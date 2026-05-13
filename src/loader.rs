@@ -2,32 +2,52 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
-fn main() {
-    println!("Starting Shelves Loader...");
+use crate::logger::{log_info, log_warning, log_error};
+
+const BUNDLE_PATH: &str = "/opt/shelves-loader/bundle/index.js";
+const CHECK_INTERVAL_SECS: u64 = 30;
+
+pub fn run() {
+    log_info("loader", "Injection loop started.");
 
     loop {
-        if !is_injected() {
-            println!("Deck Shelves not loaded. Attempting injection...");
-            inject_bundle();
+        match is_injected() {
+            true => log_info("loader", "Bundle already active — skipping injection."),
+            false => {
+                log_warning("loader", "Bundle not detected. Attempting injection...");
+                inject_bundle();
+            }
         }
-        thread::sleep(Duration::from_secs(30));
+
+        thread::sleep(Duration::from_secs(CHECK_INTERVAL_SECS));
     }
 }
 
 fn is_injected() -> bool {
-    println!("[DEBUG] Placeholder for injection check.");
+    // TODO: replace this placeholder with a real CEF/WebSocket probe that
+    // checks whether the DS bundle is already executing inside the Steam
+    // Big Picture renderer process.
+    log_info("loader", "[placeholder] injection check — always returns false");
     false
 }
 
 fn inject_bundle() {
-    let bundle_path = "/opt/shelves-loader/bundle/index.js";
+    log_info("loader", &format!("Injecting bundle: {}", BUNDLE_PATH));
 
-    match Command::new("sh")
+    let result = Command::new("sh")
         .arg("-c")
-        .arg(format!("inject_bundle_file {}", bundle_path))
-        .status()
-    {
-        Ok(_) => println!("Bundle injected successfully!"),
-        Err(e) => eprintln!("Error injecting bundle: {:?}", e),
+        .arg(format!("inject_bundle_file {}", BUNDLE_PATH))
+        .status();
+
+    match result {
+        Ok(status) if status.success() => {
+            log_info("loader", "Bundle injected successfully.");
+        }
+        Ok(status) => {
+            log_error("loader", &format!("Injection process exited with status: {}", status));
+        }
+        Err(e) => {
+            log_error("loader", &format!("Failed to spawn injection command: {}", e));
+        }
     }
 }
