@@ -1,16 +1,19 @@
-name: Release
+name: Build
 
 on:
-  push:
-    tags:
-      - 'v*'
+  pull_request:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.merged == true
     strategy:
       fail-fast: false
       matrix:
@@ -108,54 +111,3 @@ jobs:
         with:
           name: ${{ matrix.oneclick_name }}
           path: ${{ matrix.oneclick_name }}
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Resolve tag
-        id: tag
-        run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            TAG="${GITHUB_REF_NAME}"
-          else
-            TAG="v$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')"
-          fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Extract release notes
-        id: notes
-        env:
-          VERSION: ${{ steps.tag.outputs.version }}
-        run: |
-          NOTES=""
-          if [[ -f "RELEASE_NOTES.md" ]]; then
-            NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" RELEASE_NOTES.md | sed '/^$/N;/^\n$/d')
-          fi
-          if [[ -z "$NOTES" && -f "CHANGELOG.md" ]]; then
-            NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md | sed '/^$/N;/^\n$/d')
-          fi
-          {
-            echo "body<<BODY_EOF"
-            printf '%s\n' "$NOTES"
-            echo "BODY_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: Shelves Loader ${{ steps.tag.outputs.tag }}
-          body: ${{ steps.notes.outputs.body }}
-          generate_release_notes: ${{ steps.notes.outputs.body == '' }}
-          files: artifacts/**/*

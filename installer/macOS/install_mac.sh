@@ -1,24 +1,55 @@
 #!/bin/bash
-
+# One-click installer for macOS
+# Usage (online): bash install-mac.sh
+# Usage (from extracted package): bash installer/install_mac.sh
 set -e
 
+REPO="santojon/Shelves-Loader"
 INSTALL_DIR="/usr/local/shelves-loader"
-PLIST_FILE="~/Library/LaunchAgents/com.shelves.loader.plist"
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+PLIST_DEST="$LAUNCH_AGENTS_DIR/com.shelves.loader.plist"
+BINARY="loader"
+PACKAGE="shelves-loader-macos.tar.gz"
 
-echo "Installing Shelves Loader on macOS..."
+echo "=== Shelves Loader — macOS Installer ==="
 
-# Create install directory if it doesn't exist
-mkdir -p "$INSTALL_DIR"
-echo "[INFO] Directory $INSTALL_DIR created."
+if [[ -f "$BINARY" ]]; then
+  echo "[i] Binary found locally, skipping download."
+  EXTRACTED_DIR="."
+else
+  echo "[i] Fetching latest release from GitHub..."
+  DOWNLOAD_URL=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest" \
+    | grep '"browser_download_url"' \
+    | grep "$PACKAGE" \
+    | cut -d'"' -f4)
 
-# Copiar binário e bundle
-cp loader "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/loader"
-cp -r bundle/* "$INSTALL_DIR/"
-cp installer/macOS/com.shelves.loader.plist "$PLIST_FILE"
+  if [[ -z "$DOWNLOAD_URL" ]]; then
+    echo "[!] Could not find $PACKAGE in the latest release."
+    echo "    Download manually from: https://github.com/$REPO/releases/latest"
+    exit 1
+  fi
 
-# Set permissions and load the service with launchctl
-chmod 644 "$PLIST_FILE"
-launchctl load "$PLIST_FILE"
+  TMPDIR=$(mktemp -d)
+  trap 'rm -rf "$TMPDIR"' EXIT
 
-echo "[SUCCESS] Shelves Loader installed and service loaded successfully on macOS!"
+  echo "[i] Downloading $PACKAGE..."
+  curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"
+  tar -xzf "$TMPDIR/$PACKAGE" -C "$TMPDIR"
+  EXTRACTED_DIR="$TMPDIR"
+fi
+
+mkdir -p "$INSTALL_DIR/logs" "$LAUNCH_AGENTS_DIR"
+
+cp "$EXTRACTED_DIR/$BINARY" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/$BINARY"
+
+[[ -d "$EXTRACTED_DIR/bundle" ]] && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
+
+cp "$EXTRACTED_DIR/installer/com.shelves.loader.plist" "$PLIST_DEST"
+chmod 644 "$PLIST_DEST"
+launchctl load "$PLIST_DEST"
+
+echo ""
+echo "[OK] Shelves Loader installed and running."
+echo "     Install path : $INSTALL_DIR"
+echo "     Service      : launchctl list | grep shelves"

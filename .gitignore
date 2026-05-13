@@ -1,0 +1,74 @@
+# ── Rust ──────────────────────────────────────────────────────────────────────
+/target/
+**/*.rs.bk
+.cargo/
+Cargo.lock
+
+# ── OS artifacts ──────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+*.stackdump
+
+# ── Editor / IDE ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.project
+.classpath
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Node / pnpm / Python ──────────────────────────────────────────────────────
+node_modules/
+dist/
+out/
+.tmp/
+.pnpm-store/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# ── Build / release artifacts ─────────────────────────────────────────────────
+build/
+.cache/
+.installer-output/
+releases/
+*.exe
+*.dll
+*.so
+*.dylib
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+*.bak
+*.tmp
+*.temp
+*.backup
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Hidden directories (except .github) ───────────────────────────────────────
+.*/
+!.github/
+
+# ── Workflow-generated files ──────────────────────────────────────────────────
+CHANGELOG*.md
+releases/

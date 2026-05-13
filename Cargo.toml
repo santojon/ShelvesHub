@@ -5,5 +5,9 @@ edition = "2021"
 description = "A cross-platform loader for Deck Shelves"
 license = "MIT"
 
+[[bin]]
+name = "loader"
+path = "src/main.rs"
+
 [dependencies]
 chrono = "0.4"

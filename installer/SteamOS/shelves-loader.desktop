@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Install Shelves Loader
+GenericName=Shelves Loader Installer
+Comment=Download and install Shelves Loader for Steam Deck
+Exec=bash -c "T=/tmp/shelves-loader-install && mkdir -p $T && echo 'Downloading Shelves Loader...' && curl -sL https://github.com/santojon/Shelves-Loader/releases/latest/download/shelves-loader-steamos.tar.gz | tar xz -C $T && bash $T/installer/install.sh && rm -rf $T; echo; echo 'Press Enter to close...'; read"
+Terminal=true
+Icon=system-software-install
+Categories=Utility;System;

@@ -1,19 +1,54 @@
-# installer/Windows/install.ps1
+# One-click installer for Windows
+# Usage (online): irm https://github.com/santojon/Shelves-Loader/releases/latest/download/install-windows.ps1 | iex
+# Usage (from extracted package): .\installer\install.ps1
+#Requires -RunAsAdministrator
 
-Write-Output "Instalando Shelves Loader no Windows..."
-
-# Diretório de instalação
+$ErrorActionPreference = "Stop"
+$repo        = "santojon/Shelves-Loader"
+$binary      = "loader.exe"
+$package     = "shelves-loader-windows.zip"
 $installPath = "C:\Program Files\Shelves-Loader"
+
+Write-Output "=== Shelves Loader — Windows Installer ==="
+
+if (Test-Path $binary) {
+  Write-Output "[i] Binary found locally, skipping download."
+  $extractedDir = "."
+} else {
+  Write-Output "[i] Fetching latest release from GitHub..."
+  $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing
+  $asset   = $release.assets | Where-Object { $_.name -eq $package }
+
+  if (-not $asset) {
+    Write-Error "[!] Could not find $package in the latest release."
+    exit 1
+  }
+
+  $tmpDir = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
+  New-Item -ItemType Directory -Path $tmpDir | Out-Null
+
+  Write-Output "[i] Downloading $package..."
+  Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "$tmpDir\$package" -UseBasicParsing
+  Expand-Archive -Path "$tmpDir\$package" -DestinationPath $tmpDir -Force
+  $extractedDir = $tmpDir
+}
+
 New-Item -Path $installPath -ItemType Directory -Force | Out-Null
+Copy-Item -Path "$extractedDir\$binary" -Destination "$installPath\$binary" -Force
 
-# Copiar loader
-Copy-Item -Path "loader.exe" -Destination "$installPath\loader.exe"
-Write-Output "Loader copiado para: $installPath."
+if (Test-Path "$extractedDir\bundle") {
+  Copy-Item -Recurse -Path "$extractedDir\bundle\*" -Destination $installPath -Force
+}
 
-# Task Scheduler
-$action = New-ScheduledTaskAction -Execute "$installPath\loader.exe"
-$trigger = New-ScheduledTaskTrigger -AtStartup
-Register-ScheduledTask -TaskName "ShelvesLoader" -Action $action -Trigger $trigger | Out-Null
-Write-Output "Task Scheduler configurado."
+$action   = New-ScheduledTaskAction -Execute "$installPath\$binary"
+$trigger  = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName "ShelvesLoader" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+Start-ScheduledTask -TaskName "ShelvesLoader"
 
-Write-Output "Instalação concluída!"
+if (Test-Path $tmpDir -ErrorAction SilentlyContinue) { Remove-Item -Recurse -Force $tmpDir }
+
+Write-Output ""
+Write-Output "[OK] Shelves Loader installed and running."
+Write-Output "     Install path : $installPath"
+Write-Output "     Service      : Get-ScheduledTask -TaskName ShelvesLoader"
