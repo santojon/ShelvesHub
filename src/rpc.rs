@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 
-use crate::logger::{log_info, log_warning, log_error};
+use crate::logger::{log_error, log_info, log_warning};
 
 const RPC_ADDR: &str = "127.0.0.1:57381";
 
@@ -18,11 +18,11 @@ const RPC_ADDR: &str = "127.0.0.1:57381";
 pub fn serve() {
     let listener = match TcpListener::bind(RPC_ADDR) {
         Ok(l) => {
-            log_info("rpc", &format!("Listening on {}", RPC_ADDR));
+            log_info("rpc", &format!("Listening on {RPC_ADDR}"));
             l
         }
         Err(e) => {
-            log_error("rpc", &format!("Failed to bind {}: {}", RPC_ADDR, e));
+            log_error("rpc", &format!("Failed to bind {RPC_ADDR}: {e}"));
             return;
         }
     };
@@ -30,19 +30,19 @@ pub fn serve() {
     for stream in listener.incoming() {
         match stream {
             Ok(s) => handle_connection(s),
-            Err(e) => log_warning("rpc", &format!("Accept error: {}", e)),
+            Err(e) => log_warning("rpc", &format!("Accept error: {e}")),
         }
     }
 }
 
 fn handle_connection(mut stream: TcpStream) {
     let peer = stream.peer_addr().map(|a| a.to_string()).unwrap_or_default();
-    log_info("rpc", &format!("Connection from {}", peer));
+    log_info("rpc", &format!("Connection from {peer}"));
 
     let reader = BufReader::new(match stream.try_clone() {
         Ok(s) => s,
         Err(e) => {
-            log_error("rpc", &format!("Failed to clone stream: {}", e));
+            log_error("rpc", &format!("Failed to clone stream: {e}"));
             return;
         }
     });
@@ -52,21 +52,21 @@ fn handle_connection(mut stream: TcpStream) {
             Ok(l) if !l.trim().is_empty() => l,
             Ok(_) => continue,
             Err(e) => {
-                log_warning("rpc", &format!("Read error from {}: {}", peer, e));
+                log_warning("rpc", &format!("Read error from {peer}: {e}"));
                 break;
             }
         };
 
-        log_info("rpc", &format!("Request from {}: {}", peer, request));
+        log_info("rpc", &format!("Request from {peer}: {request}"));
         let response = dispatch(&request);
 
-        if let Err(e) = writeln!(stream, "{}", response) {
-            log_warning("rpc", &format!("Write error to {}: {}", peer, e));
+        if let Err(e) = writeln!(stream, "{response}") {
+            log_warning("rpc", &format!("Write error to {peer}: {e}"));
             break;
         }
     }
 
-    log_info("rpc", &format!("Connection closed: {}", peer));
+    log_info("rpc", &format!("Connection closed: {peer}"));
 }
 
 fn dispatch(request: &str) -> String {

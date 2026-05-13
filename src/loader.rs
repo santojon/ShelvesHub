@@ -2,7 +2,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
-use crate::logger::{log_info, log_warning, log_error};
+use crate::logger::{log_error, log_info, log_warning};
 
 const BUNDLE_PATH: &str = "/opt/shelves-loader/bundle/index.js";
 const CHECK_INTERVAL_SECS: u64 = 30;
@@ -11,12 +11,11 @@ pub fn run() {
     log_info("loader", "Injection loop started.");
 
     loop {
-        match is_injected() {
-            true => log_info("loader", "Bundle already active — skipping injection."),
-            false => {
-                log_warning("loader", "Bundle not detected. Attempting injection...");
-                inject_bundle();
-            }
+        if is_injected() {
+            log_info("loader", "Bundle already active — skipping injection.");
+        } else {
+            log_warning("loader", "Bundle not detected. Attempting injection...");
+            inject_bundle();
         }
 
         thread::sleep(Duration::from_secs(CHECK_INTERVAL_SECS));
@@ -32,11 +31,11 @@ fn is_injected() -> bool {
 }
 
 fn inject_bundle() {
-    log_info("loader", &format!("Injecting bundle: {}", BUNDLE_PATH));
+    log_info("loader", &format!("Injecting bundle: {BUNDLE_PATH}"));
 
     let result = Command::new("sh")
         .arg("-c")
-        .arg(format!("inject_bundle_file {}", BUNDLE_PATH))
+        .arg(format!("inject_bundle_file {BUNDLE_PATH}"))
         .status();
 
     match result {
@@ -44,10 +43,10 @@ fn inject_bundle() {
             log_info("loader", "Bundle injected successfully.");
         }
         Ok(status) => {
-            log_error("loader", &format!("Injection process exited with status: {}", status));
+            log_error("loader", &format!("Injection process exited with status: {status}"));
         }
         Err(e) => {
-            log_error("loader", &format!("Failed to spawn injection command: {}", e));
+            log_error("loader", &format!("Failed to spawn injection command: {e}"));
         }
     }
 }
