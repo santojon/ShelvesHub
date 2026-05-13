@@ -1,0 +1,98 @@
+# Diretórios padrão do Rust que NÃO devem ser versionados
+/target/
+**/*.rs.bk
+
+# Arquivos de configuração do Cargo que não precisam ser versionados
+.cargo/
+Cargo.lock
+
+# Logs em qualquer plataforma
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Arquivos temporários do sistema operacional
+*.DS_Store           # macOS
+Thumbs.db            # Windows
+ehthumbs.db          # Windows
+*.stackdump          # Windows (exemplo MinGW)
+._*                  # Arquivos de metadados do MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Arquivos temporários do Node.js (para runtime ou ferramentas complementares)
+node_modules/
+dist/
+.tmp/
+
+# Binários compilados
+*.exe
+*.out
+*.dll
+*.so
+*.dylib
+
+# Arquivos gerados por instaladores
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+.installer-output/
+
+# Exclusão do diretório de construção em múltiplos SOs
+build/
+.cache/
+.idea/
+
+# Arquivos temporários do editor
+*.swp
+*.swo
+*~
+.project
+.classpath
+
+# Ignorar arquvios criados por IDEs
+.vscode/
+.idea/
+*.iml
+
+# Changelogs e releases gerados pelo workflow
+CHANGELOG*.md
+releases/
+
+# Arquivos específicos de sistema operacional
+*.bak
+*.tmp
+*.temp
+*.backup
+
+# Node
+node_modules/
+dist/
+out/
+*.log
+.DS_Store
+
+# pnpm
+.pnpm-store/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# VSCode
+.vscode/
+
+# Environment (secrets)
+.env
+.env.*
+
+# Hidden folders
+/.*/
+!.github/

@@ -1,0 +1,9 @@
+[package]
+name = "shelves-loader"
+version = "0.1.0"
+edition = "2021"
+description = "A cross-platform loader for Deck Shelves"
+license = "MIT"
+
+[dependencies]
+chrono = "0.4"

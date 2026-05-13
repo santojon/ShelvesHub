@@ -1,0 +1,47 @@
+name: Build and Package for macOS
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  macos:
+    name: Build macOS Shelves Loader
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Build Release Binary
+      run: cargo build --release
+
+    - name: Prepare Distribution
+      run: |
+        mkdir -p build/macos
+        cp target/release/loader build/macos/
+        chmod +x build/macos/loader
+        cp installer/macOS/com.shelves.loader.plist build/macos/
+        cp -r bundle build/macos/
+
+    - name: Package as Tarball
+      run: |
+        cd build/macos
+        tar -czf shelves-loader-macos.tar.gz *
+        mv shelves-loader-macos.tar.gz ../../
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: shelves-loader-macos
+        path: shelves-loader-macos.tar.gz
