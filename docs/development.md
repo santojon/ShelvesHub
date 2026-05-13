@@ -1,48 +1,85 @@
-# Development: Running and debugging on a Steam Deck via SSH
-
-This guide shows a minimal workflow to develop and test Shelves Loader remotely on a Steam Deck over SSH. The approach uses a small `.env` file to hold connection details so the same commands work across supported platforms.
+# Development
 
 ## Prerequisites
-- A Steam Deck with developer SSH enabled (or another test machine)
-- `ssh` and `rsync` installed on your development machine
 
-## .env example
-Create a `.env` (or `.env.local`) in the project root with these values:
+- [Rust](https://rustup.rs) (stable toolchain)
+- A Steam Deck or SteamOS machine for testing (SSH access)
+- `rsync` for remote deployment
+
+## Building locally
+
+```bash
+cargo build          # debug build
+cargo build --release  # release build
+cargo test           # run tests
+cargo clippy -- -D warnings  # lint (same flags as CI)
+```
+
+The binary is output to `target/release/loader` (or `target/debug/loader`).
+
+## Cross-compiling for SteamOS (x86_64 Linux)
+
+SteamOS has a read-only filesystem and limited tooling — build locally and deploy the binary:
+
+```bash
+# Add the Linux target (if not already present)
+rustup target add x86_64-unknown-linux-gnu
+
+# On macOS you need a cross-linker — install via Homebrew:
+brew install FiloSottile/musl-cross/musl-cross
+
+# Build for SteamOS
+CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-musl-gcc \
+  cargo build --release --target x86_64-unknown-linux-gnu
+```
+
+The resulting binary at `target/x86_64-unknown-linux-gnu/release/loader` can be rsync'd directly to the Deck.
+
+## SSH deploy workflow
+
+Create a `.env` (or `.env.local`) in the project root:
 
 ```ini
-# Host or IP of the Steam Deck
 DECK_HOST=deck.local
-# SSH user
 DECK_USER=deck
-# Optional path on the device where project will be deployed
-DECK_DEPLOY_PATH=/home/deck/shelves-loader-dev
-# Path to private key (optional)
 DECK_SSH_KEY=~/.ssh/id_rsa
+DECK_DEPLOY_PATH=/home/deck/shelves-loader-dev
 ```
 
-## One-line deploy and run (local -> deck)
-Replace variables or load the env file with `set -o allexport; source .env; set +o allexport`.
+Deploy and restart:
 
 ```bash
-# Copy project to the device
-rsync -av --exclude .git --exclude target ./ $DECK_USER@$DECK_HOST:$DECK_DEPLOY_PATH
-
-# Build and run remotely (example for a cargo build)
-ssh -i "$DECK_SSH_KEY" $DECK_USER@$DECK_HOST "cd $DECK_DEPLOY_PATH && cargo build --release && sudo systemctl restart shelves-loader"
-```
-
-Notes:
-- Adjust commands if you prefer using a container or cross-compile toolchain.
-- For iterative development, copy only the changed artifacts (e.g., the compiled binary) to shorten the loop.
-
-## Optional: using a sudo password from `.env`
-If you set `DECK_SUDO_PASS` in your local `.env`, you can pipe it to `sudo` when running remote commands. Storing passwords in files is discouraged — prefer SSH key authentication and configuring `sudo` without a password for your development account.
-
-Example using `DECK_SUDO_PASS` (careful with logs/history):
-
-```bash
-# Load env, then use password with sudo on the remote host
 set -o allexport; source .env; set +o allexport
-ssh -i "$DECK_SSH_KEY" $DECK_USER@$DECK_HOST "cd $DECK_DEPLOY_PATH && echo \"$DECK_SUDO_PASS\" | sudo -S systemctl restart shelves-loader"
+
+# Sync project
+rsync -av --exclude .git --exclude target \
+  ./ $DECK_USER@$DECK_HOST:$DECK_DEPLOY_PATH
+
+# Copy pre-built binary and restart (build must be done locally first)
+ssh -i "$DECK_SSH_KEY" $DECK_USER@$DECK_HOST \
+  "cp $DECK_DEPLOY_PATH/target/x86_64-unknown-linux-gnu/release/loader \
+       $HOME/.local/share/shelves-loader/loader && \
+   systemctl --user restart shelves-loader"
 ```
 
+## Checking the service on the Deck
+
+```bash
+ssh deck@deck.local
+systemctl --user status shelves-loader
+journalctl --user -u shelves-loader -f
+```
+
+## Testing the RPC server
+
+Once the loader is running, probe the RPC endpoint from the Deck or from your dev machine (if SSH-forwarded):
+
+```bash
+echo '{"method":"ping"}' | nc 127.0.0.1 57381
+echo '{"method":"getVersion"}' | nc 127.0.0.1 57381
+echo '{"method":"isInjected"}' | nc 127.0.0.1 57381
+```
+
+## CI
+
+The CI workflow (`.github/workflows/ci.yml`) runs `cargo check`, `cargo test`, and `cargo clippy -- -D warnings` on every push and pull request. Build artifacts are generated on PR merge and on tag push. See `.github/workflows/` for the full workflow definitions.
