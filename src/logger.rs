@@ -1,27 +1,30 @@
-use std::fmt;
 use chrono::Local;
 
 #[derive(Debug)]
 pub enum LogLevel {
-    INFO,
-    WARNING,
-    ERROR,
-    DEBUG,
+    Info,
+    Warning,
+    Error,
+    Debug,
 }
 
 pub fn log(level: LogLevel, subsystem: &str, message: &str) {
-    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
     println!("[{:?}] [{}] [{}] {}", level, timestamp, subsystem, message);
 }
 
 pub fn log_info(subsystem: &str, message: &str) {
-    log(LogLevel::INFO, subsystem, message);
+    log(LogLevel::Info, subsystem, message);
 }
 
 pub fn log_warning(subsystem: &str, message: &str) {
-    log(LogLevel::WARNING, subsystem, message);
+    log(LogLevel::Warning, subsystem, message);
 }
 
 pub fn log_error(subsystem: &str, message: &str) {
-    log(LogLevel::ERROR, subsystem, message);
+    log(LogLevel::Error, subsystem, message);
+}
+
+pub fn log_debug(subsystem: &str, message: &str) {
+    log(LogLevel::Debug, subsystem, message);
 }
