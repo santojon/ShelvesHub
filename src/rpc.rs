@@ -3,7 +3,7 @@ use std::net::{TcpListener, TcpStream};
 
 use crate::logger::{log_error, log_info, log_warning};
 
-const RPC_ADDR: &str = "127.0.0.1:57381";
+const RPC_ADDR: &str = "127.0.0.1:60123";
 
 /// Blocking TCP RPC server.
 ///

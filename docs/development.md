@@ -75,9 +75,9 @@ journalctl --user -u shelves-loader -f
 Once the loader is running, probe the RPC endpoint from the Deck or from your dev machine (if SSH-forwarded):
 
 ```bash
-echo '{"method":"ping"}' | nc 127.0.0.1 57381
-echo '{"method":"getVersion"}' | nc 127.0.0.1 57381
-echo '{"method":"isInjected"}' | nc 127.0.0.1 57381
+echo '{"method":"ping"}' | nc 127.0.0.1 60123
+echo '{"method":"getVersion"}' | nc 127.0.0.1 60123
+echo '{"method":"isInjected"}' | nc 127.0.0.1 60123
 ```
 
 ## CI

@@ -28,7 +28,7 @@ bundle to consume this contract.
 |---|---|---|
 | `call` | `<T>(method, args?) => Promise<T>` | JSON-RPC call into the Rust host process |
 
-`call` POSTs to the local TCP server on `127.0.0.1:57381` (see `src/rpc.rs`).
+`call` POSTs to the local TCP server on `127.0.0.1:60123` (see `src/rpc.rs`).
 
 **Registered methods (Rust side):**
 
@@ -78,7 +78,7 @@ requires a major version bump in `HOST_API_VERSION`.
 
 ## RPC wire format
 
-The TCP server (`127.0.0.1:57381`) speaks newline-delimited JSON:
+The TCP server (`127.0.0.1:60123`) speaks newline-delimited JSON:
 
 ```
 → {"method":"ping"}

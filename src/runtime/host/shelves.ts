@@ -14,7 +14,7 @@ import type {
 } from "./contract";
 import { HOST_API_VERSION } from "./contract";
 
-const RPC_ENDPOINT = "http://127.0.0.1:57381";
+const RPC_ENDPOINT = "http://127.0.0.1:60123";
 
 function notImplemented(ns: string, method: string): never {
   throw new Error(`[ShelvesHostApi] ${ns}.${method}: not implemented`);

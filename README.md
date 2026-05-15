@@ -46,7 +46,7 @@ Download `install-windows.bat` from the latest release and double-click it. Acce
 src/
   main.rs                   Entry point — spawns RPC thread, starts injection loop
   loader.rs                 Injection loop (30s interval)
-  rpc.rs                    TCP JSON-RPC server (127.0.0.1:57381)
+  rpc.rs                    TCP JSON-RPC server (127.0.0.1:60123)
   logger.rs                 Structured logging
   runtime/host/
     contract.ts             HostApi interface (version 1.0.0)
