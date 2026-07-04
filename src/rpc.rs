@@ -1,28 +1,30 @@
-use std::io::{BufRead, BufReader, Write};
+//! Host RPC server.
+//!
+//! A minimal blocking HTTP/1.1 server on localhost. The TypeScript
+//! `ShelvesHostApi.rpc.call()` reaches it with a `fetch` POST of
+//! `{ "method": "...", "args": ... }` and reads back `{ ok, result | error }`.
+//!
+//! HTTP (not raw TCP) because the caller lives inside the CEF renderer, where
+//! `fetch` is the only available transport, and cross-origin requests need the
+//! CORS headers we emit below. The body parsing is hand-rolled to avoid a full
+//! HTTP-server dependency for three methods over loopback.
+
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
+use serde_json::Value;
+
 use crate::logger::{log_error, log_info, log_warning};
+use crate::state;
 
-const RPC_ADDR: &str = "127.0.0.1:60123";
-
-/// Blocking TCP RPC server.
-///
-/// Each connection receives one newline-delimited JSON request and responds
-/// with one newline-delimited JSON reply. This is intentionally minimal — the
-/// shape matches the IPC contract used by the TypeScript `RpcApi` in
-/// `src/runtime/host/contract.ts` so the TS side can call into the host
-/// process over localhost without any native addon.
-///
-/// Replace the stub dispatch table with real CEF / Steam client integration
-/// once the bundle injection mechanism is proven.
-pub fn serve() {
-    let listener = match TcpListener::bind(RPC_ADDR) {
+pub fn serve(addr: &str) {
+    let listener = match TcpListener::bind(addr) {
         Ok(l) => {
-            log_info("rpc", &format!("Listening on {RPC_ADDR}"));
+            log_info("rpc", &format!("Listening on {addr}"));
             l
         }
         Err(e) => {
-            log_error("rpc", &format!("Failed to bind {RPC_ADDR}: {e}"));
+            log_error("rpc", &format!("Failed to bind {addr}: {e}"));
             return;
         }
     };
@@ -37,51 +39,170 @@ pub fn serve() {
 
 fn handle_connection(mut stream: TcpStream) {
     let peer = stream.peer_addr().map(|a| a.to_string()).unwrap_or_default();
-    log_info("rpc", &format!("Connection from {peer}"));
 
-    let reader = BufReader::new(match stream.try_clone() {
-        Ok(s) => s,
+    let request = match read_request(&stream) {
+        Ok(req) => req,
         Err(e) => {
-            log_error("rpc", &format!("Failed to clone stream: {e}"));
+            log_warning("rpc", &format!("Bad request from {peer}: {e}"));
+            let _ = write_response(&mut stream, 400, r#"{"ok":false,"error":"bad request"}"#);
             return;
         }
-    });
+    };
 
-    for line in reader.lines() {
-        let request = match line {
-            Ok(l) if !l.trim().is_empty() => l,
-            Ok(_) => continue,
-            Err(e) => {
-                log_warning("rpc", &format!("Read error from {peer}: {e}"));
-                break;
-            }
-        };
+    // CORS preflight from the renderer.
+    if request.method == "OPTIONS" {
+        let _ = write_response(&mut stream, 204, "");
+        return;
+    }
 
-        log_info("rpc", &format!("Request from {peer}: {request}"));
-        let response = dispatch(&request);
+    let response_body = dispatch(&request.body);
+    log_info("rpc", &format!("{peer} -> {}", &request.body));
+    if let Err(e) = write_response(&mut stream, 200, &response_body) {
+        log_warning("rpc", &format!("Write error to {peer}: {e}"));
+    }
+}
 
-        if let Err(e) = writeln!(stream, "{response}") {
-            log_warning("rpc", &format!("Write error to {peer}: {e}"));
+struct HttpRequest {
+    method: String,
+    body: String,
+}
+
+/// Read request line + headers, then exactly `Content-Length` body bytes.
+fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
+    let mut reader = BufReader::new(stream);
+
+    let mut request_line = String::new();
+    reader.read_line(&mut request_line)?;
+    let method = request_line.split_whitespace().next().unwrap_or("").to_string();
+
+    let mut content_length = 0usize;
+    loop {
+        let mut line = String::new();
+        let n = reader.read_line(&mut line)?;
+        if n == 0 || line == "\r\n" || line == "\n" {
             break;
+        }
+        if let Some((name, value)) = line.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().unwrap_or(0);
+            }
         }
     }
 
-    log_info("rpc", &format!("Connection closed: {peer}"));
+    let mut body = vec![0u8; content_length];
+    if content_length > 0 {
+        reader.read_exact(&mut body)?;
+    }
+
+    Ok(HttpRequest {
+        method,
+        body: String::from_utf8_lossy(&body).into_owned(),
+    })
 }
 
-fn dispatch(request: &str) -> String {
-    // Minimal JSON parsing without an external crate — good enough for the
-    // stub stage. Replace with serde_json once the real method table is known.
-    if request.contains("\"method\":\"ping\"") {
-        return r#"{"ok":true,"result":"pong"}"#.to_string();
+fn dispatch(body: &str) -> String {
+    let method = serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|v| v.get("method").and_then(Value::as_str).map(str::to_string));
+
+    match method.as_deref() {
+        Some("ping") => ok(r#""pong""#.to_string()),
+        Some("getVersion") => ok(format!(r#""{}""#, env!("CARGO_PKG_VERSION"))),
+        Some("getHostApiVersion") => ok(format!(r#""{}""#, crate::HOST_API_VERSION)),
+        Some("isInjected") => ok(state::is_injected().to_string()),
+        // The bundle calls this once it has fully initialised against the host
+        // API — record it as an explicit init confirmation from the bundle side.
+        Some("bundleReady") => {
+            state::set_bundle_ready(true);
+            log_info("rpc", "Bundle reported ready (initialisation confirmed).");
+            ok("true".to_string())
+        }
+        Some(other) => err(&format!("unknown method: {other}")),
+        None => err("missing or invalid method"),
     }
-    if request.contains("\"method\":\"getVersion\"") {
-        return format!(r#"{{"ok":true,"result":"{}"}}"#, env!("CARGO_PKG_VERSION"));
-    }
-    if request.contains("\"method\":\"isInjected\"") {
-        // TODO: forward to the real injection state.
-        return r#"{"ok":true,"result":false}"#.to_string();
+}
+
+fn ok(result_json: String) -> String {
+    format!(r#"{{"ok":true,"result":{result_json}}}"#)
+}
+
+fn err(message: &str) -> String {
+    let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
+    format!(r#"{{"ok":false,"error":"{escaped}"}}"#)
+}
+
+fn write_response(stream: &mut TcpStream, status: u16, body: &str) -> std::io::Result<()> {
+    let reason = match status {
+        200 => "OK",
+        204 => "No Content",
+        400 => "Bad Request",
+        _ => "OK",
+    };
+    let response = format!(
+        "HTTP/1.1 {status} {reason}\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {len}\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         Access-Control-Allow-Methods: POST, OPTIONS\r\n\
+         Access-Control-Allow-Headers: Content-Type\r\n\
+         Connection: close\r\n\
+         \r\n\
+         {body}",
+        len = body.len()
+    );
+    stream.write_all(response.as_bytes())?;
+    stream.flush()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dispatches_ping() {
+        assert_eq!(dispatch(r#"{"method":"ping"}"#), r#"{"ok":true,"result":"pong"}"#);
     }
 
-    r#"{"ok":false,"error":"unknown method"}"#.to_string()
+    #[test]
+    fn dispatches_is_injected() {
+        state::set_injected(false);
+        assert_eq!(
+            dispatch(r#"{"method":"isInjected"}"#),
+            r#"{"ok":true,"result":false}"#
+        );
+    }
+
+    #[test]
+    fn dispatches_host_api_version() {
+        assert_eq!(
+            dispatch(r#"{"method":"getHostApiVersion"}"#),
+            format!(r#"{{"ok":true,"result":"{}"}}"#, crate::HOST_API_VERSION)
+        );
+    }
+
+    #[test]
+    fn dispatches_bundle_ready() {
+        state::set_bundle_ready(false);
+        assert_eq!(
+            dispatch(r#"{"method":"bundleReady"}"#),
+            r#"{"ok":true,"result":true}"#
+        );
+        assert!(state::is_bundle_ready());
+    }
+
+    #[test]
+    fn rejects_unknown_method() {
+        assert_eq!(
+            dispatch(r#"{"method":"nope"}"#),
+            r#"{"ok":false,"error":"unknown method: nope"}"#
+        );
+    }
+
+    #[test]
+    fn rejects_garbage() {
+        assert_eq!(
+            dispatch("not json"),
+            r#"{"ok":false,"error":"missing or invalid method"}"#
+        );
+    }
 }

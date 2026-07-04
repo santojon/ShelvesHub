@@ -8,7 +8,7 @@ Shelves Loader is the standalone host service for [Deck Shelves](https://github.
 
 ## How it works
 
-The loader runs as a background service, watches for the Steam renderer, injects the Deck Shelves bundle (`bundle/index.js`), and exposes a local JSON-RPC server (`127.0.0.1:57381`) the bundle uses to communicate with the host.
+The loader runs as a background service, watches for the Steam renderer, injects the Deck Shelves bundle (`bundle/index.js`) over the Chrome DevTools Protocol, and exposes a local HTTP JSON-RPC server (`127.0.0.1:60123`) the bundle uses to communicate with the host. See [docs/debugging.md](docs/debugging.md) for the `shelves-devtools` CDP tool and the local/on-Deck debug workflow.
 
 The TypeScript `HostApi` contract (`src/runtime/host/`) defines what the loader provides to the bundle. The Rust process (`src/`) implements the service side.
 

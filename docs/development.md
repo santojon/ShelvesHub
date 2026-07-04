@@ -1,6 +1,44 @@
 # Development
 
-## Prerequisites
+## Task runner (pnpm)
+
+`pnpm` is the single entry point for the whole project — it installs the
+toolchain, builds/runs the Rust binaries, drives the local debug harness, and
+deploys/debugs against a Steam Deck. You only need [Homebrew](https://brew.sh)
+and pnpm to start; `pnpm setup` installs the rest.
+
+```bash
+pnpm setup           # one-time: install rustup+target, zig+cargo-zigbuild,
+                     # Chromium, JS deps, and create .env (macOS / Homebrew)
+pnpm update          # update the managed toolchain + deps
+
+pnpm build           # cargo build (loader + shelves-devtools)
+pnpm build:release   # release build
+pnpm test            # cargo test
+pnpm lint            # cargo clippy -- -D warnings  (same as CI)
+pnpm run             # run the loader locally
+pnpm devtools targets      # run shelves-devtools (args follow directly)
+
+pnpm debug:local     # full end-to-end run against a local browser (no Deck)
+
+# Steam Deck (reads .env) — see docs/debugging.md
+pnpm build:deck      # cross-compile the loader for SteamOS
+pnpm deck:deploy     # build + deploy + run on the Deck over SSH
+pnpm deck:tunnel     # forward the Deck's CEF port to localhost
+pnpm deck:logs       # tail the service logs on the Deck
+pnpm deck:targets    # list CEF targets on the Deck (needs deck:tunnel running)
+pnpm deck:inject     # inject bundle/index.js into the Deck renderer
+pnpm deck:reload     # reload the Deck renderer
+pnpm deck:console    # stream the Deck renderer console
+pnpm deck:reinject   # clear markers so the loader re-injects an updated runtime/bundle
+```
+
+Connection and CDP settings live in `.env`. The `deck:*` tasks connect directly
+to `DECK_CDP_HOST:DECK_CDP_PORT` (no tunnel needed when the Deck's CEF port is
+reachable on your LAN; note Steam's `8080` is localhost-only, so a different port
+like `8081` is used over the network). See `.env.example`.
+
+## Prerequisites (manual, without pnpm)
 
 - [Rust](https://rustup.rs) (stable toolchain)
 - A Steam Deck or SteamOS machine for testing (SSH access)
@@ -72,13 +110,21 @@ journalctl --user -u shelves-loader -f
 
 ## Testing the RPC server
 
-Once the loader is running, probe the RPC endpoint from the Deck or from your dev machine (if SSH-forwarded):
+The host RPC server speaks HTTP (the bundle reaches it with `fetch` from inside
+the renderer). Once the loader is running, probe it from the Deck or from your
+dev machine (if SSH-forwarded):
 
 ```bash
-echo '{"method":"ping"}' | nc 127.0.0.1 60123
-echo '{"method":"getVersion"}' | nc 127.0.0.1 60123
-echo '{"method":"isInjected"}' | nc 127.0.0.1 60123
+curl -s 127.0.0.1:60123 -d '{"method":"ping"}'
+curl -s 127.0.0.1:60123 -d '{"method":"getVersion"}'
+curl -s 127.0.0.1:60123 -d '{"method":"isInjected"}'
 ```
+
+## Debugging the injection / DevTools
+
+See [debugging.md](debugging.md) for the `shelves-devtools` CDP tool, the local
+debug harness (`scripts/local-debug.sh`), and the on-Deck SSH workflow
+(`scripts/deck-deploy.sh`, `scripts/deck-tunnel.sh`).
 
 ## CI
 

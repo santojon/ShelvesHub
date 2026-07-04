@@ -1,14 +1,16 @@
 # HostApi — Contract Reference
 
-Contract version: **1.0.0** (additive-only after this baseline).
+Contract version: **1.1.0** (additive-only after the 1.0.0 baseline).
 
 The `HostApi` interface defines what the Shelves Loader host process provides
 to the Deck Shelves bundle. The bundle receives this object as
 `window.__SHELVES_HOST__` at startup.
 
-The concrete implementation in this repository is `ShelvesHostApi`
-(`src/runtime/host/shelves.ts`). The Deck Shelves repository builds its
-bundle to consume this contract.
+The typed contract lives in `src/runtime/host/contract.ts` (with `ShelvesHostApi`
+in `shelves.ts` as the reference surface). The **executed** implementation the
+loader injects is `runtime/shelves-host.js` — that is what becomes
+`window.__SHELVES_HOST__` in the renderer. The Deck Shelves repository builds
+its bundle to consume this contract.
 
 ---
 
@@ -28,7 +30,7 @@ bundle to consume this contract.
 |---|---|---|
 | `call` | `<T>(method, args?) => Promise<T>` | JSON-RPC call into the Rust host process |
 
-`call` POSTs to the local TCP server on `127.0.0.1:60123` (see `src/rpc.rs`).
+`call` POSTs to the local HTTP server on `127.0.0.1:60123` (see `src/rpc.rs`).
 
 **Registered methods (Rust side):**
 
@@ -36,7 +38,7 @@ bundle to consume this contract.
 |---|---|---|
 | `ping` | `"pong"` | Health check |
 | `getVersion` | `string` | Loader version from `Cargo.toml` |
-| `isInjected` | `boolean` | Whether the bundle is active (stub — always `false`) |
+| `isInjected` | `boolean` | Whether the bundle is active (live injection state) |
 
 ### `routes: RouteApi`
 
@@ -61,6 +63,20 @@ Optional. Sends a toast notification in the Steam UI.
 | `checkCompatibility` | `() => boolean` | Basic environment sanity check |
 | `navigateToApp` | `(appId: number) => void` | Navigate Steam UI to a game page |
 
+### `qam: QamApi` *(added in 1.1.0)*
+
+A dedicated panel with its own icon in the Steam Quick Access Menu.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `registerPanel` | `(panel: QamPanel) => () => void` | Adds the panel + icon; returns an unregister function |
+
+`QamPanel = { id: string; title: string; icon: string /* inline SVG or data URI */; render(container: HTMLElement): void \| (() => void) }`.
+
+Implemented in `runtime/shelves-host.js`: an always-working icon rail + slide-in
+panel (works in the local harness and as a Steam overlay), with a seam
+(`tryMountNative`) for a native Steam QAM tab pending on-device validation.
+
 ---
 
 ## Adding a new method
@@ -78,17 +94,18 @@ requires a major version bump in `HOST_API_VERSION`.
 
 ## RPC wire format
 
-The TCP server (`127.0.0.1:60123`) speaks newline-delimited JSON:
+The host RPC server (`127.0.0.1:60123`) is an HTTP/1.1 endpoint. The body of a
+`POST` is `{ "method": ..., "args": ... }` and the response is JSON:
 
 ```
-→ {"method":"ping"}
+→ POST / {"method":"ping"}
 ← {"ok":true,"result":"pong"}
 
-→ {"method":"getVersion"}
+→ POST / {"method":"getVersion"}
 ← {"ok":true,"result":"0.1.0"}
 
-→ {"method":"unknown"}
-← {"ok":false,"error":"unknown method"}
+→ POST / {"method":"unknown"}
+← {"ok":false,"error":"unknown method: unknown"}
 ```
 
 `ShelvesHostApi.rpc.call` wraps this in a `fetch` POST so the bundle does

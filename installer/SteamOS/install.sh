@@ -47,7 +47,13 @@ cp "$EXTRACTED_DIR/$BINARY" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/$BINARY"
 
 if [[ -d "$EXTRACTED_DIR/bundle" ]]; then
+  mkdir -p "$INSTALL_DIR/bundle"
   cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
+fi
+
+if [[ -d "$EXTRACTED_DIR/runtime" ]]; then
+  mkdir -p "$INSTALL_DIR/runtime"
+  cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
 fi
 
 # ── Register user systemd service ─────────────────────────────────────────────

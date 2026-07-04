@@ -37,7 +37,10 @@ New-Item -Path $installPath -ItemType Directory -Force | Out-Null
 Copy-Item -Path "$extractedDir\$binary" -Destination "$installPath\$binary" -Force
 
 if (Test-Path "$extractedDir\bundle") {
-  Copy-Item -Recurse -Path "$extractedDir\bundle\*" -Destination $installPath -Force
+  Copy-Item -Recurse -Path "$extractedDir\bundle" -Destination $installPath -Force
+}
+if (Test-Path "$extractedDir\runtime") {
+  Copy-Item -Recurse -Path "$extractedDir\runtime" -Destination $installPath -Force
 }
 
 $action   = New-ScheduledTaskAction -Execute "$installPath\$binary"

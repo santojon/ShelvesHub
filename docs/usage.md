@@ -101,12 +101,12 @@ The `bundle/index.js` slot is populated by the Deck Shelves release pipeline. On
 
 ## RPC server
 
-The loader exposes a local JSON-RPC endpoint at `127.0.0.1:60123`. You can probe it directly:
+The loader exposes a local HTTP JSON-RPC endpoint at `127.0.0.1:60123`. You can probe it directly:
 
 ```bash
-echo '{"method":"ping"}' | nc 127.0.0.1 60123
+curl -s 127.0.0.1:60123 -d '{"method":"ping"}'
 # → {"ok":true,"result":"pong"}
 
-echo '{"method":"getVersion"}' | nc 127.0.0.1 60123
+curl -s 127.0.0.1:60123 -d '{"method":"getVersion"}'
 # → {"ok":true,"result":"0.1.0"}
 ```

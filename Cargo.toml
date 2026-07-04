@@ -5,9 +5,30 @@ edition = "2021"
 description = "A cross-platform loader for Deck Shelves"
 license = "MIT"
 
+# Shared library: the CDP client, config, logger and state are reused by both
+# the background loader service and the `shelves-devtools` CLI.
+[lib]
+name = "shelves_loader"
+path = "src/lib.rs"
+
+# The background service that injects the bundle into the Steam CEF renderer.
 [[bin]]
 name = "loader"
 path = "src/main.rs"
 
+# Cross-platform developer tool: a thin CDP client to inspect/inject/debug the
+# Steam (or any Chromium) renderer from Linux, macOS or Windows.
+[[bin]]
+name = "shelves-devtools"
+path = "src/bin/devtools.rs"
+
 [dependencies]
+# All third-party crates below are dual-licensed MIT OR Apache-2.0, which is
+# compatible with this project's MIT license. See docs/debugging.md.
 chrono = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Blocking WebSocket client for the Chrome DevTools Protocol. ws:// only
+# (localhost / SSH-tunnelled), so TLS backends are intentionally disabled.
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+clap = { version = "4", features = ["derive", "env"] }

@@ -9,6 +9,7 @@ import type {
   LifecycleApi,
   NotificationsApi,
   PlatformApi,
+  QamApi,
   RouteApi,
   RpcApi,
 } from "./contract";
@@ -63,6 +64,13 @@ const platform: PlatformApi = {
   navigateToApp(_appId) { notImplemented("platform", "navigateToApp"); },
 };
 
+// The concrete QAM implementation lives in the injected host runtime
+// (`runtime/shelves-host.js`), which is what the loader exposes as
+// `window.__SHELVES_HOST__`. This stub documents the contract surface.
+const qam: QamApi = {
+  registerPanel(_panel) { return notImplemented("qam", "registerPanel"); },
+};
+
 export const ShelvesHostApi: HostApi = {
   version: HOST_API_VERSION,
   lifecycle,
@@ -70,4 +78,5 @@ export const ShelvesHostApi: HostApi = {
   routes,
   notifications,
   platform,
+  qam,
 };

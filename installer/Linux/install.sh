@@ -13,7 +13,8 @@ sudo mkdir -p "$INSTALL_DIR"
 sudo cp "$BINARY" "$INSTALL_DIR/"
 sudo chmod +x "$INSTALL_DIR/$BINARY"
 
-[[ -d bundle ]] && sudo cp -r bundle/. "$INSTALL_DIR/bundle/"
+[[ -d bundle ]] && sudo mkdir -p "$INSTALL_DIR/bundle" && sudo cp -r bundle/. "$INSTALL_DIR/bundle/"
+[[ -d runtime ]] && sudo mkdir -p "$INSTALL_DIR/runtime" && sudo cp -r runtime/. "$INSTALL_DIR/runtime/"
 
 sudo cp installer/shelves-loader.service "$SERVICE_FILE"
 sudo chmod 644 "$SERVICE_FILE"

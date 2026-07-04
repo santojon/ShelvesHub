@@ -71,9 +71,11 @@ jobs:
       - name: Package (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p dist/bundle dist/installer
+          mkdir -p dist/bundle dist/runtime dist/installer
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
+          cp target/${{ matrix.target }}/release/shelves-devtools dist/
           cp -r bundle/. dist/bundle/
+          cp -r runtime/. dist/runtime/
           cp -r ${{ matrix.installer_dir }}/. dist/installer/
           cd dist && tar -czf ../${{ matrix.package }} .
 
@@ -81,9 +83,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist\bundle, dist\installer | Out-Null
+          New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer | Out-Null
           Copy-Item target\${{ matrix.target }}\release\${{ matrix.binary }} dist\
+          Copy-Item target\${{ matrix.target }}\release\shelves-devtools.exe dist\
           Copy-Item -Recurse bundle\* dist\bundle\
+          Copy-Item -Recurse runtime\* dist\runtime\
           Copy-Item -Recurse ${{ matrix.installer_dir }}\* dist\installer\
           Compress-Archive -Path dist\* -DestinationPath ${{ matrix.package }}
 
@@ -133,12 +137,16 @@ jobs:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
           NOTES=""
-          if [[ -f "RELEASE_NOTES.md" ]]; then
-            NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" RELEASE_NOTES.md | sed '/^$/N;/^\n$/d')
-          fi
-          if [[ -z "$NOTES" && -f "CHANGELOG.md" ]]; then
-            NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md | sed '/^$/N;/^\n$/d')
-          fi
+          # Prefer a section matching the released version, then fall back to the
+          # "Unreleased" section (used while no versioned section exists yet).
+          for SECTION in "${VERSION}" "Unreleased"; do
+            if [[ -z "$NOTES" && -f "RELEASE_NOTES.md" ]]; then
+              NOTES=$(awk "/^## \\[${SECTION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" RELEASE_NOTES.md | sed '/^$/N;/^\n$/d')
+            fi
+            if [[ -z "$NOTES" && -f "CHANGELOG.md" ]]; then
+              NOTES=$(awk "/^## \\[${SECTION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md | sed '/^$/N;/^\n$/d')
+            fi
+          done
           {
             echo "body<<BODY_EOF"
             printf '%s\n' "$NOTES"

@@ -1,52 +1,146 @@
-use std::process::Command;
+//! Injection loop.
+//!
+//! On every tick the loader connects to the Steam CEF renderer over the
+//! DevTools protocol, checks whether the Deck Shelves bundle is already
+//! executing, and injects it if not. The connection is re-established each
+//! tick, so a Steam restart (renderer disappears and reappears under a fresh
+//! marker-less context) is handled for free: the next probe returns `false`
+//! and we re-inject.
+
+use std::fs;
 use std::thread;
 use std::time::Duration;
 
+use serde_json::json;
+
+use crate::cdp::{self, CdpClient};
+use crate::config::Config;
 use crate::logger::{log_error, log_info, log_warning};
+use crate::state;
 
-const BUNDLE_PATH: &str = "/opt/shelves-loader/bundle/index.js";
-const CHECK_INTERVAL_SECS: u64 = 30;
+/// Global the loader sets in the renderer to mark a successful injection. The
+/// probe reads it back; the bundle and `shelves-devtools probe` can too.
+pub const MARKER_GLOBAL: &str = "window.__SHELVES_LOADER__";
 
-pub fn run() {
+pub fn run(config: Config) {
     log_info("loader", "Injection loop started.");
+    let interval = Duration::from_secs(config.interval_secs);
 
     loop {
-        if is_injected() {
-            log_info("loader", "Bundle already active — skipping injection.");
-        } else {
-            log_warning("loader", "Bundle not detected. Attempting injection...");
-            inject_bundle();
+        match tick(&config) {
+            Ok(true) => {
+                state::set_injected(true);
+                log_info("loader", "Bundle active in renderer.");
+            }
+            Ok(false) => {
+                state::set_injected(false);
+                log_warning("loader", "Injection attempted but not confirmed.");
+            }
+            Err(e) => {
+                state::set_injected(false);
+                // Renderer-not-ready is the common case (Steam closed, CEF
+                // debugging not enabled yet) — warn, don't crash, retry next tick.
+                log_warning("loader", &format!("Injection cycle skipped: {e}"));
+            }
         }
 
-        thread::sleep(Duration::from_secs(CHECK_INTERVAL_SECS));
+        thread::sleep(interval);
     }
 }
 
-fn is_injected() -> bool {
-    // TODO: replace this placeholder with a real CEF/WebSocket probe that
-    // checks whether the DS bundle is already executing inside the Steam
-    // Big Picture renderer process.
-    log_info("loader", "[placeholder] injection check — always returns false");
-    false
+/// One injection cycle. Returns `Ok(true)` when the bundle is confirmed active.
+fn tick(config: &Config) -> cdp::Result<bool> {
+    let mut client = CdpClient::connect_renderer(
+        &config.cef_host,
+        config.cef_port,
+        config.target_filter.as_deref(),
+    )?;
+
+    // Enabling the Runtime domain is harmless and keeps parity with tooling
+    // that listens for console events on the same target.
+    let _ = client.call("Runtime.enable", json!({}));
+
+    if probe_injected(&mut client)? {
+        return Ok(true);
+    }
+
+    log_warning("loader", "Bundle not detected — injecting.");
+
+    // Inject the host runtime first so `window.__SHELVES_HOST__` (and QAM
+    // support) is present before the bundle boots. Best-effort: if it is
+    // missing we still inject the bundle (it can fall back to an inert host).
+    inject_host_runtime(&mut client, config);
+
+    let source = read_bundle(config)?;
+    // Bundle compatibility check: never inject an empty/whitespace bundle — that
+    // would stamp the loader marker over a no-op and mask a packaging problem.
+    // A missing file is already rejected by `read_bundle`; this catches the
+    // present-but-empty case with a clear, actionable log line.
+    if source.trim().is_empty() {
+        log_warning(
+            "loader",
+            &format!(
+                "Bundle {} is empty — skipping injection.",
+                config.bundle_path.display()
+            ),
+        );
+        return Ok(false);
+    }
+    inject_bundle(&mut client, &source, env!("CARGO_PKG_VERSION"))?;
+
+    // Confirm the marker is now present rather than trusting a silent eval.
+    probe_injected(&mut client)
 }
 
-fn inject_bundle() {
-    log_info("loader", &format!("Injecting bundle: {BUNDLE_PATH}"));
-
-    let result = Command::new("sh")
-        .arg("-c")
-        .arg(format!("inject_bundle_file {BUNDLE_PATH}"))
-        .status();
-
-    match result {
-        Ok(status) if status.success() => {
-            log_info("loader", "Bundle injected successfully.");
-        }
-        Ok(status) => {
-            log_error("loader", &format!("Injection process exited with status: {status}"));
-        }
-        Err(e) => {
-            log_error("loader", &format!("Failed to spawn injection command: {e}"));
-        }
+/// Evaluate the host runtime (`window.__SHELVES_HOST__`) in the renderer. The
+/// runtime is idempotent, so re-evaluating on a later tick is harmless.
+fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
+    match fs::read_to_string(&config.host_runtime_path) {
+        Ok(source) => match client.evaluate(&source) {
+            Ok(_) => log_info("loader", "Host runtime injected."),
+            Err(e) => log_error("loader", &format!("Host runtime eval failed: {e}")),
+        },
+        Err(e) => log_warning(
+            "loader",
+            &format!(
+                "Host runtime not injected ({}): {e}",
+                config.host_runtime_path.display()
+            ),
+        ),
     }
+}
+
+/// Read the bundle source, mapping IO errors into the CDP error type so the
+/// caller can log+retry uniformly.
+fn read_bundle(config: &Config) -> cdp::Result<String> {
+    fs::read_to_string(&config.bundle_path).map_err(|e| {
+        cdp::CdpError(format!(
+            "cannot read bundle {}: {e}",
+            config.bundle_path.display()
+        ))
+    })
+}
+
+/// Check the renderer for the loader marker.
+pub fn probe_injected(client: &mut CdpClient) -> cdp::Result<bool> {
+    let expr = format!("!!({MARKER_GLOBAL} && {MARKER_GLOBAL}.injected)");
+    let value = client.evaluate(&expr)?;
+    Ok(value.as_bool().unwrap_or(false))
+}
+
+/// Evaluate the bundle source in the renderer, then stamp the loader marker.
+/// The marker is only written if the bundle evaluated without throwing, so the
+/// probe never reports a half-injected state.
+pub fn inject_bundle(client: &mut CdpClient, source: &str, version: &str) -> cdp::Result<()> {
+    client.evaluate(source).map_err(|e| {
+        log_error("loader", &format!("Bundle threw during injection: {e}"));
+        e
+    })?;
+
+    let marker = format!(
+        "{MARKER_GLOBAL} = {{ injected: true, version: {version:?}, at: Date.now() }}; true"
+    );
+    client.evaluate(&marker)?;
+    log_info("loader", &format!("Bundle injected (v{version})."));
+    Ok(())
 }

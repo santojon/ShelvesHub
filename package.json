@@ -1,0 +1,38 @@
+{
+  "name": "shelves-loader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone host/loader for Deck Shelves. pnpm is the single entry point: it installs the toolchain, builds and runs the Rust loader + devtools, drives the local debug harness, and deploys/debugs against a Steam Deck over SSH.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "setup": "bash scripts/mac-setup.sh",
+    "update": "bash scripts/mac-setup.sh --update",
+    "build": "cargo build",
+    "build:release": "cargo build --release",
+    "build:deck": "bash scripts/deck-build.sh",
+    "check": "cargo check",
+    "test": "cargo test",
+    "lint": "cargo clippy -- -D warnings",
+    "fmt": "cargo fmt",
+    "run": "cargo run --bin loader",
+    "devtools": "cargo run --quiet --bin shelves-devtools --",
+    "debug:local": "bash scripts/local-debug.sh",
+    "deck:deploy": "bash scripts/deck-deploy.sh",
+    "deck:tunnel": "bash scripts/deck-tunnel.sh",
+    "deck:logs": "bash scripts/deck-logs.sh",
+    "deck:targets": "dotenv -e .env -- sh -c 'cargo run --quiet --bin shelves-devtools -- --host \"$DECK_CDP_HOST\" --port \"$DECK_CDP_PORT\" targets'",
+    "deck:probe": "dotenv -e .env -- sh -c 'cargo run --quiet --bin shelves-devtools -- --host \"$DECK_CDP_HOST\" --port \"$DECK_CDP_PORT\" probe'",
+    "deck:inject": "dotenv -e .env -- sh -c 'cargo run --quiet --bin shelves-devtools -- --host \"$DECK_CDP_HOST\" --port \"$DECK_CDP_PORT\" inject --bundle bundle/index.js'",
+    "deck:reload": "dotenv -e .env -- sh -c 'cargo run --quiet --bin shelves-devtools -- --host \"$DECK_CDP_HOST\" --port \"$DECK_CDP_PORT\" reload'",
+    "deck:console": "dotenv -e .env -- sh -c 'cargo run --quiet --bin shelves-devtools -- --host \"$DECK_CDP_HOST\" --port \"$DECK_CDP_PORT\" console'",
+    "deck:reinject": "dotenv -e .env -- sh -c 'cargo run --quiet --bin shelves-devtools -- --host \"$DECK_CDP_HOST\" --port \"$DECK_CDP_PORT\" eval \"delete window.__SHELVES_HOST__; delete window.__SHELVES_LOADER__\"'",
+    "clean": "cargo clean"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.4"
+  }
+}

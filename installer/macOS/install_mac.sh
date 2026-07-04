@@ -43,7 +43,8 @@ mkdir -p "$INSTALL_DIR/logs" "$LAUNCH_AGENTS_DIR"
 cp "$EXTRACTED_DIR/$BINARY" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/$BINARY"
 
-[[ -d "$EXTRACTED_DIR/bundle" ]] && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
+[[ -d "$EXTRACTED_DIR/bundle" ]] && mkdir -p "$INSTALL_DIR/bundle" && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
+[[ -d "$EXTRACTED_DIR/runtime" ]] && mkdir -p "$INSTALL_DIR/runtime" && cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
 
 cp "$EXTRACTED_DIR/installer/com.shelves.loader.plist" "$PLIST_DEST"
 chmod 644 "$PLIST_DEST"

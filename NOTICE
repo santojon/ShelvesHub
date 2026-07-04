@@ -1,0 +1,28 @@
+Shelves Loader — NOTICE
+
+Shelves Loader (MIT) is the standalone host for Deck Shelves. It was developed
+independently (clean-room): no source code from the projects below was copied,
+and no binary or package from them is redistributed.
+
+Acknowledgement of the techniques this loader re-implements from
+observable behaviour only:
+
+- plugin loader — https://github.com/SteamDeckHomebrew/a plugin loader (GPL-2.0)
+  Reference for the overall standalone-host concept: enabling CEF remote
+  debugging, injecting a bundle into the Steam renderer, tracking the renderer
+  lifecycle, and adding a Quick Access Menu tab. Behaviour was studied and
+  re-implemented from scratch against the public Chrome DevTools Protocol; no
+  plugin loader code (GPL-2.0) was copied or adapted — doing so is deliberately
+  avoided to keep this project under the MIT license.
+
+- a frontend library / the packages / the packages —
+  https://github.com/SteamDeckHomebrew/a frontend library (LGPL-2.1)
+  Reference for locating Steam's webpack UI modules and the React-tree patch
+  helpers (afterPatch / findInReactTree / fiber refresh) used by the injected
+  host runtime. Re-implemented from scratch; the `the packages` packages are never
+  bundled.
+
+The Steam client, the Steam UI components located at runtime, and the SteamOS
+platform are property of Valve Corporation and are not redistributed here.
+
+See also the shared host runtime's NOTICE (@deck-shelves/host).

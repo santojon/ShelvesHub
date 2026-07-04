@@ -10,17 +10,20 @@ macOS, and Windows.
 ## High-level diagram
 
 ```
-Steam Big Picture (CEF renderer)
-  └─ bundle/index.js   ←── injected by the loader
-       └─ Deck Shelves bundle
-            └─ calls window.__SHELVES_HOST__ (HostApi)
-                          │
-                          │ TCP JSON-RPC  127.0.0.1:57381
-                          ▼
-                 Shelves Loader (Rust process)
+Steam Big Picture (CEF renderer)            shelves-devtools (CLI, any OS)
+  └─ bundle/index.js   ←── injected ───┐         │  inspect / inject / debug
+       └─ Deck Shelves bundle          │         ▼
+            └─ window.__SHELVES_HOST__  │   CDP over WebSocket (port 8080)
+                          │             └────────┴───────────┐
+                          │ HTTP JSON-RPC 127.0.0.1:60123     │
+                          ▼                                   ▼
+                 Shelves Loader (Rust process)         Steam CEF DevTools
                    ├─ main.rs      — entry point, spawns RPC thread
-                   ├─ loader.rs    — injection loop (30s interval)
-                   ├─ rpc.rs       — TCP JSON-RPC server
+                   ├─ loader.rs    — injection loop (probe + inject via CDP)
+                   ├─ cdp.rs       — Chrome DevTools Protocol client
+                   ├─ rpc.rs       — HTTP JSON-RPC server (host API)
+                   ├─ config.rs    — env-driven configuration
+                   ├─ state.rs     — shared injection state
                    └─ logger.rs    — structured logging
 ```
 
@@ -35,26 +38,32 @@ inside the bundle.
 
 ### Loader (`src/loader.rs`)
 
-Polls every 30 seconds to check whether the Deck Shelves bundle is already
-active in the Steam renderer. If not, it runs the injection command. The
-injection mechanism is currently a placeholder; it will be replaced with a
-proper CEF/WebSocket probe.
+Every tick (default 30s) it connects to the Steam CEF renderer over the Chrome
+DevTools Protocol, probes whether the bundle is already running
+(`window.__SHELVES_LOADER__`), and — if not — injects the host runtime
+(`runtime/shelves-host.js`, which becomes `window.__SHELVES_HOST__`) followed by
+`bundle/index.js` via `Runtime.evaluate`. The connection is rebuilt each tick,
+so a Steam restart is re-injected automatically. Paths and the CEF endpoint are
+configurable (`src/config.rs`).
 
-Key constant: `BUNDLE_PATH = /opt/shelves-loader/bundle/index.js`.
+### CDP client (`src/cdp.rs`)
+
+A from-scratch Chrome DevTools Protocol client over a blocking WebSocket
+(`tungstenite`). Discovers targets via `GET /json`, picks the Steam renderer,
+and exposes `evaluate` / `call` / target discovery. Shared by the loader loop
+and the `shelves-devtools` CLI. See [debugging.md](./debugging.md).
 
 ### RPC server (`src/rpc.rs`)
 
-Blocking TCP server on `127.0.0.1:57381`. Speaks newline-delimited JSON (one
-request → one response per connection). Registered methods:
+Minimal blocking HTTP/1.1 server on `127.0.0.1:60123` (configurable). The bundle
+reaches it with a `fetch` POST of `{ method, args }` from inside the renderer, so
+it emits CORS headers and handles preflight. Registered methods:
 
 | Method | Result |
 |---|---|
 | `ping` | `"pong"` |
 | `getVersion` | Loader semver from `Cargo.toml` |
-| `isInjected` | `false` (stub — not yet implemented) |
-
-The TypeScript-side `ShelvesHostApi.rpc.call()` wraps this in a `fetch`
-POST so the bundle never manages raw sockets.
+| `isInjected` | live injection state from `state.rs` |
 
 ### Logger (`src/logger.rs`)
 
@@ -76,8 +85,26 @@ See [docs/host-api.md](./host-api.md) for the full contract reference.
 ### Bundle (`bundle/index.js`)
 
 Placeholder. In production this is the built Deck Shelves bundle — placed here
-by the Deck Shelves release pipeline. The loader reads from `BUNDLE_PATH`; the
-bundle content is owned by the Deck Shelves repository.
+by the Deck Shelves release pipeline. The loader reads it from
+`SHELVES_BUNDLE_PATH` (default: next to the binary); the bundle content is owned
+by the Deck Shelves repository. A working stand-in for local testing lives in
+`examples/bundle/shelves-example.js` (see [debugging.md](./debugging.md)).
+
+### Host runtime (`runtime/shelves-host.js`)
+
+The executed implementation of the HostApi contract. The loader injects it into
+the renderer before the bundle, where it becomes `window.__SHELVES_HOST__`:
+`lifecycle`, `rpc` (HTTP), `routes`, `notifications`, `platform`, and `qam`
+(Quick Access Menu panels). It includes a from-scratch Steam webpack
+module-finder and a QAM panel host (icon rail + slide-in panel, with a seam for
+a native Steam QAM tab). Written from scratch — no third-party loader source is
+copied. Shipped alongside the binary (`runtime/` next to `loader`).
+
+### Developer tool (`src/bin/devtools.rs`)
+
+`shelves-devtools` — a cross-platform CDP CLI (`targets` / `probe` / `eval` /
+`inject` / `reload` / `console`) for inspecting and debugging the renderer from
+Linux, macOS or Windows, locally or against a Deck over an SSH tunnel.
 
 ---
 
@@ -96,9 +123,9 @@ the current user so they share the Steam session.
 
 ## Pending work (Shelves Loader mode)
 
-- [ ] Replace the `is_injected()` placeholder with a real CEF probe
-- [ ] Replace the `inject_bundle_file` shell call with the actual WebSocket
-      injection mechanism into the Steam renderer
+- [x] Replace the `is_injected()` placeholder with a real CEF probe _(Set 2)_
+- [x] Replace the shell-call injection with the WebSocket/CDP injection
+      mechanism into the Steam renderer _(Set 2)_
 - [ ] Implement `ShelvesHostApi.lifecycle.*`
 - [ ] Implement `ShelvesHostApi.routes.*` (Steam-side route registration)
 - [ ] Implement `ShelvesHostApi.notifications.*`
