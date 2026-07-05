@@ -4,12 +4,15 @@
 
 `pnpm` is the single entry point for the whole project — it installs the
 toolchain, builds/runs the Rust binaries, drives the local debug harness, and
-deploys/debugs against a Steam Deck. You only need [Homebrew](https://brew.sh)
-and pnpm to start; `pnpm setup` installs the rest.
+deploys/debugs against a Steam Deck. `pnpm setup` bootstraps the toolchain on
+**macOS, Linux/SteamOS, and Windows**; you only need Node + pnpm to start.
 
 ```bash
-pnpm setup           # one-time: install rustup+target, zig+cargo-zigbuild,
-                     # Chromium, JS deps, and create .env (macOS / Homebrew)
+pnpm setup           # one-time toolchain install, auto-dispatched per OS:
+                     #   macOS   → Homebrew (rustup, zig+cargo-zigbuild, Chromium)
+                     #   Linux   → rustup.rs + Corepack (SteamOS/Arch/Ubuntu/Fedora/…)
+                     #   Windows → winget/rustup + Corepack
+                     # then adds the Deck target, installs JS deps, creates .env
 pnpm update          # update the managed toolchain + deps
 
 pnpm build           # cargo build (loader + shelves-devtools)
@@ -32,6 +35,16 @@ pnpm deck:reload     # reload the Deck renderer
 pnpm deck:console    # stream the Deck renderer console
 pnpm deck:reinject   # clear markers so the loader re-injects an updated runtime/bundle
 ```
+
+### Supported platforms
+
+The core dev loop — `setup`, `build`, `build:release`, `test`, `lint`, `fmt`,
+`run`, `devtools`, `clean`, `debug:local`, and the `deck:*` CDP tasks — runs
+natively on **Windows, macOS, SteamOS, and other Linux** (the CDP tasks go
+through a small Node wrapper, `scripts/deck-devtools.mjs`, and `debug:local`
+dispatches to `local-debug.sh` / `local-debug.ps1`). The SSH-deploy and
+cross-compile tasks (`build:deck`, `deck:deploy`, `deck:tunnel`, `deck:logs`)
+are bash and target a Linux Deck — on Windows run them under WSL / Git Bash.
 
 Connection and CDP settings live in `.env`. The `deck:*` tasks connect directly
 to `DECK_CDP_HOST:DECK_CDP_PORT` (no tunnel needed when the Deck's CEF port is
