@@ -56,7 +56,7 @@ fn handle_connection(mut stream: TcpStream) {
     }
 
     let response_body = dispatch(&request.body);
-    log_info("rpc", &format!("{peer} -> {}", &request.body));
+    log_info("rpc", &format!("{peer} -> {}", request.body));
     if let Err(e) = write_response(&mut stream, 200, &response_body) {
         log_warning("rpc", &format!("Write error to {peer}: {e}"));
     }
