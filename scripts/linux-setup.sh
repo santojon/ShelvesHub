@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Linux / SteamOS toolchain setup for Shelves Loader.
+# Linux / SteamOS toolchain setup for ShelvesHub.
 #
 # Installs the Rust toolchain (via the official rustup.rs installer), the Steam
 # Deck build target, pnpm (via Corepack), and the project's JS dev deps.

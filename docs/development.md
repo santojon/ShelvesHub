@@ -66,7 +66,7 @@ cargo test           # run tests
 cargo clippy -- -D warnings  # lint (same flags as CI)
 ```
 
-The binary is output to `target/release/loader` (or `target/debug/loader`).
+The binary is output to `target/release/shelveshub` (or `target/debug/shelveshub`).
 
 ## Cross-compiling for SteamOS (x86_64 Linux)
 
@@ -84,7 +84,7 @@ CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-musl-gcc \
   cargo build --release --target x86_64-unknown-linux-gnu
 ```
 
-The resulting binary at `target/x86_64-unknown-linux-gnu/release/loader` can be rsync'd directly to the Deck.
+The resulting binary at `target/x86_64-unknown-linux-gnu/release/shelveshub` can be rsync'd directly to the Deck.
 
 ## SSH deploy workflow
 
@@ -94,7 +94,7 @@ Create a `.env` (or `.env.local`) in the project root:
 DECK_HOST=deck.local
 DECK_USER=deck
 DECK_SSH_KEY=~/.ssh/id_rsa
-DECK_DEPLOY_PATH=/home/deck/shelves-loader-dev
+DECK_DEPLOY_PATH=/home/deck/shelveshub-dev
 ```
 
 Deploy and restart:
@@ -108,17 +108,17 @@ rsync -av --exclude .git --exclude target \
 
 # Copy pre-built binary and restart (build must be done locally first)
 ssh -i "$DECK_SSH_KEY" $DECK_USER@$DECK_HOST \
-  "cp $DECK_DEPLOY_PATH/target/x86_64-unknown-linux-gnu/release/loader \
-       $HOME/.local/share/shelves-loader/loader && \
-   systemctl --user restart shelves-loader"
+  "cp $DECK_DEPLOY_PATH/target/x86_64-unknown-linux-gnu/release/shelveshub \
+       $HOME/.local/share/shelveshub/shelveshub && \
+   systemctl --user restart shelveshub"
 ```
 
 ## Checking the service on the Deck
 
 ```bash
 ssh deck@deck.local
-systemctl --user status shelves-loader
-journalctl --user -u shelves-loader -f
+systemctl --user status shelveshub
+journalctl --user -u shelveshub -f
 ```
 
 ## Testing the RPC server

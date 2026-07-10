@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Install ShelvesHub
+GenericName=ShelvesHub Installer
+Comment=Download and install ShelvesHub for Steam Deck
+Exec=bash -c "T=/tmp/shelveshub-install && mkdir -p $T && echo 'Downloading ShelvesHub...' && curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/shelveshub-steamos.tar.gz | tar xz -C $T && bash $T/installer/install.sh && rm -rf $T; echo; echo 'Press Enter to close...'; read"
+Terminal=true
+Icon=system-software-install
+Categories=Utility;System;

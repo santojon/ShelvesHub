@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Tail the Shelves Loader service logs on the Steam Deck over SSH.
+# Tail the ShelvesHub service logs on the Steam Deck over SSH.
 # Reads DECK_HOST / DECK_USER / DECK_SSH_KEY from .env.
 #
 # Usage:  pnpm deck:logs
@@ -21,4 +21,4 @@ SSH=(ssh)
 [[ -f "$DECK_SSH_KEY" ]] && SSH+=(-i "$DECK_SSH_KEY")
 
 exec "${SSH[@]}" "$DECK_USER@$DECK_HOST" \
-  'journalctl --user -u shelves-loader -f'
+  'journalctl --user -u shelveshub -f'

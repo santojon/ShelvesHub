@@ -41,6 +41,6 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [0.1.0] - 2026-05-13
 ### Added
-- Initial Shelves Loader scaffolding
+- Initial ShelvesHub scaffolding
 - Installers for Linux, macOS, and Windows
 - Integrated Rust logger

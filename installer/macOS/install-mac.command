@@ -1,14 +1,14 @@
 #!/bin/bash
-# Double-click this file in Finder to install Shelves Loader.
+# Double-click this file in Finder to install ShelvesHub.
 # First run: right-click → Open to bypass Gatekeeper.
 set -e
 cd "$(dirname "$0")"
 
-REPO="santojon/Shelves-Loader"
-PACKAGE="shelves-loader-macos.tar.gz"
+REPO="santojon/ShelvesHub"
+PACKAGE="shelveshub-macos.tar.gz"
 URL="https://github.com/$REPO/releases/latest/download/$PACKAGE"
 
-echo "=== Shelves Loader — macOS Installer ==="
+echo "=== ShelvesHub — macOS Installer ==="
 echo ""
 echo "[i] Downloading $PACKAGE..."
 

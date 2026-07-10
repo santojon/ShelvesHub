@@ -16,6 +16,6 @@ Steps to reproduce the behavior:
 
 **Environment (please complete the following information):**
 - OS: 
-- Shelves Loader version: 
+- ShelvesHub version: 
 
 **Additional context**

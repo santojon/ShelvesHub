@@ -1,6 +1,6 @@
 # Security Policy
 
-If you discover a security vulnerability in Shelves Loader, please avoid public disclosure and follow these steps:
+If you discover a security vulnerability in ShelvesHub, please avoid public disclosure and follow these steps:
 
 1. Open a confidential issue (private repository) or contact the maintainers via the repository's preferred security contact.
 2. Provide a minimal reproduction and steps to reproduce the issue.

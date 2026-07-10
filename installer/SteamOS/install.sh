@@ -1,15 +1,15 @@
 #!/bin/bash
 # One-click installer for SteamOS / Steam Deck
-# Usage: bash <(curl -sL https://github.com/santojon/Shelves-Loader/releases/latest/download/install-steamos.sh)
+# Usage: bash <(curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/install-steamos.sh)
 set -e
 
-REPO="santojon/Shelves-Loader"
-INSTALL_DIR="$HOME/.local/share/shelves-loader"
+REPO="santojon/ShelvesHub"
+INSTALL_DIR="$HOME/.local/share/shelveshub"
 SERVICE_DIR="$HOME/.config/systemd/user"
-BINARY="loader"
-PACKAGE="shelves-loader-steamos.tar.gz"
+BINARY="shelveshub"
+PACKAGE="shelveshub-steamos.tar.gz"
 
-echo "=== Shelves Loader — SteamOS Installer ==="
+echo "=== ShelvesHub — SteamOS Installer ==="
 
 # ── Resolve download URL ───────────────────────────────────────────────────────
 if [[ -f "$BINARY" ]]; then
@@ -59,12 +59,12 @@ fi
 # ── Register user systemd service ─────────────────────────────────────────────
 echo "[i] Setting up systemd user service..."
 mkdir -p "$SERVICE_DIR"
-cp "$EXTRACTED_DIR/installer/shelves-loader.service" "$SERVICE_DIR/"
+cp "$EXTRACTED_DIR/installer/shelveshub.service" "$SERVICE_DIR/"
 
 systemctl --user daemon-reload
-systemctl --user enable --now shelves-loader.service
+systemctl --user enable --now shelveshub.service
 
 echo ""
-echo "[OK] Shelves Loader installed and running."
+echo "[OK] ShelvesHub installed and running."
 echo "     Install path : $INSTALL_DIR"
-echo "     Service      : systemctl --user status shelves-loader"
+echo "     Service      : systemctl --user status shelveshub"

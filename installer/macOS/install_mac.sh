@@ -4,14 +4,14 @@
 # Usage (from extracted package): bash installer/install_mac.sh
 set -e
 
-REPO="santojon/Shelves-Loader"
-INSTALL_DIR="/usr/local/shelves-loader"
+REPO="santojon/ShelvesHub"
+INSTALL_DIR="/usr/local/shelveshub"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-PLIST_DEST="$LAUNCH_AGENTS_DIR/com.shelves.loader.plist"
-BINARY="loader"
-PACKAGE="shelves-loader-macos.tar.gz"
+PLIST_DEST="$LAUNCH_AGENTS_DIR/com.shelveshub.plist"
+BINARY="shelveshub"
+PACKAGE="shelveshub-macos.tar.gz"
 
-echo "=== Shelves Loader — macOS Installer ==="
+echo "=== ShelvesHub — macOS Installer ==="
 
 if [[ -f "$BINARY" ]]; then
   echo "[i] Binary found locally, skipping download."
@@ -46,11 +46,11 @@ chmod +x "$INSTALL_DIR/$BINARY"
 [[ -d "$EXTRACTED_DIR/bundle" ]] && mkdir -p "$INSTALL_DIR/bundle" && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
 [[ -d "$EXTRACTED_DIR/runtime" ]] && mkdir -p "$INSTALL_DIR/runtime" && cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
 
-cp "$EXTRACTED_DIR/installer/com.shelves.loader.plist" "$PLIST_DEST"
+cp "$EXTRACTED_DIR/installer/com.shelveshub.plist" "$PLIST_DEST"
 chmod 644 "$PLIST_DEST"
 launchctl load "$PLIST_DEST"
 
 echo ""
-echo "[OK] Shelves Loader installed and running."
+echo "[OK] ShelvesHub installed and running."
 echo "     Install path : $INSTALL_DIR"
 echo "     Service      : launchctl list | grep shelves"

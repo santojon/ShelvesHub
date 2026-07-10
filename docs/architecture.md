@@ -1,6 +1,6 @@
-# Shelves Loader — Architecture
+# ShelvesHub — Architecture
 
-Shelves Loader is a small cross-platform service that injects the Deck Shelves
+ShelvesHub is a small cross-platform service that injects the Deck Shelves
 bundle into the Steam Big Picture UI. It provides the runtime host APIs the
 bundle calls into, and manages the injection lifecycle across Linux/SteamOS,
 macOS, and Windows.
@@ -17,7 +17,7 @@ Steam Big Picture (CEF renderer)            shelves-devtools (CLI, any OS)
                           │             └────────┴───────────┐
                           │ HTTP JSON-RPC 127.0.0.1:60123     │
                           ▼                                   ▼
-                 Shelves Loader (Rust process)         Steam CEF DevTools
+                 ShelvesHub (Rust process)         Steam CEF DevTools
                    ├─ main.rs      — entry point, spawns RPC thread
                    ├─ loader.rs    — injection loop (probe + inject via CDP)
                    ├─ cdp.rs       — Chrome DevTools Protocol client
@@ -112,8 +112,8 @@ Linux, macOS or Windows, locally or against a Deck over an SSH tunnel.
 
 | Platform | Mechanism | Unit file |
 |---|---|---|
-| Linux / SteamOS | systemd | `installer/Linux/shelves-loader.service` |
-| macOS | launchd | `installer/macOS/com.shelves.loader.plist` |
+| Linux / SteamOS | systemd | `installer/Linux/shelveshub.service` |
+| macOS | launchd | `installer/macOS/com.shelveshub.plist` |
 | Windows | Task Scheduler | `installer/Windows/install.ps1` |
 
 All three start the compiled `loader` binary, restart on failure, and run as
@@ -121,7 +121,7 @@ the current user so they share the Steam session.
 
 ---
 
-## Pending work (Shelves Loader mode)
+## Pending work (ShelvesHub mode)
 
 - [x] Replace the `is_injected()` placeholder with a real CEF probe _(Set 2)_
 - [x] Replace the shell-call injection with the WebSocket/CDP injection

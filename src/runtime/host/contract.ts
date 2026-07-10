@@ -55,7 +55,7 @@ export interface QamApi {
 }
 
 /**
- * What the Shelves Loader host process provides to the Deck Shelves bundle.
+ * What the ShelvesHub host process provides to the Deck Shelves bundle.
  *
  * The bundle receives this object at startup (via `window.__SHELVES_HOST__`)
  * and uses it to register itself, invoke host methods, and manage routes.

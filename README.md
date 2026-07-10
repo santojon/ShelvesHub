@@ -1,6 +1,6 @@
-# Shelves Loader
+# ShelvesHub
 
-Shelves Loader is the standalone host service for [Deck Shelves](https://github.com/santojon/Deck-Shelves). It injects the Deck Shelves bundle into the Steam Big Picture UI and provides the runtime API the bundle calls into — no plugin loader required.
+ShelvesHub is the standalone host service for [Deck Shelves](https://github.com/santojon/Deck-Shelves). It injects the Deck Shelves bundle into the Steam Big Picture UI and provides the runtime API the bundle calls into — no plugin loader required.
 
 **Primary target:** SteamOS / Steam Deck. Also supported: Linux, macOS, Windows.
 
@@ -18,17 +18,17 @@ The TypeScript `HostApi` contract (`src/runtime/host/`) defines what the loader 
 
 ### SteamOS / Steam Deck (one-click)
 
-Download `shelves-loader.desktop` from the [latest release](https://github.com/santojon/Shelves-Loader/releases/latest), open it in Desktop Mode, and follow the terminal prompt. Installs to `~/.local/share/shelves-loader` with a user-level systemd service — no sudo required.
+Download `shelveshub.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest), open it in Desktop Mode, and follow the terminal prompt. Installs to `~/.local/share/shelveshub` with a user-level systemd service — no sudo required.
 
 ### Linux (from package)
 
-Download `shelves-loader-linux.tar.gz`, extract, and run:
+Download `shelveshub-linux.tar.gz`, extract, and run:
 
 ```bash
 sudo bash installer/install.sh
 ```
 
-Manages a system-level `shelves-loader.service` via systemd.
+Manages a system-level `shelveshub.service` via systemd.
 
 ### macOS (one-click)
 
@@ -75,11 +75,11 @@ Each release publishes 7 files:
 
 | File | Description |
 |---|---|
-| `shelves-loader-steamos.tar.gz` | SteamOS package (binary + installer + bundle slot) |
-| `shelves-loader-linux.tar.gz` | Linux package |
-| `shelves-loader-macos.tar.gz` | macOS package |
-| `shelves-loader-windows.zip` | Windows package |
-| `shelves-loader.desktop` | SteamOS one-click installer |
+| `shelveshub-steamos.tar.gz` | SteamOS package (binary + installer + bundle slot) |
+| `shelveshub-linux.tar.gz` | Linux package |
+| `shelveshub-macos.tar.gz` | macOS package |
+| `shelveshub-windows.zip` | Windows package |
+| `shelveshub.desktop` | SteamOS one-click installer |
 | `install-mac.command` | macOS one-click installer |
 | `install-windows.bat` | Windows one-click installer |
 

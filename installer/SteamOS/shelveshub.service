@@ -1,0 +1,12 @@
+[Unit]
+Description=ShelvesHub Service
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/share/shelveshub/shelveshub
+Restart=always
+RestartSec=10
+WorkingDirectory=%h/.local/share/shelveshub
+
+[Install]
+WantedBy=default.target

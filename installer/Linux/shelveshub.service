@@ -1,12 +1,12 @@
 [Unit]
-Description=Shelves Loader Service
+Description=ShelvesHub Service
 After=network-online.target
 
 [Service]
-ExecStart=/opt/shelves-loader/loader
+ExecStart=/opt/shelveshub/shelveshub
 Restart=always
 RestartSec=10
-WorkingDirectory=/opt/shelves-loader
+WorkingDirectory=/opt/shelveshub
 Environment=TERM=xterm-256color
 
 [Install]

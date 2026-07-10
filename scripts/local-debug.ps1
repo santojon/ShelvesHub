@@ -41,7 +41,7 @@ Write-Host "[i] Bundle  : $Bundle"
 Write-Host "[i] Building loader + shelves-devtools..."
 cargo build --quiet
 $Devtools = Join-Path $Root "target\debug\shelves-devtools.exe"
-$Loader   = Join-Path $Root "target\debug\loader.exe"
+$Loader   = Join-Path $Root "target\debug\shelveshub.exe"
 
 $Profile = Join-Path ([System.IO.Path]::GetTempPath()) ("shelves-" + [guid]::NewGuid())
 $BrowserArgs = @(

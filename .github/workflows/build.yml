@@ -20,33 +20,33 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary: loader
+            binary: shelveshub
             installer_dir: installer/SteamOS
-            package: shelves-loader-steamos.tar.gz
-            oneclick_src: shelves-loader.desktop
-            oneclick_name: shelves-loader.desktop
+            package: shelveshub-steamos.tar.gz
+            oneclick_src: shelveshub.desktop
+            oneclick_name: shelveshub.desktop
 
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary: loader
+            binary: shelveshub
             installer_dir: installer/Linux
-            package: shelves-loader-linux.tar.gz
+            package: shelveshub-linux.tar.gz
             oneclick_src: ""
             oneclick_name: ""
 
           - os: macos-latest
             target: aarch64-apple-darwin
-            binary: loader
+            binary: shelveshub
             installer_dir: installer/macOS
-            package: shelves-loader-macos.tar.gz
+            package: shelveshub-macos.tar.gz
             oneclick_src: install-mac.command
             oneclick_name: install-mac.command
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            binary: loader.exe
+            binary: shelveshub.exe
             installer_dir: installer/Windows
-            package: shelves-loader-windows.zip
+            package: shelveshub-windows.zip
             oneclick_src: install-windows.bat
             oneclick_name: install-windows.bat
 

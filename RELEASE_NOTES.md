@@ -1,6 +1,6 @@
 # Release Notes
 
-Highlights for each release, written for people using Shelves Loader. The full,
+Highlights for each release, written for people using ShelvesHub. The full,
 detailed list of changes lives in [CHANGELOG.md](CHANGELOG.md).
 
 Releases are created automatically by CI when a version tag (`vMAJOR.MINOR.PATCH`)
@@ -30,6 +30,6 @@ something that actually runs Deck Shelves.
 
 ## [0.1.0] - 2026-05-13
 
-- First version of Shelves Loader: the background service, installers for Linux,
+- First version of ShelvesHub: the background service, installers for Linux,
   macOS and Windows, and logging. Groundwork only — it did not yet load Deck
   Shelves.

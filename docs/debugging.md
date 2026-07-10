@@ -1,6 +1,6 @@
 # Debugging & DevTools
 
-Shelves Loader injects the Deck Shelves bundle into Steam's CEF (Chromium
+ShelvesHub injects the Deck Shelves bundle into Steam's CEF (Chromium
 Embedded Framework) renderer over the **Chrome DevTools Protocol (CDP)**. Because
 CEF and Chromium speak the same protocol, the same tooling works against a real
 Steam Deck and against a plain local browser — from Linux, macOS or Windows.
@@ -143,7 +143,7 @@ shelves-devtools --port 9222 --target harness \
 Logs on the Deck:
 
 ```bash
-ssh deck@deck.local 'journalctl --user -u shelves-loader -f'
+ssh deck@deck.local 'journalctl --user -u shelveshub -f'
 ```
 
 ---

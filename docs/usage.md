@@ -1,6 +1,6 @@
-# Using Shelves Loader
+# Using ShelvesHub
 
-Shelves Loader runs as a background service and injects the Deck Shelves bundle into the Steam Big Picture UI. Below are platform-specific install and usage notes.
+ShelvesHub runs as a background service and injects the Deck Shelves bundle into the Steam Big Picture UI. Below are platform-specific install and usage notes.
 
 ---
 
@@ -8,23 +8,23 @@ Shelves Loader runs as a background service and injects the Deck Shelves bundle 
 
 ### One-click
 
-1. Download `shelves-loader.desktop` from the [latest release](https://github.com/santojon/Shelves-Loader/releases/latest).
+1. Download `shelveshub.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest).
 2. In Desktop Mode, double-click the file. A terminal opens and runs the installer automatically.
-3. The installer downloads the package, installs to `~/.local/share/shelves-loader`, and registers a user-level systemd service. No sudo required.
+3. The installer downloads the package, installs to `~/.local/share/shelveshub`, and registers a user-level systemd service. No sudo required.
 
 ### From package
 
 ```bash
-# Extract shelves-loader-steamos.tar.gz, then:
+# Extract shelveshub-steamos.tar.gz, then:
 bash installer/install.sh
 ```
 
 **Service commands:**
 
 ```bash
-systemctl --user status shelves-loader
-systemctl --user restart shelves-loader
-systemctl --user stop shelves-loader
+systemctl --user status shelveshub
+systemctl --user restart shelveshub
+systemctl --user stop shelveshub
 ```
 
 ---
@@ -34,17 +34,17 @@ systemctl --user stop shelves-loader
 ### From package
 
 ```bash
-# Extract shelves-loader-linux.tar.gz, then:
+# Extract shelveshub-linux.tar.gz, then:
 sudo bash installer/install.sh
 ```
 
-Installs to `/opt/shelves-loader` and registers a system-level `shelves-loader.service`.
+Installs to `/opt/shelveshub` and registers a system-level `shelveshub.service`.
 
 **Service commands:**
 
 ```bash
-systemctl status shelves-loader
-sudo systemctl restart shelves-loader
+systemctl status shelveshub
+sudo systemctl restart shelveshub
 ```
 
 ---
@@ -55,12 +55,12 @@ sudo systemctl restart shelves-loader
 
 1. Download `install-mac.command` from the latest release.
 2. Double-click it in Finder. On first run, right-click → Open to bypass Gatekeeper.
-3. A Terminal window opens, downloads the package, installs to `/usr/local/shelves-loader`, and loads a launchd service.
+3. A Terminal window opens, downloads the package, installs to `/usr/local/shelveshub`, and loads a launchd service.
 
 ### From package
 
 ```bash
-# Extract shelves-loader-macos.tar.gz, then:
+# Extract shelveshub-macos.tar.gz, then:
 bash installer/install_mac.sh
 ```
 
@@ -78,19 +78,19 @@ launchctl list | grep shelves
 
 1. Download `install-windows.bat` from the latest release.
 2. Double-click it and accept the UAC prompt (admin required).
-3. The installer downloads the package, copies to `C:\Program Files\Shelves-Loader`, and registers a Task Scheduler entry that starts the loader at boot.
+3. The installer downloads the package, copies to `C:\Program Files\ShelvesHub`, and registers a Task Scheduler entry that starts the loader at boot.
 
 ### From package
 
 ```powershell
-# Extract shelves-loader-windows.zip, then (as Administrator):
+# Extract shelveshub-windows.zip, then (as Administrator):
 .\installer\install.ps1
 ```
 
 **Verify service:**
 
 ```powershell
-Get-ScheduledTask -TaskName ShelvesLoader
+Get-ScheduledTask -TaskName ShelvesHub
 ```
 
 ---

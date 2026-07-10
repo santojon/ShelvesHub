@@ -56,7 +56,7 @@ echo "[i] Bundle  : $BUNDLE"
 echo "[i] Building loader + shelves-devtools..."
 cargo build --quiet
 DEVTOOLS="$ROOT/target/debug/shelves-devtools"
-LOADER="$ROOT/target/debug/loader"
+LOADER="$ROOT/target/debug/shelveshub"
 
 PROFILE="$(mktemp -d)"
 BROWSER_PID=""

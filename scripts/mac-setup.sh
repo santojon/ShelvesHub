@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# macOS toolchain setup for Shelves Loader, via Homebrew.
+# macOS toolchain setup for ShelvesHub, via Homebrew.
 #
 # Installs everything needed to build, run, debug and cross-compile the loader
 # for a Steam Deck from a Mac. Idempotent: safe to re-run. Pass --update to also
@@ -67,11 +67,11 @@ rustup target add x86_64-unknown-linux-gnu >/dev/null 2>&1 || true
 # bin dir. Persist it on PATH so `pnpm build` etc. work in a fresh shell.
 RUSTUP_BIN="$(brew --prefix rustup)/bin"
 ZSHRC="$HOME/.zshrc"
-if ! grep -q "shelves-loader (rust toolchain)" "$ZSHRC" 2>/dev/null; then
+if ! grep -q "shelveshub (rust toolchain)" "$ZSHRC" 2>/dev/null; then
   echo "[+] adding rust toolchain to PATH in $ZSHRC"
   {
     echo ""
-    echo "# shelves-loader (rust toolchain) — Homebrew keg-only rustup"
+    echo "# shelveshub (rust toolchain) — Homebrew keg-only rustup"
     echo "export PATH=\"$RUSTUP_BIN:\$PATH\""
   } >> "$ZSHRC"
 else

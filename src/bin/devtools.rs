@@ -20,15 +20,15 @@ use std::time::{Duration, Instant};
 use clap::{Parser, Subcommand};
 use serde_json::{json, Value};
 
-use shelves_loader::cdp::{self, CdpClient};
-use shelves_loader::config::{DEFAULT_CEF_HOST, DEFAULT_CEF_PORT};
-use shelves_loader::loader;
+use shelveshub::cdp::{self, CdpClient};
+use shelveshub::config::{DEFAULT_CEF_HOST, DEFAULT_CEF_PORT};
+use shelveshub::loader;
 
 #[derive(Parser)]
 #[command(
     name = "shelves-devtools",
     version,
-    about = "Cross-platform CDP dev tool for Shelves Loader (inspect / inject / debug a CEF or Chromium renderer)"
+    about = "Cross-platform CDP dev tool for ShelvesHub (inspect / inject / debug a CEF or Chromium renderer)"
 )]
 struct Cli {
     /// DevTools host (Steam CEF / Chromium remote-debugging host).

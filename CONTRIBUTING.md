@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to Shelves Loader. Below are recommended steps and conventions used by this project.
+Thanks for your interest in contributing to ShelvesHub. Below are recommended steps and conventions used by this project.
 
 ## Getting started
 

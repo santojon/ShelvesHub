@@ -1,5 +1,5 @@
 [package]
-name = "shelves-loader"
+name = "shelveshub"
 version = "0.1.0"
 edition = "2021"
 description = "A cross-platform loader for Deck Shelves"
@@ -8,12 +8,12 @@ license = "MIT"
 # Shared library: the CDP client, config, logger and state are reused by both
 # the background loader service and the `shelves-devtools` CLI.
 [lib]
-name = "shelves_loader"
+name = "shelveshub"
 path = "src/lib.rs"
 
 # The background service that injects the bundle into the Steam CEF renderer.
 [[bin]]
-name = "loader"
+name = "shelveshub"
 path = "src/main.rs"
 
 # Cross-platform developer tool: a thin CDP client to inspect/inject/debug the

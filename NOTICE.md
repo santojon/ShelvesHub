@@ -1,6 +1,6 @@
 # Notice — Acknowledgements & Inspirations
 
-Shelves Loader (MIT) is the standalone host for Deck Shelves — the process that
+ShelvesHub (MIT) is the standalone host for Deck Shelves — the process that
 injects Deck Shelves into Steam **and** the injected host runtime
 (`runtime/shelves-host.js`, the concrete `window.__SHELVES_HOST__`) that provides
 the Steam UI layer and the Quick Access Menu tab. It was written independently
@@ -38,7 +38,7 @@ of endorsement or affiliation.
 
 ## Steam / SteamOS
 
-Shelves Loader drives Steam's CEF renderer via the DevTools protocol and locates
+ShelvesHub drives Steam's CEF renderer via the DevTools protocol and locates
 and renders Steam's own UI components at runtime. Steam, SteamOS, and Steam Deck
 are trademarks of Valve Corporation. This is an unofficial, community project,
 not affiliated with or endorsed by Valve, and it redistributes none of Steam's

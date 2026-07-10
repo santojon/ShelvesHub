@@ -3,20 +3,20 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.shelves.loader</string>
+    <string>com.shelveshub</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/shelves-loader/loader</string>
+        <string>/usr/local/shelveshub/shelveshub</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>WorkingDirectory</key>
-    <string>/usr/local/shelves-loader</string>
+    <string>/usr/local/shelveshub</string>
     <key>StandardOutPath</key>
-    <string>/usr/local/shelves-loader/logs/out.log</string>
+    <string>/usr/local/shelveshub/logs/out.log</string>
     <key>StandardErrorPath</key>
-    <string>/usr/local/shelves-loader/logs/error.log</string>
+    <string>/usr/local/shelveshub/logs/error.log</string>
 </dict>
 </plist>

@@ -2,7 +2,7 @@
 
 Contract version: **1.1.0** (additive-only after the 1.0.0 baseline).
 
-The `HostApi` interface defines what the Shelves Loader host process provides
+The `HostApi` interface defines what the ShelvesHub host process provides
 to the Deck Shelves bundle. The bundle receives this object as
 `window.__SHELVES_HOST__` at startup.
 

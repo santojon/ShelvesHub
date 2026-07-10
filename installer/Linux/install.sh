@@ -3,11 +3,11 @@
 # Run from the extracted package directory: sudo bash installer/install.sh
 set -e
 
-INSTALL_DIR="/opt/shelves-loader"
-SERVICE_FILE="/etc/systemd/system/shelves-loader.service"
-BINARY="loader"
+INSTALL_DIR="/opt/shelveshub"
+SERVICE_FILE="/etc/systemd/system/shelveshub.service"
+BINARY="shelveshub"
 
-echo "=== Shelves Loader — Linux Installer ==="
+echo "=== ShelvesHub — Linux Installer ==="
 
 sudo mkdir -p "$INSTALL_DIR"
 sudo cp "$BINARY" "$INSTALL_DIR/"
@@ -16,13 +16,13 @@ sudo chmod +x "$INSTALL_DIR/$BINARY"
 [[ -d bundle ]] && sudo mkdir -p "$INSTALL_DIR/bundle" && sudo cp -r bundle/. "$INSTALL_DIR/bundle/"
 [[ -d runtime ]] && sudo mkdir -p "$INSTALL_DIR/runtime" && sudo cp -r runtime/. "$INSTALL_DIR/runtime/"
 
-sudo cp installer/shelves-loader.service "$SERVICE_FILE"
+sudo cp installer/shelveshub.service "$SERVICE_FILE"
 sudo chmod 644 "$SERVICE_FILE"
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now shelves-loader.service
+sudo systemctl enable --now shelveshub.service
 
 echo ""
-echo "[OK] Shelves Loader installed and running."
+echo "[OK] ShelvesHub installed and running."
 echo "     Install path : $INSTALL_DIR"
-echo "     Service      : systemctl status shelves-loader"
+echo "     Service      : systemctl status shelveshub"

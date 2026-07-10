@@ -1,4 +1,4 @@
-// ShelvesHostApi — the Shelves Loader implementation of HostApi.
+// ShelvesHostApi — the ShelvesHub implementation of HostApi.
 //
 // Injected into the Steam renderer as `window.__SHELVES_HOST__` so the
 // Deck Shelves bundle can call host services without knowing how they

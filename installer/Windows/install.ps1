@@ -1,15 +1,15 @@
 # One-click installer for Windows
-# Usage (online): irm https://github.com/santojon/Shelves-Loader/releases/latest/download/install-windows.ps1 | iex
+# Usage (online): irm https://github.com/santojon/ShelvesHub/releases/latest/download/install-windows.ps1 | iex
 # Usage (from extracted package): .\installer\install.ps1
 #Requires -RunAsAdministrator
 
 $ErrorActionPreference = "Stop"
-$repo        = "santojon/Shelves-Loader"
-$binary      = "loader.exe"
-$package     = "shelves-loader-windows.zip"
-$installPath = "C:\Program Files\Shelves-Loader"
+$repo        = "santojon/ShelvesHub"
+$binary      = "shelveshub.exe"
+$package     = "shelveshub-windows.zip"
+$installPath = "C:\Program Files\ShelvesHub"
 
-Write-Output "=== Shelves Loader — Windows Installer ==="
+Write-Output "=== ShelvesHub — Windows Installer ==="
 
 if (Test-Path $binary) {
   Write-Output "[i] Binary found locally, skipping download."
@@ -46,12 +46,12 @@ if (Test-Path "$extractedDir\runtime") {
 $action   = New-ScheduledTaskAction -Execute "$installPath\$binary"
 $trigger  = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName "ShelvesLoader" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
-Start-ScheduledTask -TaskName "ShelvesLoader"
+Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+Start-ScheduledTask -TaskName "ShelvesHub"
 
 if (Test-Path $tmpDir -ErrorAction SilentlyContinue) { Remove-Item -Recurse -Force $tmpDir }
 
 Write-Output ""
-Write-Output "[OK] Shelves Loader installed and running."
+Write-Output "[OK] ShelvesHub installed and running."
 Write-Output "     Install path : $installPath"
-Write-Output "     Service      : Get-ScheduledTask -TaskName ShelvesLoader"
+Write-Output "     Service      : Get-ScheduledTask -TaskName ShelvesHub"

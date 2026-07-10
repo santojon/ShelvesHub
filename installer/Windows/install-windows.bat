@@ -1,6 +1,6 @@
 @echo off
 setlocal
-echo === Shelves Loader - Windows Installer ===
+echo === ShelvesHub - Windows Installer ===
 echo.
 
 net session >nul 2>&1
@@ -10,15 +10,15 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
-set "URL=https://github.com/santojon/Shelves-Loader/releases/latest/download/shelves-loader-windows.zip"
-set "T=%TEMP%\shelves-loader-install"
+set "URL=https://github.com/santojon/ShelvesHub/releases/latest/download/shelveshub-windows.zip"
+set "T=%TEMP%\shelveshub-install"
 
 powershell -ExecutionPolicy Bypass -NoProfile -Command ^
     "$ErrorActionPreference = 'Stop';" ^
     "$t = '%T%';" ^
     "if (Test-Path $t) { Remove-Item $t -Recurse -Force };" ^
     "New-Item -ItemType Directory $t | Out-Null;" ^
-    "Write-Output '[i] Downloading Shelves Loader...';" ^
+    "Write-Output '[i] Downloading ShelvesHub...';" ^
     "Invoke-WebRequest '%URL%' -OutFile \"$t\pkg.zip\";" ^
     "Write-Output '[i] Extracting...';" ^
     "Expand-Archive \"$t\pkg.zip\" $t -Force;" ^

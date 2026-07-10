@@ -1,4 +1,4 @@
-# Windows toolchain setup for Shelves Loader.
+# Windows toolchain setup for ShelvesHub.
 #
 # Installs the Rust toolchain (rustup), the Steam Deck build target, pnpm (via
 # Corepack), and the project's JS dev deps. Idempotent; pass -Update to upgrade.

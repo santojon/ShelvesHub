@@ -1,6 +1,6 @@
 // runtime/shelves-host.js
 //
-// The Shelves Loader host runtime. Injected by the loader into the Steam UI
+// The ShelvesHub host runtime. Injected by the loader into the Steam UI
 // renderer (over CDP) before the Deck Shelves bundle, where it becomes
 // `window.__SHELVES_HOST__` — the concrete HostApi the bundle calls into.
 //
@@ -39,7 +39,7 @@
           return k.indexOf("webpackChunk") === 0 && Array.isArray(window[k]);
         })[0];
         if (!key) return;
-        window[key].push([[Symbol("shelves-loader")], {}, function (r) { req = r; }]);
+        window[key].push([[Symbol("shelveshub")], {}, function (r) { req = r; }]);
       } catch (e) { log("webpack capture failed:", e && e.message); }
       if (!req || !req.m) return;
       Object.keys(req.m).forEach(function (id) {

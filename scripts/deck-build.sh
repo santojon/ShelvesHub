@@ -29,4 +29,4 @@ else
   cargo build --release --target "$TARGET"
 fi
 
-echo "[OK] built target/$TARGET/release/loader"
+echo "[OK] built target/$TARGET/release/shelveshub"

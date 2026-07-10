@@ -1,4 +1,4 @@
-//! Shelves Loader — shared library.
+//! ShelvesHub — shared library.
 //!
 //! The CDP client, configuration, logging and injection state live here so
 //! both binaries can reuse them:
