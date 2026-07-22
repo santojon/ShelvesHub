@@ -2,7 +2,7 @@
 //
 // A self-contained, framework-free stand-in for the real Deck Shelves bundle.
 // Its QAM panel is a *mock of the Deck Shelves settings menu* (the one Deck
-// Shelves shows in the loader's Quick Access Menu): an "Enabled" activation toggle
+// Shelves shows in the Steam Quick Access Menu): an "Enabled" activation toggle
 // plus collapsible sections (Behavior / Additional features / Shelves / Smart
 // Shelves) with Steam-style toggle rows — so the loader's injection + host API
 // + panel rendering can be validated against a realistic UI without a build.

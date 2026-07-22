@@ -8,8 +8,18 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
-This is the first set of work that turns the loader from a skeleton into
-something that actually runs Deck Shelves.
+- **Real data, hosted here.** The service now runs the Deck Shelves data
+  backend itself — settings, backups and friends — supervising it, restarting
+  it on crashes, and surfacing its logs in one place. Drop the backend at
+  `backend/` next to the binary (or set `SHELVES_BACKEND_DIR`) and everything
+  else is automatic.
+- **Plays nice with another host.** If Deck Shelves is already mounted by a
+  different host on the same machine, the service stands down instead of
+  loading it twice. Prefer this host? `SHELVES_FORCE_OWNER=shelveshub` makes
+  the hand-over explicit and safe — one writer for your settings, always.
+
+This release also includes the work that turned the loader from a skeleton
+into something that actually runs Deck Shelves.
 
 - **Deck Shelves now loads into Steam.** The loader detects the Steam interface,
   injects Deck Shelves, and recovers on its own if Steam restarts.

@@ -14,6 +14,7 @@ use std::net::{TcpListener, TcpStream};
 
 use serde_json::Value;
 
+use crate::backend;
 use crate::logger::{log_error, log_info, log_warning};
 use crate::state;
 
@@ -31,7 +32,11 @@ pub fn serve(addr: &str) {
 
     for stream in listener.incoming() {
         match stream {
-            Ok(s) => handle_connection(s),
+            // One thread per connection: a slow data call proxied to the
+            // Python backend must not block ping/version probes.
+            Ok(s) => {
+                std::thread::spawn(move || handle_connection(s));
+            }
             Err(e) => log_warning("rpc", &format!("Accept error: {e}")),
         }
     }
@@ -56,7 +61,7 @@ fn handle_connection(mut stream: TcpStream) {
     }
 
     let response_body = dispatch(&request.body);
-    log_info("rpc", &format!("{peer} -> {}", request.body));
+    log_info("rpc", &format!("{peer} -> {}", truncate_for_log(&request.body)));
     if let Err(e) = write_response(&mut stream, 200, &response_body) {
         log_warning("rpc", &format!("Write error to {peer}: {e}"));
     }
@@ -100,9 +105,20 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
     })
 }
 
+/// Keep journal lines sane: request bodies can be full settings documents.
+fn truncate_for_log(body: &str) -> String {
+    const MAX: usize = 300;
+    if body.len() <= MAX {
+        return body.to_string();
+    }
+    let cut = body.char_indices().take_while(|(i, _)| *i < MAX).last().map(|(i, c)| i + c.len_utf8()).unwrap_or(0);
+    format!("{}… ({} bytes)", &body[..cut], body.len())
+}
+
 fn dispatch(body: &str) -> String {
-    let method = serde_json::from_str::<Value>(body)
-        .ok()
+    let parsed = serde_json::from_str::<Value>(body).ok();
+    let method = parsed
+        .as_ref()
         .and_then(|v| v.get("method").and_then(Value::as_str).map(str::to_string));
 
     match method.as_deref() {
@@ -116,6 +132,23 @@ fn dispatch(body: &str) -> String {
             state::set_bundle_ready(true);
             log_info("rpc", "Bundle reported ready (initialisation confirmed).");
             ok("true".to_string())
+        }
+        // Health of the hosted Python backend (loader-local, not proxied).
+        Some("getBackendStatus") => ok(format!(
+            r#"{{"configured":{},"running":{}}}"#,
+            backend::enabled(),
+            backend::is_running()
+        )),
+        // Anything else is a data method owned by the hosted Python backend.
+        Some(other) if backend::enabled() => {
+            let args = parsed
+                .as_ref()
+                .and_then(|v| v.get("args").cloned())
+                .unwrap_or(Value::Null);
+            match backend::call(other, &args) {
+                Ok(result) => ok(result.to_string()),
+                Err(message) => err(&message),
+            }
         }
         Some(other) => err(&format!("unknown method: {other}")),
         None => err("missing or invalid method"),

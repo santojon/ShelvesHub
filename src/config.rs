@@ -32,6 +32,20 @@ pub struct Config {
     pub target_filter: Option<String>,
     /// Seconds between injection-loop ticks.
     pub interval_secs: u64,
+    /// Directory containing the Deck Shelves Python backend (`main.py` etc.).
+    /// Unset = backend hosting disabled; data RPC methods return an error.
+    pub backend_dir: Option<PathBuf>,
+    /// Path to the backend runner script spawned to host the backend.
+    pub backend_runner_path: PathBuf,
+    /// Python interpreter used to run the backend.
+    pub python_bin: String,
+    /// Directory where the backend keeps `settings.json` (exported to the
+    /// backend process, which reads it before any of its own fallbacks).
+    pub settings_dir: PathBuf,
+    /// When true (`SHELVES_FORCE_OWNER=shelveshub`), inject even if another
+    /// host adapter already owns the renderer; the owner-preference global is
+    /// stamped so the other adapter stands down cooperatively.
+    pub force_owner: bool,
 }
 
 impl Config {
@@ -47,6 +61,24 @@ impl Config {
             ),
             target_filter: env::var("SHELVES_TARGET").ok().filter(|s| !s.is_empty()),
             interval_secs: env_u64("SHELVES_INTERVAL_SECS", 30),
+            backend_dir: env::var("SHELVES_BACKEND_DIR")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from)
+                .or_else(default_backend_dir),
+            backend_runner_path: resolve_asset_path(
+                "SHELVES_BACKEND_RUNNER_PATH",
+                "runtime/backend/shelveshub_backend.py",
+            ),
+            python_bin: env_string("SHELVES_PYTHON", default_python()),
+            settings_dir: env::var("SHELVES_SETTINGS_DIR")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(default_settings_dir),
+            force_owner: env::var("SHELVES_FORCE_OWNER")
+                .map(|v| v.eq_ignore_ascii_case("shelveshub"))
+                .unwrap_or(false),
         }
     }
 
@@ -57,7 +89,7 @@ impl Config {
 
     pub fn summary(&self) -> String {
         format!(
-            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s",
+            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={}{}",
             self.cef_host,
             self.cef_port,
             self.rpc_addr,
@@ -65,7 +97,49 @@ impl Config {
             self.bundle_path.display(),
             self.target_filter.as_deref().unwrap_or("<auto>"),
             self.interval_secs,
+            self.backend_dir
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "<disabled>".to_string()),
+            self.settings_dir.display(),
+            if self.force_owner { " force_owner=shelveshub" } else { "" },
         )
+    }
+}
+
+/// Installed layout auto-detection: a backend payload dropped at
+/// `<exe_dir>/backend/main.py` enables hosting without any configuration.
+fn default_backend_dir() -> Option<PathBuf> {
+    let exe = env::current_exe().ok()?;
+    let candidate = exe.parent()?.join("backend");
+    candidate.join("main.py").is_file().then_some(candidate)
+}
+
+fn default_python() -> &'static str {
+    if cfg!(windows) {
+        "python"
+    } else {
+        "python3"
+    }
+}
+
+/// Per-OS default for the ShelvesHub settings store. Mirrors the runner's
+/// own fallback so both sides agree when neither env var is set.
+fn default_settings_dir() -> PathBuf {
+    let home = env::var("HOME")
+        .or_else(|_| env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    if cfg!(windows) {
+        let base = env::var("APPDATA").unwrap_or(home);
+        PathBuf::from(base).join("deck-shelves")
+    } else if cfg!(target_os = "macos") {
+        PathBuf::from(home).join("Library/Application Support/deck-shelves")
+    } else {
+        let base = env::var("XDG_DATA_HOME")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| format!("{home}/.local/share"));
+        PathBuf::from(base).join("deck-shelves")
     }
 }
 

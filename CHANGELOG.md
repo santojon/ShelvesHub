@@ -6,6 +6,30 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 ### Added
+- The service can now host the Deck Shelves data backend directly: it starts
+  the backend as a supervised child process, restarts it if it crashes, and
+  forwards data requests (settings, backups, and the rest) from the Steam
+  interface to it. Backend log lines show up in the service's own log.
+- The hosting environment is fully self-contained and neutral: the backend
+  gets a settings directory (outside any other tool's file tree), a log
+  channel, and a simple request/response protocol — nothing more is emulated
+  or provided. New settings: `SHELVES_BACKEND_DIR` (enables hosting),
+  `SHELVES_PYTHON`, `SHELVES_SETTINGS_DIR`, `SHELVES_BACKEND_RUNNER_PATH`.
+- A new `getBackendStatus` request reports whether backend hosting is
+  configured and the process is alive.
+- An example backend (`examples/backend/`) exercises the whole pipeline
+  end to end without any external project.
+- Coexistence with another installed host: the service now respects the
+  renderer's single-owner claim and stands down instead of loading the plugin
+  twice. `SHELVES_FORCE_OWNER=shelveshub` claims ownership explicitly, and the
+  other side yields — settings are only ever written by one host at a time.
+- A backend payload placed at `backend/` next to the binary is detected and
+  hosted automatically — no configuration needed. Installers copy that payload
+  when the package carries one.
+### Changed
+- The request server now answers each connection on its own thread, so a slow
+  data request can no longer delay health checks.
+- Long request bodies are truncated in the log.
 - The loader now actually loads Deck Shelves into Steam. It finds the running
   Steam interface, injects the Deck Shelves bundle, and re-injects on its own if
   Steam restarts — previously this was just a stub that did nothing.

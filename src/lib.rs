@@ -6,6 +6,7 @@
 //! - `loader`           — the background service ([`loader`] + [`rpc`]).
 //! - `shelves-devtools` — the cross-platform CDP developer tool.
 
+pub mod backend;
 pub mod cdp;
 pub mod config;
 pub mod loader;

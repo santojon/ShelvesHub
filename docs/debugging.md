@@ -15,7 +15,7 @@ There are two things in this repo for that:
 
 ---
 
-## How injection works (Set 2)
+## How injection works
 
 1. **Discovery.** The loader fetches `http://<cef-host>:<cef-port>/json` and
    picks the renderer target (Steam's `SharedJSContext` / Big Picture window, or

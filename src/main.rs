@@ -1,6 +1,6 @@
 use shelveshub::config::Config;
 use shelveshub::logger::log_info;
-use shelveshub::{loader, rpc};
+use shelveshub::{backend, loader, rpc};
 
 fn main() {
     log_info("main", "ShelvesHub starting...");
@@ -8,6 +8,9 @@ fn main() {
 
     let config = Config::from_env();
     log_info("main", &format!("Config: {}", config.summary()));
+
+    // Host the Deck Shelves Python backend (data RPC) when configured.
+    backend::init(&config);
 
     // Spawn the RPC server on a background thread so the loader loop
     // can run concurrently without blocking on incoming connections.

@@ -42,6 +42,10 @@ if (Test-Path "$extractedDir\bundle") {
 if (Test-Path "$extractedDir\runtime") {
   Copy-Item -Recurse -Path "$extractedDir\runtime" -Destination $installPath -Force
 }
+# Optional data-backend payload: auto-detected by the service at <install>\backend.
+if (Test-Path "$extractedDir\backend") {
+  Copy-Item -Recurse -Path "$extractedDir\backend" -Destination $installPath -Force
+}
 
 $action   = New-ScheduledTaskAction -Execute "$installPath\$binary"
 $trigger  = New-ScheduledTaskTrigger -AtStartup

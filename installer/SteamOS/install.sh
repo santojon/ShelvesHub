@@ -56,6 +56,12 @@ if [[ -d "$EXTRACTED_DIR/runtime" ]]; then
   cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
 fi
 
+# Optional data-backend payload: auto-detected by the service at <install>/backend.
+if [[ -d "$EXTRACTED_DIR/backend" ]]; then
+  mkdir -p "$INSTALL_DIR/backend"
+  cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
+fi
+
 # ── Register user systemd service ─────────────────────────────────────────────
 echo "[i] Setting up systemd user service..."
 mkdir -p "$SERVICE_DIR"

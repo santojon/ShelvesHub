@@ -45,6 +45,8 @@ chmod +x "$INSTALL_DIR/$BINARY"
 
 [[ -d "$EXTRACTED_DIR/bundle" ]] && mkdir -p "$INSTALL_DIR/bundle" && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
 [[ -d "$EXTRACTED_DIR/runtime" ]] && mkdir -p "$INSTALL_DIR/runtime" && cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
+# Optional data-backend payload: auto-detected by the service at <install>/backend.
+[[ -d "$EXTRACTED_DIR/backend" ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
 
 cp "$EXTRACTED_DIR/installer/com.shelveshub.plist" "$PLIST_DEST"
 chmod 644 "$PLIST_DEST"

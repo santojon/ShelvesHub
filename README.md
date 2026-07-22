@@ -1,6 +1,6 @@
 # ShelvesHub
 
-ShelvesHub is the standalone host service for [Deck Shelves](https://github.com/santojon/Deck-Shelves). It injects the Deck Shelves bundle into the Steam Big Picture UI and provides the runtime API the bundle calls into — no plugin loader required.
+ShelvesHub is the independent host service for [Deck Shelves](https://github.com/santojon/Deck-Shelves). It injects the Deck Shelves bundle into the Steam Big Picture UI and provides the runtime API the bundle calls into — no plugin loader required.
 
 **Primary target:** SteamOS / Steam Deck. Also supported: Linux, macOS, Windows.
 

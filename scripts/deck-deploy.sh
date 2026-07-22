@@ -49,9 +49,10 @@ BIN="target/$TARGET/release/shelveshub"
 
 # ── Deploy binary + host runtime + bundle ───────────────────────────────────
 echo "[i] Deploying to $DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR ..."
-"${SSH[@]}" "mkdir -p '$REMOTE_HOME_DIR/bundle' '$REMOTE_HOME_DIR/runtime' '/home/$DECK_USER/.config/systemd/user'"
+"${SSH[@]}" "mkdir -p '$REMOTE_HOME_DIR/bundle' '$REMOTE_HOME_DIR/runtime/backend' '/home/$DECK_USER/.config/systemd/user'"
 rsync -az -e "$RSH" "$BIN" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/shelveshub"
 rsync -az -e "$RSH" runtime/shelves-host.js "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/shelves-host.js"
+rsync -az -e "$RSH" runtime/backend/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/backend/"
 rsync -az -e "$RSH" "$BUNDLE" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/bundle/index.js"
 
 # Generate the user service pointing at the actual deploy path (the static unit
