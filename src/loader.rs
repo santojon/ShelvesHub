@@ -30,6 +30,9 @@ pub const OWNER_KIND: &str = "shelveshub";
 /// Renderer global stamped before injection when ownership is forced, so the
 /// other host's adapter can stand down cooperatively.
 pub const FORCE_OWNER_GLOBAL: &str = "window.__SHELVES_FORCE_OWNER__";
+/// Renderer global that opts the injected runtime into the native Quick
+/// Access tab path (`SHELVES_NATIVE_QAM=1`). Read once at runtime boot.
+pub const NATIVE_QAM_GLOBAL: &str = "window.__SHELVES_NATIVE_QAM__";
 
 /// Outcome of one injection cycle.
 enum Tick {
@@ -102,6 +105,14 @@ fn tick(config: &Config) -> cdp::Result<Tick> {
         match client.evaluate(&stamp) {
             Ok(_) => log_info("loader", "Owner preference stamped (forced)."),
             Err(e) => log_warning("loader", &format!("Owner stamp failed: {e}")),
+        }
+    }
+    // Native QAM opt-in: stamped before the runtime evaluates so it can pick
+    // the native tab path (trip-breaker guarded; overlay stays the fallback).
+    if config.native_qam {
+        match client.evaluate(&format!("{NATIVE_QAM_GLOBAL} = true; true")) {
+            Ok(_) => log_info("loader", "Native QAM stamp set."),
+            Err(e) => log_warning("loader", &format!("Native QAM stamp failed: {e}")),
         }
     }
 

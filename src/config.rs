@@ -46,6 +46,10 @@ pub struct Config {
     /// host adapter already owns the renderer; the owner-preference global is
     /// stamped so the other adapter stands down cooperatively.
     pub force_owner: bool,
+    /// When true (`SHELVES_NATIVE_QAM=1`), stamp the renderer so the injected
+    /// runtime attempts the native Quick Access tab (guarded by a trip
+    /// breaker; overlay remains the fallback). Off by default.
+    pub native_qam: bool,
 }
 
 impl Config {
@@ -79,6 +83,9 @@ impl Config {
             force_owner: env::var("SHELVES_FORCE_OWNER")
                 .map(|v| v.eq_ignore_ascii_case("shelveshub"))
                 .unwrap_or(false),
+            native_qam: env::var("SHELVES_NATIVE_QAM")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
         }
     }
 
@@ -89,7 +96,7 @@ impl Config {
 
     pub fn summary(&self) -> String {
         format!(
-            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={}{}",
+            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={}{}{}",
             self.cef_host,
             self.cef_port,
             self.rpc_addr,
@@ -103,6 +110,7 @@ impl Config {
                 .unwrap_or_else(|| "<disabled>".to_string()),
             self.settings_dir.display(),
             if self.force_owner { " force_owner=shelveshub" } else { "" },
+            if self.native_qam { " native_qam=on" } else { "" },
         )
     }
 }

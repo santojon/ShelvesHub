@@ -26,6 +26,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - A backend payload placed at `backend/` next to the binary is detected and
   hosted automatically — no configuration needed. Installers copy that payload
   when the package carries one.
+- Experimental native Quick Access tab, off by default (`SHELVES_NATIVE_QAM=1`
+  to try it): enabling it no longer requires editing the injected runtime, a
+  trip breaker auto-disables the feature after a failed attempt instead of
+  ever crash-looping the Steam interface, and the on-screen overlay always
+  remains as the fallback.
 ### Changed
 - The request server now answers each connection on its own thread, so a slow
   data request can no longer delay health checks.

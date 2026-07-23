@@ -28,23 +28,31 @@
   // ── Steam webpack: module cache + finders ─────────────────────────────────
   var Steam = (function () {
     var modules = new Map(); // id -> module
-    var inited = false;
+    var req = null, captureTried = false;
 
-    function init() {
-      if (inited) return;
-      inited = true;
-      var req = null;
+    function capture() {
+      if (req || captureTried) return;
+      captureTried = true;
       try {
         var key = Object.keys(window).filter(function (k) {
           return k.indexOf("webpackChunk") === 0 && Array.isArray(window[k]);
         })[0];
-        if (!key) return;
+        if (!key) { captureTried = false; return; } // webpack not up yet — retry later
         window[key].push([[Symbol("shelveshub")], {}, function (r) { req = r; }]);
       } catch (e) { log("webpack capture failed:", e && e.message); }
+    }
+
+    // Incremental: chunks keep loading long after boot starts, so every call
+    // picks up modules that appeared since the last one (early-injection path
+    // depends on this — the QAM tab-list builder loads late in boot).
+    function init() {
+      capture();
       if (!req || !req.m) return;
-      Object.keys(req.m).forEach(function (id) {
-        try { var m = req(id); if (m) modules.set(id, m); } catch (e) {}
-      });
+      var ids = Object.keys(req.m);
+      for (var i = 0; i < ids.length; i++) {
+        if (modules.has(ids[i])) continue;
+        try { var m = req(ids[i]); if (m) modules.set(ids[i], m); } catch (e) {}
+      }
     }
 
     function findModule(filter) {
@@ -282,19 +290,45 @@
   }
 
   // ── QAM: register a native tab in the Quick Access Menu ───────────────────
-  // Faithful port of the proven QAM tab-injection: patch both QAM renderers'
-  // `.type` with a tree patcher that navigates to the tab-list node and injects
-  // our tab(s) into `props.tabs`, then refresh the already-mounted QAM fiber.
+  // The tab-list builder hook returns the tabs array; we append our tab(s) to
+  // its output (non-destructive). Overlay panel is the fallback and the
+  // immediate path. See installPatch below for the mechanism and its timing.
   var QamHost = (function () {
     var KEY_PREFIX = "shelves-";
-    // Native QAM tab is WIP and must be validated on a non-primary device — it
-    // can destabilise the Steam renderer. Off by default so the deployed state
-    // is stable. Flip to true to test the native tab.
-    var NATIVE_QAM_ENABLED = false;
-    var PATCH_EMBEDDED = false; // patching the in-main-tree Embedded QAM risks a black screen
+    // Native QAM tab is config-driven: the daemon stamps
+    // `window.__SHELVES_NATIVE_QAM__ = true` (env SHELVES_NATIVE_QAM=1) before
+    // injecting this runtime. Off by default so the deployed state is stable —
+    // validate on a non-primary device first; it touches the Steam renderer.
+    var NATIVE_QAM_ENABLED = (function () {
+      try { return window.__SHELVES_NATIVE_QAM__ === true; } catch (_) { return false; }
+    })();
     var specs = {};
-    var browserView = null, embedded = null;
     var patched = false;
+    var confirmed = false;
+
+    // Trip breaker: "armed" is written just before patching and cleared on the
+    // first healthy render through our handler. If a boot finds "armed" left
+    // over, the previous arm never confirmed (renderer likely died) — trip and
+    // refuse the native path until the key is cleared manually. Guarantees at
+    // most one bad arm, never a crash loop. All storage access is fail-safe
+    // (CEF contexts can deny localStorage).
+    var TRIP_KEY = "shelves.nativeQamTrip";
+    function tripGet() { try { return window.localStorage.getItem(TRIP_KEY); } catch (_) { return null; } }
+    function tripSet(v) { try { window.localStorage.setItem(TRIP_KEY, v); } catch (_) {} }
+    function tripClear() { try { window.localStorage.removeItem(TRIP_KEY); } catch (_) {} }
+    var tripped = false;
+    if (NATIVE_QAM_ENABLED) {
+      var prior = tripGet();
+      if (prior === "armed") {
+        tripSet("tripped:" + Date.now());
+        tripped = true;
+        log("QAM native: previous arm never confirmed — TRIPPED. Overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
+      } else if (prior && prior.indexOf("tripped") === 0) {
+        tripped = true;
+        log("QAM native: breaker is tripped (" + prior + ") — overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
+      }
+      if (tripped) NATIVE_QAM_ENABLED = false;
+    }
 
     function iconEl(icon) {
       if (icon && icon.$$typeof) return icon;
@@ -306,77 +340,223 @@
       return ErrorBoundary ? h(ErrorBoundary, null, c) : c;
     }
 
-    // Inject our tab(s) into the live tabs array, idempotently per render.
-    function renderTabs(tabs, visible) {
-      Object.keys(specs).forEach(function (id) {
-        var key = KEY_PREFIX + id;
-        var existing = null;
-        for (var i = 0; i < tabs.length; i++) { if (tabs[i] && tabs[i].key === key) { existing = tabs[i]; break; } }
-        if (existing) { existing.initialVisibility = visible; return; }
-        var spec = specs[id];
-        tabs.push({
-          key: key, title: spec.title, strTitle: spec.title,
-          tab: iconEl(spec.icon), panel: contentEl(spec),
-          shelves: true, initialVisibility: visible !== false,
-        });
+    // One stable native tab whose icon and panel are LAZY slots: they render
+    // whatever panel spec is currently registered, at render time. This makes
+    // the whole path order-independent — the tab can enter the tab list at
+    // Steam boot (before the bundle loads), and the moment the bundle calls
+    // registerPanel the slots re-render with the real Deck Shelves icon and
+    // UI. The panel renders Deck Shelves DIRECTLY (never a plugin list).
+    var slotListeners = [];
+    function notifySlots() {
+      for (var i = 0; i < slotListeners.length; i++) {
+        try { slotListeners[i](function (n) { return n + 1; }); } catch (e) {}
+      }
+    }
+    function useSlotRefresh() {
+      var st = React.useState(0);
+      React.useEffect(function () {
+        slotListeners.push(st[1]);
+        return function () {
+          var i = slotListeners.indexOf(st[1]);
+          if (i >= 0) slotListeners.splice(i, 1);
+        };
+      }, []);
+    }
+    function firstSpec() {
+      var ids = Object.keys(specs);
+      return ids.length ? specs[ids[0]] : null;
+    }
+    // Placeholder mark until the Deck Shelves package ships its own icon
+    // (the registered spec's icon replaces it the moment the bundle loads).
+    var DEFAULT_ICON =
+      '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">' +
+      '<path d="M3 4h18v3H3zM3 10.5h18v3H3zM3 17h18v3H3z"/></svg>';
+    function TabIconSlot() {
+      useSlotRefresh();
+      var s = firstSpec();
+      return iconEl((s && s.icon) || DEFAULT_ICON);
+    }
+    function PanelSlot() {
+      useSlotRefresh();
+      var s = firstSpec();
+      if (!s) return h("div", { style: { padding: "16px" } }, "Deck Shelves");
+      return contentEl(s);
+    }
+    // A registered tab needs its key present in Steam's `QuickAccessTab` enum:
+    // `pt` derives the panel class as `tab_${QuickAccessTab[key]}` and the tab
+    // strip's focus/visibility logic keys off the same enum. An unregistered
+    // (string) key renders as `tab_undefined` and is not treated as a
+    // first-class tab (focus of hidden tabs misbehaves). So we register a
+    // numeric key, exactly as other hosts do (their tab sits at 999).
+    var NATIVE_TAB_KEY = 998;
+    var NATIVE_TAB_NAME = "ShelvesHub";
+    function tabEnum() {
+      try { if (window.DFL && window.DFL.QuickAccessTab) return window.DFL.QuickAccessTab; } catch (e) {}
+      return Steam.findModuleExport(function (m) {
+        try { return m && m.Notifications === 0 && m.Settings === 4 && m.Help === 6; } catch (e) { return false; }
       });
     }
-
-    function makePatchHandler() {
-      return createReactTreePatcher(
-        [function (tree) { return findInReactTree(tree, function (n) { return n && n.props && n.props.onFocusNavDeactivated; }); }],
-        function (args, ret) {
-          var node = findInReactTree(ret, function (x) { return x && x.props && Array.isArray(x.props.tabs); });
-          if (node) renderTabs(node.props.tabs, args[0] && args[0].visible);
-          return ret;
+    function registerTabEnum() {
+      try {
+        var e = tabEnum();
+        if (e && e[NATIVE_TAB_KEY] === undefined) {
+          e[NATIVE_TAB_KEY] = NATIVE_TAB_NAME;
+          e[NATIVE_TAB_NAME] = NATIVE_TAB_KEY;
         }
-      );
+      } catch (_) {}
     }
 
+    function buildTab() {
+      return {
+        key: NATIVE_TAB_KEY,
+        strTitle: "Deck Shelves",
+        title: h(React.Fragment, null),
+        tab: h(TabIconSlot, null),
+        panel: h(PanelSlot, null),
+        vrLocation: "quick-access-menu",
+      };
+    }
+
+    // Position: sit right AFTER Steam's Performance tab, so we are always just
+    // below Performance and above any lower tab (other hosts' tabs included,
+    // which append at the end). Configurable: set `window.__SHELVES_QAM_AFTER__`
+    // to another QuickAccessTab key, or to null to append at the very end.
+    var NATIVE_TAB_AFTER = 5; // QuickAccessTab.Perf ("Desempenho")
+    function insertAfterKey() {
+      try { if ("__SHELVES_QAM_AFTER__" in window) return window.__SHELVES_QAM_AFTER__; } catch (e) {}
+      return NATIVE_TAB_AFTER;
+    }
+    function pushTab(tabs) {
+      var tab = buildTab();
+      for (var j = 0; j < tabs.length; j++) { if (tabs[j] && tabs[j].key === tab.key) return; }
+      var after = insertAfterKey(), at = tabs.length;
+      if (after != null) {
+        for (var i = 0; i < tabs.length; i++) { if (tabs[i] && tabs[i].key === after) { at = i + 1; break; } }
+      }
+      tabs.splice(at, 0, tab); // insert in place (array mutable; element props may be frozen)
+      if (!confirmed) { confirmed = true; tripClear(); log("QAM native: tab inserted, healthy."); }
+    }
+
+    // Reach the tabs array from a render output and push our tab. The array
+    // lives in the output of a deeper component (marked by `onFocusNavDeactivated`),
+    // not in the BrowserView's direct return, so we wrap that component's type
+    // ONCE — as a real function (never Object.assign on a plain function, which
+    // yields a non-callable object → the historical black screen). A memo is
+    // rewrapped as a fresh memo whose `.type` is our function. Wrappers are
+    // cached on the original so we wrap each component exactly once.
+    var wrapCache = typeof WeakMap === "function" ? new WeakMap() : null;
+    function tabWrapper(innerFn) {
+      var w = function () {
+        var out = innerFn.apply(this, arguments);
+        try {
+          var node = findInReactTree(out, function (x) { return x && x.props && Array.isArray(x.props.tabs); });
+          if (node) pushTab(node.props.tabs);
+        } catch (e) {}
+        return out;
+      };
+      w.__shelvesTabWrap = true;
+      return w;
+    }
+    function injectTabs(ret) {
+      // Fast path: tabs already in this output.
+      var direct = findInReactTree(ret, function (x) { return x && x.props && Array.isArray(x.props.tabs); });
+      if (direct) { pushTab(direct.props.tabs); return; }
+      // Otherwise wrap the component whose output produces the tab list.
+      var host = findInReactTree(ret, function (n) { return n && n.props && n.props.onFocusNavDeactivated && n.type; });
+      if (!host) return;
+      var orig = host.type;
+      if (orig.__shelvesTabWrap || (orig.type && orig.type.__shelvesTabWrap)) return; // already wrapped
+      if (wrapCache && wrapCache.has(orig)) { host.type = wrapCache.get(orig); return; }
+      var wrapped;
+      if (typeof orig === "function") {
+        wrapped = tabWrapper(orig);
+      } else if (orig && typeof orig.type === "function" && orig.$$typeof) {
+        // React.memo/forwardRef: keep the wrapper a valid memo with a function type.
+        wrapped = { $$typeof: orig.$$typeof, type: tabWrapper(orig.type), compare: orig.compare };
+        wrapped.__shelvesTabWrap = true;
+      } else {
+        return; // unknown shape — never risk an invalid component
+      }
+      if (wrapCache) wrapCache.set(orig, wrapped);
+      host.type = wrapped;
+    }
+
+    // The native mechanism — safe by construction. The tab-list *builder*
+    // export is a sealed webpack getter (non-writable, non-configurable), so it
+    // cannot be wrapped. The QAM *consumer* — the `QuickAccessMenuBrowserView`
+    // React.memo — has a WRITABLE `.type`, so we wrap that. On each render we
+    // locate the node carrying `props.tabs` in the returned element tree and
+    // PUSH our tab onto that array. Nothing else: no component-type cloning, no
+    // tree-patcher, no live-fiber surgery — those were the black-screen vectors
+    // (on-device 2026-07-23, see internal notes/qam-native-validation.md). We only
+    // add one element to a plain array, exactly what a native tab is.
+    //
+    // Timing: a mounted memo holds its pre-patch type, so this must be wrapped
+    // BEFORE the QAM first mounts. The preload path (Page.addScriptToEvaluate-
+    // OnNewDocument) runs this runtime at document-start, ahead of the mount;
+    // installPatchWithRetry polls until the BrowserView module loads. Without
+    // preload (late daemon injection) the tab waits for the next QAM mount; the
+    // overlay panel is the immediate fallback either way.
     function installPatch() {
       if (patched || !React) return patched;
-      var mod = Steam.findModuleByExport(function (e) {
-        try { return e && e.type && typeof e.type === "function" && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; }
-      });
-      if (!mod) return false;
-      var vals = Object.values(mod);
-      browserView = vals.find(function (e) { try { return e && e.type && e.type.toString && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; } });
-      embedded = vals.find(function (e) { try { return e && e.type && e.type.toString && e.type.toString().indexOf("QuickAccessMenuEmbedded") >= 0; } catch (_) { return false; } });
-      var handler = makePatchHandler();
-      // Patch ONLY the BrowserView (the separate QAM popup). The Embedded
-      // renderer lives in the main UI tree, so patching it risks blacking out
-      // the whole screen — opt-in only.
-      if (browserView && !browserView.type.__shelvesPatched) afterPatch(browserView, "type", handler);
-      if (PATCH_EMBEDDED && embedded && !embedded.type.__shelvesPatched) afterPatch(embedded, "type", handler);
-      patched = !!browserView;
-      if (patched) log("QAM patched (browserView=" + !!browserView + " embedded=" + (PATCH_EMBEDDED && !!embedded) + ")");
+      try {
+        var mod = Steam.findModuleByExport(function (e) {
+          try { return e && e.type && typeof e.type === "function" && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; }
+        });
+        if (!mod) return false; // BrowserView chunk not loaded yet — retry
+        var bv = Object.values(mod).find(function (e) {
+          try { return e && e.type && e.type.toString && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; }
+        });
+        if (!bv || typeof bv.type !== "function") return false;
+        if (bv.type.__shelvesPatched) { patched = true; return true; }
+        // Register our key so the tab is first-class (class + focus/visibility).
+        registerTabEnum();
+        // Arm the breaker: if this session never confirms a healthy patched
+        // render, the next boot trips and forces the overlay fallback.
+        tripSet("armed");
+        afterPatch(bv, "type", function (args, ret) {
+          try { injectTabs(ret); } catch (e) { log("QAM append error (ignored):", e && e.message); }
+          return ret;
+        });
+        patched = true;
+        log("QAM native: BrowserView consumer patched.");
+      } catch (e) {
+        tripClear();
+        log("QAM installPatch failed (overlay fallback):", e && e.message);
+      }
       return patched;
     }
 
-    // Refresh the single already-mounted QAM fiber so it re-renders through the
-    // patch (its fiber holds the pre-patch type; new mounts use the patch).
-    function refreshLiveQam() {
-      try {
-        var root = getReactRoot(document.getElementById("root")) || getReactRoot(document.body);
-        if (!root) return;
-        var qamNode = findInReactTree(root, function (n) {
-          return n && n.elementType && (n.elementType === browserView || (PATCH_EMBEDDED && embedded && n.elementType === embedded));
-        });
-        if (qamNode) {
-          qamNode.type = qamNode.elementType.type;
-          if (qamNode.alternate) qamNode.alternate.type = qamNode.type;
-        }
-      } catch (e) { log("refreshLiveQam:", e && e.message); }
+    // The builder's chunk loads at some point during Steam boot and the QAM
+    // mounts right after — so when this runtime evaluates early (preload
+    // path), poll until the builder appears. The append is idempotent and
+    // non-destructive, so retrying is safe; if the QAM mounts before we won
+    // the race, the tab simply waits for the next Steam UI boot.
+    var patchAttempts = 0;
+    function installPatchWithRetry() {
+      if (patched || !React) return;
+      if (installPatch()) return;
+      patchAttempts++;
+      if (patchAttempts === 1) log("QAM native: waiting for the tab-list builder…");
+      if (patchAttempts < 1200) setTimeout(installPatchWithRetry, 50);
+      else log("QAM native: builder never appeared — overlay only.");
     }
+    if (NATIVE_QAM_ENABLED) installPatchWithRetry();
 
     function registerPanel(spec) {
       if (!spec || typeof spec.id !== "string") throw new Error("[shelves-host] qam.registerPanel: { id, title, icon, content } required");
       specs[spec.id] = spec;
-      if (NATIVE_QAM_ENABLED) { installPatch(); refreshLiveQam(); }
-      log("QAM panel registered:", spec.id, NATIVE_QAM_ENABLED ? (patched ? "(native)" : "(patch unavailable)") : "(native disabled)");
-      return function () { delete specs[spec.id]; if (NATIVE_QAM_ENABLED) refreshLiveQam(); };
+      if (NATIVE_QAM_ENABLED) { installPatchWithRetry(); notifySlots(); }
+      log("QAM panel registered:", spec.id, NATIVE_QAM_ENABLED ? (patched ? "(native)" : "(patch pending)") : "(native disabled)");
+      return function () { delete specs[spec.id]; if (NATIVE_QAM_ENABLED) notifySlots(); };
     }
-    return { registerPanel: registerPanel, _specs: specs, _isNative: function () { return patched; } };
+    // Diagnostic surface: which QAM path is live, and why.
+    function mode() {
+      if (tripped) return "tripped";
+      if (NATIVE_QAM_ENABLED && patched) return confirmed ? "native" : "native-arming";
+      return "overlay";
+    }
+    return { registerPanel: registerPanel, mode: mode, _specs: specs, _isNative: function () { return patched; } };
   })();
 
   // ── HostApi assembly ──────────────────────────────────────────────────────
@@ -420,6 +600,7 @@
 
   window.__SHELVES_HOST__ = host;
   log("runtime ready v" + HOST_API_VERSION + (Steam.isSteam() ? " (Steam)" : " (no webpack)") +
-    " ui[" + Object.keys(UI).filter(function (k) { return !!UI[k]; }).join(",") + "]");
+    " ui[" + Object.keys(UI).filter(function (k) { return !!UI[k]; }).join(",") + "]" +
+    " qam=" + QamHost.mode());
   return HOST_API_VERSION;
 })();

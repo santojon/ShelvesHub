@@ -79,6 +79,18 @@ enum Command {
         #[arg(long, default_value_t = 0)]
         duration: u64,
     },
+    /// Register a script that evaluates at document start on every (re)load
+    /// of the target, and hold the session open (the registration lives as
+    /// long as this command runs). Closes the injection timing race: the
+    /// script is present before any page code executes.
+    Preload {
+        /// Path to the script to evaluate before page scripts.
+        #[arg(long)]
+        script: PathBuf,
+        /// Stop after this many seconds (0 = hold until Ctrl-C).
+        #[arg(long, default_value_t = 0)]
+        duration: u64,
+    },
 }
 
 fn main() -> ExitCode {
@@ -105,6 +117,44 @@ fn run(cli: &Cli) -> cdp::Result<()> {
             cmd_reload(&cli.host, cli.port, filter, *ignore_cache)
         }
         Command::Console { duration } => cmd_console(&cli.host, cli.port, filter, *duration),
+        Command::Preload { script, duration } => {
+            cmd_preload(&cli.host, cli.port, filter, script, *duration)
+        }
+    }
+}
+
+fn cmd_preload(
+    host: &str,
+    port: u16,
+    filter: Option<&str>,
+    script: &std::path::Path,
+    duration: u64,
+) -> cdp::Result<()> {
+    let source = std::fs::read_to_string(script)
+        .map_err(|e| cdp::CdpError(format!("cannot read {}: {e}", script.display())))?;
+    let mut client = CdpClient::connect_renderer(host, port, filter)?;
+    client.call("Page.enable", serde_json::json!({}))?;
+    let result = client.call(
+        "Page.addScriptToEvaluateOnNewDocument",
+        serde_json::json!({ "source": source }),
+    )?;
+    let id = result
+        .get("identifier")
+        .and_then(|v| v.as_str())
+        .unwrap_or("?");
+    println!(
+        "preload registered (id {id}, {} bytes) — holding session{}",
+        source.len(),
+        if duration == 0 { "; Ctrl-C to stop" } else { "" }
+    );
+    let start = std::time::Instant::now();
+    loop {
+        // Drain events to keep the socket healthy; the registration lives as
+        // long as this session does.
+        client.poll_message()?;
+        if duration > 0 && start.elapsed().as_secs() >= duration {
+            return Ok(());
+        }
     }
 }
 
