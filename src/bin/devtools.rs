@@ -132,30 +132,86 @@ fn cmd_preload(
 ) -> cdp::Result<()> {
     let source = std::fs::read_to_string(script)
         .map_err(|e| cdp::CdpError(format!("cannot read {}: {e}", script.display())))?;
-    let mut client = CdpClient::connect_renderer(host, port, filter)?;
-    client.call("Page.enable", serde_json::json!({}))?;
-    let result = client.call(
-        "Page.addScriptToEvaluateOnNewDocument",
-        serde_json::json!({ "source": source }),
-    )?;
-    let id = result
-        .get("identifier")
-        .and_then(|v| v.as_str())
-        .unwrap_or("?");
     println!(
-        "preload registered (id {id}, {} bytes) — holding session{}",
+        "preload: {} bytes; browser-level auto-attach — the script is registered on every page as it is CREATED (before any of its code runs), and survives Steam restarts{}",
         source.len(),
-        if duration == 0 { "; Ctrl-C to stop" } else { "" }
+        if duration == 0 { " (Ctrl-C to stop)" } else { "" }
     );
     let start = std::time::Instant::now();
+    // Outer loop: a Steam restart tears down the whole CEF, so the browser
+    // connection drops — reconnect and re-arm auto-attach each time.
     loop {
-        // Drain events to keep the socket healthy; the registration lives as
-        // long as this session does.
-        client.poll_message()?;
         if duration > 0 && start.elapsed().as_secs() >= duration {
             return Ok(());
         }
+        match run_autoattach(host, port, filter, &source) {
+            Ok(()) => {}
+            Err(e) => eprintln!("preload: browser session dropped ({e}) — reconnecting…"),
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
     }
+}
+
+/// Connect to the browser-level endpoint, arm `Target.setAutoAttach` with
+/// `waitForDebuggerOnStart` so each new page is paused at birth, and register
+/// the document-start script on matching pages before resuming them. Returns
+/// Err when the browser connection drops (Steam restart) so the caller
+/// reconnects.
+fn run_autoattach(host: &str, port: u16, filter: Option<&str>, source: &str) -> cdp::Result<()> {
+    let ws = cdp::browser_ws_url(host, port)?;
+    let mut client = CdpClient::connect(&ws)?;
+    // `waitForDebuggerOnStart:false` on purpose: pausing every new target is a
+    // boot-wedge risk (a target left paused hangs the Steam UI). We attach as
+    // early as the Target domain allows and register the document-start script
+    // then; it applies to that target's next document. Safe, if slightly less
+    // guaranteed on the very first document of a brand-new target.
+    client.call(
+        "Target.setAutoAttach",
+        serde_json::json!({ "autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true }),
+    )?;
+    println!("preload: browser auto-attach armed — watching page targets");
+    let needle = filter.map(|f| f.to_lowercase());
+    loop {
+        if let Some(msg) = client.poll_message()? {
+            if msg.get("method").and_then(|m| m.as_str()) == Some("Target.attachedToTarget") {
+                handle_attached(&mut client, &msg, source, needle.as_deref());
+            }
+        }
+    }
+}
+
+/// One `Target.attachedToTarget`: register the document-start script when the
+/// page matches the filter, then always resume the paused target.
+fn handle_attached(client: &mut CdpClient, msg: &serde_json::Value, source: &str, needle: Option<&str>) {
+    let params = msg.get("params");
+    let session_id = params
+        .and_then(|p| p.get("sessionId"))
+        .and_then(|v| v.as_str());
+    let Some(sid) = session_id else { return };
+    let info = params.and_then(|p| p.get("targetInfo"));
+    let ttype = info.and_then(|i| i.get("type")).and_then(|v| v.as_str()).unwrap_or("");
+    let title = info.and_then(|i| i.get("title")).and_then(|v| v.as_str()).unwrap_or("");
+    let url = info.and_then(|i| i.get("url")).and_then(|v| v.as_str()).unwrap_or("");
+
+    let matches = match needle {
+        Some(n) => title.to_lowercase().contains(n) || url.to_lowercase().contains(n),
+        None => {
+            ttype == "page"
+                && (title.to_lowercase().contains("sharedjscontext") || url.contains("steamloopback"))
+        }
+    };
+    if matches {
+        let _ = client.send_on_session("Page.enable", serde_json::json!({}), sid);
+        let _ = client.send_on_session(
+            "Page.addScriptToEvaluateOnNewDocument",
+            serde_json::json!({ "source": source }),
+            sid,
+        );
+        let label = if title.is_empty() { url } else { title };
+        println!("preload: registered on \"{label}\" (session {sid})");
+    }
+    // Harmless no-op unless a target happens to be waiting for a debugger.
+    let _ = client.send_on_session("Runtime.runIfWaitingForDebugger", serde_json::json!({}), sid);
 }
 
 fn cmd_targets(host: &str, port: u16) -> cdp::Result<()> {

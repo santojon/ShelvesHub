@@ -67,6 +67,19 @@ pub fn discover_targets(host: &str, port: u16) -> Result<Vec<Target>> {
     serde_json::from_str(&body).map_err(|e| CdpError::new(format!("parse /json: {e}")))
 }
 
+/// The browser-level DevTools WebSocket URL (`/json/version`). A connection to
+/// it can drive the `Target` domain (auto-attach to every page as it is
+/// created), which a per-page connection cannot.
+pub fn browser_ws_url(host: &str, port: u16) -> Result<String> {
+    let body = http_get(host, port, "/json/version")?;
+    let v: Value =
+        serde_json::from_str(&body).map_err(|e| CdpError::new(format!("parse /json/version: {e}")))?;
+    v.get("webSocketDebuggerUrl")
+        .and_then(Value::as_str)
+        .map(String::from)
+        .ok_or_else(|| CdpError::new("no webSocketDebuggerUrl in /json/version"))
+}
+
 /// Pick the renderer to inject into.
 ///
 /// When `filter` is set, the first target whose title or URL contains it
@@ -170,6 +183,30 @@ impl CdpClient {
             }
             return Ok(value.get("result").cloned().unwrap_or(Value::Null));
         }
+    }
+
+    /// Send a command without waiting for its response (fire-and-forget); the
+    /// caller drains responses/events via `poll_message`. Returns the id used.
+    pub fn send(&mut self, method: &str, params: Value) -> Result<u64> {
+        self.next_id += 1;
+        let id = self.next_id;
+        let payload = json!({ "id": id, "method": method, "params": params });
+        self.socket
+            .send(Message::Text(payload.to_string()))
+            .map_err(|e| CdpError::new(format!("send {method}: {e}")))?;
+        Ok(id)
+    }
+
+    /// Like `send`, but routed to a flattened auto-attach session (adds
+    /// `sessionId` so the browser connection forwards it to that page).
+    pub fn send_on_session(&mut self, method: &str, params: Value, session_id: &str) -> Result<u64> {
+        self.next_id += 1;
+        let id = self.next_id;
+        let payload = json!({ "id": id, "sessionId": session_id, "method": method, "params": params });
+        self.socket
+            .send(Message::Text(payload.to_string()))
+            .map_err(|e| CdpError::new(format!("send {method}: {e}")))?;
+        Ok(id)
     }
 
     /// Evaluate a JavaScript expression in the renderer's main context and

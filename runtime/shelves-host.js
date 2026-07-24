@@ -25,6 +25,40 @@
     try { console.log.apply(console, ["[shelves-host]"].concat([].slice.call(arguments))); } catch (e) {}
   }
 
+  // ── Coexistence: never break another host, but always keep OUR tab ────────
+  // Two separable things this runtime does:
+  //   (A) install `window.__SHELVES_HOST__` — the host API the bundle selects
+  //       on via its host-selection check. When a plugin loader (the loader) is already
+  //       hosting Deck Shelves, installing this makes ITS bundle mis-select the
+  //       ShelvesHub adapter and drop its home patches. So (A) is SKIPPED in
+  //       coexistence — that is the hard safety invariant: loading ShelvesHub
+  //       must never disturb the loader or its plugin.
+  //   (B) add our Quick Access tab — harmless, additive (a new tab in the
+  //       array; it never removes the other loader's tab). This ALWAYS runs, so
+  //       ShelvesHub's tab is present with or without the loader.
+  // `SHELVES_FORCE_OWNER=shelveshub` (→ `window.__SHELVES_FORCE_OWNER__`) forces
+  // full ownership (installs (A) anyway), an advanced opt-in that needs the
+  // loader adapter to stand down cooperatively.
+  function otherLoaderPresent() {
+    try {
+      var w = window;
+      return !!(
+        w.DeckyPluginLoader ||
+        w.deckyHasLoaded ||
+        w.__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit ||
+        w.deckyFrontendLib ||
+        (w.DFL && typeof w.DFL.definePlugin === "function") ||
+        typeof w.__ds_build !== "undefined"
+      );
+    } catch (e) { return false; }
+  }
+  var FORCE_OWNER = false;
+  try { FORCE_OWNER = window.__SHELVES_FORCE_OWNER__ === "shelveshub"; } catch (e) {}
+  var COEXIST = otherLoaderPresent() && !FORCE_OWNER; // tab yes, host no
+  if (COEXIST) {
+    log("Another plugin loader detected — coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched).");
+  }
+
   // ── Steam webpack: module cache + finders ─────────────────────────────────
   var Steam = (function () {
     var modules = new Map(); // id -> module
@@ -598,9 +632,18 @@
     _steam: Steam,
   };
 
-  window.__SHELVES_HOST__ = host;
+  // (A) Host API — installed only when we are NOT coexisting with another
+  // loader. In coexistence we leave `__SHELVES_HOST__` unset so the other
+  // loader's Deck Shelves keeps selecting its own adapter (safety invariant).
+  // (B) — the QAM tab — already ran above via QamHost, regardless of coexistence.
+  if (!COEXIST) {
+    window.__SHELVES_HOST__ = host;
+    try { window.__DECK_SHELVES_OWNER__ = "shelveshub"; } catch (e) {}
+  } else {
+    try { if (!window.__DECK_SHELVES_OWNER__) window.__DECK_SHELVES_OWNER__ = "decky"; } catch (e) {}
+  }
   log("runtime ready v" + HOST_API_VERSION + (Steam.isSteam() ? " (Steam)" : " (no webpack)") +
     " ui[" + Object.keys(UI).filter(function (k) { return !!UI[k]; }).join(",") + "]" +
-    " qam=" + QamHost.mode());
-  return HOST_API_VERSION;
+    " qam=" + QamHost.mode() + (COEXIST ? " coexist(tab-only)" : " owner"));
+  return COEXIST ? undefined : HOST_API_VERSION;
 })();
