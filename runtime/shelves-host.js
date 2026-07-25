@@ -369,9 +369,26 @@
       if (typeof icon === "string") return h("div", { style: { display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }, dangerouslySetInnerHTML: { __html: icon } });
       return null;
     }
+    // Accept BOTH panel shapes: the @deck-shelves/host contract's imperative
+    // `render(container)` (framework-agnostic — we host it in a ref'd div), and
+    // our React `content` (element or factory), used by the example bundle.
     function contentEl(spec) {
-      var c = typeof spec.content === "function" ? spec.content() : spec.content;
-      return ErrorBoundary ? h(ErrorBoundary, null, c) : c;
+      var inner;
+      if (typeof spec.render === "function") {
+        inner = h(function () {
+          var ref = React.useRef(null);
+          React.useEffect(function () {
+            if (!ref.current) return undefined;
+            var cleanup;
+            try { cleanup = spec.render(ref.current); } catch (e) { log("qam panel render:", e && e.message); }
+            return typeof cleanup === "function" ? cleanup : undefined;
+          }, []);
+          return h("div", { ref: ref, style: { width: "100%", height: "100%" } });
+        }, null);
+      } else {
+        inner = typeof spec.content === "function" ? spec.content() : spec.content;
+      }
+      return ErrorBoundary ? h(ErrorBoundary, null, inner) : inner;
     }
 
     // One stable native tab whose icon and panel are LAZY slots: they render
@@ -601,8 +618,12 @@
     React: React,
     ui: UI,
     ErrorBoundary: ErrorBoundary,
+    // Shapes conform to the @deck-shelves/host contract directly (so the
+    // plugin's resolveHost() uses this object as the HostApi with no interim
+    // adapter). The legacy shapes (register() no-arg, addRoute/removeRoute,
+    // notifications.send) are kept for older bundles that still bridge.
     lifecycle: {
-      register: function () { log("lifecycle.register"); },
+      register: function (plugin) { log("lifecycle.register", plugin && plugin.name); return { dispose: function () {} }; },
       onMount: function (cb) { if (typeof cb === "function") { mountHandlers.push(cb); cb(); } },
       onUnmount: function (cb) { if (typeof cb === "function") unmountHandlers.push(cb); },
     },
@@ -613,8 +634,13 @@
           .then(function (j) { if (!j.ok) throw new Error("rpc.call(" + method + "): " + j.error); return j.result; });
       },
     },
-    routes: { addRoute: function (p) { log("routes.addRoute", p); }, removeRoute: function (p) { log("routes.removeRoute", p); } },
+    routes: {
+      register: function (path, component) { log("routes.register", path); return { dispose: function () { log("routes.remove", path); } }; },
+      addRoute: function (p) { log("routes.addRoute", p); },
+      removeRoute: function (p) { log("routes.removeRoute", p); },
+    },
     notifications: {
+      toast: function (opts) { opts = opts || {}; this.send(opts.title || "", opts.body || "", opts.durationMs); },
       send: function (title, body) {
         try { if (window.SteamClient && window.SteamClient.Notifications) { window.SteamClient.Notifications.DisplayNotification(title, body); return; } } catch (e) {}
         log("notify:", title, "-", body);
