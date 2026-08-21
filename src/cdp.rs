@@ -118,6 +118,21 @@ pub fn find_renderer<'a>(targets: &'a [Target], filter: Option<&str>) -> Option<
         .or_else(|| targets.iter().find(has_ws))
 }
 
+/// Whether Steam's visible UI windows are present.
+///
+/// The screen the user sees is rendered by windows (Big Picture, Main Menu,
+/// the Quick Access popup, …) that are *separate* targets from
+/// `SharedJSContext` — the background React/webpack context. When those windows
+/// are torn down the screen goes black, yet `SharedJSContext` survives and keeps
+/// answering evals (route stays `/routes/library/home`). So a renderer probe is
+/// a false health signal; the target list is the real one. A lone
+/// `SharedJSContext` (no other `page` target) means the UI has collapsed.
+pub fn ui_windows_present(targets: &[Target]) -> bool {
+    targets
+        .iter()
+        .any(|t| t.kind == "page" && !t.title.to_lowercase().contains("sharedjscontext"))
+}
+
 /// A live CDP session over a single WebSocket connection.
 pub struct CdpClient {
     socket: WebSocket<TcpStream>,
@@ -406,5 +421,28 @@ mod tests {
             ws_url: None,
         }];
         assert!(find_renderer(&targets, None).is_none());
+    }
+
+    #[test]
+    fn detects_collapsed_ui_windows() {
+        let shared = Target {
+            id: "1".into(),
+            kind: "page".into(),
+            title: "SharedJSContext".into(),
+            url: "https://steamloopback.host/routes/library/home".into(),
+            ws_url: Some("ws://h:1/a".into()),
+        };
+        // Only SharedJSContext survives → UI windows collapsed (black screen).
+        assert!(!ui_windows_present(std::slice::from_ref(&shared)));
+
+        // With the Big Picture window present → UI is healthy.
+        let big_picture = Target {
+            id: "2".into(),
+            kind: "page".into(),
+            title: "Steam — Big Picture Mode".into(),
+            url: "about:blank".into(),
+            ws_url: Some("ws://h:1/b".into()),
+        };
+        assert!(ui_windows_present(&[shared, big_picture]));
     }
 }

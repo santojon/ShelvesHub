@@ -50,6 +50,21 @@ pub struct Config {
     /// runtime attempts the native Quick Access tab (guarded by a trip
     /// breaker; overlay remains the fallback). Off by default.
     pub native_qam: bool,
+    /// Optional shell command (`SHELVES_RECOVER_CMD`) run once when the loader
+    /// detects the Steam UI windows have collapsed (a black screen where only
+    /// `SharedJSContext` survives). Unset by default — the loader then only
+    /// pauses injection and logs the recovery hint. On a device this is
+    /// typically `systemctl --user restart steam-launcher.service`; from a dev
+    /// host, `scripts/recover-deck.sh`. Never `StartRestart` — it worsens this.
+    pub recover_cmd: Option<String>,
+    /// When true (`SHELVES_PRELOAD=1`), register the host runtime at document-
+    /// start (browser auto-attach + `Page.addScriptToEvaluateOnNewDocument`)
+    /// instead of evaluating it into the live page. It then runs at idle boot —
+    /// before the plugin loads and renders — so its heavy webpack enumeration
+    /// never blocks a busy renderer (the native QAM path's late-inject failure
+    /// mode: a blocked main thread starves the plugin's async shelf resolves →
+    /// React teardown). Off by default; the injection loop is the default path.
+    pub preload: bool,
 }
 
 impl Config {
@@ -86,6 +101,10 @@ impl Config {
             native_qam: env::var("SHELVES_NATIVE_QAM")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
+            recover_cmd: env::var("SHELVES_RECOVER_CMD").ok().filter(|s| !s.is_empty()),
+            preload: env::var("SHELVES_PRELOAD")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
         }
     }
 
@@ -96,7 +115,7 @@ impl Config {
 
     pub fn summary(&self) -> String {
         format!(
-            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={}{}{}",
+            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={}{}{}{}{}",
             self.cef_host,
             self.cef_port,
             self.rpc_addr,
@@ -111,6 +130,8 @@ impl Config {
             self.settings_dir.display(),
             if self.force_owner { " force_owner=shelveshub" } else { "" },
             if self.native_qam { " native_qam=on" } else { "" },
+            if self.recover_cmd.is_some() { " recover_cmd=set" } else { "" },
+            if self.preload { " preload=on" } else { "" },
         )
     }
 }

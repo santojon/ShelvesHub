@@ -54,9 +54,23 @@
   }
   var FORCE_OWNER = false;
   try { FORCE_OWNER = window.__SHELVES_FORCE_OWNER__ === "shelveshub"; } catch (e) {}
+  var NATIVE_QAM_REQUESTED = false;
+  try { NATIVE_QAM_REQUESTED = window.__SHELVES_NATIVE_QAM__ === true; } catch (e) {}
   var COEXIST = otherLoaderPresent() && !FORCE_OWNER; // tab yes, host no
   if (COEXIST) {
     log("Another plugin loader detected — coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched).");
+    // Safety stand-down. When the native tab is NOT requested there is nothing
+    // to install (host skipped in coexistence) and nothing to patch (the tab is
+    // gated on the native-tab opt-in) — so return NOW, before capturing Steam's
+    // webpack or enumerating any modules. Walking Steam's module graph
+    // (force-require + touching every export) while another loader owns the UI
+    // is invasive and a suspected trigger of the Steam UI window teardown (black
+    // screen). Truly inert means never touching Steam internals when we have
+    // nothing to add.
+    if (!NATIVE_QAM_REQUESTED) {
+      log("Native tab not requested — standing down without touching Steam internals.");
+      return;
+    }
   }
 
   // ── Steam webpack: module cache + finders ─────────────────────────────────
@@ -81,11 +95,30 @@
     // depends on this — the QAM tab-list builder loads late in boot).
     function init() {
       capture();
-      if (!req || !req.m) return;
+      if (!req) return;
+      // Prefer the module CACHE (`req.c`): already-instantiated modules, read
+      // WITHOUT a force-require, so we never run an unloaded module's factory
+      // (side effects) and never block the renderer main thread walking the
+      // whole graph. That block is what starved the plugin's async shelf
+      // resolves → React #31 → black screen. Another loader (and Steam itself)
+      // populates the cache during boot, so it is usually complete by the time
+      // we inject; chunks that appear later are picked up on the next call.
+      var cache = req.c;
+      if (cache && typeof cache === "object") {
+        var cids = Object.keys(cache);
+        for (var i = 0; i < cids.length; i++) {
+          if (modules.has(cids[i])) continue;
+          try { var mod = cache[cids[i]]; var ex = mod && mod.exports; if (ex) modules.set(cids[i], ex); } catch (e) {}
+        }
+        if (modules.size > 0) return; // cache had modules — done, no force-require
+      }
+      // Last resort (cache empty — nothing loaded yet): force-require. Heavy;
+      // only runs when there is no cache to read from at all.
+      if (!req.m) return;
       var ids = Object.keys(req.m);
-      for (var i = 0; i < ids.length; i++) {
-        if (modules.has(ids[i])) continue;
-        try { var m = req(ids[i]); if (m) modules.set(ids[i], m); } catch (e) {}
+      for (var j = 0; j < ids.length; j++) {
+        if (modules.has(ids[j])) continue;
+        try { var m = req(ids[j]); if (m) modules.set(ids[j], m); } catch (e) {}
       }
     }
 
@@ -165,8 +198,14 @@
   }
 
   // ── Steam's native, gamepad-focusable UI components ───────────────────────
+  // Skipped in coexistence (`COEXIST`): this discovery is several full webpack
+  // scans (toString over thousands of exports) and it is exactly what blocks the
+  // renderer main thread → the active plugin's async shelf resolves time out →
+  // React #31 → black screen. These components are only for rendering the
+  // bundle, which does NOT run under us while another loader owns the plugin. The
+  // QAM tab itself needs only React (and the one QAM module found in installPatch).
   var UI = {};
-  if (React) {
+  if (React && !COEXIST) {
     var CommonUIModule = Steam.findModule(function (m) {
       if (typeof m !== "object") return false;
       for (var prop in m) {
@@ -230,11 +269,19 @@
   // GenericPatchHandler: (args, ret) => newRet. Wraps obj[prop].
   function afterPatch(obj, prop, handler) {
     var orig = obj[prop];
-    obj[prop] = function () {
+    var patched = function () {
       var ret = orig.apply(this, arguments);
       try { return handler(arguments, ret); } catch (e) { log("patch handler:", e && e.message); return ret; }
     };
-    obj[prop].__shelvesPatched = true;
+    // Carry the original's own props and reported source forward. Steam matches
+    // components by `type.toString()` (webpack filters, render paths); a wrapper
+    // that reports its own source — or drops the original's static props —
+    // breaks that matching. Object.assign onto a FUNCTION target stays callable
+    // (the non-callable trap is only `Object.assign({}, fn)`).
+    try { Object.assign(patched, orig); } catch (e) {}
+    try { patched.toString = function () { return orig.toString(); }; } catch (e) {}
+    patched.__shelvesPatched = true;
+    obj[prop] = patched;
     return orig;
   }
 
@@ -266,62 +313,6 @@
     return null;
   }
 
-  // Clone a component's type/render so a patch is localized to this node and
-  // never mutates the shared component used elsewhere in the UI.
-  function wrapReactType(node, prop) {
-    prop = prop || "type";
-    if (node[prop] && node[prop].__shelvesWrapped) return node[prop];
-    // Object.assign copies own enumerable string AND symbol keys, so the React
-    // `$$typeof` Symbol (memo/forward_ref marker) survives — a for-in/manual
-    // copy would drop it and produce an invalid component.
-    var copy = Object.assign({}, node[prop]);
-    copy.__shelvesWrapped = true;
-    return (node[prop] = copy);
-  }
-  function wrapReactClass(node, prop) {
-    prop = prop || "type";
-    if (node[prop] && node[prop].__shelvesWrapped) return node[prop];
-    var cls = node[prop];
-    var wrapped = class extends cls {};
-    wrapped.__shelvesWrapped = true;
-    return (node[prop] = wrapped);
-  }
-
-  // ── createReactTreePatcher: step-based, cached, clone-localized patcher ────
-  function patchComponent(node, handler, steps, step, caches, prop) {
-    prop = prop || "type";
-    var next = steps[step + 1] ? createStepHandler(handler, steps, step + 1, caches) : handler;
-    var t = node[prop];
-    if (typeof t === "function") {
-      afterPatch(node, prop, next);
-    } else if (t && typeof t === "object") {
-      if (t.prototype && t.prototype.render) {
-        wrapReactClass(node, prop);
-        afterPatch(node[prop].prototype, "render", next);
-      } else {
-        wrapReactType(node, prop);
-        patchComponent(node[prop], handler, steps, step, caches, node[prop].render ? "render" : "type");
-      }
-    }
-  }
-  function handleStep(tree, handler, steps, step, caches) {
-    var stepFn = steps[step];
-    var cache = caches[step] || (caches[step] = new Map());
-    var node = stepFn(tree);
-    if (!node || !node.type) return tree;
-    var cached = cache.get(node.type);
-    if (cached) { node.type = cached; return tree; }
-    var originalType = node.type;
-    patchComponent(node, handler, steps, step, caches);
-    cache.set(originalType, node.type);
-    return tree;
-  }
-  function createStepHandler(handler, steps, step, caches) {
-    return function (_args, tree) { return handleStep(tree, handler, steps, step, caches); };
-  }
-  function createReactTreePatcher(steps, handler) {
-    return createStepHandler(handler, steps, 0, []);
-  }
 
   // ── QAM: register a native tab in the Quick Access Menu ───────────────────
   // The tab-list builder hook returns the tabs array; we append our tab(s) to
@@ -339,6 +330,7 @@
     var specs = {};
     var patched = false;
     var confirmed = false;
+    var lastVisible = true;
 
     // Trip breaker: "armed" is written just before patching and cleared on the
     // first healthy render through our handler. If a boot finds "armed" left
@@ -417,11 +409,15 @@
       var ids = Object.keys(specs);
       return ids.length ? specs[ids[0]] : null;
     }
-    // Placeholder mark until the Deck Shelves package ships its own icon
-    // (the registered spec's icon replaces it the moment the bundle loads).
+    // Deck Shelves' own tab icon (mirrors the plugin's assets/tab-icon.svg:
+    // tintable single-colour, reads at ~18px). A registered spec's icon still
+    // overrides it the moment the bundle registers a panel.
     var DEFAULT_ICON =
-      '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">' +
-      '<path d="M3 4h18v3H3zM3 10.5h18v3H3zM3 17h18v3H3z"/></svg>';
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
+      '<rect x="3.8" y="7.5" width="3.9" height="11.5" rx="0.8"/>' +
+      '<rect x="8.7" y="5" width="3.9" height="14" rx="0.8"/>' +
+      '<rect x="14" y="8" width="3.9" height="11" rx="0.8" transform="rotate(-13 15.95 19)"/>' +
+      '<rect x="2.4" y="19" width="19.2" height="2.5" rx="0.9"/></svg>';
     function TabIconSlot() {
       useSlotRefresh();
       var s = firstSpec();
@@ -439,7 +435,7 @@
     // (string) key renders as `tab_undefined` and is not treated as a
     // first-class tab (focus of hidden tabs misbehaves). So we register a
     // numeric key, exactly as other hosts do (their tab sits at 999).
-    var NATIVE_TAB_KEY = 998;
+    var NATIVE_TAB_KEY = 900; // distinct from the loader's tab (999); position is set by insertAfterKey, not by this value
     var NATIVE_TAB_NAME = "ShelvesHub";
     function tabEnum() {
       try { if (window.DFL && window.DFL.QuickAccessTab) return window.DFL.QuickAccessTab; } catch (e) {}
@@ -465,6 +461,8 @@
         tab: h(TabIconSlot, null),
         panel: h(PanelSlot, null),
         vrLocation: "quick-access-menu",
+        __shelvesTab: true,
+        initialVisibility: lastVisible,
       };
     }
 
@@ -472,14 +470,24 @@
     // below Performance and above any lower tab (other hosts' tabs included,
     // which append at the end). Configurable: set `window.__SHELVES_QAM_AFTER__`
     // to another QuickAccessTab key, or to null to append at the very end.
-    var NATIVE_TAB_AFTER = 5; // QuickAccessTab.Perf ("Desempenho")
+    var NATIVE_TAB_AFTER = 5; // right AFTER Steam's Performance tab (QuickAccessTab.Perf) and thus before another host's tab (those append at the end). With the user's hidden tabs this reads as "just before the loader's tab". Override with window.__SHELVES_QAM_AFTER__.
     function insertAfterKey() {
       try { if ("__SHELVES_QAM_AFTER__" in window) return window.__SHELVES_QAM_AFTER__; } catch (e) {}
       return NATIVE_TAB_AFTER;
     }
     function pushTab(tabs) {
+      // Idempotent: if our tab is already in this list, only refresh its
+      // visibility to track the menu's open/closed state — never insert twice.
+      for (var j = 0; j < tabs.length; j++) {
+        if (tabs[j] && tabs[j].key === NATIVE_TAB_KEY) {
+          if (typeof tabs[j].qAMVisibilitySetter === "function") { try { tabs[j].qAMVisibilitySetter(lastVisible); } catch (e) {} }
+          else { tabs[j].initialVisibility = lastVisible; }
+          return;
+        }
+      }
       var tab = buildTab();
-      for (var j = 0; j < tabs.length; j++) { if (tabs[j] && tabs[j].key === tab.key) return; }
+      // Position: right after Steam's Performance tab, so we sit ahead of any
+      // tab that is appended at the end of the list (later additions land last).
       var after = insertAfterKey(), at = tabs.length;
       if (after != null) {
         for (var i = 0; i < tabs.length; i++) { if (tabs[i] && tabs[i].key === after) { at = i + 1; break; } }
@@ -505,8 +513,28 @@
         } catch (e) {}
         return out;
       };
+      // Report the original's source and carry its props (Steam matches
+      // components by `type.toString()`). Assigning onto a function keeps it
+      // callable — the non-callable trap is only `Object.assign({}, fn)`.
+      try { Object.assign(w, innerFn); } catch (e) {}
+      try { w.toString = function () { return innerFn.toString(); }; } catch (e) {}
       w.__shelvesTabWrap = true;
       return w;
+    }
+    // True when a component carries another patcher's marker (a foreign wrap):
+    // any own enumerable key that reads like a patch/wrap marker but isn't ours.
+    // Name-agnostic on purpose, so we never double-wrap a component another host
+    // already wrapped — double-wrapping breaks that host's own composite child
+    // resolution (observed: it times out and yields `{}` → React error #31 →
+    // the Steam UI tree unmounts).
+    function foreignWrapped(fn) {
+      if (!fn) return false;
+      try {
+        for (var k in fn) { if (k !== "__shelvesTabWrap" && /patch|wrapped/i.test(k)) return true; }
+        var inner = fn.type;
+        if (inner && typeof inner === "object") { for (var k2 in inner) { if (k2 !== "__shelvesTabWrap" && /patch|wrapped/i.test(k2)) return true; } }
+      } catch (e) {}
+      return false;
     }
     function injectTabs(ret) {
       // Fast path: tabs already in this output.
@@ -516,14 +544,23 @@
       var host = findInReactTree(ret, function (n) { return n && n.props && n.props.onFocusNavDeactivated && n.type; });
       if (!host) return;
       var orig = host.type;
-      if (orig.__shelvesTabWrap || (orig.type && orig.type.__shelvesTabWrap)) return; // already wrapped
+      if (orig.__shelvesTabWrap || (orig.type && orig.type.__shelvesTabWrap)) return; // already ours
+      // Chain our tab-append after whatever already wraps this component (another
+      // host may have wrapped it first): on render, its wrapper adds its tab(s),
+      // then ours adds ours. The earlier React #31 was NOT this double-wrap — it
+      // was the heavy UI discovery blocking the main thread (now skipped in
+      // coexistence), so chaining here is safe and additive. `foreignWrapped`
+      // stays available for diagnostics.
+      void foreignWrapped;
       if (wrapCache && wrapCache.has(orig)) { host.type = wrapCache.get(orig); return; }
       var wrapped;
       if (typeof orig === "function") {
         wrapped = tabWrapper(orig);
       } else if (orig && typeof orig.type === "function" && orig.$$typeof) {
-        // React.memo/forwardRef: keep the wrapper a valid memo with a function type.
-        wrapped = { $$typeof: orig.$$typeof, type: tabWrapper(orig.type), compare: orig.compare };
+        // React.memo/forwardRef: clone as a valid memo carrying ALL of the
+        // original's props, with our wrapped inner function as `.type`.
+        wrapped = Object.assign({}, orig);
+        wrapped.type = tabWrapper(orig.type);
         wrapped.__shelvesTabWrap = true;
       } else {
         return; // unknown shape — never risk an invalid component
@@ -554,28 +591,72 @@
         var mod = Steam.findModuleByExport(function (e) {
           try { return e && e.type && typeof e.type === "function" && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; }
         });
-        if (!mod) return false; // BrowserView chunk not loaded yet — retry
+        if (!mod) return false; // consumer chunk not loaded yet — retry
         var bv = Object.values(mod).find(function (e) {
           try { return e && e.type && e.type.toString && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; }
+        });
+        var embedded = Object.values(mod).find(function (e) {
+          try { return e && e.type && e.type.toString && e.type.toString().indexOf("QuickAccessMenuEmbedded") >= 0; } catch (_) { return false; }
         });
         if (!bv || typeof bv.type !== "function") return false;
         if (bv.type.__shelvesPatched) { patched = true; return true; }
         // Register our key so the tab is first-class (class + focus/visibility).
         registerTabEnum();
         // Arm the breaker: if this session never confirms a healthy patched
-        // render, the next boot trips and forces the overlay fallback.
+        // render, the next boot trips and forces standing down.
         tripSet("armed");
-        afterPatch(bv, "type", function (args, ret) {
-          try { injectTabs(ret); } catch (e) { log("QAM append error (ignored):", e && e.message); }
+        var handler = function (args, ret) {
+          try {
+            if (args && args[0] && typeof args[0].visible !== "undefined") lastVisible = args[0].visible;
+            injectTabs(ret);
+          } catch (e) { log("QAM append error (ignored):", e && e.message); }
           return ret;
-        });
+        };
+        // The menu has two consumers that both render the tab list; patch each
+        // that is present so the tab shows in either presentation.
+        afterPatch(bv, "type", handler);
+        if (embedded && typeof embedded.type === "function" && !embedded.type.__shelvesPatched) {
+          afterPatch(embedded, "type", handler);
+        }
         patched = true;
-        log("QAM native: BrowserView consumer patched.");
+        log("QAM native: consumer patched.");
+        // Late injection: a consumer may already be mounted, holding its pre-
+        // patch type, so the wrap above would not take effect until a remount.
+        // Re-point the live fiber's `type` to the now-patched inner function
+        // (reached via `elementType`; the fiber's own `type` is a wrapper), so
+        // an already-open menu picks up the tab without waiting for a remount.
+        // Off by default: this re-point synchronously mutates a LIVE fiber, and
+        // on a late/arbitrary-timed inject it tears the Steam UI down (confirmed
+        // on-device — the immediate black screen). Without it the tab simply
+        // appears on the next QAM mount. Opt in with `window.__SHELVES_FIBER_REPOINT__`.
+        var doRepoint = false;
+        try { doRepoint = window.__SHELVES_FIBER_REPOINT__ === true; } catch (e) {}
+        if (doRepoint) { patchMountedConsumer(bv, embedded); }
+        else { log("QAM native: mounted re-point OFF by default (opt in via __SHELVES_FIBER_REPOINT__)."); }
       } catch (e) {
         tripClear();
-        log("QAM installPatch failed (overlay fallback):", e && e.message);
+        log("QAM installPatch failed:", e && e.message);
       }
       return patched;
+    }
+
+    // Reach the live fiber for an already-mounted consumer and re-point its
+    // `type` to the patched inner function. Scoped to that one fiber node (and
+    // its alternate), so nothing shared is mutated. No-op if the menu has not
+    // mounted yet (the wrap above covers the first mount then).
+    function patchMountedConsumer(bv, embedded) {
+      try {
+        var root = getReactRoot(document.getElementById("root"));
+        if (!root) return;
+        var node = findInReactTree(root, function (n) {
+          return n && (n.elementType === bv || (embedded && n.elementType === embedded));
+        });
+        if (node && node.elementType && node.elementType.type) {
+          node.type = node.elementType.type;
+          if (node.alternate) node.alternate.type = node.type;
+          log("QAM native: re-pointed already-mounted consumer.");
+        }
+      } catch (e) { log("QAM mounted re-point skipped:", e && e.message); }
     }
 
     // The builder's chunk loads at some point during Steam boot and the QAM
@@ -657,6 +738,24 @@
     qam: QamHost,
     _steam: Steam,
   };
+
+  // The native QAM tab's registration surface — the @deck-shelves/host contract's
+  // `window.__SHELVES_QAM__` (a `HostQam`), exposed on its own global. Unlike
+  // `__SHELVES_HOST__` this never participates in host selection, so a Deck
+  // Shelves running under ANOTHER loader (which owns the home) can still populate
+  // THIS host's native tab by registering a panel here — the one safe hook in
+  // coexistence. In owner mode it is the same object as `__SHELVES_HOST__.qam`.
+  // Idempotent: the first runtime to patch the tab stays the registration target,
+  // so a panel registered against it always feeds the tab that is actually live.
+  try { if (!window.__SHELVES_QAM__) window.__SHELVES_QAM__ = host.qam; } catch (e) {}
+  // Drain panels a Deck Shelves registered before this bridge existed: when it
+  // boots first (under another loader) it leaves them on `__SHELVES_QAM_PENDING__`.
+  // Registering against `__SHELVES_QAM__` (the idempotent bridge) guarantees they
+  // feed the tab that is actually live, whichever runtime patched it.
+  try {
+    var pend = window.__SHELVES_QAM_PENDING__, q = window.__SHELVES_QAM__;
+    if (q && pend && pend.length) { for (var pi = 0; pi < pend.length; pi++) { try { q.registerPanel(pend[pi]); } catch (e) {} } pend.length = 0; }
+  } catch (e) {}
 
   // (A) Host API — installed only when we are NOT coexisting with another
   // loader. In coexistence we leave `__SHELVES_HOST__` unset so the other
