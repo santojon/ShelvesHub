@@ -435,7 +435,18 @@
     // (string) key renders as `tab_undefined` and is not treated as a
     // first-class tab (focus of hidden tabs misbehaves). So we register a
     // numeric key, exactly as other hosts do (their tab sits at 999).
-    var NATIVE_TAB_KEY = 900; // distinct from the loader's tab (999); position is set by insertAfterKey, not by this value
+    //
+    // The KEY is only the tab's identity (kept distinct from the loader's 999);
+    // the POSITION in the strip is set by insertAfterKey below, NOT by this value.
+    // To change it: edit `DEFAULT_TAB_KEY` (one place), or — without touching this
+    // file — set `window.__SHELVES_QAM_KEY__` (a number) before injection.
+    var DEFAULT_TAB_KEY = 900;
+    var NATIVE_TAB_KEY = (function () {
+      try {
+        if ("__SHELVES_QAM_KEY__" in window && typeof window.__SHELVES_QAM_KEY__ === "number") return window.__SHELVES_QAM_KEY__;
+      } catch (e) {}
+      return DEFAULT_TAB_KEY;
+    })();
     var NATIVE_TAB_NAME = "ShelvesHub";
     function tabEnum() {
       try { if (window.DFL && window.DFL.QuickAccessTab) return window.DFL.QuickAccessTab; } catch (e) {}

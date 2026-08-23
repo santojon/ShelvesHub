@@ -17,6 +17,11 @@ is pushed — the notes below are picked up and published with the release.
   different host on the same machine, the service stands down instead of
   loading it twice. Prefer this host? `SHELVES_FORCE_OWNER=shelveshub` makes
   the hand-over explicit and safe — one writer for your settings, always.
+- **Deck Shelves, right in the Steam menu.** This host's own Quick Access tab
+  opens the Deck Shelves editor directly — validated on a Steam Deck. With
+  another host also installed, both tabs work side by side and edit the same
+  settings, and the plugin's wide side panel opens from whichever one is on
+  screen. One place to edit, whichever tab you reach for.
 
 This release also includes the work that turned the loader from a skeleton
 into something that actually runs Deck Shelves.
@@ -37,9 +42,6 @@ into something that actually runs Deck Shelves.
 - **A Deck Shelves panel with its own icon.** Deck Shelves can open a dedicated
   panel with an icon, like other Steam Deck plugins. It works now as an
   on-screen panel; the fully native Steam-menu version is in progress.
-
-## [0.1.0] - 2026-05-13
-
 - First version of ShelvesHub: the background service, installers for Linux,
   macOS and Windows, and logging. Groundwork only — it did not yet load Deck
   Shelves.

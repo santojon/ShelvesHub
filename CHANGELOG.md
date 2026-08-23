@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
 ## [Unreleased]
+
 ### Added
 - The service can now host the Deck Shelves data backend directly: it starts
   the backend as a supervised child process, restarts it if it crashes, and
@@ -31,6 +32,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   trip breaker auto-disables the feature after a failed attempt instead of
   ever crash-looping the Steam interface, and the on-screen overlay always
   remains as the fallback.
+- Initial ShelvesHub scaffolding.
+- Installers for Linux, macOS, and Windows.
+- Integrated Rust logger.
+  
 ### Changed
 - The request server now answers each connection on its own thread, so a slow
   data request can no longer delay health checks.
@@ -49,27 +54,23 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - One `pnpm` workflow for everything: a single `pnpm setup` installs the whole
   toolchain on macOS via Homebrew, and `pnpm` tasks build, run, test, debug
   locally, and deploy to a Steam Deck.
-- Deck Shelves can now add its own panel with an icon to the Steam Quick Access
-  Menu, the way the bundle wants — the loader injects a host runtime that
-  provides this. The panel and icon work today as an on-screen overlay
-  (verified locally); the deeper, native Steam-menu integration is scaffolded
-  and pending validation on a real device.
-
+- Deck Shelves can add its own panel and icon to the Steam Quick Access Menu
+  through a host runtime the loader injects. Validated on a Steam Deck: this
+  host's own menu tab opens the Deck Shelves editor directly — no intermediate
+  list — carrying the plugin's icon and a header for its settings and about
+  actions. It coexists with another installed host: both tabs are usable at once
+  and edit the same settings, and the plugin's wide side panel opens from
+  whichever tab is on screen. The bundle fills this host's tab through a
+  host-selection-neutral surface (`window.__SHELVES_QAM__`) that never disturbs
+  which host owns the home, and queues its panel if the tab arrives first. An
+  on-screen overlay remains as the fallback where the native tab is unavailable.
 - The loader now answers a host-API version handshake: the bundle can ask which
   HostApi version the loader speaks (`getHostApiVersion`) before relying on host
   features, and can report when it has finished starting up (`bundleReady`).
 - Safety check: the loader refuses to inject an empty bundle, logging a clear
   message instead of silently marking a no-op as loaded.
-
-### Changed
 - The bundle and the loader now talk over HTTP, and the "is Deck Shelves
   loaded?" check reports the real status instead of a fixed answer.
 - The loader now injects into Steam's main app context (`SharedJSContext`)
   instead of the Big Picture wrapper window — verified on a real Steam Deck,
   where it correctly detects the Steam UI.
-
-## [0.1.0] - 2026-05-13
-### Added
-- Initial ShelvesHub scaffolding
-- Installers for Linux, macOS, and Windows
-- Integrated Rust logger

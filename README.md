@@ -18,6 +18,8 @@ The loader runs as a background service, watches for the Steam renderer, injects
 
 The TypeScript `HostApi` contract (`src/runtime/host/`) defines what the loader provides to the bundle. The Rust process (`src/`) implements the service side.
 
+It can also give Deck Shelves its own tab in the Steam Quick Access Menu, opening the editor directly (with the plugin's icon and header). Where another host such as plugin loader is installed too, the two coexist: both tabs stay usable and edit the same settings, the plugin's wide side panel opens from whichever tab is on screen, and only one host writes settings at a time.
+
 ---
 
 ## Installation
