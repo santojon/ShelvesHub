@@ -8,6 +8,10 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **Brings its own copy of Deck Shelves.** If Deck Shelves is not already on the
+  machine, the service fetches it — reusing a local copy, copying it from an
+  installed plugin loader, or downloading the newest release — so it can run
+  Deck Shelves on its own. Opt into pre-release versions with `SHELVES_PRERELEASE=1`.
 - **Real data, hosted here.** The service now runs the Deck Shelves data
   backend itself — settings, backups and friends — supervising it, restarting
   it on crashes, and surfacing its logs in one place. Drop the backend at

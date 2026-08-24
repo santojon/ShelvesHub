@@ -113,9 +113,7 @@ fn run(cli: &Cli) -> cdp::Result<()> {
         Command::Inject { bundle, force } => {
             cmd_inject(&cli.host, cli.port, filter, bundle, *force)
         }
-        Command::Reload { ignore_cache } => {
-            cmd_reload(&cli.host, cli.port, filter, *ignore_cache)
-        }
+        Command::Reload { ignore_cache } => cmd_reload(&cli.host, cli.port, filter, *ignore_cache),
         Command::Console { duration } => cmd_console(&cli.host, cli.port, filter, *duration),
         Command::Preload { script, duration } => {
             cmd_preload(&cli.host, cli.port, filter, script, *duration)
@@ -182,22 +180,37 @@ fn run_autoattach(host: &str, port: u16, filter: Option<&str>, source: &str) -> 
 
 /// One `Target.attachedToTarget`: register the document-start script when the
 /// page matches the filter, then always resume the paused target.
-fn handle_attached(client: &mut CdpClient, msg: &serde_json::Value, source: &str, needle: Option<&str>) {
+fn handle_attached(
+    client: &mut CdpClient,
+    msg: &serde_json::Value,
+    source: &str,
+    needle: Option<&str>,
+) {
     let params = msg.get("params");
     let session_id = params
         .and_then(|p| p.get("sessionId"))
         .and_then(|v| v.as_str());
     let Some(sid) = session_id else { return };
     let info = params.and_then(|p| p.get("targetInfo"));
-    let ttype = info.and_then(|i| i.get("type")).and_then(|v| v.as_str()).unwrap_or("");
-    let title = info.and_then(|i| i.get("title")).and_then(|v| v.as_str()).unwrap_or("");
-    let url = info.and_then(|i| i.get("url")).and_then(|v| v.as_str()).unwrap_or("");
+    let ttype = info
+        .and_then(|i| i.get("type"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let title = info
+        .and_then(|i| i.get("title"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let url = info
+        .and_then(|i| i.get("url"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     let matches = match needle {
         Some(n) => title.to_lowercase().contains(n) || url.to_lowercase().contains(n),
         None => {
             ttype == "page"
-                && (title.to_lowercase().contains("sharedjscontext") || url.contains("steamloopback"))
+                && (title.to_lowercase().contains("sharedjscontext")
+                    || url.contains("steamloopback"))
         }
     };
     if matches {
@@ -211,7 +224,11 @@ fn handle_attached(client: &mut CdpClient, msg: &serde_json::Value, source: &str
         println!("preload: registered on \"{label}\" (session {sid})");
     }
     // Harmless no-op unless a target happens to be waiting for a debugger.
-    let _ = client.send_on_session("Runtime.runIfWaitingForDebugger", serde_json::json!({}), sid);
+    let _ = client.send_on_session(
+        "Runtime.runIfWaitingForDebugger",
+        serde_json::json!({}),
+        sid,
+    );
 }
 
 fn cmd_targets(host: &str, port: u16) -> cdp::Result<()> {
@@ -220,7 +237,10 @@ fn cmd_targets(host: &str, port: u16) -> cdp::Result<()> {
         println!("No targets at http://{host}:{port}/json");
         return Ok(());
     }
-    println!("{} target(s) at http://{host}:{port}/json:\n", targets.len());
+    println!(
+        "{} target(s) at http://{host}:{port}/json:\n",
+        targets.len()
+    );
     for t in &targets {
         let ws = if t.ws_url.is_some() { "ws" } else { "no-ws" };
         println!("  [{:<8}] {:<6} {}", t.kind, ws, t.title);
@@ -239,7 +259,10 @@ fn cmd_probe(host: &str, port: u16, filter: Option<&str>) -> cdp::Result<()> {
 fn cmd_eval(host: &str, port: u16, filter: Option<&str>, expression: &str) -> cdp::Result<()> {
     let mut client = CdpClient::connect_renderer(host, port, filter)?;
     let value = client.evaluate(expression)?;
-    println!("{}", serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string()));
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string())
+    );
     Ok(())
 }
 
@@ -332,5 +355,10 @@ fn format_remote_object(obj: &Value) -> String {
     obj.get("description")
         .and_then(Value::as_str)
         .map(str::to_string)
-        .unwrap_or_else(|| obj.get("type").and_then(Value::as_str).unwrap_or("?").to_string())
+        .unwrap_or_else(|| {
+            obj.get("type")
+                .and_then(Value::as_str)
+                .unwrap_or("?")
+                .to_string()
+        })
 }

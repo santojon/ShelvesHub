@@ -65,6 +65,11 @@ pub struct Config {
     /// mode: a blocked main thread starves the plugin's async shelf resolves →
     /// React teardown). Off by default; the injection loop is the default path.
     pub preload: bool,
+    /// When true (`SHELVES_PRERELEASE=1`), the bundle "populate" download step
+    /// considers pre-release Deck Shelves releases (picking the newest overall)
+    /// instead of only the latest stable — the sole-host equivalent of the
+    /// plugin's beta channel. Off by default.
+    pub prerelease: bool,
 }
 
 impl Config {
@@ -98,24 +103,18 @@ impl Config {
             force_owner: env::var("SHELVES_FORCE_OWNER")
                 .map(|v| v.eq_ignore_ascii_case("shelveshub"))
                 .unwrap_or(false),
-            native_qam: env::var("SHELVES_NATIVE_QAM")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false),
-            recover_cmd: env::var("SHELVES_RECOVER_CMD").ok().filter(|s| !s.is_empty()),
-            preload: env::var("SHELVES_PRELOAD")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false),
+            native_qam: env_bool("SHELVES_NATIVE_QAM"),
+            recover_cmd: env::var("SHELVES_RECOVER_CMD")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            preload: env_bool("SHELVES_PRELOAD"),
+            prerelease: env_bool("SHELVES_PRERELEASE"),
         }
-    }
-
-    /// The `http://host:port` base of the DevTools HTTP discovery endpoint.
-    pub fn cef_http_base(&self) -> String {
-        format!("http://{}:{}", self.cef_host, self.cef_port)
     }
 
     pub fn summary(&self) -> String {
         format!(
-            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={}{}{}{}{}",
+            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={}{}{}{}{}{}",
             self.cef_host,
             self.cef_port,
             self.rpc_addr,
@@ -132,6 +131,7 @@ impl Config {
             if self.native_qam { " native_qam=on" } else { "" },
             if self.recover_cmd.is_some() { " recover_cmd=set" } else { "" },
             if self.preload { " preload=on" } else { "" },
+            if self.prerelease { " prerelease=on" } else { "" },
         )
     }
 }
@@ -173,15 +173,31 @@ fn default_settings_dir() -> PathBuf {
 }
 
 fn env_string(key: &str, default: &str) -> String {
-    env::var(key).ok().filter(|s| !s.is_empty()).unwrap_or_else(|| default.to_string())
+    env::var(key)
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| default.to_string())
 }
 
 fn env_u16(key: &str, default: u16) -> u16 {
-    env::var(key).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    env::var(key)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn env_u64(key: &str, default: u64) -> u64 {
-    env::var(key).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    env::var(key)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
+}
+
+/// A boolean flag env var: true for `1` or `true` (case-insensitive), else false.
+fn env_bool(key: &str) -> bool {
+    env::var(key)
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
 }
 
 /// Resolve an asset path: explicit env override wins, otherwise look next to the

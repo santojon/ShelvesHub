@@ -11,6 +11,7 @@ pub mod cdp;
 pub mod config;
 pub mod loader;
 pub mod logger;
+pub mod populate;
 pub mod rpc;
 pub mod state;
 

@@ -7,6 +7,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- When Deck Shelves cannot be loaded, the host's own tab now shows a **ShelvesHub
+  panel** with recovery actions instead of an empty tab; the home always loads
+  regardless. Its text is **localized** from per-locale files under `runtime/i18n/`
+  (the service inlines them at injection time).
+- The service now **obtains the Deck Shelves bundle on its own** when it is not
+  already present: it uses a local copy if there is one, otherwise copies the
+  built bundle from an installed plugin loader, otherwise downloads the newest
+  release from the Deck Shelves project — so a machine with no local bundle can
+  still bring Deck Shelves up. `SHELVES_PRERELEASE=1` widens the download to
+  pre-release versions (the pre-release channel).
+- As the sole host (no other loader present), the injected runtime discovers
+  Steam's own React, ReactDOM and jsx-runtime and exposes them to the bundle, so
+  the plugin resolves React from this host rather than from a loader's globals.
 - The service can now host the Deck Shelves data backend directly: it starts
   the backend as a supervised child process, restarts it if it crashes, and
   forwards data requests (settings, backups, and the rest) from the Steam
@@ -37,6 +50,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Integrated Rust logger.
   
 ### Changed
+- Updated dependencies, including the WebSocket client used for the DevTools
+  connection.
+- Added a project lint and formatting configuration, enforced the same way in
+  CI and locally.
+- The release workflow now marks SemVer pre-release tags (e.g. `v1.2.3-beta.1`)
+  as GitHub pre-releases, keeping them off the stable channel.
+- Modularized the CDP client and the injection loop into focused submodules
+  (`src/cdp/`, `src/loader/`).
 - The request server now answers each connection on its own thread, so a slow
   data request can no longer delay health checks.
 - Long request bodies are truncated in the log.

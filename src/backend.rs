@@ -54,7 +54,10 @@ struct State {
 }
 
 static SETTINGS: OnceLock<BackendSettings> = OnceLock::new();
-static STATE: Mutex<State> = Mutex::new(State { handle: None, last_spawn: None });
+static STATE: Mutex<State> = Mutex::new(State {
+    handle: None,
+    last_spawn: None,
+});
 
 /// Configure backend hosting and eagerly spawn the child. No-op when
 /// `SHELVES_BACKEND_DIR` is unset (backend hosting disabled).
@@ -94,7 +97,9 @@ pub fn is_running() -> bool {
 /// underscore (lifecycle/private methods), no exotic characters.
 pub fn valid_method_name(name: &str) -> bool {
     let mut chars = name.chars();
-    let Some(first) = chars.next() else { return false };
+    let Some(first) = chars.next() else {
+        return false;
+    };
     name.len() <= 64
         && first.is_ascii_alphabetic()
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -116,7 +121,11 @@ pub fn call(method: &str, args: &Value) -> Result<Value, String> {
     let id = handle.next_id;
     handle.next_id += 1;
     let request = json!({ "id": id, "method": method, "args": args }).to_string() + "\n";
-    if let Err(e) = handle.stdin.write_all(request.as_bytes()).and_then(|_| handle.stdin.flush()) {
+    if let Err(e) = handle
+        .stdin
+        .write_all(request.as_bytes())
+        .and_then(|_| handle.stdin.flush())
+    {
         drop_handle(&mut state, &format!("write failed: {e}"));
         return Err("backend write failed".to_string());
     }
@@ -157,7 +166,9 @@ pub fn call(method: &str, args: &Value) -> Result<Value, String> {
 /// Make sure a live child exists, spawning one if allowed by the cooldown.
 /// Returns false when hosting is unconfigured or the spawn failed.
 fn ensure_running(state: &mut State) -> bool {
-    let Some(settings) = SETTINGS.get() else { return false };
+    let Some(settings) = SETTINGS.get() else {
+        return false;
+    };
 
     if let Some(handle) = state.handle.as_mut() {
         match handle.child.try_wait() {
@@ -177,7 +188,10 @@ fn ensure_running(state: &mut State) -> bool {
 
     match spawn(settings) {
         Ok(handle) => {
-            log_info("backend", &format!("Backend started (pid {}).", handle.child.id()));
+            log_info(
+                "backend",
+                &format!("Backend started (pid {}).", handle.child.id()),
+            );
             state.handle = Some(handle);
             true
         }
@@ -189,7 +203,10 @@ fn ensure_running(state: &mut State) -> bool {
 }
 
 fn drop_handle(state: &mut State, reason: &str) {
-    log_warning("backend", &format!("Discarding backend process ({reason})."));
+    log_warning(
+        "backend",
+        &format!("Discarding backend process ({reason})."),
+    );
     if let Some(mut handle) = state.handle.take() {
         let _ = handle.child.kill();
         let _ = handle.child.wait();
@@ -238,7 +255,12 @@ fn spawn(settings: &BackendSettings) -> std::io::Result<Handle> {
         }
     });
 
-    Ok(Handle { child, stdin, responses: rx, next_id: 1 })
+    Ok(Handle {
+        child,
+        stdin,
+        responses: rx,
+        next_id: 1,
+    })
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 {
-  "_comment": "DeckProbe project config for ShelvesHub. DeckProbe (submodule at ./deckprobe) loads this file plus .env (DECK_CDP_HOST / DECK_CDP_PORT, default port 8081) to run CDP probes / diags / screenshots against a live Steam Deck. Drive it via the pnpm deck:probe, deck:diag, deck:screenshot, and deck:perf scripts. Every value here is overridable through DECKPROBE_* environment variables.",
+  "_comment": "DeckProbe config for ShelvesHub. Loaded with .env (DECK_CDP_HOST/PORT); drive via the deck:probe / deck:diag / deck:screenshot / deck:perf scripts. DECKPROBE_* env vars override any value.",
   "screenshots_dir": "screenshots/deck",
   "selectors": {}
 }

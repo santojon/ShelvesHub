@@ -73,6 +73,51 @@
     }
   }
 
+  // ── i18n ──────────────────────────────────────────────────────────────────
+  // Lightweight i18n for the host's OWN UI (the fallback panel + error text),
+  // mirroring the plugin's molds: an ordered prefix→locale map, a
+  // navigator-language pick, per-locale dictionaries, and an en-US fallback.
+  // Standalone (no framework, no fetch): the plugin's i18n is NOT available when
+  // the bundle fails to load — which is exactly when this UI must show text.
+  var I18N = (function () {
+    var PREFIXES = [
+      ["pt-pt", "pt-PT"], ["pt", "pt-BR"], ["es-es", "es-ES"], ["es", "es-419"],
+      ["it", "it-IT"], ["fr-ca", "fr-CA"], ["fr", "fr-FR"], ["de", "de-DE"],
+      ["ru", "ru-RU"], ["pl", "pl-PL"], ["nl", "nl-NL"], ["tr", "tr-TR"],
+      ["uk", "uk-UA"], ["ja", "ja-JP"], ["ko", "ko-KR"], ["zh-tw", "zh-TW"],
+      ["zh-hant", "zh-TW"], ["zh", "zh-CN"], ["en-gb", "en-GB"],
+    ];
+    // Dictionaries live in dedicated per-locale JSON files under runtime/i18n/;
+    // the daemon inlines them as `window.__SHELVES_I18N__` at injection time (this
+    // runtime is an injected blob and cannot read the files itself). en-US is the
+    // fallback for any missing locale/key.
+    var DICTS = (function () {
+      try {
+        if (window.__SHELVES_I18N__ && typeof window.__SHELVES_I18N__ === "object") {
+          return window.__SHELVES_I18N__;
+        }
+      } catch (e) {}
+      return {};
+    })();
+    function pickLocale(l) {
+      l = (l || "en-US").toLowerCase();
+      for (var i = 0; i < PREFIXES.length; i++) {
+        if (l.indexOf(PREFIXES[i][0]) === 0) return PREFIXES[i][1];
+      }
+      return "en-US";
+    }
+    var LOCALE = "en-US";
+    try { LOCALE = pickLocale(navigator && navigator.language); } catch (e) {}
+    function t(key) {
+      var d = DICTS[LOCALE];
+      if (d && key in d) return d[key];
+      var en = DICTS["en-US"];
+      if (en && key in en) return en[key];
+      return key;
+    }
+    return { t: t, locale: LOCALE, pickLocale: pickLocale };
+  })();
+
   // ── Steam webpack: module cache + finders ─────────────────────────────────
   var Steam = (function () {
     var modules = new Map(); // id -> module
@@ -160,7 +205,54 @@
     function findModuleByExport(filter, minExports) { return findModuleDetailsByExport(filter, minExports)[0]; }
 
     function isSteam() { init(); return modules.size > 0; }
-    function getReact() { return (window.SP_REACT && window.SP_REACT.createElement) ? window.SP_REACT : null; }
+    // React stack. A plugin loader normally publishes Steam's React / ReactDOM /
+    // jsx-runtime as the globals the bundle reads. In owner mode (no loader) we
+    // instead DISCOVER them from Steam's own webpack and expose them on the host
+    // object (`host.React` / `host.ReactDOM` / `host.jsx`); the bundle's shims read
+    // them from `__SHELVES_HOST__`. We deliberately never publish loader-shaped
+    // globals — the host environment stays neutral. When a global is already
+    // present (coexistence) we reuse it, so the heavy module scan is skipped there.
+    var _stack = null;
+    function getReactStack() {
+      if (_stack) return _stack;
+      var w = window;
+      var React = (w.SP_REACT && w.SP_REACT.createElement) ? w.SP_REACT
+        : findModule(function (m) {
+            return m && typeof m.createElement === "function"
+              && typeof m.useState === "function"
+              && typeof m.Fragment !== "undefined" && m.Component;
+          });
+      if (!React || !React.createElement) {
+        return { React: null, ReactDOM: null, jsx: null, client: null };
+      }
+      var ReactDOM = (w.SP_REACTDOM && w.SP_REACTDOM.createPortal) ? w.SP_REACTDOM
+        : findModule(function (m) {
+            return m && typeof m.createPortal === "function"
+              && (typeof m.render === "function" || typeof m.createRoot === "function");
+          });
+      var jsx = (w.SP_JSX && w.SP_JSX.jsx) ? w.SP_JSX
+        : findModule(function (m) {
+            return m && typeof m.jsx === "function" && typeof m.jsxs === "function";
+          });
+      if (!jsx) {
+        // Fallback: build jsx from React — jsx(type, config, key) carries
+        // children/key in the config object, which createElement accepts.
+        var mk = function (type, config, key) {
+          var props = config || {};
+          if (key !== undefined && key !== null) { props = Object.assign({}, props); props.key = key; }
+          return React.createElement(type, props);
+        };
+        jsx = { Fragment: React.Fragment, jsx: mk, jsxs: mk, jsxDEV: mk };
+      }
+      var client = (w.SP_REACTDOM_CLIENT && w.SP_REACTDOM_CLIENT.createRoot) ? w.SP_REACTDOM_CLIENT
+        : findModule(function (m) {
+            return m && typeof m.createRoot === "function" && typeof m.hydrateRoot === "function";
+          });
+      if (!client && ReactDOM && typeof ReactDOM.createRoot === "function") client = ReactDOM;
+      _stack = { React: React, ReactDOM: ReactDOM || null, jsx: jsx, client: client || null };
+      return _stack;
+    }
+    function getReact() { return getReactStack().React; }
 
     return {
       get modules() { init(); return modules; },
@@ -168,11 +260,12 @@
       findModuleDetailsByExport: findModuleDetailsByExport,
       findModuleExport: findModuleExport,
       findModuleByExport: findModuleByExport,
-      isSteam: isSteam, getReact: getReact, init: init,
+      isSteam: isSteam, getReact: getReact, getReactStack: getReactStack, init: init,
     };
   })();
 
-  var React = Steam.getReact();
+  var ReactStack = Steam.getReactStack();
+  var React = ReactStack.React;
   function h() { return React.createElement.apply(React, arguments); }
 
   // Build a regex matching a minified `const {a:b,c:d}` prop destructuring, in
@@ -259,7 +352,7 @@
       render() {
         return this.state.err
           ? h("div", { style: { padding: "16px", color: "#ff8d8d", fontSize: "13px" } },
-              "Deck Shelves: erro ao renderizar o painel.")
+              I18N.t("panel_error"))
           : this.props.children;
       }
     };
@@ -423,10 +516,55 @@
       var s = firstSpec();
       return iconEl((s && s.icon) || DEFAULT_ICON);
     }
+    // POST a JSON-RPC call to the local host RPC server (same transport as
+    // `host.rpc.call`) — used by the fallback panel's actions.
+    function hostRpc(method, args) {
+      return fetch(RPC_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: method, args: args == null ? null : args }),
+      }).then(function (r) { return r.json(); });
+    }
+    // Shown in OUR tab when no panel is registered — i.e. the bundle could not be
+    // brought up. Host-branded, self-contained (plain elements, no dependency on
+    // the discovered Steam UI, which may be part of what failed), strings via I18N.
+    // Actions call the daemon over RPC; each degrades quietly if unavailable.
+    function FallbackPanel() {
+      var st = React.useState(null);
+      var busy = st[0], setBusy = st[1];
+      function run(id, method) {
+        setBusy(id);
+        hostRpc(method).then(function () { setBusy(null); }, function () { setBusy(null); });
+      }
+      function btn(id, key, method, primary) {
+        return h("button", {
+          key: id,
+          onClick: function () { if (!busy) run(id, method); },
+          style: {
+            display: "block", width: "100%", boxSizing: "border-box",
+            padding: "10px 14px", marginTop: "8px", textAlign: "left",
+            border: "none", borderRadius: "4px",
+            cursor: busy ? "default" : "pointer", fontSize: "14px",
+            opacity: busy && busy !== id ? 0.5 : 1,
+            background: primary ? "#1a9fff" : "rgba(255,255,255,0.08)", color: "#fff",
+          },
+        }, I18N.t(key));
+      }
+      return h(
+        "div",
+        { style: { padding: "16px 15px 10px" } },
+        h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")),
+        h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "4px 0 12px" } }, I18N.t("unavailable_body")),
+        btn("download", "action_download", "populateBundle", true),
+        btn("update", "action_update_hub", "selfUpdate"),
+        btn("logs", "action_logs", "getLogs"),
+        btn("auto", "action_auto_update", "toggleAutoUpdate")
+      );
+    }
     function PanelSlot() {
       useSlotRefresh();
       var s = firstSpec();
-      if (!s) return h("div", { style: { padding: "16px" } }, "Deck Shelves");
+      if (!s) return ErrorBoundary ? h(ErrorBoundary, null, h(FallbackPanel, null)) : h(FallbackPanel, null);
       return contentEl(s);
     }
     // A registered tab needs its key present in Steam's `QuickAccessTab` enum:
@@ -707,7 +845,12 @@
   var host = {
     __shelvesRuntime: true,
     version: HOST_API_VERSION,
+    // Steam's React stack, discovered from webpack in owner mode — the bundle's
+    // react / react-dom / jsx-runtime shims read these from `__SHELVES_HOST__`
+    // (no loader-shaped globals are published; the host stays neutral).
     React: React,
+    ReactDOM: ReactStack.ReactDOM,
+    jsx: ReactStack.jsx,
     ui: UI,
     ErrorBoundary: ErrorBoundary,
     // Shapes conform to the @deck-shelves/host contract directly (so the

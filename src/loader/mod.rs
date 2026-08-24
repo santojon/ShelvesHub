@@ -8,15 +8,18 @@
 //! and we re-inject.
 
 use std::fs;
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::json;
 
 use crate::cdp::{self, CdpClient};
 use crate::config::Config;
 use crate::logger::{log_error, log_info, log_warning};
 use crate::state;
+
+mod preload;
 
 /// Global the loader sets in the renderer to mark a successful injection. The
 /// probe reads it back; the bundle and `shelves-devtools probe` can too.
@@ -50,11 +53,26 @@ enum Tick {
 const COLLAPSE_HALT_THRESHOLD: u32 = 2;
 
 pub fn run(config: Config) {
+    // Obtain the bundle before anything else: the sole-host case (no loader, no
+    // local bundle) still brings Deck Shelves up on its own — local → copy from
+    // an installed plugin loader → download the newest release. Best-effort; on a
+    // miss we keep whatever is at the path and injection reports it.
+    match crate::populate::ensure_bundle(&config.bundle_path, config.prerelease) {
+        Ok(src) => log_info("loader", &format!("Bundle ready via {src}.")),
+        Err(e) => log_warning(
+            "loader",
+            &format!(
+                "Could not obtain a bundle ({e}); injecting whatever is at {}.",
+                config.bundle_path.display()
+            ),
+        ),
+    }
+
     // Preload mode registers the runtime at document-start (idle boot) instead
     // of evaluating it into the live page — the safe path for the native QAM
     // tab, which must not run its heavy webpack walk on a busy renderer.
     if config.preload {
-        return run_preload(config);
+        return preload::run_preload(config);
     }
 
     log_info("loader", "Injection loop started.");
@@ -147,106 +165,6 @@ fn run_recovery(cmd: &str) {
     }
 }
 
-/// Preload mode: register the host runtime at document-start on every (re)load
-/// of the Steam renderer, via browser-level auto-attach. The runtime then runs
-/// at idle boot — before the plugin loads and renders — so its heavy webpack
-/// enumeration never blocks a busy renderer (the native-QAM late-inject failure
-/// mode, where a blocked main thread starves the plugin's async shelf resolves
-/// and tears the UI down). The registration lives as long as this process runs.
-fn run_preload(config: Config) {
-    log_info("loader", "Preload mode: host runtime runs at document-start (idle boot).");
-    let runtime = match fs::read_to_string(&config.host_runtime_path) {
-        Ok(s) => s,
-        Err(e) => {
-            log_error(
-                "loader",
-                &format!(
-                    "Preload: cannot read host runtime {}: {e}",
-                    config.host_runtime_path.display()
-                ),
-            );
-            return;
-        }
-    };
-    // Compose the document-start script: opt-in stamps first (so the runtime
-    // sees them the moment it evaluates), then the runtime itself.
-    let mut source = String::new();
-    if config.force_owner {
-        source.push_str(&format!("{FORCE_OWNER_GLOBAL} = {OWNER_KIND:?};\n"));
-    }
-    if config.native_qam {
-        source.push_str(&format!("{NATIVE_QAM_GLOBAL} = true;\n"));
-    }
-    source.push_str(&runtime);
-
-    // A Steam restart tears down the CEF, dropping the browser connection —
-    // reconnect and re-arm auto-attach each time.
-    loop {
-        match preload_session(&config, &source) {
-            Ok(()) => {}
-            Err(e) => log_warning("loader", &format!("Preload session dropped ({e}) — reconnecting…")),
-        }
-        thread::sleep(Duration::from_millis(250));
-    }
-}
-
-/// Arm browser-level `Target.setAutoAttach` and register the document-start
-/// script on matching pages. Returns Err when the browser connection drops.
-fn preload_session(config: &Config, source: &str) -> cdp::Result<()> {
-    let ws = cdp::browser_ws_url(&config.cef_host, config.cef_port)?;
-    let mut client = CdpClient::connect(&ws)?;
-    // `waitForDebuggerOnStart:false`: never leave a target paused (that wedges
-    // the Steam UI); we register the document-start script as early as the
-    // Target domain allows, which applies to that target's next document.
-    client.call(
-        "Target.setAutoAttach",
-        json!({ "autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true }),
-    )?;
-    log_info("loader", "Preload: browser auto-attach armed — watching page targets.");
-    let needle = config.target_filter.as_deref().map(|f| f.to_lowercase());
-    loop {
-        if let Some(msg) = client.poll_message()? {
-            if msg.get("method").and_then(|m| m.as_str()) == Some("Target.attachedToTarget") {
-                preload_attached(&mut client, &msg, source, needle.as_deref());
-            }
-        }
-    }
-}
-
-/// One `Target.attachedToTarget`: register the document-start script on a
-/// matching page, then always resume the (possibly paused) target.
-fn preload_attached(client: &mut CdpClient, msg: &Value, source: &str, needle: Option<&str>) {
-    let params = msg.get("params");
-    let Some(sid) = params.and_then(|p| p.get("sessionId")).and_then(Value::as_str) else {
-        return;
-    };
-    let info = params.and_then(|p| p.get("targetInfo"));
-    let ttype = info.and_then(|i| i.get("type")).and_then(Value::as_str).unwrap_or("");
-    let title = info.and_then(|i| i.get("title")).and_then(Value::as_str).unwrap_or("");
-    let url = info.and_then(|i| i.get("url")).and_then(Value::as_str).unwrap_or("");
-
-    let matches = match needle {
-        Some(n) => title.to_lowercase().contains(n) || url.to_lowercase().contains(n),
-        None => {
-            ttype == "page"
-                && (title.to_lowercase().contains("sharedjscontext")
-                    || url.contains("steamloopback"))
-        }
-    };
-    if matches {
-        let _ = client.send_on_session("Page.enable", json!({}), sid);
-        let _ = client.send_on_session(
-            "Page.addScriptToEvaluateOnNewDocument",
-            json!({ "source": source }),
-            sid,
-        );
-        let label = if title.is_empty() { url } else { title };
-        log_info("loader", &format!("Preload: registered on \"{label}\""));
-    }
-    // Harmless no-op unless a target happens to be waiting for a debugger.
-    let _ = client.send_on_session("Runtime.runIfWaitingForDebugger", json!({}), sid);
-}
-
 /// One injection cycle.
 fn tick(config: &Config) -> cdp::Result<Tick> {
     let mut client = CdpClient::connect_renderer(
@@ -311,7 +229,11 @@ fn tick(config: &Config) -> cdp::Result<Tick> {
     inject_bundle(&mut client, &source, env!("CARGO_PKG_VERSION"))?;
 
     // Confirm the marker is now present rather than trusting a silent eval.
-    Ok(if probe_injected(&mut client)? { Tick::Active } else { Tick::NotConfirmed })
+    Ok(if probe_injected(&mut client)? {
+        Tick::Active
+    } else {
+        Tick::NotConfirmed
+    })
 }
 
 /// Read the renderer's owner claim: empty string when unclaimed.
@@ -329,12 +251,55 @@ pub fn may_inject(owner: &str, force: bool) -> bool {
 
 /// Evaluate the host runtime (`window.__SHELVES_HOST__`) in the renderer. The
 /// runtime is idempotent, so re-evaluating on a later tick is harmless.
+/// Compose a `window.__SHELVES_I18N__ = {…}` assignment from the per-locale JSON
+/// files next to the runtime (`<runtime dir>/i18n/*.json`), so the injected
+/// runtime — a blob that cannot read files — gets its dictionaries. Empty when
+/// the directory is absent; the runtime then falls back to raw keys.
+pub(super) fn i18n_stamp(host_runtime_path: &Path) -> String {
+    let dir = match host_runtime_path.parent() {
+        Some(p) => p.join("i18n"),
+        None => return String::new(),
+    };
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return String::new(),
+    };
+    let mut map = serde_json::Map::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let locale = match path.file_stem().and_then(|s| s.to_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(dict) = serde_json::from_str::<serde_json::Value>(&content) {
+                map.insert(locale, dict);
+            }
+        }
+    }
+    if map.is_empty() {
+        return String::new();
+    }
+    format!(
+        "window.__SHELVES_I18N__ = {};\n",
+        serde_json::Value::Object(map)
+    )
+}
+
 fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
     match fs::read_to_string(&config.host_runtime_path) {
-        Ok(source) => match client.evaluate(&source) {
-            Ok(_) => log_info("loader", "Host runtime injected."),
-            Err(e) => log_error("loader", &format!("Host runtime eval failed: {e}")),
-        },
+        Ok(source) => {
+            // Inline the per-locale dictionaries first so the runtime's i18n reads
+            // them the moment it evaluates.
+            let source = format!("{}{}", i18n_stamp(&config.host_runtime_path), source);
+            match client.evaluate(&source) {
+                Ok(_) => log_info("loader", "Host runtime injected."),
+                Err(e) => log_error("loader", &format!("Host runtime eval failed: {e}")),
+            }
+        }
         Err(e) => log_warning(
             "loader",
             &format!(

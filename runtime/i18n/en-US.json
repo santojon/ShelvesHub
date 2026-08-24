@@ -1,0 +1,10 @@
+{
+  "hub_title": "ShelvesHub",
+  "panel_error": "Deck Shelves: could not render the panel.",
+  "unavailable_title": "Deck Shelves is not loaded",
+  "unavailable_body": "The Deck Shelves bundle could not be brought up on this host.",
+  "action_download": "Download the latest Deck Shelves",
+  "action_update_hub": "Update ShelvesHub",
+  "action_logs": "View logs",
+  "action_auto_update": "Automatic updates"
+}

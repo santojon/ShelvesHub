@@ -4,10 +4,13 @@
 //! to answer `isInjected`. A plain atomic is enough — there is exactly one
 //! writer (the loader loop) and many readers (RPC connections).
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 
 static INJECTED: AtomicBool = AtomicBool::new(false);
 static BUNDLE_READY: AtomicBool = AtomicBool::new(false);
+static POPULATE: OnceLock<(PathBuf, bool)> = OnceLock::new();
 
 /// Record whether the Deck Shelves bundle is currently active in the renderer.
 pub fn set_injected(value: bool) {
@@ -30,4 +33,15 @@ pub fn set_bundle_ready(value: bool) {
 /// Whether the bundle has confirmed full initialisation via `bundleReady`.
 pub fn is_bundle_ready() -> bool {
     BUNDLE_READY.load(Ordering::Relaxed)
+}
+
+/// Record the bundle path + pre-release flag so RPC handlers (a manual
+/// re-download from the fallback panel) can reach them. Set once at startup.
+pub fn set_populate_config(bundle_path: PathBuf, prerelease: bool) {
+    let _ = POPULATE.set((bundle_path, prerelease));
+}
+
+/// The `(bundle_path, prerelease)` recorded at startup, if any.
+pub fn populate_config() -> Option<&'static (PathBuf, bool)> {
+    POPULATE.get()
 }

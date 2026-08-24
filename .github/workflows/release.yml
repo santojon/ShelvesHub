@@ -130,6 +130,13 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          # A SemVer pre-release tag carries a `-` suffix (e.g. v1.2.3-beta.1) —
+          # mark the GitHub release as a pre-release so it stays off the "latest"
+          # channel and self-update only offers it when the beta channel is on.
+          case "$TAG" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       - name: Extract release notes
         id: notes
@@ -166,4 +173,5 @@ jobs:
           name: ShelvesHub ${{ steps.tag.outputs.tag }}
           body: ${{ steps.notes.outputs.body }}
           generate_release_notes: ${{ steps.notes.outputs.body == '' }}
+          prerelease: ${{ steps.tag.outputs.prerelease }}
           files: artifacts/**/*

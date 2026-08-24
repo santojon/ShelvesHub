@@ -43,7 +43,10 @@ pub fn serve(addr: &str) {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let peer = stream.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let peer = stream
+        .peer_addr()
+        .map(|a| a.to_string())
+        .unwrap_or_default();
 
     let request = match read_request(&stream) {
         Ok(req) => req,
@@ -61,7 +64,10 @@ fn handle_connection(mut stream: TcpStream) {
     }
 
     let response_body = dispatch(&request.body);
-    log_info("rpc", &format!("{peer} -> {}", truncate_for_log(&request.body)));
+    log_info(
+        "rpc",
+        &format!("{peer} -> {}", truncate_for_log(&request.body)),
+    );
     if let Err(e) = write_response(&mut stream, 200, &response_body) {
         log_warning("rpc", &format!("Write error to {peer}: {e}"));
     }
@@ -78,7 +84,11 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
 
     let mut request_line = String::new();
     reader.read_line(&mut request_line)?;
-    let method = request_line.split_whitespace().next().unwrap_or("").to_string();
+    let method = request_line
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_string();
 
     let mut content_length = 0usize;
     loop {
@@ -111,7 +121,12 @@ fn truncate_for_log(body: &str) -> String {
     if body.len() <= MAX {
         return body.to_string();
     }
-    let cut = body.char_indices().take_while(|(i, _)| *i < MAX).last().map(|(i, c)| i + c.len_utf8()).unwrap_or(0);
+    let cut = body
+        .char_indices()
+        .take_while(|(i, _)| *i < MAX)
+        .last()
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(0);
     format!("{}… ({} bytes)", &body[..cut], body.len())
 }
 
@@ -139,6 +154,20 @@ fn dispatch(body: &str) -> String {
             backend::enabled(),
             backend::is_running()
         )),
+        // Manual bundle re-download (the fallback panel's "download" action):
+        // fetch the newest release into the bundle path; the loop re-injects it.
+        Some("populateBundle") => match state::populate_config() {
+            Some((path, prerelease)) => {
+                match crate::populate::update_from_release(path, *prerelease) {
+                    Ok(url) => {
+                        log_info("rpc", &format!("Bundle re-downloaded: {url}"));
+                        ok(serde_json::Value::String(url).to_string())
+                    }
+                    Err(e) => err(&e),
+                }
+            }
+            None => err("bundle path not configured"),
+        },
         // Anything else is a data method owned by the hosted Python backend.
         Some(other) if backend::enabled() => {
             let args = parsed
@@ -193,7 +222,10 @@ mod tests {
 
     #[test]
     fn dispatches_ping() {
-        assert_eq!(dispatch(r#"{"method":"ping"}"#), r#"{"ok":true,"result":"pong"}"#);
+        assert_eq!(
+            dispatch(r#"{"method":"ping"}"#),
+            r#"{"ok":true,"result":"pong"}"#
+        );
     }
 
     #[test]
