@@ -1,0 +1,12 @@
+{
+  "hub_title": "ShelvesHub",
+  "hub_subtitle": "Options et maintenance de l'hôte.",
+  "unavailable_title": "Deck Shelves n'est pas chargé",
+  "unavailable_body": "Le paquet Deck Shelves n'a pas pu être lancé sur cet hôte.",
+  "panel_error": "Deck Shelves : impossible d'afficher le panneau.",
+  "action_download": "Télécharger la dernière version de Deck Shelves",
+  "action_update_hub": "Mettre à jour ShelvesHub",
+  "action_logs": "Afficher les journaux",
+  "action_auto_update": "Mises à jour automatiques",
+  "action_back": "Retour"
+}

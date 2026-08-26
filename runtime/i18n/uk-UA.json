@@ -1,0 +1,12 @@
+{
+  "hub_title": "ShelvesHub",
+  "hub_subtitle": "Параметри та обслуговування хоста.",
+  "unavailable_title": "Deck Shelves не завантажено",
+  "unavailable_body": "Не вдалося запустити пакет Deck Shelves на цьому хості.",
+  "panel_error": "Deck Shelves: не вдалося відобразити панель.",
+  "action_download": "Завантажити останню версію Deck Shelves",
+  "action_update_hub": "Оновити ShelvesHub",
+  "action_logs": "Переглянути журнали",
+  "action_auto_update": "Автоматичні оновлення",
+  "action_back": "Назад"
+}

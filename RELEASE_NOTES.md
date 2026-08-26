@@ -18,14 +18,21 @@ is pushed — the notes below are picked up and published with the release.
   `backend/` next to the binary (or set `SHELVES_BACKEND_DIR`) and everything
   else is automatic.
 - **Plays nice with another host.** If Deck Shelves is already mounted by a
-  different host on the same machine, the service stands down instead of
-  loading it twice. Prefer this host? `SHELVES_FORCE_OWNER=shelveshub` makes
-  the hand-over explicit and safe — one writer for your settings, always.
+  different host on the same machine, the service never loads it twice or takes
+  over — it adds only its own Quick Access tab alongside. Prefer this host?
+  `SHELVES_FORCE_OWNER=shelveshub` makes the hand-over explicit and safe — one
+  writer for your settings, always. On a shared machine, `SHELVES_OWNER_SETTLE_SECS`
+  lets it wait for the other host to start before ever hosting on its own.
 - **Deck Shelves, right in the Steam menu.** This host's own Quick Access tab
   opens the Deck Shelves editor directly — validated on a Steam Deck. With
   another host also installed, both tabs work side by side and edit the same
   settings, and the plugin's wide side panel opens from whichever one is on
   screen. One place to edit, whichever tab you reach for.
+- **A resilient fallback that remembers your choice.** If Deck Shelves can't be
+  brought up, the host's own tab shows a compact ShelvesHub panel — icon'd actions
+  to fetch the latest Deck Shelves and view logs, plus an **Automatic updates**
+  on/off switch that sticks: it is saved with a rolling backup, so it survives a
+  crash or a restart without losing or corrupting your settings.
 
 This release also includes the work that turned the loader from a skeleton
 into something that actually runs Deck Shelves.

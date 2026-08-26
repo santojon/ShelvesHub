@@ -1,0 +1,12 @@
+{
+  "hub_title": "ShelvesHub",
+  "hub_subtitle": "主機選項與維護。",
+  "unavailable_title": "Deck Shelves 未載入",
+  "unavailable_body": "無法在此主機上啟動 Deck Shelves 套件。",
+  "panel_error": "Deck Shelves：無法轉譯面板。",
+  "action_download": "下載最新的 Deck Shelves",
+  "action_update_hub": "更新 ShelvesHub",
+  "action_logs": "檢視記錄",
+  "action_auto_update": "自動更新",
+  "action_back": "返回"
+}

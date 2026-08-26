@@ -1,0 +1,4 @@
+# React / ReactDOM UMD are fetched on demand by scripts/harness.sh — a dev-test
+# dependency only (MIT, Meta Platforms). Not redistributed in this repository.
+react.js
+react-dom.js

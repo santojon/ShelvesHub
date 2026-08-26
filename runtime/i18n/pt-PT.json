@@ -1,12 +1,12 @@
 {
   "hub_title": "ShelvesHub",
-  "hub_subtitle": "Opções e manutenção do host.",
+  "hub_subtitle": "Opções e manutenção do anfitrião.",
   "unavailable_title": "O Deck Shelves não está carregado",
-  "unavailable_body": "O pacote do Deck Shelves não pôde ser iniciado neste host.",
+  "unavailable_body": "Não foi possível iniciar o pacote do Deck Shelves neste anfitrião.",
   "panel_error": "Deck Shelves: não foi possível renderizar o painel.",
-  "action_download": "Baixar o Deck Shelves mais recente",
+  "action_download": "Transferir o Deck Shelves mais recente",
   "action_update_hub": "Atualizar o ShelvesHub",
-  "action_logs": "Ver logs",
+  "action_logs": "Ver registos",
   "action_auto_update": "Atualizações automáticas",
   "action_back": "Voltar"
 }

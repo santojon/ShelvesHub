@@ -10,7 +10,7 @@
 use std::fs;
 use std::path::Path;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 
@@ -43,8 +43,15 @@ enum Tick {
     Active,
     /// Injection ran but the marker did not confirm.
     NotConfirmed,
-    /// Another host owns the renderer — nothing was injected on purpose.
+    /// Another host owns the renderer and native-tab coexistence is off — nothing
+    /// was injected on purpose.
     StoodDown(String),
+    /// Another host owns the renderer; we added ONLY our native QAM tab alongside
+    /// it (the host + bundle are left to the other loader). Carries the owner kind.
+    CoexistTab(String),
+    /// Renderer unclaimed and settling — waiting `owner_settle_secs` for another
+    /// host to claim before we host it ourselves. Carries seconds waited so far.
+    Settling(u64),
 }
 
 /// Consecutive collapsed-UI observations before the loader halts injection and
@@ -78,6 +85,10 @@ pub fn run(config: Config) {
     log_info("loader", "Injection loop started.");
     let interval = Duration::from_secs(config.interval_secs);
     let mut consecutive_collapse: u32 = 0;
+    // Tracks how long the renderer has been unclaimed, for the owner-settle guard
+    // (`owner_settle_secs`): hold off owner-mode hosting until either a claim
+    // appears (→ coexist) or the settle window elapses (→ sole host).
+    let mut empty_since: Option<Instant> = None;
 
     loop {
         // Health gate. The visible Steam UI lives in windows (Big Picture, Main
@@ -126,7 +137,7 @@ pub fn run(config: Config) {
         }
         consecutive_collapse = 0;
 
-        match tick(&config) {
+        match tick(&config, &mut empty_since) {
             Ok(Tick::Active) => {
                 state::set_injected(true);
                 log_info("loader", "Bundle active in renderer.");
@@ -140,6 +151,27 @@ pub fn run(config: Config) {
                 log_info(
                     "loader",
                     &format!("Renderer owned by \"{owner}\" — standing down this tick."),
+                );
+            }
+            Ok(Tick::CoexistTab(owner)) => {
+                // Our bundle is not hosted here (the other loader owns it) — but our
+                // native tab is added alongside. `injected` tracks OUR bundle, so it
+                // stays false; the tab is purely additive.
+                state::set_injected(false);
+                log_info(
+                    "loader",
+                    &format!(
+                        "Coexisting with \"{owner}\" — native QAM tab added alongside (host untouched)."
+                    ),
+                );
+            }
+            Ok(Tick::Settling(secs)) => {
+                state::set_injected(false);
+                log_info(
+                    "loader",
+                    &format!(
+                        "Renderer unclaimed — settling {secs}s (waiting for another host to claim before hosting)."
+                    ),
                 );
             }
             Err(e) => {
@@ -165,8 +197,9 @@ fn run_recovery(cmd: &str) {
     }
 }
 
-/// One injection cycle.
-fn tick(config: &Config) -> cdp::Result<Tick> {
+/// One injection cycle. `empty_since` carries the owner-settle clock across ticks
+/// (see `owner_settle_secs`).
+fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick> {
     let mut client = CdpClient::connect_renderer(
         &config.cef_host,
         config.cef_port,
@@ -178,30 +211,54 @@ fn tick(config: &Config) -> cdp::Result<Tick> {
     let _ = client.call("Runtime.enable", json!({}));
 
     if probe_injected(&mut client)? {
+        *empty_since = None;
         return Ok(Tick::Active);
     }
 
-    // Coexistence guard: if another host's adapter already owns this renderer,
-    // injecting would double-mount the plugin. Stand down unless ownership is
-    // explicitly forced (the force stamp tells the other adapter to yield).
     let owner = probe_owner(&mut client)?;
+
+    // Foreign owner (another host + its Deck Shelves): coexist. We never install
+    // the host or boot the bundle here — that would double-mount / hijack. But we
+    // DO add our native QAM tab (additive, host-neutral) so ShelvesHub's tab shows
+    // alongside. The injected runtime detects the other loader itself and takes the
+    // tab-only path; the daemon just delivers it once. `!may_inject` is exactly "a
+    // foreign owner, and we are not forcing".
     if !may_inject(&owner, config.force_owner) {
-        return Ok(Tick::StoodDown(owner));
+        *empty_since = None;
+        if !config.native_qam {
+            return Ok(Tick::StoodDown(owner));
+        }
+        if probe_coexist_tab(&mut client)? {
+            return Ok(Tick::CoexistTab(owner)); // our tab is already present
+        }
+        stamp_native_qam(&mut client);
+        inject_host_runtime(&mut client, config);
+        return Ok(Tick::CoexistTab(owner));
     }
+
+    // Unclaimed renderer, not forced: it may be a true sole host, or a coexistence
+    // renderer a beat before the other host's adapter claims it. Injecting
+    // owner-mode NOW would hijack that pending claim (the fast-tick failure mode).
+    // Settle: wait up to `owner_settle_secs` for a claim to appear before hosting.
+    // Default 0 disables the wait — a sole host boots immediately.
+    if owner.is_empty() && !config.force_owner && config.owner_settle_secs > 0 {
+        let now = Instant::now();
+        let since = *empty_since.get_or_insert(now);
+        let waited = now.duration_since(since).as_secs();
+        if keep_settling(config.owner_settle_secs, waited) {
+            return Ok(Tick::Settling(waited));
+        }
+    }
+    *empty_since = None;
+
+    // We host: our own claim, forced, or unclaimed past the settle window. Stamp
+    // the opt-ins, inject the runtime (it installs `window.__SHELVES_HOST__` when it
+    // finds no other loader), then the bundle.
     if config.force_owner {
-        let stamp = format!("{FORCE_OWNER_GLOBAL} = {OWNER_KIND:?}; true");
-        match client.evaluate(&stamp) {
-            Ok(_) => log_info("loader", "Owner preference stamped (forced)."),
-            Err(e) => log_warning("loader", &format!("Owner stamp failed: {e}")),
-        }
+        stamp_force_owner(&mut client);
     }
-    // Native QAM opt-in: stamped before the runtime evaluates so it can pick
-    // the native tab path (trip-breaker guarded; overlay stays the fallback).
     if config.native_qam {
-        match client.evaluate(&format!("{NATIVE_QAM_GLOBAL} = true; true")) {
-            Ok(_) => log_info("loader", "Native QAM stamp set."),
-            Err(e) => log_warning("loader", &format!("Native QAM stamp failed: {e}")),
-        }
+        stamp_native_qam(&mut client);
     }
 
     log_warning("loader", "Bundle not detected — injecting.");
@@ -236,6 +293,32 @@ fn tick(config: &Config) -> cdp::Result<Tick> {
     })
 }
 
+/// Stamp the native-QAM opt-in global before the runtime evaluates, so it picks
+/// the native tab path (trip-breaker guarded; overlay stays the fallback).
+fn stamp_native_qam(client: &mut CdpClient) {
+    match client.evaluate(&format!("{NATIVE_QAM_GLOBAL} = true; true")) {
+        Ok(_) => log_info("loader", "Native QAM stamp set."),
+        Err(e) => log_warning("loader", &format!("Native QAM stamp failed: {e}")),
+    }
+}
+
+/// Stamp the force-owner global so a foreign adapter yields cooperatively.
+fn stamp_force_owner(client: &mut CdpClient) {
+    let stamp = format!("{FORCE_OWNER_GLOBAL} = {OWNER_KIND:?}; true");
+    match client.evaluate(&stamp) {
+        Ok(_) => log_info("loader", "Owner preference stamped (forced)."),
+        Err(e) => log_warning("loader", &format!("Owner stamp failed: {e}")),
+    }
+}
+
+/// True when our coexistence runtime has already added its tab. In coexistence the
+/// runtime sets `window.__SHELVES_QAM__` but never the bundle marker
+/// (`probe_injected`), so this is the distinct "tab already delivered" probe.
+fn probe_coexist_tab(client: &mut CdpClient) -> cdp::Result<bool> {
+    let value = client.evaluate("!!window.__SHELVES_QAM__")?;
+    Ok(value.as_bool().unwrap_or(false))
+}
+
 /// Read the renderer's owner claim: empty string when unclaimed.
 pub fn probe_owner(client: &mut CdpClient) -> cdp::Result<String> {
     let expr = format!("String({OWNER_GLOBAL} || \"\")");
@@ -247,6 +330,13 @@ pub fn probe_owner(client: &mut CdpClient) -> cdp::Result<String> {
 /// ownership is forced. A foreign claim without force means stand down.
 pub fn may_inject(owner: &str, force: bool) -> bool {
     owner.is_empty() || owner == OWNER_KIND || force
+}
+
+/// Whether an unclaimed renderer should keep settling (wait) rather than be hosted
+/// yet. Enabled only when `settle_secs > 0`; ends once `waited_secs` reaches it, at
+/// which point the renderer is treated as a true sole host.
+fn keep_settling(settle_secs: u64, waited_secs: u64) -> bool {
+    settle_secs > 0 && waited_secs < settle_secs
 }
 
 /// Evaluate the host runtime (`window.__SHELVES_HOST__`) in the renderer. The
@@ -363,5 +453,22 @@ mod tests {
     #[test]
     fn force_overrides_foreign_owner() {
         assert!(may_inject("other-host", true));
+    }
+
+    #[test]
+    fn settle_disabled_by_default() {
+        // `owner_settle_secs == 0` (the default) never settles — a sole host boots
+        // immediately.
+        assert!(!keep_settling(0, 0));
+        assert!(!keep_settling(0, 100));
+    }
+
+    #[test]
+    fn settle_waits_until_window_elapses() {
+        // Enabled: settle while unclaimed, up to the window; then host as sole host.
+        assert!(keep_settling(25, 0));
+        assert!(keep_settling(25, 24));
+        assert!(!keep_settling(25, 25));
+        assert!(!keep_settling(25, 30));
     }
 }

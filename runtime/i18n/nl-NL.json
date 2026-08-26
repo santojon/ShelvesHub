@@ -1,0 +1,12 @@
+{
+  "hub_title": "ShelvesHub",
+  "hub_subtitle": "Hostopties en onderhoud.",
+  "unavailable_title": "Deck Shelves is niet geladen",
+  "unavailable_body": "De Deck Shelves-bundel kon niet worden gestart op deze host.",
+  "panel_error": "Deck Shelves: kan het paneel niet weergeven.",
+  "action_download": "Nieuwste Deck Shelves downloaden",
+  "action_update_hub": "ShelvesHub bijwerken",
+  "action_logs": "Logboeken bekijken",
+  "action_auto_update": "Automatische updates",
+  "action_back": "Terug"
+}

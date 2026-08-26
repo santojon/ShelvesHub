@@ -1,0 +1,12 @@
+{
+  "hub_title": "ShelvesHub",
+  "hub_subtitle": "Host-Optionen und Wartung.",
+  "unavailable_title": "Deck Shelves ist nicht geladen",
+  "unavailable_body": "Das Deck-Shelves-Paket konnte auf diesem Host nicht gestartet werden.",
+  "panel_error": "Deck Shelves: Panel konnte nicht gerendert werden.",
+  "action_download": "Neuestes Deck Shelves herunterladen",
+  "action_update_hub": "ShelvesHub aktualisieren",
+  "action_logs": "Protokolle anzeigen",
+  "action_auto_update": "Automatische Updates",
+  "action_back": "Zurück"
+}

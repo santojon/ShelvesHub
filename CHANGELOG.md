@@ -9,8 +9,26 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Added
 - When Deck Shelves cannot be loaded, the host's own tab now shows a **ShelvesHub
   panel** with recovery actions instead of an empty tab; the home always loads
-  regardless. Its text is **localized** from per-locale files under `runtime/i18n/`
-  (the service inlines them at injection time).
+  regardless. Each action carries an icon, and **Automatic updates** is a real
+  on/off toggle whose state is saved. It is also reachable from a **ShelvesHub
+  button at the end of the host's own tab even while Deck Shelves is loaded**, and
+  its text is **localized into 19 languages** from per-locale files under
+  `runtime/i18n/` (the service inlines them at injection time).
+- Running alongside another host, the host's own Quick Access tab now shows **the
+  plugin's editor mirrored** into it — the plugin populates it through a
+  host-neutral bridge, so one tab reaches the real editor and the other host's
+  copy is left untouched.
+- The host keeps its **own settings** (currently the automatic-updates preference)
+  in a small store — `SHELVES_HUB_CONFIG` (default `<settings_dir>/shelveshub.json`)
+  — written atomically with a rolling backup and healed from that backup if the
+  file is ever missing or corrupt, so a crash or a bad shutdown never loses or
+  corrupts it.
+- New requests `getConfig`, `setAutoUpdate` and `getLogs` back the fallback
+  panel's toggle and log view.
+- A **scenario test harness** (`scripts/harness.sh`) runs the injected runtime
+  against a mock of the Steam UI in a headless browser, covering the native tab,
+  coexistence mirroring, the sole-host path and the fallback panel without a
+  device.
 - The service now **obtains the Deck Shelves bundle on its own** when it is not
   already present: it uses a local copy if there is one, otherwise copies the
   built bundle from an installed plugin loader, otherwise downloads the newest
@@ -45,11 +63,24 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   trip breaker auto-disables the feature after a failed attempt instead of
   ever crash-looping the Steam interface, and the on-screen overlay always
   remains as the fallback.
+- New setting `SHELVES_OWNER_SETTLE_SECS` (default `0`): while the renderer is
+  unclaimed, the service waits up to this many seconds for another host to claim
+  it before hosting it itself. A sole host leaves it at `0` (immediate); running
+  alongside another host, set it (for example `25`) so a fast injection cycle
+  never starts hosting ahead of the other host's pending claim.
 - Initial ShelvesHub scaffolding.
 - Installers for Linux, macOS, and Windows.
 - Integrated Rust logger.
   
 ### Changed
+- Alongside another host, the service now adds its own Quick Access tab by
+  injecting only its runtime — never taking over hosting or loading the plugin
+  bundle — so its tab appears next to the other host's without disturbing it.
+  Previously it stood down entirely when another host owned the renderer.
+- The host's Quick Access tab now shows reliably alongside another host even when
+  it is added after the menu has already mounted — previously it could stay hidden
+  until the menu was reopened. A related fix makes the host read the live UI's
+  current render tree instead of a stale back-buffer.
 - Updated dependencies, including the WebSocket client used for the DevTools
   connection.
 - Added a project lint and formatting configuration, enforced the same way in

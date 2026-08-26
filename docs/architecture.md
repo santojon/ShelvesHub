@@ -103,10 +103,20 @@ configurable (`src/config.rs`).
 
 Before injecting, the loop honours the renderer's single-owner claim
 (`window.__DECK_SHELVES_OWNER__`): if another host adapter already owns the
-renderer, the tick stands down instead of double-mounting the plugin. Setting
+renderer, the tick never takes over hosting or loads the plugin bundle. With the
+native Quick Access tab enabled (`SHELVES_NATIVE_QAM=1`) it still injects only
+its runtime, which detects the other host and adds ShelvesHub's tab alongside
+without installing its own host — so both tabs coexist and the other host's
+plugin is left untouched; otherwise the tick stands down entirely. Setting
 `SHELVES_FORCE_OWNER=shelveshub` claims ownership anyway — the daemon stamps
 `window.__SHELVES_FORCE_OWNER__` before injecting so the other adapter can
 yield cooperatively, and the plugin sees a single writer at all times.
+
+While the renderer is still unclaimed, `SHELVES_OWNER_SETTLE_SECS` (default `0`)
+makes the loop wait that many seconds for a claim to appear before hosting the
+renderer itself — so on a shared machine a fast injection cycle never starts
+hosting ahead of another host that is still starting up. A sole host leaves it
+at `0` and boots immediately.
 
 ### CDP client (`src/cdp.rs`)
 

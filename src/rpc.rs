@@ -168,6 +168,56 @@ fn dispatch(body: &str) -> String {
             }
             None => err("bundle path not configured"),
         },
+        // The host's own settings (the fallback panel's auto-update toggle).
+        Some("getConfig") => match state::hub_config_path() {
+            Some(path) => match serde_json::to_string(&crate::store::load(path)) {
+                Ok(json) => ok(json),
+                Err(e) => err(&format!("serialize config: {e}")),
+            },
+            None => err("hub config path not configured"),
+        },
+        Some("setAutoUpdate") => match state::hub_config_path() {
+            Some(path) => {
+                let enabled = parsed
+                    .as_ref()
+                    .and_then(|v| v.get("args"))
+                    .and_then(|a| a.as_bool().or_else(|| a.get("enabled").and_then(Value::as_bool)))
+                    .unwrap_or(false);
+                let mut settings = crate::store::load(path);
+                settings.auto_update = enabled;
+                match crate::store::save(path, &settings) {
+                    Ok(()) => {
+                        log_info("rpc", &format!("Auto-update set to {enabled}."));
+                        match serde_json::to_string(&settings) {
+                            Ok(json) => ok(json),
+                            Err(e) => err(&format!("serialize config: {e}")),
+                        }
+                    }
+                    Err(e) => err(&format!("save config: {e}")),
+                }
+            }
+            None => err("hub config path not configured"),
+        },
+        // Recent daemon log lines (the fallback panel's "view logs" action).
+        Some("getLogs") => {
+            let n = parsed
+                .as_ref()
+                .and_then(|v| v.get("args"))
+                .and_then(|a| a.as_u64().or_else(|| a.get("count").and_then(Value::as_u64)))
+                .unwrap_or(120)
+                .min(300) as usize;
+            match serde_json::to_string(&state::recent_logs(n)) {
+                Ok(json) => ok(json),
+                Err(e) => err(&format!("serialize logs: {e}")),
+            }
+        }
+        // Update ShelvesHub itself. Replacing + relaunching the running binary
+        // from here is not safe yet, so report an honest status rather than a dead
+        // button (in-place self-update is a future release).
+        Some("selfUpdate") => ok(format!(
+            r#"{{"updated":false,"version":"{}","message":"Update ShelvesHub through its installer or service; in-place self-update is not yet available."}}"#,
+            env!("CARGO_PKG_VERSION")
+        )),
         // Anything else is a data method owned by the hosted Python backend.
         Some(other) if backend::enabled() => {
             let args = parsed

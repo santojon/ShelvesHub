@@ -70,10 +70,30 @@ pub struct Config {
     /// instead of only the latest stable — the sole-host equivalent of the
     /// plugin's beta channel. Off by default.
     pub prerelease: bool,
+    /// Seconds to wait for another host to claim an unclaimed renderer before we
+    /// host it ourselves (`SHELVES_OWNER_SETTLE_SECS`, default 0 = off). A sole
+    /// host wants an immediate boot (0); a coexistence deployment sets this (~25)
+    /// so a fast tick never injects owner-mode ahead of the other host's pending
+    /// claim — which would hijack it. Only applies while the renderer is unclaimed.
+    pub owner_settle_secs: u64,
+    /// Path to the host's own settings store (`SHELVES_HUB_CONFIG`; default
+    /// `<settings_dir>/shelveshub.json`) — the auto-update preference and future
+    /// host settings, persisted with atomic writes + a backup (see `store`).
+    pub hub_config_path: PathBuf,
 }
 
 impl Config {
     pub fn from_env() -> Self {
+        let settings_dir = env::var("SHELVES_SETTINGS_DIR")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(default_settings_dir);
+        let hub_config_path = env::var("SHELVES_HUB_CONFIG")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| settings_dir.join("shelveshub.json"));
         Config {
             cef_host: env_string("SHELVES_CEF_HOST", DEFAULT_CEF_HOST),
             cef_port: env_u16("SHELVES_CEF_PORT", DEFAULT_CEF_PORT),
@@ -95,11 +115,7 @@ impl Config {
                 "runtime/backend/shelveshub_backend.py",
             ),
             python_bin: env_string("SHELVES_PYTHON", default_python()),
-            settings_dir: env::var("SHELVES_SETTINGS_DIR")
-                .ok()
-                .filter(|s| !s.is_empty())
-                .map(PathBuf::from)
-                .unwrap_or_else(default_settings_dir),
+            settings_dir,
             force_owner: env::var("SHELVES_FORCE_OWNER")
                 .map(|v| v.eq_ignore_ascii_case("shelveshub"))
                 .unwrap_or(false),
@@ -109,12 +125,14 @@ impl Config {
                 .filter(|s| !s.is_empty()),
             preload: env_bool("SHELVES_PRELOAD"),
             prerelease: env_bool("SHELVES_PRERELEASE"),
+            owner_settle_secs: env_u64("SHELVES_OWNER_SETTLE_SECS", 0),
+            hub_config_path,
         }
     }
 
     pub fn summary(&self) -> String {
         format!(
-            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={}{}{}{}{}{}",
+            "cef={}:{} rpc={} host_runtime={} bundle={} target={} interval={}s backend={} settings={} hub_config={}{}{}{}{}{}{}",
             self.cef_host,
             self.cef_port,
             self.rpc_addr,
@@ -127,11 +145,17 @@ impl Config {
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "<disabled>".to_string()),
             self.settings_dir.display(),
+            self.hub_config_path.display(),
             if self.force_owner { " force_owner=shelveshub" } else { "" },
             if self.native_qam { " native_qam=on" } else { "" },
             if self.recover_cmd.is_some() { " recover_cmd=set" } else { "" },
             if self.preload { " preload=on" } else { "" },
             if self.prerelease { " prerelease=on" } else { "" },
+            if self.owner_settle_secs > 0 {
+                format!(" owner_settle={}s", self.owner_settle_secs)
+            } else {
+                String::new()
+            },
         )
     }
 }

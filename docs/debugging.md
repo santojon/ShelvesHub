@@ -41,6 +41,9 @@ Configuration (all optional, env-driven — see `src/config.rs`):
 | `SHELVES_HOST_RUNTIME_PATH` | `<exe-dir>/runtime/shelves-host.js` | Host runtime (`window.__SHELVES_HOST__`, incl. QAM) |
 | `SHELVES_TARGET` | _auto_ | Title/URL substring to pick the target |
 | `SHELVES_INTERVAL_SECS` | `30` | Injection-loop interval |
+| `SHELVES_NATIVE_QAM` | `0` | Add a native Quick Access tab (`1` to enable) |
+| `SHELVES_OWNER_SETTLE_SECS` | `0` | Seconds to wait for another host to claim an unclaimed renderer before hosting it (coexistence; `0` = host immediately) |
+| `SHELVES_HUB_CONFIG` | `<settings_dir>/shelveshub.json` | The host's own settings store (auto-update preference; atomic writes + backup) |
 
 ---
 

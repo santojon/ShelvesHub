@@ -14,6 +14,7 @@ pub mod logger;
 pub mod populate;
 pub mod rpc;
 pub mod state;
+pub mod store;
 
 /// Version of the `HostApi` contract this loader implements. Mirrors
 /// `HOST_API_VERSION` in `src/runtime/host/contract.ts` (and the injected host

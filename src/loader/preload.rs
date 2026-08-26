@@ -14,6 +14,22 @@ use crate::logger::{log_error, log_info, log_warning};
 
 use super::{FORCE_OWNER_GLOBAL, NATIVE_QAM_GLOBAL, OWNER_KIND};
 
+// The document-start script runs BEFORE Steam's webpack is up, so the preloaded
+// runtime + bundle are wrapped in a poll that defers them until React is findable
+// (the idle-boot point). Running there — before the QAM/home first mount — lets
+// the tab + home patches take on the first render, so no risky live-fiber
+// re-point (which black-screens on a late inject) is needed.
+const GATE_PREFIX: &str = r#"(function(){
+function __shelvesReady(){try{var k=Object.keys(window).filter(function(x){return x.indexOf("webpackChunk")===0&&Array.isArray(window[x])})[0];if(!k)return false;var req;window[k].push([[Symbol("shelves-ready")],{},function(r){req=r}]);if(!req||!req.c)return false;var ids=Object.keys(req.c);for(var i=0;i<ids.length;i++){try{var ex=req.c[ids[i]]&&req.c[ids[i]].exports;var m=ex&&(ex.default||ex);if(m&&typeof m.createElement==="function"&&typeof m.useState==="function")return true}catch(e){}}return false}catch(e){return false}}
+function __shelvesBoot(){
+"#;
+
+const GATE_SUFFIX: &str = r#"
+}
+if(__shelvesReady()){__shelvesBoot();}else{var __n=0,__iv=setInterval(function(){if(__shelvesReady()){clearInterval(__iv);__shelvesBoot();}else if(++__n>1200){clearInterval(__iv);}},50);}
+})();
+"#;
+
 /// Preload mode: register the host runtime at document-start on every (re)load
 /// of the Steam renderer, via browser-level auto-attach. The runtime then runs
 /// at idle boot — before the plugin loads and renders — so its heavy webpack
@@ -38,8 +54,14 @@ pub(super) fn run_preload(config: Config) {
             return;
         }
     };
-    // Compose the document-start script: opt-in stamps first (so the runtime
-    // sees them the moment it evaluates), then the runtime itself.
+    // The sole host boots the plugin at idle boot too, so its home patch is in
+    // place BEFORE the home first paints (a late inject misses that window). The
+    // bundle's self-invoke gates it — dormant in coexistence (no `__SHELVES_HOST__`).
+    let bundle = fs::read_to_string(&config.bundle_path).unwrap_or_default();
+
+    // Compose the document-start script: opt-in stamps first (so the runtime sees
+    // them the moment it evaluates), the per-locale dictionaries, then the runtime
+    // (+ bundle) wrapped in the React-ready gate.
     let mut source = String::new();
     if config.force_owner {
         source.push_str(&format!("{FORCE_OWNER_GLOBAL} = {OWNER_KIND:?};\n"));
@@ -47,9 +69,14 @@ pub(super) fn run_preload(config: Config) {
     if config.native_qam {
         source.push_str(&format!("{NATIVE_QAM_GLOBAL} = true;\n"));
     }
-    // Per-locale dictionaries, inlined before the runtime for its i18n.
     source.push_str(&super::i18n_stamp(&config.host_runtime_path));
+    source.push_str(GATE_PREFIX);
     source.push_str(&runtime);
+    if !bundle.is_empty() {
+        source.push('\n');
+        source.push_str(&bundle);
+    }
+    source.push_str(GATE_SUFFIX);
 
     // A Steam restart tears down the CEF, dropping the browser connection —
     // reconnect and re-arm auto-attach each time.

@@ -1,0 +1,12 @@
+{
+  "hub_title": "ShelvesHub",
+  "hub_subtitle": "호스트 옵션 및 유지 관리.",
+  "unavailable_title": "Deck Shelves가 로드되지 않았습니다",
+  "unavailable_body": "이 호스트에서 Deck Shelves 번들을 실행할 수 없습니다.",
+  "panel_error": "Deck Shelves: 패널을 렌더링할 수 없습니다.",
+  "action_download": "최신 Deck Shelves 다운로드",
+  "action_update_hub": "ShelvesHub 업데이트",
+  "action_logs": "로그 보기",
+  "action_auto_update": "자동 업데이트",
+  "action_back": "뒤로"
+}

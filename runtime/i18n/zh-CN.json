@@ -1,0 +1,12 @@
+{
+  "hub_title": "ShelvesHub",
+  "hub_subtitle": "主机选项与维护。",
+  "unavailable_title": "Deck Shelves 未加载",
+  "unavailable_body": "无法在此主机上启动 Deck Shelves 包。",
+  "panel_error": "Deck Shelves：无法渲染面板。",
+  "action_download": "下载最新的 Deck Shelves",
+  "action_update_hub": "更新 ShelvesHub",
+  "action_logs": "查看日志",
+  "action_auto_update": "自动更新",
+  "action_back": "返回"
+}

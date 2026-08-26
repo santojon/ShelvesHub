@@ -22,7 +22,18 @@
     return window.__SHELVES_HOST__.version;
   }
   function log() {
-    try { console.log.apply(console, ["[shelves-host]"].concat([].slice.call(arguments))); } catch (e) {}
+    var a = [].slice.call(arguments);
+    try { console.log.apply(console, ["[shelves-host]"].concat(a)); } catch (e) {}
+    // Also buffer to a global so the daemon / devtools can read the runtime's own
+    // log via a single eval, without holding a live console stream open (which is
+    // hard to capture on-device). Bounded ring; newest last.
+    try {
+      var b = (window.__SHELVES_LOG__ = window.__SHELVES_LOG__ || []);
+      b.push(a.map(function (x) {
+        try { return typeof x === "string" ? x : JSON.stringify(x); } catch (e) { return String(x); }
+      }).join(" "));
+      if (b.length > 300) b.shift();
+    } catch (e) {}
   }
 
   // ── Coexistence: never break another host, but always keep OUR tab ────────
@@ -225,10 +236,12 @@
       if (!React || !React.createElement) {
         return { React: null, ReactDOM: null, jsx: null, client: null };
       }
+      // `createPortal` is the react-dom marker. Do NOT also require `render` /
+      // `createRoot`: React 19's react-dom dropped legacy `render` and moved
+      // `createRoot` to react-dom/client, so a strict filter finds nothing.
       var ReactDOM = (w.SP_REACTDOM && w.SP_REACTDOM.createPortal) ? w.SP_REACTDOM
         : findModule(function (m) {
-            return m && typeof m.createPortal === "function"
-              && (typeof m.render === "function" || typeof m.createRoot === "function");
+            return m && typeof m.createPortal === "function";
           });
       var jsx = (w.SP_JSX && w.SP_JSX.jsx) ? w.SP_JSX
         : findModule(function (m) {
@@ -249,6 +262,16 @@
             return m && typeof m.createRoot === "function" && typeof m.hydrateRoot === "function";
           });
       if (!client && ReactDOM && typeof ReactDOM.createRoot === "function") client = ReactDOM;
+      // React 19 splits the portal API (react-dom) from the root API
+      // (react-dom/client); expose a ReactDOM carrying BOTH so the bundle's
+      // react-dom (createPortal) and react-dom-client (createRoot) shims are both
+      // satisfied from `host.ReactDOM`.
+      if (ReactDOM && client && typeof ReactDOM.createRoot !== "function" && typeof client.createRoot === "function") {
+        ReactDOM = Object.assign({}, ReactDOM, {
+          createRoot: client.createRoot,
+          hydrateRoot: client.hydrateRoot,
+        });
+      }
       _stack = { React: React, ReactDOM: ReactDOM || null, jsx: jsx, client: client || null };
       return _stack;
     }
@@ -400,10 +423,17 @@
 
   function getReactRoot(el) {
     if (!el) return null;
+    var fiber = null;
     var k = Object.keys(el).find(function (x) { return x.indexOf("__reactContainer$") === 0; });
-    if (k) return el[k];
-    if (el._reactRootContainer && el._reactRootContainer._internalRoot) return el._reactRootContainer._internalRoot.current;
-    return null;
+    if (k) fiber = el[k];
+    else if (el._reactRootContainer && el._reactRootContainer._internalRoot) fiber = el._reactRootContainer._internalRoot.current;
+    if (!fiber) return null;
+    // The container key holds a FIXED HostRoot fiber; after a render the live
+    // tree may be on its alternate (React double-buffers the two HostRoot
+    // fibers). Resolve to the FiberRoot's `current` so callers always walk the
+    // mounted tree — otherwise a re-point can land on the empty back-buffer.
+    try { if (fiber.stateNode && fiber.stateNode.current) return fiber.stateNode.current; } catch (e) {}
+    return fiber;
   }
 
 
@@ -529,43 +559,132 @@
     // brought up. Host-branded, self-contained (plain elements, no dependency on
     // the discovered Steam UI, which may be part of what failed), strings via I18N.
     // Actions call the daemon over RPC; each degrades quietly if unavailable.
-    function FallbackPanel() {
+    // Inline SVG (currentColor) so each action reads at a glance and the panel
+    // stays self-contained — no external icon font/asset, nothing that could be
+    // part of what failed.
+    var FALLBACK_ICONS = {
+      download: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>',
+      update: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>',
+      logs: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>',
+      auto: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
+      back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+      hub: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    };
+    function fbIcon(name) {
+      return h("span", {
+        key: "i",
+        style: { display: "inline-flex", flex: "0 0 16px", width: "16px", height: "16px", opacity: 0.9 },
+        dangerouslySetInnerHTML: { __html: FALLBACK_ICONS[name] },
+      });
+    }
+    function FallbackPanel(props) {
+      var onBack = props && props.onBack;
       var st = React.useState(null);
       var busy = st[0], setBusy = st[1];
+      // null = still loading the setting; then a boolean mirrors the store.
+      var au = React.useState(null);
+      var autoUpdate = au[0], setAutoUpdate = au[1];
+      React.useEffect(function () {
+        var alive = true;
+        hostRpc("getConfig").then(function (r) {
+          if (!alive) return;
+          var v = r && r.ok && r.result && typeof r.result.auto_update === "boolean" ? r.result.auto_update : false;
+          setAutoUpdate(v);
+        }, function () { if (alive) setAutoUpdate(false); });
+        return function () { alive = false; };
+      }, []);
       function run(id, method) {
         setBusy(id);
         hostRpc(method).then(function () { setBusy(null); }, function () { setBusy(null); });
       }
-      function btn(id, key, method, primary) {
+      function toggleAuto() {
+        if (busy) return;
+        var next = !(autoUpdate === true);
+        setAutoUpdate(next); setBusy("auto");
+        hostRpc("setAutoUpdate", next).then(function (r) {
+          setBusy(null);
+          if (r && r.ok && r.result && typeof r.result.auto_update === "boolean") setAutoUpdate(r.result.auto_update);
+        }, function () { setBusy(null); setAutoUpdate(!next); });
+      }
+      var row = {
+        display: "flex", alignItems: "center", gap: "10px",
+        width: "100%", boxSizing: "border-box", padding: "10px 14px",
+        marginTop: "8px", textAlign: "left", border: "none",
+        borderRadius: "4px", fontSize: "14px", color: "#fff",
+      };
+      function actionBtn(id, icon, key, method, primary) {
         return h("button", {
           key: id,
           onClick: function () { if (!busy) run(id, method); },
-          style: {
-            display: "block", width: "100%", boxSizing: "border-box",
-            padding: "10px 14px", marginTop: "8px", textAlign: "left",
-            border: "none", borderRadius: "4px",
-            cursor: busy ? "default" : "pointer", fontSize: "14px",
+          "data-fb": id,
+          style: Object.assign({}, row, {
+            cursor: busy ? "default" : "pointer",
             opacity: busy && busy !== id ? 0.5 : 1,
-            background: primary ? "#1a9fff" : "rgba(255,255,255,0.08)", color: "#fff",
-          },
-        }, I18N.t(key));
+            background: primary ? "#1a9fff" : "rgba(255,255,255,0.08)",
+          }),
+        }, fbIcon(icon), h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t(key)));
       }
+      function toggleRow() {
+        var on = autoUpdate === true;
+        return h("div", {
+          key: "auto", onClick: toggleAuto, "data-fb": "auto", "data-on": on ? "1" : "0",
+          style: Object.assign({}, row, { cursor: busy ? "default" : "pointer", background: "rgba(255,255,255,0.08)" }),
+        },
+          fbIcon("auto"),
+          h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t("action_auto_update")),
+          h("span", {
+            key: "sw",
+            style: { flex: "0 0 auto", width: "38px", height: "22px", borderRadius: "11px", position: "relative", background: on ? "#1a9fff" : "rgba(255,255,255,0.25)" },
+          }, h("span", { style: { position: "absolute", top: "2px", left: on ? "18px" : "2px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff" } }))
+        );
+      }
+      var titleRow = onBack
+        ? h("div", { style: { display: "flex", alignItems: "center", gap: "8px" } },
+            h("button", {
+              onClick: onBack, "data-fb": "back", title: I18N.t("action_back"),
+              style: { flex: "0 0 auto", width: "28px", height: "28px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" },
+            }, fbIcon("back")),
+            h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
+        : h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title"));
       return h(
         "div",
-        { style: { padding: "16px 15px 10px" } },
-        h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")),
-        h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "4px 0 12px" } }, I18N.t("unavailable_body")),
-        btn("download", "action_download", "populateBundle", true),
-        btn("update", "action_update_hub", "selfUpdate"),
-        btn("logs", "action_logs", "getLogs"),
-        btn("auto", "action_auto_update", "toggleAutoUpdate")
+        { style: { padding: "16px 15px 10px" }, "data-fb-panel": "1" },
+        titleRow,
+        h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "4px 0 12px" } }, I18N.t(onBack ? "hub_subtitle" : "unavailable_body")),
+        actionBtn("download", "download", "action_download", "populateBundle", true),
+        actionBtn("update", "update", "action_update_hub", "selfUpdate"),
+        actionBtn("logs", "logs", "action_logs", "getLogs"),
+        toggleRow()
       );
     }
+    // Our tab: the plugin's editor when present, plus a ShelvesHub row pinned at
+    // the end that opens the host's hub view (the same actions as the fallback) —
+    // so the host's own options are reachable even while Deck Shelves is loaded.
     function PanelSlot() {
       useSlotRefresh();
+      var hub = React.useState(false);
+      var showHub = hub[0], setShowHub = hub[1];
       var s = firstSpec();
-      if (!s) return ErrorBoundary ? h(ErrorBoundary, null, h(FallbackPanel, null)) : h(FallbackPanel, null);
-      return contentEl(s);
+      function wrap(node) { return ErrorBoundary ? h(ErrorBoundary, null, node) : node; }
+      // No registered panel → the hub view IS the content (the fallback).
+      if (!s) return wrap(h(FallbackPanel, null));
+      // Hub view opened from the plugin editor → show it with a back button.
+      if (showHub) return wrap(h(FallbackPanel, { onBack: function () { setShowHub(false); } }));
+      return h(
+        "div",
+        { style: { display: "flex", flexDirection: "column", height: "100%" } },
+        h("div", { style: { flex: "1 1 auto", minHeight: 0, overflow: "auto" } }, contentEl(s)),
+        h("button", {
+          onClick: function () { setShowHub(true); },
+          "data-fb": "open-hub",
+          style: {
+            flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",
+            gap: "8px", width: "100%", boxSizing: "border-box", padding: "10px 14px",
+            border: "none", borderTop: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: "13px",
+          },
+        }, fbIcon("hub"), h("span", { key: "t" }, I18N.t("hub_title")))
+      );
     }
     // A registered tab needs its key present in Steam's `QuickAccessTab` enum:
     // `pt` derives the panel class as `tab_${QuickAccessTab[key]}` and the tab
@@ -588,18 +707,33 @@
     var NATIVE_TAB_NAME = "ShelvesHub";
     function tabEnum() {
       try { if (window.DFL && window.DFL.QuickAccessTab) return window.DFL.QuickAccessTab; } catch (e) {}
-      return Steam.findModuleExport(function (m) {
-        try { return m && m.Notifications === 0 && m.Settings === 4 && m.Help === 6; } catch (e) { return false; }
-      });
+      // Exact known shape first, then a value-INDEPENDENT bidirectional-enum match
+      // (survives a Steam enum-value change; the sole host has no DFL to fall back on).
+      return (
+        Steam.findModuleExport(function (m) {
+          try { return m && m.Notifications === 0 && m.Settings === 4 && m.Help === 6; } catch (e) { return false; }
+        }) ||
+        Steam.findModuleExport(function (m) {
+          try {
+            return m && typeof m === "object"
+              && typeof m.Notifications === "number"
+              && typeof m.Settings === "number"
+              && typeof m.Help === "number"
+              && m[m.Settings] === "Settings";
+          } catch (e) { return false; }
+        })
+      );
     }
     function registerTabEnum() {
       try {
         var e = tabEnum();
-        if (e && e[NATIVE_TAB_KEY] === undefined) {
+        if (!e) { log("QAM enum NOT found — our tab would render as tab_undefined."); return; }
+        if (e[NATIVE_TAB_KEY] === undefined) {
           e[NATIVE_TAB_KEY] = NATIVE_TAB_NAME;
           e[NATIVE_TAB_NAME] = NATIVE_TAB_KEY;
+          log("QAM enum registered: key " + NATIVE_TAB_KEY + " = " + NATIVE_TAB_NAME + ".");
         }
-      } catch (_) {}
+      } catch (err) { log("QAM registerTabEnum error:", err && err.message); }
     }
 
     function buildTab() {
@@ -774,14 +908,18 @@
         // Re-point the live fiber's `type` to the now-patched inner function
         // (reached via `elementType`; the fiber's own `type` is a wrapper), so
         // an already-open menu picks up the tab without waiting for a remount.
-        // Off by default: this re-point synchronously mutates a LIVE fiber, and
-        // on a late/arbitrary-timed inject it tears the Steam UI down (confirmed
-        // on-device — the immediate black screen). Without it the tab simply
-        // appears on the next QAM mount. Opt in with `window.__SHELVES_FIBER_REPOINT__`.
-        var doRepoint = false;
-        try { doRepoint = window.__SHELVES_FIBER_REPOINT__ === true; } catch (e) {}
+        // This re-point synchronously mutates a LIVE fiber. In OWNER mode a
+        // late/arbitrary-timed inject tears the Steam UI down (confirmed on-device
+        // — the immediate black screen), so it stays opt-in there. In COEXISTENCE
+        // the patch is tab-only (no host, no heavy owner-mode scan) and the
+        // re-point is SAFE — verified on-device (no UI collapse) and in the
+        // scenario harness — so enable it by default there, letting an
+        // already-mounted menu show our tab without waiting for a remount (the
+        // late-daemon-injection case). Force with `window.__SHELVES_FIBER_REPOINT__`.
+        var doRepoint = COEXIST;
+        try { if (window.__SHELVES_FIBER_REPOINT__ === true) doRepoint = true; } catch (e) {}
         if (doRepoint) { patchMountedConsumer(bv, embedded); }
-        else { log("QAM native: mounted re-point OFF by default (opt in via __SHELVES_FIBER_REPOINT__)."); }
+        else { log("QAM native: mounted re-point OFF (owner mode; opt in via __SHELVES_FIBER_REPOINT__)."); }
       } catch (e) {
         tripClear();
         log("QAM installPatch failed:", e && e.message);

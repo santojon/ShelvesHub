@@ -36,6 +36,16 @@ of endorsement or affiliation.
   `findInReactTree`, fiber refresh) the injected runtime uses to render
   Steam-native UI. Re-implemented from scratch; these packages are never bundled.
 
+## Test harness dependencies
+
+The scenario harness (`examples/harness/`, run by `scripts/harness.sh`) exercises
+the injected runtime against a mock of Steam's UI in a headless browser. It uses
+**React** and **ReactDOM** (Meta Platforms, Inc., MIT) — the production UMD
+builds — fetched on demand into `examples/harness/vendor/` (git-ignored). They are
+a **development/test dependency only**: not committed here, not part of the
+service, the injected runtime, or any release artifact, and their MIT license is
+compatible with this project's.
+
 ## Steam / SteamOS
 
 ShelvesHub drives Steam's CEF renderer via the DevTools protocol and locates

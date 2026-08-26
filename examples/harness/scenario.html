@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>shelveshub-harness</title>
+    <script>
+      // Map ?scenario= to the mock/orchestration flags. Must run BEFORE the mock
+      // (the mock reads window.__HARNESS__ at load to install the loader stub).
+      (function () {
+        var sc = new URLSearchParams(location.search).get("scenario") || "coexist-mirror";
+        var map = {
+          "coexist-mirror": { coexist: true, pluginPanel: true },
+          "coexist-fallback": { coexist: true, pluginPanel: false },
+          "sole-host": { coexist: false },
+          "sole-host-mirror": { coexist: false, pluginPanel: true },
+          "coexist-late": { coexist: true, pluginPanel: true, lateMount: true },
+        };
+        window.__HARNESS__ = map[sc] || map["coexist-mirror"];
+        window.__HARNESS_SCENARIO__ = sc;
+        window.__HARNESS_READY__ = false;
+        window.__HARNESS_ERRORS__ = [];
+        window.addEventListener("error", function (e) {
+          window.__HARNESS_ERRORS__.push(String((e && (e.message || e.error)) || e));
+        });
+      })();
+    </script>
+    <script src="vendor/react.js"></script>
+    <script src="vendor/react-dom.js"></script>
+    <script src="steam-mock.js"></script>
+    <script src="orchestrate.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

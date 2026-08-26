@@ -9,7 +9,11 @@ pub enum LogLevel {
 
 pub fn log(level: LogLevel, subsystem: &str, message: &str) {
     let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
-    println!("[{level:?}] [{timestamp}] [{subsystem}] {message}");
+    let line = format!("[{level:?}] [{timestamp}] [{subsystem}] {message}");
+    println!("{line}");
+    // Mirror into the in-memory ring the `getLogs` RPC serves (the fallback
+    // panel's "view logs" action).
+    crate::state::push_log(line);
 }
 
 pub fn log_info(subsystem: &str, message: &str) {

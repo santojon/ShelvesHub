@@ -1,0 +1,12 @@
+{
+  "hub_title": "ShelvesHub",
+  "hub_subtitle": "Ana makine seçenekleri ve bakımı.",
+  "unavailable_title": "Deck Shelves yüklü değil",
+  "unavailable_body": "Deck Shelves paketi bu ana makinede başlatılamadı.",
+  "panel_error": "Deck Shelves: panel görüntülenemedi.",
+  "action_download": "En son Deck Shelves'i indir",
+  "action_update_hub": "ShelvesHub'ı güncelle",
+  "action_logs": "Günlükleri görüntüle",
+  "action_auto_update": "Otomatik güncellemeler",
+  "action_back": "Geri"
+}
