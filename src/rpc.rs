@@ -181,7 +181,10 @@ fn dispatch(body: &str) -> String {
                 let enabled = parsed
                     .as_ref()
                     .and_then(|v| v.get("args"))
-                    .and_then(|a| a.as_bool().or_else(|| a.get("enabled").and_then(Value::as_bool)))
+                    .and_then(|a| {
+                        a.as_bool()
+                            .or_else(|| a.get("enabled").and_then(Value::as_bool))
+                    })
                     .unwrap_or(false);
                 let mut settings = crate::store::load(path);
                 settings.auto_update = enabled;
@@ -203,7 +206,10 @@ fn dispatch(body: &str) -> String {
             let n = parsed
                 .as_ref()
                 .and_then(|v| v.get("args"))
-                .and_then(|a| a.as_u64().or_else(|| a.get("count").and_then(Value::as_u64)))
+                .and_then(|a| {
+                    a.as_u64()
+                        .or_else(|| a.get("count").and_then(Value::as_u64))
+                })
                 .unwrap_or(120)
                 .min(300) as usize;
             match serde_json::to_string(&state::recent_logs(n)) {

@@ -5,7 +5,7 @@
 set -e
 
 REPO="santojon/ShelvesHub"
-INSTALL_DIR="/usr/local/shelveshub"
+INSTALL_DIR="$HOME/.local/share/shelveshub"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 PLIST_DEST="$LAUNCH_AGENTS_DIR/com.shelveshub.plist"
 BINARY="shelveshub"
@@ -48,7 +48,9 @@ chmod +x "$INSTALL_DIR/$BINARY"
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 [[ -d "$EXTRACTED_DIR/backend" ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
 
-cp "$EXTRACTED_DIR/installer/com.shelveshub.plist" "$PLIST_DEST"
+# Generate the agent with the real install path (a user LaunchAgent runs as the
+# user, so it lives under $HOME — never root-owned /usr/local).
+sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$EXTRACTED_DIR/installer/com.shelveshub.plist" > "$PLIST_DEST"
 chmod 644 "$PLIST_DEST"
 launchctl load "$PLIST_DEST"
 

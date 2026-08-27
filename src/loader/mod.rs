@@ -380,6 +380,11 @@ pub(super) fn i18n_stamp(host_runtime_path: &Path) -> String {
 }
 
 fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
+    // Fresh context: drop any stale native-tab trip so this inject re-arms cleanly.
+    // A boot's mid-load reload leaves an unconfirmed "armed" that the next inject
+    // would read as a crash and trip — but the standard inject is safe; the daemon
+    // health gate is the real crash-loop guard.
+    let _ = client.evaluate("try{localStorage.removeItem('shelves.nativeQamTrip')}catch(e){} true");
     match fs::read_to_string(&config.host_runtime_path) {
         Ok(source) => {
             // Inline the per-locale dictionaries first so the runtime's i18n reads

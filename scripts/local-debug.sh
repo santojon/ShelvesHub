@@ -114,7 +114,7 @@ echo "--- window.__SHELVES_DEMO__ ---"
 "$DEVTOOLS" --port "$PORT" --target "$TARGET_FILTER" eval "window.__SHELVES_DEMO__" || true
 echo "--- QAM panel registered? ---"
 "$DEVTOOLS" --port "$PORT" --target "$TARGET_FILTER" eval \
-  "!!(window.__SHELVES_HOST__ && window.__SHELVES_HOST__.qam && window.__SHELVES_HOST__.qam._panels['deck-shelves'])" || true
+  "!!(window.__SHELVES_HOST__ && window.__SHELVES_HOST__.qam && window.__SHELVES_HOST__.qam._specs['deck-shelves'])" || true
 echo "--- rpc via host (ping/getVersion/isInjected) ---"
 "$DEVTOOLS" --port "$PORT" --target "$TARGET_FILTER" eval \
   "Promise.all([__SHELVES_HOST__.rpc.call('ping'),__SHELVES_HOST__.rpc.call('getVersion'),__SHELVES_HOST__.rpc.call('isInjected')])" || true

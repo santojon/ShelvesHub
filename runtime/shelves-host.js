@@ -314,54 +314,83 @@
   }
 
   // ── Steam's native, gamepad-focusable UI components ───────────────────────
-  // Skipped in coexistence (`COEXIST`): this discovery is several full webpack
-  // scans (toString over thousands of exports) and it is exactly what blocks the
-  // renderer main thread → the active plugin's async shelf resolves time out →
-  // React #31 → black screen. These components are only for rendering the
-  // bundle, which does NOT run under us while another loader owns the plugin. The
-  // QAM tab itself needs only React (and the one QAM module found in installPatch).
+  // `ensureUi` is idempotent. The sole-host path calls it eagerly (the bundle
+  // needs these to render). Under another loader (COEXIST) it is deferred until
+  // the host's own hub view first renders — a user action, off the boot path —
+  // because this scan (toString over thousands of exports) blocks the renderer
+  // main thread, and at boot that starves the active plugin's async shelf
+  // resolves → React #31 → black screen. Off the boot path it is harmless.
   var UI = {};
-  if (React && !COEXIST) {
-    var CommonUIModule = Steam.findModule(function (m) {
-      if (typeof m !== "object") return false;
-      for (var prop in m) {
-        try { if (m[prop] && m[prop].contextType && m[prop].contextType._currentValue && Object.keys(m).length > 60) return true; } catch (e) {}
-      }
-      return false;
-    });
-    var commonValues = CommonUIModule ? Object.values(CommonUIModule) : [];
+  var uiReady = false;
+  function ensureUi() {
+    if (uiReady || !React) return UI;
+    uiReady = true;
+    try {
+      var CommonUIModule = Steam.findModule(function (m) {
+        if (typeof m !== "object") return false;
+        for (var prop in m) {
+          try { if (m[prop] && m[prop].contextType && m[prop].contextType._currentValue && Object.keys(m).length > 60) return true; } catch (e) {}
+        }
+        return false;
+      });
+      var commonValues = CommonUIModule ? Object.values(CommonUIModule) : [];
 
-    var focusableRegex = propListRegex(["flow-children", "onActivate", "onCancel", "focusClassName", "focusWithinClassName"]);
-    UI.Focusable = Steam.findModuleExport(function (e) {
-      return (typeof e === "function" && focusableRegex.test(srcOf(e))) || focusableRegex.test(renderSrc(e));
-    });
+      var focusableRegex = propListRegex(["flow-children", "onActivate", "onCancel", "focusClassName", "focusWithinClassName"]);
+      UI.Focusable = Steam.findModuleExport(function (e) {
+        return (typeof e === "function" && focusableRegex.test(srcOf(e))) || focusableRegex.test(renderSrc(e));
+      });
 
-    UI.ToggleField = commonValues.find(function (mod) {
-      var s = renderSrc(mod);
-      return s.indexOf("ToggleField,fallback") >= 0 || s.indexOf('ToggleField",') >= 0;
-    });
+      UI.ToggleField = commonValues.find(function (mod) {
+        var s = renderSrc(mod);
+        return s.indexOf("ToggleField,fallback") >= 0 || s.indexOf('ToggleField",') >= 0;
+      });
 
-    var buttonItemRegex = propListRegex(["highlightOnFocus", "childrenContainerWidth"], false);
-    UI.ButtonItem = commonValues.find(function (mod) {
-      var s = renderSrc(mod);
-      return buttonItemRegex.test(s) || s.indexOf('childrenContainerWidth:"min"') >= 0;
-    });
+      var buttonItemRegex = propListRegex(["highlightOnFocus", "childrenContainerWidth"], false);
+      UI.ButtonItem = commonValues.find(function (mod) {
+        var s = renderSrc(mod);
+        return buttonItemRegex.test(s) || s.indexOf('childrenContainerWidth:"min"') >= 0;
+      });
 
-    UI.SliderField = commonValues.find(function (mod) {
-      var s = srcOf(mod);
-      return s.indexOf("SliderField,fallback") >= 0 || s.indexOf('SliderField",') >= 0;
-    });
+      UI.SliderField = commonValues.find(function (mod) {
+        var s = srcOf(mod);
+        return s.indexOf("SliderField,fallback") >= 0 || s.indexOf('SliderField",') >= 0;
+      });
 
-    UI.Field = Steam.findModuleExport(function (e) {
-      return (srcOf(e).indexOf("().Field") >= 0 && srcOf(e).indexOf('"shift-children-below"') >= 0) ||
-        renderSrc(e).indexOf('"shift-children-below"') >= 0;
-    });
+      UI.Field = Steam.findModuleExport(function (e) {
+        return (srcOf(e).indexOf("().Field") >= 0 && srcOf(e).indexOf('"shift-children-below"') >= 0) ||
+          renderSrc(e).indexOf('"shift-children-below"') >= 0;
+      });
 
-    var panelDetails = Steam.findModuleDetailsByExport(function (e) { return srcOf(e).indexOf(".PanelSection") >= 0; });
-    UI.PanelSection = panelDetails[1];
-    UI.PanelSectionRow = panelDetails[0]
-      ? Object.values(panelDetails[0]).filter(function (exp) { return srcOf(exp).indexOf(".PanelSection") < 0; })[0]
-      : undefined;
+      var panelDetails = Steam.findModuleDetailsByExport(function (e) { return srcOf(e).indexOf(".PanelSection") >= 0; });
+      UI.PanelSection = panelDetails[1];
+      UI.PanelSectionRow = panelDetails[0]
+        ? Object.values(panelDetails[0]).filter(function (exp) { return srcOf(exp).indexOf(".PanelSection") < 0; })[0]
+        : undefined;
+    } catch (e) { log("ui discovery:", e && e.message); }
+    return UI;
+  }
+  if (React && !COEXIST) ensureUi();
+
+  // Steam's Focusable — the single component the QAM tab panel needs to join
+  // Steam's gamepad-focus navigation (the loader wraps its plugin view in it). It is
+  // discovered on demand OFF the render path (scheduled in QamHost): one webpack
+  // scan, which black-screens if run during a React render but is safe when the
+  // renderer is idle. Reuses UI.Focusable when the sole-host path already found it.
+  var focusableComp = null;
+  var focusableTried = false;
+  function ensureFocusable() {
+    if (focusableComp) return focusableComp;
+    if (UI.Focusable) { focusableComp = UI.Focusable; return focusableComp; }
+    if (focusableTried || !React) return focusableComp;
+    focusableTried = true;
+    try {
+      var re = propListRegex(["flow-children", "onActivate", "onCancel", "focusClassName", "focusWithinClassName"]);
+      focusableComp = Steam.findModuleExport(function (e) {
+        return (typeof e === "function" && re.test(srcOf(e))) || re.test(renderSrc(e));
+      }) || null;
+      log("QAM Focusable: " + (focusableComp ? "found" : "not found") + ".");
+    } catch (e) { log("QAM Focusable discovery:", e && e.message); }
+    return focusableComp;
   }
 
   // A minimal error boundary so a bad panel render shows a fallback instead of
@@ -487,22 +516,26 @@
     // Accept BOTH panel shapes: the @deck-shelves/host contract's imperative
     // `render(container)` (framework-agnostic — we host it in a ref'd div), and
     // our React `content` (element or factory), used by the example bundle.
+    // Stable host for a spec's imperative render(container). Defined ONCE (not a
+    // fresh closure per contentEl call) and keyed by spec.id at the call site, so
+    // it reconciles across PanelSlot re-renders instead of remounting — a remount
+    // re-runs spec.render and resets the mirrored editor's transient state (a
+    // toggle mid-flip, the open side panel) on every slot refresh.
+    function SpecRenderHost(props) {
+      var spec = props.spec;
+      var ref = React.useRef(null);
+      React.useEffect(function () {
+        if (!ref.current) return undefined;
+        var cleanup;
+        try { cleanup = spec.render(ref.current); } catch (e) { log("qam panel render:", e && e.message); }
+        return typeof cleanup === "function" ? cleanup : undefined;
+      }, []);
+      return h("div", { ref: ref, style: { width: "100%", height: "100%" } });
+    }
     function contentEl(spec) {
-      var inner;
-      if (typeof spec.render === "function") {
-        inner = h(function () {
-          var ref = React.useRef(null);
-          React.useEffect(function () {
-            if (!ref.current) return undefined;
-            var cleanup;
-            try { cleanup = spec.render(ref.current); } catch (e) { log("qam panel render:", e && e.message); }
-            return typeof cleanup === "function" ? cleanup : undefined;
-          }, []);
-          return h("div", { ref: ref, style: { width: "100%", height: "100%" } });
-        }, null);
-      } else {
-        inner = typeof spec.content === "function" ? spec.content() : spec.content;
-      }
+      var inner = typeof spec.render === "function"
+        ? h(SpecRenderHost, { key: spec.id, spec: spec })
+        : (typeof spec.content === "function" ? spec.content() : spec.content);
       return ErrorBoundary ? h(ErrorBoundary, null, inner) : inner;
     }
 
@@ -593,19 +626,21 @@
         }, function () { if (alive) setAutoUpdate(false); });
         return function () { alive = false; };
       }, []);
+      var on = autoUpdate === true;
       function run(id, method) {
         setBusy(id);
         hostRpc(method).then(function () { setBusy(null); }, function () { setBusy(null); });
       }
-      function toggleAuto() {
+      function applyAuto(next) {
         if (busy) return;
-        var next = !(autoUpdate === true);
         setAutoUpdate(next); setBusy("auto");
         hostRpc("setAutoUpdate", next).then(function (r) {
           setBusy(null);
           if (r && r.ok && r.result && typeof r.result.auto_update === "boolean") setAutoUpdate(r.result.auto_update);
         }, function () { setBusy(null); setAutoUpdate(!next); });
       }
+
+      // ── Panel (self-contained plain elements) ──
       var row = {
         display: "flex", alignItems: "center", gap: "10px",
         width: "100%", boxSizing: "border-box", padding: "10px 14px",
@@ -625,9 +660,8 @@
         }, fbIcon(icon), h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t(key)));
       }
       function toggleRow() {
-        var on = autoUpdate === true;
         return h("div", {
-          key: "auto", onClick: toggleAuto, "data-fb": "auto", "data-on": on ? "1" : "0",
+          key: "auto", onClick: function () { applyAuto(!on); }, "data-fb": "auto", "data-on": on ? "1" : "0",
           style: Object.assign({}, row, { cursor: busy ? "default" : "pointer", background: "rgba(255,255,255,0.08)" }),
         },
           fbIcon("auto"),
@@ -650,7 +684,7 @@
         "div",
         { style: { padding: "16px 15px 10px" }, "data-fb-panel": "1" },
         titleRow,
-        h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "4px 0 12px" } }, I18N.t(onBack ? "hub_subtitle" : "unavailable_body")),
+        onBack ? null : h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "4px 0 12px" } }, I18N.t("unavailable_body")),
         actionBtn("download", "download", "action_download", "populateBundle", true),
         actionBtn("update", "update", "action_update_hub", "selfUpdate"),
         actionBtn("logs", "logs", "action_logs", "getLogs"),
@@ -665,12 +699,14 @@
       var hub = React.useState(false);
       var showHub = hub[0], setShowHub = hub[1];
       var s = firstSpec();
-      function wrap(node) { return ErrorBoundary ? h(ErrorBoundary, null, node) : node; }
+      var body;
       // No registered panel → the hub view IS the content (the fallback).
-      if (!s) return wrap(h(FallbackPanel, null));
+      if (!s) body = h(FallbackPanel, null);
       // Hub view opened from the plugin editor → show it with a back button.
-      if (showHub) return wrap(h(FallbackPanel, { onBack: function () { setShowHub(false); } }));
-      return h(
+      else if (showHub) body = h(FallbackPanel, { onBack: function () { setShowHub(false); } });
+      // Plugin editor + a ShelvesHub button pinned at the end that opens the hub
+      // view (the host's own options, reachable while Deck Shelves is loaded).
+      else body = h(
         "div",
         { style: { display: "flex", flexDirection: "column", height: "100%" } },
         h("div", { style: { flex: "1 1 auto", minHeight: 0, overflow: "auto" } }, contentEl(s)),
@@ -685,6 +721,12 @@
           },
         }, fbIcon("hub"), h("span", { key: "t" }, I18N.t("hub_title")))
       );
+      var inner = ErrorBoundary ? h(ErrorBoundary, null, body) : body;
+      // Wrap the panel in Steam's Focusable so it joins the gamepad-focus
+      // navigation (the mirrored editor's controls and ours) — exactly how the loader
+      // wraps its plugin view. Discovered off the render path; until it is
+      // available the panel renders bare (touch still works).
+      return focusableComp ? h(focusableComp, { style: { height: "100%" } }, inner) : inner;
     }
     // A registered tab needs its key present in Steam's `QuickAccessTab` enum:
     // `pt` derives the panel class as `tab_${QuickAccessTab[key]}` and the tab
@@ -758,6 +800,7 @@
       try { if ("__SHELVES_QAM_AFTER__" in window) return window.__SHELVES_QAM_AFTER__; } catch (e) {}
       return NATIVE_TAB_AFTER;
     }
+    var cachedTab = null;
     function pushTab(tabs) {
       // Idempotent: if our tab is already in this list, only refresh its
       // visibility to track the menu's open/closed state — never insert twice.
@@ -768,7 +811,14 @@
           return;
         }
       }
-      var tab = buildTab();
+      // Reuse ONE tab object (and its panel/icon elements) across renders. The
+      // list is rebuilt fresh on every QAM render, so building a NEW tab each time
+      // hands Steam a new panel element every render — remounting the mirrored
+      // editor, resetting toggles/side panel, and preventing gamepad focus from
+      // settling. the loader adds its tab once; we keep ours stable the same way.
+      if (!cachedTab) cachedTab = buildTab();
+      var tab = cachedTab;
+      tab.initialVisibility = lastVisible;
       // Position: right after Steam's Performance tab, so we sit ahead of any
       // tab that is appended at the end of the list (later additions land last).
       var after = insertAfterKey(), at = tabs.length;
@@ -961,6 +1011,17 @@
       else log("QAM native: builder never appeared — overlay only.");
     }
     if (NATIVE_QAM_ENABLED) installPatchWithRetry();
+    // TEMP controlled test: run the single Focusable discovery on demand (off the
+    // render path) and re-render the panel, so the scan's on-device safety is
+    // verified via CDP before it auto-runs on every inject.
+    try {
+      window.__SHELVES_FOCUS_TEST__ = function () {
+        var t0 = Date.now();
+        var f = ensureFocusable();
+        notifySlots();
+        return { found: !!f, ms: Date.now() - t0 };
+      };
+    } catch (e) {}
 
     function registerPanel(spec) {
       if (!spec || typeof spec.id !== "string") throw new Error("[shelves-host] qam.registerPanel: { id, title, icon, content } required");

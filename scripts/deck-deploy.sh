@@ -52,6 +52,7 @@ echo "[i] Deploying to $DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR ..."
 "${SSH[@]}" "mkdir -p '$REMOTE_HOME_DIR/bundle' '$REMOTE_HOME_DIR/runtime/backend' '/home/$DECK_USER/.config/systemd/user'"
 rsync -az -e "$RSH" "$BIN" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/shelveshub"
 rsync -az -e "$RSH" runtime/shelves-host.js "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/shelves-host.js"
+rsync -az -e "$RSH" runtime/i18n/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/i18n/"
 rsync -az -e "$RSH" runtime/backend/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/backend/"
 rsync -az -e "$RSH" "$BUNDLE" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/bundle/index.js"
 
@@ -63,6 +64,8 @@ printf '%s\n' \
   "After=network-online.target" \
   "" \
   "[Service]" \
+  "Environment=SHELVES_NATIVE_QAM=${SHELVES_NATIVE_QAM:-1}" \
+  "Environment=SHELVES_OWNER_SETTLE_SECS=${SHELVES_OWNER_SETTLE_SECS:-25}" \
   "ExecStart=$REMOTE_HOME_DIR/shelveshub" \
   "Restart=always" \
   "RestartSec=10" \
@@ -77,6 +80,9 @@ echo "[i] Enabling CEF remote debugging and (re)starting service..."
 "${SSH[@]}" "chmod +x '$REMOTE_HOME_DIR/shelveshub' 2>/dev/null || true"
 "${SSH[@]}" bash -s <<'REMOTE'
 set -e
+# Make `systemctl --user` reachable over a non-interactive SSH session.
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 # Steam exposes the CEF DevTools endpoint (port 8080) only when this file exists.
 mkdir -p "$HOME/.steam/steam"
 touch "$HOME/.steam/steam/.cef-enable-remote-debugging"

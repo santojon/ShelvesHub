@@ -116,6 +116,44 @@
     Fragment: React.Fragment,
   };
 
+  // ── Native, gamepad-focusable UI components (scenario flag `nativeUi`) ─────
+  // Shaped so the runtime's ensureUi() discovery finds them: ButtonItem and
+  // ToggleField are forwardRef-shaped (renderSrc reads `.render`) and carry the
+  // discovery marker in a comment; PanelSection/Row are plain functions (srcOf
+  // reads toString). Each renders detectable DOM (`data-native=…`) for assertions.
+  var FORWARD_REF = Symbol.for("react.forward_ref");
+  var ButtonItem = {
+    $$typeof: FORWARD_REF,
+    render: function (props) {
+      /* childrenContainerWidth:"min" */
+      return h("button", { className: "native-button", "data-native": "button", disabled: !!props.disabled, onClick: props.onClick }, props.children);
+    },
+  };
+  var ToggleField = {
+    $$typeof: FORWARD_REF,
+    render: function (props) {
+      /* ToggleField,fallback */
+      return h("div", {
+        className: "native-toggle", "data-native": "toggle", "data-checked": props.checked ? "1" : "0",
+        onClick: function () { if (!props.disabled && props.onChange) props.onChange(!props.checked); },
+      }, props.label);
+    },
+  };
+  function PanelSection(props) {
+    /* .PanelSection */
+    return h("div", { className: "native-section", "data-native": "section" },
+      props.title ? h("div", { className: "native-title", key: "t" }, props.title) : null,
+      h("div", { key: "c" }, props.children));
+  }
+  function PanelSectionRow(props) {
+    return h("div", { className: "native-row" }, props.children);
+  }
+  function CtxComp() { return null; }
+  CtxComp.contextType = { _currentValue: {} };
+  var commonUi = { Focusable: function Focusable() {}, ToggleField: ToggleField, ButtonItem: ButtonItem, Field: function Field() {}, CtxComp: CtxComp };
+  for (var _d = 0; _d < 62; _d++) commonUi["decoy" + _d] = function () { return null; };
+  var panelModule = { PanelSection: PanelSection, PanelSectionRow: PanelSectionRow };
+
   // ── Fake webpack registry ─────────────────────────────────────────────────
   // The module cache (`require.c`) the runtime walks; a few decoy modules so
   // the finders actually have to search.
@@ -128,6 +166,10 @@
     300: { unrelated: function () {} },
     301: { alsoUnrelated: 42 },
   };
+  if (S.nativeUi) {
+    modules[202] = commonUi;
+    modules[203] = panelModule;
+  }
   var cache = {};
   Object.keys(modules).forEach(function (id) {
     cache[id] = { exports: modules[id] };
@@ -248,6 +290,14 @@
           return { id: id, present: !!el, hasIcon: !!(el && el.querySelector("svg")) };
         });
         return { panel: true, buttons: buttons, hasToggle: !!panel.querySelector('[data-fb="auto"]') };
+      })(),
+      nativeUi: (function () {
+        if (!document.querySelector('[data-native="section"]')) return null;
+        return {
+          section: true,
+          buttons: document.querySelectorAll('[data-native="button"]').length,
+          toggle: !!document.querySelector('[data-native="toggle"]'),
+        };
       })(),
       openHub: !!document.querySelector('[data-fb="open-hub"]'),
     };

@@ -14,6 +14,8 @@
           "sole-host": { coexist: false },
           "sole-host-mirror": { coexist: false, pluginPanel: true },
           "coexist-late": { coexist: true, pluginPanel: true, lateMount: true },
+          "coexist-native": { coexist: true, pluginPanel: true, nativeUi: true },
+          "coexist-fallback-native": { coexist: true, pluginPanel: false, nativeUi: true },
         };
         window.__HARNESS__ = map[sc] || map["coexist-mirror"];
         window.__HARNESS_SCENARIO__ = sc;

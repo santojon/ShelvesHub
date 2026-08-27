@@ -56,7 +56,8 @@ if ! brew list --formula rustup >/dev/null 2>&1; then
   echo "[+] installing rustup via Homebrew"
   brew install rustup
 fi
-export PATH="$(brew --prefix rustup)/bin:$HOME/.cargo/bin:$PATH"
+RUSTUP_PREFIX="$(brew --prefix rustup)"
+export PATH="$RUSTUP_PREFIX/bin:$HOME/.cargo/bin:$PATH"
 echo "[i] activating the stable toolchain"
 rustup default stable
 [[ "$UPDATE" == "1" ]] && rustup update || true

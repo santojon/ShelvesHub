@@ -69,7 +69,10 @@ fn backup_path(path: &Path) -> PathBuf {
 /// observes a half-written file.
 fn atomic_write(path: &Path, contents: &str) -> io::Result<()> {
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    let stem = path.file_name().and_then(|s| s.to_str()).unwrap_or("config");
+    let stem = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("config");
     let tmp = dir.join(format!(".{stem}.tmp"));
     {
         let mut f = fs::File::create(&tmp)?;
