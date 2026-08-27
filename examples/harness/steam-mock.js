@@ -139,6 +139,17 @@
       }, props.label);
     },
   };
+  // DialogButton — a bare focusable button that spreads its props (like real DFL:
+  // `jsx(G,{type:"button",...e,...})`), so runtime-supplied markers pass through.
+  var DialogButton = {
+    $$typeof: FORWARD_REF,
+    render: function (props) {
+      /* "DialogButton","_DialogLayout" */
+      var p = { className: "native-dialogbutton" };
+      for (var k in props) if (k !== "children") p[k] = props[k];
+      return h("button", p, props.children);
+    },
+  };
   function PanelSection(props) {
     /* .PanelSection */
     return h("div", { className: "native-section", "data-native": "section" },
@@ -150,7 +161,7 @@
   }
   function CtxComp() { return null; }
   CtxComp.contextType = { _currentValue: {} };
-  var commonUi = { Focusable: function Focusable() {}, ToggleField: ToggleField, ButtonItem: ButtonItem, Field: function Field() {}, CtxComp: CtxComp };
+  var commonUi = { Focusable: function Focusable() {}, ToggleField: ToggleField, ButtonItem: ButtonItem, DialogButton: DialogButton, Field: function Field() {}, CtxComp: CtxComp };
   for (var _d = 0; _d < 62; _d++) commonUi["decoy" + _d] = function () { return null; };
   var panelModule = { PanelSection: PanelSection, PanelSectionRow: PanelSectionRow };
 

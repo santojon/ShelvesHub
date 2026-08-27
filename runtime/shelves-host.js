@@ -322,10 +322,14 @@
   // resolves → React #31 → black screen. Off the boot path it is harmless.
   var UI = {};
   var uiReady = false;
-  function ensureUi() {
-    if (uiReady || !React) return UI;
-    uiReady = true;
-    try {
+  var _commonValues = [];
+  // Discovery split into independent steps. One scan off-render is safe (~25ms),
+  // but several back-to-back block the main thread long enough to starve the
+  // running plugin in coexistence and collapse the Steam UI (observed on-device).
+  // So sole-host runs all steps at once at inject (no other plugin to starve);
+  // coexistence runs ONE STEP PER IDLE TICK (ensureUiChunked), yielding between.
+  var uiSteps = [
+    function () {
       var CommonUIModule = Steam.findModule(function (m) {
         if (typeof m !== "object") return false;
         for (var prop in m) {
@@ -333,43 +337,86 @@
         }
         return false;
       });
-      var commonValues = CommonUIModule ? Object.values(CommonUIModule) : [];
-
+      _commonValues = CommonUIModule ? Object.values(CommonUIModule) : [];
+      UI.ToggleField = _commonValues.find(function (mod) {
+        var s = renderSrc(mod);
+        return s.indexOf("ToggleField,fallback") >= 0 || s.indexOf('ToggleField",') >= 0;
+      });
+      var buttonItemRegex = propListRegex(["highlightOnFocus", "childrenContainerWidth"], false);
+      UI.ButtonItem = _commonValues.find(function (mod) {
+        var s = renderSrc(mod);
+        return buttonItemRegex.test(s) || s.indexOf('childrenContainerWidth:"min"') >= 0;
+      });
+      // DialogButton — a bare focusable button (not Field-wrapped like ButtonItem).
+      // This is what the bundle itself renders in the QAM (its shim maps its buttons
+      // to DialogButton), so it is a component proven to render in the injected tab.
+      UI.DialogButton = _commonValues.find(function (mod) {
+        var s = renderSrc(mod);
+        return s.indexOf('"DialogButton"') >= 0 && s.indexOf('"_DialogLayout"') >= 0;
+      });
+      UI.SliderField = _commonValues.find(function (mod) {
+        var s = srcOf(mod);
+        return s.indexOf("SliderField,fallback") >= 0 || s.indexOf('SliderField",') >= 0;
+      });
+    },
+    function () {
       var focusableRegex = propListRegex(["flow-children", "onActivate", "onCancel", "focusClassName", "focusWithinClassName"]);
       UI.Focusable = Steam.findModuleExport(function (e) {
         return (typeof e === "function" && focusableRegex.test(srcOf(e))) || focusableRegex.test(renderSrc(e));
       });
-
-      UI.ToggleField = commonValues.find(function (mod) {
-        var s = renderSrc(mod);
-        return s.indexOf("ToggleField,fallback") >= 0 || s.indexOf('ToggleField",') >= 0;
-      });
-
-      var buttonItemRegex = propListRegex(["highlightOnFocus", "childrenContainerWidth"], false);
-      UI.ButtonItem = commonValues.find(function (mod) {
-        var s = renderSrc(mod);
-        return buttonItemRegex.test(s) || s.indexOf('childrenContainerWidth:"min"') >= 0;
-      });
-
-      UI.SliderField = commonValues.find(function (mod) {
-        var s = srcOf(mod);
-        return s.indexOf("SliderField,fallback") >= 0 || s.indexOf('SliderField",') >= 0;
-      });
-
+    },
+    function () {
       UI.Field = Steam.findModuleExport(function (e) {
         return (srcOf(e).indexOf("().Field") >= 0 && srcOf(e).indexOf('"shift-children-below"') >= 0) ||
           renderSrc(e).indexOf('"shift-children-below"') >= 0;
       });
-
+    },
+    function () {
       var panelDetails = Steam.findModuleDetailsByExport(function (e) { return srcOf(e).indexOf(".PanelSection") >= 0; });
       UI.PanelSection = panelDetails[1];
       UI.PanelSectionRow = panelDetails[0]
         ? Object.values(panelDetails[0]).filter(function (exp) { return srcOf(exp).indexOf(".PanelSection") < 0; })[0]
         : undefined;
-    } catch (e) { log("ui discovery:", e && e.message); }
+    },
+  ];
+  function runUiStep(i) { try { uiSteps[i](); } catch (e) { log("ui step " + i + ":", e && e.message); } }
+  function ensureUi() {
+    if (uiReady || !React) return UI;
+    uiReady = true;
+    for (var i = 0; i < uiSteps.length; i++) runUiStep(i);
     return UI;
   }
+  function ensureUiChunked(onDone) {
+    if (uiReady || !React) { if (onDone) onDone(); return; }
+    uiReady = true;
+    var i = 0;
+    // A plain timer, NOT requestIdleCallback: Steam's renderer is never idle, so
+    // the idle callback never fires. The gap between ticks lets the plugin run so
+    // no cumulative starvation builds up; each single scan is short (measured safe).
+    (function next() {
+      if (i >= uiSteps.length) { if (onDone) onDone(); return; }
+      runUiStep(i++);
+      setTimeout(next, 80);
+    })();
+  }
   if (React && !COEXIST) ensureUi();
+  // Coexist: the loader already resolved every Steam UI component — borrow them
+  // directly. A webpack discovery scan on the INJECT path (even chunked) stalls the
+  // renderer main thread long enough to collapse the Steam UI windows (black
+  // screen), and it runs on every inject with the QAM closed. Borrowing avoids the
+  // scan entirely; the scan remains only as the sole-host / no-lib fallback below.
+  if (React && COEXIST) {
+    try {
+      var _lib = window.DFL || window.deckyFrontendLib;
+      if (_lib) {
+        ["Focusable", "ButtonItem", "DialogButton", "ToggleField", "SliderField", "Field", "PanelSection", "PanelSectionRow"].forEach(function (k) {
+          if (_lib[k]) UI[k] = _lib[k];
+        });
+        if (UI.Focusable) uiReady = true;
+        log("QAM UI: borrowed from loader (no scan) — " + Object.keys(UI).length + " components.");
+      }
+    } catch (e) {}
+  }
 
   // Steam's Focusable — the single component the QAM tab panel needs to join
   // Steam's gamepad-focus navigation (the loader wraps its plugin view in it). It is
@@ -392,6 +439,10 @@
     } catch (e) { log("QAM Focusable discovery:", e && e.message); }
     return focusableComp;
   }
+  // Native-component rendering is gated behind a runtime flag while we verify our
+  // discovery finds the CORRECT Steam components (a wrong match collapses the UI).
+  // Flip window.__SHELVES_NATIVE_UI__ = true and trigger a slot refresh to test.
+  function nativeUiOn() { try { return window.__SHELVES_NATIVE_UI__ === true; } catch (e) { return false; } }
 
   // A minimal error boundary so a bad panel render shows a fallback instead of
   // crashing the Steam renderer.
@@ -400,7 +451,10 @@
     ErrorBoundary = class extends React.Component {
       constructor(p) { super(p); this.state = { err: null }; }
       static getDerivedStateFromError(err) { return { err: err }; }
-      componentDidCatch(e) { log("panel render error:", e && e.message); }
+      componentDidCatch(e, info) {
+        log("panel render error:", e && e.message);
+        try { window.__SHELVES_NATIVE_ERR__ = { message: e && e.message, stack: e && e.stack, componentStack: info && info.componentStack }; } catch (x) {}
+      }
       render() {
         return this.state.err
           ? h("div", { style: { padding: "16px", color: "#ff8d8d", fontSize: "13px" } },
@@ -551,6 +605,9 @@
         try { slotListeners[i](function (n) { return n + 1; }); } catch (e) {}
       }
     }
+    // Diagnostic: lets a controlled native-render test force a slot re-render from
+    // the debugger after flipping window.__SHELVES_NATIVE_UI__ (see nativeUiOn()).
+    try { window.__SHELVES_REFRESH__ = notifySlots; } catch (e) {}
     function useSlotRefresh() {
       var st = React.useState(0);
       React.useEffect(function () {
@@ -610,6 +667,37 @@
         dangerouslySetInnerHTML: { __html: FALLBACK_ICONS[name] },
       });
     }
+    // A gamepad-focusable clickable: Steam's Focusable (onActivate fires on the A
+    // button and on pointer) once it is discovered, else a plain <button>. Same
+    // styling either way; Focusable adds Steam's native focus ring so our own
+    // items join the gamepad navigation, exactly like the plugin's native controls.
+    // Native gamepad focus ring: Steam's Focusable applies `focusClassName` to the
+    // element while it holds focus-nav focus. We render our buttons through the
+    // real Focusable (the one primitive that mounts safely in the injected panel)
+    // and give it a ring class, so items focus WITH a visible native-style ring —
+    // without the DFL button components that collapse this panel.
+    var _focusCssDone = false;
+    function ensureFocusCss() {
+      if (_focusCssDone) return;
+      _focusCssDone = true;
+      try {
+        var s = document.createElement("style");
+        s.setAttribute("data-shelves", "focus");
+        s.textContent =
+          ".shelves-fnav{outline:none;transition:box-shadow .12s ease,background-color .12s ease;}" +
+          ".shelves-fnav.shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,0.95),0 0 12px 2px rgba(90,160,255,0.6);}";
+        (document.head || document.documentElement).appendChild(s);
+      } catch (e) {}
+    }
+    function clickable(onAct, extra, kids) {
+      ensureFocusCss();
+      var props = focusableComp
+        ? { onActivate: onAct, focusClassName: "shelves-gpfocus" }
+        : { onClick: onAct };
+      if (extra) for (var k in extra) props[k] = extra[k];
+      if (focusableComp) props.className = (props.className ? props.className + " " : "") + "shelves-fnav";
+      return React.createElement.apply(React, [focusableComp || "button", props].concat(kids || []));
+    }
     function FallbackPanel(props) {
       var onBack = props && props.onBack;
       var st = React.useState(null);
@@ -640,6 +728,45 @@
         }, function () { setBusy(null); setAutoUpdate(!next); });
       }
 
+      // ── Native Steam components (theme-aware, gamepad-focusable, native focus
+      // ring). Discovery is off the render path (idle), so rendering here only
+      // reads cached components — no scan on the render path. Falls through to the
+      // plain/Focusable-wrapped panel below when discovery came up empty. ──
+      // Native hub — built ONLY from primitives the bundle itself renders in this
+      // same injected tab (DialogButton, ToggleField): those are proven to mount
+      // here. ButtonItem/PanelSection/PanelSectionRow are deliberately NOT used —
+      // the bundle never renders them in the QAM, and mounting them in the injected
+      // panel collapses the Steam UI (silent main-thread stall, no throw).
+      var DB = UI.DialogButton, TF = UI.ToggleField;
+      if (nativeUiOn() && DB && TF) {
+        var iconLabel = function (icon, key) {
+          return h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" } }, fbIcon(icon), h("span", null, I18N.t(key)));
+        };
+        var actBtn = function (id, icon, key, method) {
+          return h(DB, {
+            key: id, "data-native": "button",
+            disabled: !!busy && busy !== id,
+            style: { width: "100%", marginTop: "8px" },
+            onClick: function () { if (!busy) run(id, method); },
+          }, iconLabel(icon, key));
+        };
+        return h("div", { style: { padding: "12px 14px" }, "data-native": "section" },
+          onBack
+            ? h("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" } },
+                h(DB, { "data-native": "button", style: { flex: "0 0 auto" }, onClick: onBack }, fbIcon("back")),
+                h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
+            : h("div", { style: { fontSize: "18px", fontWeight: "700", marginBottom: "2px" } }, I18N.t("hub_title")),
+          onBack ? null : h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "2px 0 8px" } }, I18N.t("unavailable_body")),
+          actBtn("download", "download", "action_download", "populateBundle"),
+          actBtn("update", "update", "action_update_hub", "selfUpdate"),
+          actBtn("logs", "logs", "action_logs", "getLogs"),
+          h("div", { style: { marginTop: "10px" } }, h(TF, {
+            label: I18N.t("action_auto_update"),
+            checked: on, disabled: !!busy && busy !== "auto",
+            onChange: function (v) { applyAuto(!!v); },
+          })));
+      }
+
       // ── Panel (self-contained plain elements) ──
       var row = {
         display: "flex", alignItems: "center", gap: "10px",
@@ -648,36 +775,35 @@
         borderRadius: "4px", fontSize: "14px", color: "#fff",
       };
       function actionBtn(id, icon, key, method, primary) {
-        return h("button", {
+        return clickable(function () { if (!busy) run(id, method); }, {
           key: id,
-          onClick: function () { if (!busy) run(id, method); },
           "data-fb": id,
           style: Object.assign({}, row, {
             cursor: busy ? "default" : "pointer",
             opacity: busy && busy !== id ? 0.5 : 1,
             background: primary ? "#1a9fff" : "rgba(255,255,255,0.08)",
           }),
-        }, fbIcon(icon), h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t(key)));
+        }, [fbIcon(icon), h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t(key))]);
       }
       function toggleRow() {
-        return h("div", {
-          key: "auto", onClick: function () { applyAuto(!on); }, "data-fb": "auto", "data-on": on ? "1" : "0",
+        return clickable(function () { applyAuto(!on); }, {
+          key: "auto", "data-fb": "auto", "data-on": on ? "1" : "0",
           style: Object.assign({}, row, { cursor: busy ? "default" : "pointer", background: "rgba(255,255,255,0.08)" }),
-        },
+        }, [
           fbIcon("auto"),
           h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t("action_auto_update")),
           h("span", {
             key: "sw",
             style: { flex: "0 0 auto", width: "38px", height: "22px", borderRadius: "11px", position: "relative", background: on ? "#1a9fff" : "rgba(255,255,255,0.25)" },
           }, h("span", { style: { position: "absolute", top: "2px", left: on ? "18px" : "2px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff" } }))
-        );
+        ]);
       }
       var titleRow = onBack
         ? h("div", { style: { display: "flex", alignItems: "center", gap: "8px" } },
-            h("button", {
-              onClick: onBack, "data-fb": "back", title: I18N.t("action_back"),
+            clickable(onBack, {
+              "data-fb": "back", title: I18N.t("action_back"),
               style: { flex: "0 0 auto", width: "28px", height: "28px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" },
-            }, fbIcon("back")),
+            }, [fbIcon("back")]),
             h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
         : h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title"));
       return h(
@@ -706,21 +832,26 @@
       else if (showHub) body = h(FallbackPanel, { onBack: function () { setShowHub(false); } });
       // Plugin editor + a ShelvesHub button pinned at the end that opens the hub
       // view (the host's own options, reachable while Deck Shelves is loaded).
-      else body = h(
-        "div",
-        { style: { display: "flex", flexDirection: "column", height: "100%" } },
-        h("div", { style: { flex: "1 1 auto", minHeight: 0, overflow: "auto" } }, contentEl(s)),
-        h("button", {
-          onClick: function () { setShowHub(true); },
-          "data-fb": "open-hub",
-          style: {
-            flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",
-            gap: "8px", width: "100%", boxSizing: "border-box", padding: "10px 14px",
-            border: "none", borderTop: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: "13px",
-          },
-        }, fbIcon("hub"), h("span", { key: "t" }, I18N.t("hub_title")))
-      );
+      else {
+        var openHub = function () { setShowHub(true); };
+        var hubBtn = (nativeUiOn() && UI.DialogButton)
+          ? h(UI.DialogButton, { "data-fb": "open-hub", onClick: openHub, style: { width: "100%", marginTop: "8px" } },
+              h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } }, fbIcon("hub"), h("span", null, I18N.t("hub_title"))))
+          : clickable(openHub, {
+              "data-fb": "open-hub",
+              style: {
+                flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",
+                gap: "8px", width: "100%", boxSizing: "border-box", padding: "10px 14px",
+                border: "none", borderTop: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: "13px",
+              },
+            }, [fbIcon("hub"), h("span", { key: "t" }, I18N.t("hub_title"))]);
+        // Natural flow (no flex column, no overflow): the editor keeps its own
+        // height and the hub button sits AFTER it — so the button never overlaps
+        // the editor, and no overflow ancestor clips the plugin's IntersectionObserver
+        // (useIsActiveQamTab). The QAM panel does the scrolling, like the loader.
+        body = h("div", null, contentEl(s), hubBtn);
+      }
       var inner = ErrorBoundary ? h(ErrorBoundary, null, body) : body;
       // Wrap the panel in Steam's Focusable so it joins the gamepad-focus
       // navigation (the mirrored editor's controls and ours) — exactly how the loader
@@ -1011,17 +1142,23 @@
       else log("QAM native: builder never appeared — overlay only.");
     }
     if (NATIVE_QAM_ENABLED) installPatchWithRetry();
-    // TEMP controlled test: run the single Focusable discovery on demand (off the
-    // render path) and re-render the panel, so the scan's on-device safety is
-    // verified via CDP before it auto-runs on every inject.
-    try {
-      window.__SHELVES_FOCUS_TEST__ = function () {
-        var t0 = Date.now();
-        var f = ensureFocusable();
-        notifySlots();
-        return { found: !!f, ms: Date.now() - t0 };
-      };
-    } catch (e) {}
+    // Discover Steam's native UI components off the render path, on a timer ~1.5s
+    // after inject (once the plugin's boot has settled), then re-render the slots so
+    // the panel + our items render natively (native look + focus ring). CHUNKED —
+    // one scan per timer tick (ensureUiChunked) — because a single scan is safe
+    // (~25ms) but several back-to-back block the main thread long enough to starve
+    // the running plugin and collapse the Steam UI (measured on-device: 3–48ms/step).
+    if (NATIVE_QAM_ENABLED && !focusableComp) {
+      try {
+        setTimeout(function () {
+          // Coexist borrowed UI from the loader already (uiReady) → just adopt
+          // Focusable, NO webpack scan. Otherwise (sole host / no lib) discover it
+          // chunked. The scan on the inject path is what collapsed the Steam UI.
+          if (uiReady) { ensureFocusable(); notifySlots(); }
+          else ensureUiChunked(function () { ensureFocusable(); notifySlots(); });
+        }, 1500);
+      } catch (e) {}
+    }
 
     function registerPanel(spec) {
       if (!spec || typeof spec.id !== "string") throw new Error("[shelves-host] qam.registerPanel: { id, title, icon, content } required");

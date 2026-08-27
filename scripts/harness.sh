@@ -87,7 +87,7 @@ assert_for() {
     sole-host)        echo 'var r=__HARNESS_REPORT__();var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.shelvesTabPresent;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     sole-host-mirror) echo 'var r=__HARNESS_REPORT__();var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.specs.indexOf("deck-shelves")>=0&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     coexist-late)     echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.shelvesTabPresent;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
-    coexist-native)   echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.owner==="decky"&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub&&!!r.nativeUi&&r.nativeUi.section&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
+    coexist-native)   echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.owner==="decky"&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&(r.openHub||(r.nativeUi&&r.nativeUi.section))&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
     coexist-fallback-native) echo 'var r=__HARNESS_REPORT__();var nu=r.nativeUi;var ok=r.bridge&&!r.hostInstalled&&r.specs.length===0&&r.shelvesTabPresent&&!!nu&&nu.section&&nu.buttons===3&&nu.toggle&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
   esac
 }

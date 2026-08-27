@@ -18,6 +18,10 @@
           "coexist-fallback-native": { coexist: true, pluginPanel: false, nativeUi: true },
         };
         window.__HARNESS__ = map[sc] || map["coexist-mirror"];
+        // Native-component rendering is gated behind this runtime flag on-device
+        // (see nativeUiOn()); scenarios that provide native mocks opt in here so
+        // the harness exercises the native render path.
+        if (window.__HARNESS__.nativeUi) window.__SHELVES_NATIVE_UI__ = true;
         window.__HARNESS_SCENARIO__ = sc;
         window.__HARNESS_READY__ = false;
         window.__HARNESS_ERRORS__ = [];

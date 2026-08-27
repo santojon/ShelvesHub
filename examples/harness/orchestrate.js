@@ -69,8 +69,26 @@
     return chain;
   }
 
+  // Native discovery runs OFF the render path (a settle timer, then a chunked
+  // scan yielding between steps), so native components land after the QAM mounts.
+  // For native scenarios, wait for that render before signalling ready.
+  function waitForNativeRender() {
+    return new Promise(function (resolve) {
+      var t0 = Date.now();
+      (function poll() {
+        var r = null;
+        try { r = window.__HARNESS_REPORT__(); } catch (e) {}
+        if ((r && r.nativeUi) || Date.now() - t0 > 4000) return resolve();
+        setTimeout(poll, 80);
+      })();
+    });
+  }
+
   function start() {
     run()
+      .then(function () {
+        return window.__HARNESS__ && window.__HARNESS__.nativeUi ? waitForNativeRender() : null;
+      })
       .then(function () {
         window.__HARNESS_READY__ = true;
       })
