@@ -439,10 +439,11 @@
     } catch (e) { log("QAM Focusable discovery:", e && e.message); }
     return focusableComp;
   }
-  // Native-component rendering is gated behind a runtime flag while we verify our
-  // discovery finds the CORRECT Steam components (a wrong match collapses the UI).
-  // Flip window.__SHELVES_NATIVE_UI__ = true and trigger a slot refresh to test.
-  function nativeUiOn() { try { return window.__SHELVES_NATIVE_UI__ === true; } catch (e) { return false; } }
+  // Native-component rendering (verified safe once discovery stopped scanning on
+  // the inject path). ON by default; set window.__SHELVES_NATIVE_UI__ = false as a
+  // kill switch. It renders only when the components are actually present anyway
+  // (the branches also gate on UI.DialogButton/UI.ToggleField).
+  function nativeUiOn() { try { return window.__SHELVES_NATIVE_UI__ !== false; } catch (e) { return true; } }
 
   // A minimal error boundary so a bad panel render shows a fallback instead of
   // crashing the Steam renderer.
@@ -658,7 +659,10 @@
       logs: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>',
       auto: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
       back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
-      hub: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+      // Tintable ShelvesHub mark: three books on a shelf over a hub node, single-
+      // colour (currentColor). Three bigger books (vs the 4-book draft) + the hub
+      // (the ShelvesHub identity), tuned to still read at 16px.
+      hub: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="2.6" width="3.7" height="11.8" rx="0.7"/><rect x="9.5" y="1" width="3.7" height="13.4" rx="0.7"/><rect x="14" y="3.4" width="3.7" height="11" rx="0.7" transform="rotate(-12 15.85 14.4)"/><rect x="3.3" y="14.4" width="17.4" height="2.1" rx="0.9"/><circle cx="12" cy="19.2" r="1.6"/><circle cx="8.6" cy="22.3" r="1"/><circle cx="12" cy="22.8" r="1"/><circle cx="15.4" cy="22.3" r="1"/><path d="M12 20.5 L9 21.9 M12 20.8 L12 21.9 M12 20.5 L15 21.9" stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round"/></svg>',
     };
     function fbIcon(name) {
       return h("span", {
@@ -671,31 +675,15 @@
     // button and on pointer) once it is discovered, else a plain <button>. Same
     // styling either way; Focusable adds Steam's native focus ring so our own
     // items join the gamepad navigation, exactly like the plugin's native controls.
-    // Native gamepad focus ring: Steam's Focusable applies `focusClassName` to the
-    // element while it holds focus-nav focus. We render our buttons through the
-    // real Focusable (the one primitive that mounts safely in the injected panel)
-    // and give it a ring class, so items focus WITH a visible native-style ring —
-    // without the DFL button components that collapse this panel.
-    var _focusCssDone = false;
-    function ensureFocusCss() {
-      if (_focusCssDone) return;
-      _focusCssDone = true;
-      try {
-        var s = document.createElement("style");
-        s.setAttribute("data-shelves", "focus");
-        s.textContent =
-          ".shelves-fnav{outline:none;transition:box-shadow .12s ease,background-color .12s ease;}" +
-          ".shelves-fnav.shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,0.95),0 0 12px 2px rgba(90,160,255,0.6);}";
-        (document.head || document.documentElement).appendChild(s);
-      } catch (e) {}
-    }
+    // Focus ring for the plain (non-DialogButton) path: give the Focusable a ring
+    // class the panel's <style> targets. Steam's Focusable applies `focusClassName`
+    // while the element holds focus-nav focus; the CSS is rendered INTO the panel
+    // (see PanelSlot) so it reaches the QAM document, not SharedJSContext.
     function clickable(onAct, extra, kids) {
-      ensureFocusCss();
       var props = focusableComp
         ? { onActivate: onAct, focusClassName: "shelves-gpfocus" }
         : { onClick: onAct };
       if (extra) for (var k in extra) props[k] = extra[k];
-      if (focusableComp) props.className = (props.className ? props.className + " " : "") + "shelves-fnav";
       return React.createElement.apply(React, [focusableComp || "button", props].concat(kids || []));
     }
     function FallbackPanel(props) {
@@ -753,14 +741,17 @@
         return h("div", { style: { padding: "12px 14px" }, "data-native": "section" },
           onBack
             ? h("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" } },
-                h(DB, { "data-native": "button", style: { flex: "0 0 auto" }, onClick: onBack }, fbIcon("back")),
+                h(DB, { "data-native": "button", style: { flex: "0 0 auto", width: "40px", minWidth: "0", maxWidth: "40px", padding: "6px 0", boxSizing: "border-box" }, onClick: onBack }, fbIcon("back")),
                 h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
             : h("div", { style: { fontSize: "18px", fontWeight: "700", marginBottom: "2px" } }, I18N.t("hub_title")),
           onBack ? null : h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "2px 0 8px" } }, I18N.t("unavailable_body")),
           actBtn("download", "download", "action_download", "populateBundle"),
           actBtn("update", "update", "action_update_hub", "selfUpdate"),
           actBtn("logs", "logs", "action_logs", "getLogs"),
-          h("div", { style: { marginTop: "10px" } }, h(TF, {
+          // The toggle row goes edge-to-edge like the plugin's (its own native
+          // padding insets the label/switch), so it breaks out of the section's
+          // horizontal padding — the focus highlight then reaches the QAM edge.
+          h("div", { className: "shelves-toggle-row", style: { marginTop: "10px", marginLeft: "-14px", marginRight: "-14px" } }, h(TF, {
             label: I18N.t("action_auto_update"),
             checked: on, disabled: !!busy && busy !== "auto",
             onChange: function (v) { applyAuto(!!v); },
@@ -853,11 +844,35 @@
         body = h("div", null, contentEl(s), hubBtn);
       }
       var inner = ErrorBoundary ? h(ErrorBoundary, null, body) : body;
-      // Wrap the panel in Steam's Focusable so it joins the gamepad-focus
-      // navigation (the mirrored editor's controls and ours) — exactly how the loader
-      // wraps its plugin view. Discovered off the render path; until it is
-      // available the panel renders bare (touch still works).
-      return focusableComp ? h(focusableComp, { style: { height: "100%" } }, inner) : inner;
+      // Focus ring: Steam applies `.gpfocus` to the focused native control but draws
+      // NO ring for our injected panel (it sits outside Steam's own FocusRing
+      // ancestor). We render the ring CSS as part of the panel so it lands in the
+      // QAM document (NOT SharedJSContext, where a head-injected <style> would go
+      // and never reach these nodes), scoped to `.shelves-panel`.
+      // Ring ONLY buttons (DialogButton lacks a native focus visual in our injected
+      // panel) and our own plain clickables (.shelves-gpfocus). Toggles, collapsible
+      // titles and other native controls already get Steam's own row highlight
+      // (a background, not a ring) — ringing them too looks doubled-up/odd.
+      var ringCss =
+        ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{" +
+        "box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;" +
+        "border-radius:4px;}";
+      // Our edge-to-edge toggle row's Field has 0 horizontal padding, so its label/
+      // switch touch the sides. Pad the Field's CONTENT (not the wrapper): the
+      // highlight/background still reaches the QAM edge, only the content insets.
+      // Field class comes from the loader (coexist); scoped to our toggle row.
+      try {
+        var _fieldCls = (window.DFL && window.DFL.gamepadDialogClasses && window.DFL.gamepadDialogClasses.Field) || "";
+        if (_fieldCls) ringCss += ".shelves-panel .shelves-toggle-row ." + _fieldCls +
+          "{padding-left:14px!important;padding-right:14px!important;}";
+      } catch (e) {}
+      var styleEl = h("style", { "data-shelves": "ring" }, ringCss);
+      // Wrap the panel in Steam's Focusable so it joins gamepad-focus navigation
+      // (the mirrored editor's controls and ours) — exactly how the loader wraps its
+      // plugin view. Bare (touch still works) until Focusable is available.
+      return focusableComp
+        ? h(focusableComp, { className: "shelves-panel", style: { height: "100%" } }, styleEl, inner)
+        : h("div", { className: "shelves-panel", style: { height: "100%" } }, styleEl, inner);
     }
     // A registered tab needs its key present in Steam's `QuickAccessTab` enum:
     // `pt` derives the panel class as `tab_${QuickAccessTab[key]}` and the tab

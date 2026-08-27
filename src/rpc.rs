@@ -196,7 +196,10 @@ fn dispatch(body: &str) -> String {
                             Err(e) => err(&format!("serialize config: {e}")),
                         }
                     }
-                    Err(e) => err(&format!("save config: {e}")),
+                    Err(e) => {
+                        log_error("rpc", &format!("save config failed: {e}"));
+                        err(&format!("save config: {e}"))
+                    }
                 }
             }
             None => err("hub config path not configured"),

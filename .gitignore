@@ -72,3 +72,4 @@ releases/
 # ── Workflow-generated files ──────────────────────────────────────────────────
 CHANGELOG*.md
 releases/
+assets/icons/icon-*.png

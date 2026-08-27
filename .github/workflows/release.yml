@@ -113,6 +113,39 @@ jobs:
           name: ${{ matrix.oneclick_name }}
           path: ${{ matrix.oneclick_name }}
 
+      # ── GUI installers with the app icon (clickable) ────────────────────────
+      - name: Build macOS installer app
+        if: runner.os == 'macOS'
+        run: |
+          [ -f assets/icons/icon.icns ] || { brew install librsvg; python3 -m pip install --quiet --break-system-packages pillow; }
+          bash scripts/build-mac-app.sh "$PWD/dist-app"
+
+      - name: Upload macOS installer app
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Install-ShelvesHub-app
+          path: dist-app/Install ShelvesHub.app.zip
+
+      - name: Build Windows installer (NSIS)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          New-Item -ItemType Directory -Force nsis\payload | Out-Null
+          Copy-Item dist\* nsis\payload\ -Recurse -Force
+          Copy-Item installer\Windows\register-task.ps1 nsis\payload\ -Force
+          Copy-Item installer\Windows\shelveshub.nsi nsis\ -Force
+          Copy-Item assets\icons\icon.ico nsis\icon.ico -Force
+          & "$env:ProgramFiles(x86)\NSIS\makensis.exe" nsis\shelveshub.nsi
+
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: shelveshub-setup.exe
+          path: nsis\shelveshub-setup.exe
+
   publish:
     needs: build
     runs-on: ubuntu-latest
