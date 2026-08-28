@@ -91,7 +91,7 @@ in-flight backend call at a time — so writes never race inside this host.
 
 ## Components
 
-### Loader (`src/loader.rs`)
+### Loader (`src/loader/`)
 
 Every tick (default 30s) it connects to the Steam CEF renderer over the Chrome
 DevTools Protocol, probes whether the bundle is already running
@@ -112,13 +112,14 @@ plugin is left untouched; otherwise the tick stands down entirely. Setting
 `window.__SHELVES_FORCE_OWNER__` before injecting so the other adapter can
 yield cooperatively, and the plugin sees a single writer at all times.
 
-While the renderer is still unclaimed, `SHELVES_OWNER_SETTLE_SECS` (default `0`)
-makes the loop wait that many seconds for a claim to appear before hosting the
-renderer itself — so on a shared machine a fast injection cycle never starts
-hosting ahead of another host that is still starting up. A sole host leaves it
-at `0` and boots immediately.
+While the renderer is still unclaimed, `SHELVES_OWNER_SETTLE_SECS` (config key
+`owner_settle_secs`) makes the loop wait that many seconds for a claim to appear
+before hosting the renderer itself — so on a shared machine a fast injection cycle
+never starts hosting ahead of another host that is still starting up. The code
+default is `0`; the shipped `shelveshub.config.json` sets **25** for the primary
+(coexistence) setup. A sole host sets it back to `0` to boot immediately.
 
-### CDP client (`src/cdp.rs`)
+### CDP client (`src/cdp/`)
 
 A from-scratch Chrome DevTools Protocol client over a blocking WebSocket
 (`tungstenite`). Discovers targets via `GET /json`, picks the Steam renderer,
