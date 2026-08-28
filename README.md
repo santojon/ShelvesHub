@@ -4,6 +4,16 @@
 <p>
   <img src="assets/logo.svg" alt="ShelvesHub" width="352">
 </p>
+
+[![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
+[![Release](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml)
+[![Tests](https://img.shields.io/badge/cargo%20test-28%20passed-brightgreen?logo=rust&logoColor=white)](src/)
+[![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](Cargo.toml)
+[![Platform](https://img.shields.io/badge/platform-SteamOS%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-purple?logo=steamdeck&logoColor=white)](https://github.com/ValveSoftware/SteamOS)
+[![Downloads](https://img.shields.io/github/downloads/santojon/ShelvesHub/total.svg?label=downloads&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
+[![GitHub release](https://img.shields.io/github/v/release/santojon/ShelvesHub?label=latest&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 </div>
 
 ShelvesHub is the independent host service for [Deck Shelves](https://github.com/santojon/Deck-Shelves). It injects the Deck Shelves bundle into the Steam Big Picture UI and provides the runtime API the bundle calls into — no plugin loader required.
@@ -38,13 +48,13 @@ sudo bash installer/install.sh
 
 Manages a system-level `shelveshub.service` via systemd.
 
-### macOS (one-click)
+### macOS
 
-Download `install-mac.command` from the latest release and double-click it in Finder. On first run, right-click → Open to bypass Gatekeeper.
+Download **`Install ShelvesHub.app`** (a clickable installer app carrying the ShelvesHub icon) from the latest release and double-click it. On first run, right-click → Open to bypass Gatekeeper. A plain `install-mac.command` script is also published.
 
-### Windows (one-click)
+### Windows
 
-Download `install-windows.bat` from the latest release and double-click it. Accept the UAC prompt — the installer runs elevated automatically.
+Download **`shelveshub-setup.exe`** (a setup program carrying the ShelvesHub icon) from the latest release and run it, accepting the UAC prompt. A plain `install-windows.bat` script is also published.
 
 ---
 
@@ -53,19 +63,26 @@ Download `install-windows.bat` from the latest release and double-click it. Acce
 ```
 src/
   main.rs                   Entry point — spawns RPC thread, starts injection loop
-  loader.rs                 Injection loop (30s interval)
+  loader/                   Injection loop + preload (document-start) mode
+  cdp/                      Chrome DevTools Protocol client
   rpc.rs                    TCP JSON-RPC server (127.0.0.1:60123)
-  logger.rs                 Structured logging
-  runtime/host/
-    contract.ts             HostApi interface (version 1.0.0)
-    shelves.ts              ShelvesHostApi — concrete implementation
-    index.ts                Barrel export
-  runtime/platform.ts       PlatformApi interface
+  populate.rs               Obtains / self-installs the Deck Shelves bundle
+  backend.rs                Supervises the hosted data backend
+  store.rs                  The host's own settings, atomically persisted
+  logger.rs config.rs state.rs
+runtime/
+  shelves-host.js           The injected host runtime (installs the HostApi + native tab)
+  i18n/                     Per-locale strings, inlined at injection time
+  backend/                  Optional data-backend runner
 installer/
   SteamOS/                  One-click .desktop + user systemd service
   Linux/                    System-wide install.sh + systemd service
-  macOS/                    install_mac.sh + launchd plist + one-click .command
-  Windows/                  install.ps1 + one-click .bat + registry file
+  macOS/                    install_mac.sh + launchd plist + one-click .command + .app
+  Windows/                  install.ps1 + one-click .bat + NSIS setup + registry file
+assets/
+  icon.svg tab-icon.svg     App icon + tintable tab icon
+  icons/                    Generated rasters (.ico / .icns / PNGs) for the installers
+shelveshub.config.json      Optional settings (RPC/CEF ports, coexistence, recovery)
 bundle/
   index.js                  Placeholder — replaced by the Deck Shelves release bundle
 docs/
@@ -73,13 +90,19 @@ docs/
   host-api.md               HostApi contract reference
   development.md            SSH development workflow
   usage.md                  Platform-specific usage notes
+  debugging.md              shelves-devtools + local/on-Deck debug workflow
+  troubleshooting.md        Ports, coexistence and recovery — fixes via the config file
 ```
+
+Settings live in `shelveshub.config.json` next to the binary (env var > file >
+default). See [docs/troubleshooting.md](docs/troubleshooting.md) for port conflicts,
+coexistence with another host, and black-screen recovery.
 
 ---
 
 ## Releases
 
-Each release publishes 7 files:
+Each release publishes the per-platform packages, one-click scripts, and clickable installers:
 
 | File | Description |
 |---|---|
@@ -88,10 +111,12 @@ Each release publishes 7 files:
 | `shelveshub-macos.tar.gz` | macOS package |
 | `shelveshub-windows.zip` | Windows package |
 | `shelveshub.desktop` | SteamOS one-click installer |
-| `install-mac.command` | macOS one-click installer |
-| `install-windows.bat` | Windows one-click installer |
+| `install-mac.command` | macOS one-click script |
+| `install-windows.bat` | Windows one-click script |
+| `Install ShelvesHub.app` (zipped) | macOS clickable installer app (with icon) |
+| `shelveshub-setup.exe` | Windows setup program (with icon) |
 
-CI builds on every PR merge; releases are tagged `v*.*.*` and trigger the release pipeline automatically.
+CI builds on every PR merge; releases are tagged `v*.*.*` and trigger the release pipeline automatically — the tag sets the version.
 
 ---
 

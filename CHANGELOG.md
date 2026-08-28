@@ -7,6 +7,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- The native Quick Access tab now renders **native Steam controls** — real buttons
+  and toggles with a gamepad focus ring — and carries a **tintable ShelvesHub
+  icon**. Alongside another host it draws these from the host environment with no
+  start-up scan, so the tab appears without disturbing the running interface.
+- **Clickable installers** for macOS (an installer app) and Windows (a setup
+  program), each carrying the ShelvesHub icon, alongside the existing one-click
+  scripts for SteamOS, Linux, macOS and Windows.
+- The host can **install a Deck Shelves update itself** — it fetches the release
+  and swaps the bundle in place, then reloads — so updating no longer needs a
+  manual file install.
+- Every failure path in the service now writes a log line, so problems surface in
+  the service log rather than failing silently.
 - When Deck Shelves cannot be loaded, the host's own tab now shows a **ShelvesHub
   panel** with recovery actions instead of an empty tab; the home always loads
   regardless. Each action carries an icon, and **Automatic updates** is a real

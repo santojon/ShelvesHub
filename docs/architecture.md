@@ -163,15 +163,14 @@ example backend lives in `examples/backend/`.
 Structured log lines: `[LEVEL] [timestamp] [subsystem] message`. Levels: INFO,
 WARNING, ERROR, DEBUG. Used by all Rust modules.
 
-### Runtime — HostApi (`src/runtime/host/`)
+### Runtime — HostApi
 
-TypeScript definition of the contract between the host process and the bundle.
-
-| File | Purpose |
-|---|---|
-| `contract.ts` | `HostApi` interface + `HOST_API_VERSION = "1.0.0"` |
-| `shelves.ts` | `ShelvesHostApi` — concrete implementation; RPC delegates to the Rust server |
-| `index.ts` | Barrel re-export |
+The injected host runtime is `runtime/shelves-host.js` — a self-contained script
+the loader evaluates in the renderer. It installs `window.__SHELVES_HOST__` (the
+concrete `HostApi`) and the native Quick Access tab, and delegates RPC to the Rust
+server. The contract it implements is the shared `@deck-shelves/host` package
+(`HOST_API_VERSION = "1.1.0"`, additive-only after the 1.0 baseline); a TypeScript
+reference of the same shapes lives under `src/runtime/host/`.
 
 See [docs/host-api.md](./host-api.md) for the full contract reference.
 

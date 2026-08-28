@@ -35,6 +35,10 @@ Section "Install"
   File /r "payload\bundle"
   File "payload\register-task.ps1"
 
+  ; Config file — install only if absent, so a re-install never clobbers edits.
+  IfFileExists "$INSTDIR\shelveshub.config.json" +2
+    File "payload\shelveshub.config.json"
+
   DetailPrint "Registering the ShelvesHub background service..."
   nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -NoProfile -File "$INSTDIR\register-task.ps1" -InstallPath "$INSTDIR"'
   Pop $0
@@ -55,6 +59,7 @@ Section "Uninstall"
   Delete "$INSTDIR\shelveshub.exe"
   Delete "$INSTDIR\shelves-devtools.exe"
   Delete "$INSTDIR\register-task.ps1"
+  Delete "$INSTDIR\shelveshub.config.json"
   RMDir /r "$INSTDIR\runtime"
   RMDir /r "$INSTDIR\bundle"
   RMDir /r "$INSTDIR\backend"

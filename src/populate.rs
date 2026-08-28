@@ -204,6 +204,37 @@ pub fn update_from_release(dest: &Path, prerelease: bool) -> Result<String, Stri
     }
 }
 
+/// Apply a plugin update from a specific release asset (the host `updates.applyUpdate`
+/// path). Downloads `asset_url` into `dest` after verifying it is a GitHub-hosted JS
+/// bundle (the daemon must never be steered into fetching an arbitrary URL) and a real
+/// bundle (not truncated). When `asset_url` is absent, falls back to the newest release.
+pub fn apply_update(
+    dest: &Path,
+    asset_url: Option<&str>,
+    prerelease: bool,
+) -> Result<String, String> {
+    let url = match asset_url {
+        None => return update_from_release(dest, prerelease),
+        Some(u) => {
+            let trusted = u.starts_with("https://github.com/")
+                && (u.ends_with(".iife.js") || u.ends_with(".js"));
+            if !trusted {
+                return Err(format!("refused update asset (not a GitHub .js url): {u}"));
+            }
+            u
+        }
+    };
+    let tmp = dest.with_file_name(".bundle.update.tmp");
+    curl_download(url, &tmp)?;
+    if !is_real_bundle(&tmp) {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("downloaded update looks truncated/placeholder: {url}"));
+    }
+    fs::rename(&tmp, dest).map_err(|e| format!("swap update into place: {e}"))?;
+    log_info("populate", &format!("Applied plugin update from {url}"));
+    Ok(url.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,6 +256,22 @@ mod tests {
         let json =
             r#"{"assets":[{"name":"deck-shelves.zip","browser_download_url":"https://x/zip"}]}"#;
         assert!(find_iife_asset_url(json).is_none());
+    }
+
+    #[test]
+    fn apply_update_refuses_untrusted_or_nonjs_urls() {
+        let dest = std::env::temp_dir().join("shelveshub-apply-update-test.js");
+        // Not GitHub-hosted.
+        let e = apply_update(&dest, Some("https://evil.example.com/x.iife.js"), false).unwrap_err();
+        assert!(e.contains("refused"), "{e}");
+        // GitHub but not a JS bundle.
+        let e2 = apply_update(
+            &dest,
+            Some("https://github.com/santojon/Deck-Shelves/releases/download/v1/mal.exe"),
+            false,
+        )
+        .unwrap_err();
+        assert!(e2.contains("refused"), "{e2}");
     }
 
     #[test]

@@ -15,8 +15,12 @@
 (function () {
   "use strict";
 
-  var HOST_API_VERSION = "1.1.0";
-  var RPC_ENDPOINT = "http://127.0.0.1:60123";
+  // Derived from the daemon's `window.__SHELVES_CONFIG__` stamp (RPC address from
+  // its config, contract version from @deck-shelves/host) so nothing is hardcoded
+  // here; the literals are a fallback for a standalone load without the stamp.
+  var SHELVES_CFG = (function () { try { return window.__SHELVES_CONFIG__ || {}; } catch (e) { return {}; } })();
+  var HOST_API_VERSION = SHELVES_CFG.hostApiVersion || "1.1.0";
+  var RPC_ENDPOINT = SHELVES_CFG.rpcEndpoint || "http://127.0.0.1:60123";
 
   if (window.__SHELVES_HOST__ && window.__SHELVES_HOST__.__shelvesRuntime) {
     return window.__SHELVES_HOST__.version;
@@ -658,7 +662,7 @@
       update: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>',
       logs: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>',
       auto: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
-      back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+      back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
       // Tintable ShelvesHub mark: three books on a shelf over a hub node, single-
       // colour (currentColor). Three bigger books (vs the 4-book draft) + the hub
       // (the ShelvesHub identity), tuned to still read at 16px.
@@ -841,7 +845,10 @@
         // height and the hub button sits AFTER it — so the button never overlaps
         // the editor, and no overflow ancestor clips the plugin's IntersectionObserver
         // (useIsActiveQamTab). The QAM panel does the scrolling, like the loader.
-        body = h("div", null, contentEl(s), hubBtn);
+        // Inset the ShelvesHub button so it aligns with the plugin's own rows and
+        // our hub-screen items (which sit inside the section's 14px padding), rather
+        // than sitting flush against the QAM edge.
+        body = h("div", null, contentEl(s), h("div", { style: { padding: "0 14px" } }, hubBtn));
       }
       var inner = ErrorBoundary ? h(ErrorBoundary, null, body) : body;
       // Focus ring: Steam applies `.gpfocus` to the focused native control but draws
@@ -1238,6 +1245,18 @@
       navigateToApp: function (appId) {
         try { if (window.SteamClient && window.SteamClient.Apps) { window.SteamClient.Apps.RunGame(String(appId), "", -1, 100); return; } } catch (e) {}
         log("navigateToApp", appId);
+      },
+    },
+    // Self-install of a PLUGIN update: the daemon obtains the release asset and swaps
+    // the injected bundle, so the plugin's update UX can offer "Install" (not just
+    // "Download"). applyUpdate reloads once the swap succeeds, so the daemon re-injects
+    // the new bundle and the plugin re-boots on it.
+    updates: {
+      canSelfInstall: function () { return true; },
+      applyUpdate: function (release) {
+        return fetch(RPC_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ method: "applyUpdate", args: release == null ? null : release }) })
+          .then(function (res) { if (!res.ok) throw new Error("applyUpdate HTTP " + res.status); return res.json(); })
+          .then(function (j) { if (!j.ok) throw new Error("applyUpdate: " + j.error); try { window.location.reload(); } catch (e) {} });
       },
     },
     qam: QamHost,

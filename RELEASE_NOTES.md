@@ -8,6 +8,14 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **A native tab that looks the part.** The host's Quick Access tab now renders
+  real Steam buttons and toggles — with a gamepad focus ring and a ShelvesHub icon
+  that tints to your theme — so it feels like the rest of the interface.
+- **Click to install.** Double-click installers for macOS and Windows, each with
+  the ShelvesHub icon, alongside the one-click scripts for SteamOS, Linux, macOS
+  and Windows.
+- **Updates itself.** When a new Deck Shelves is available, the host can fetch and
+  install it for you — no manual file copying.
 - **Brings its own copy of Deck Shelves.** If Deck Shelves is not already on the
   machine, the service fetches it — reusing a local copy, copying it from an
   installed plugin loader, or downloading the newest release — so it can run

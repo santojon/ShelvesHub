@@ -65,6 +65,16 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      # The tag is the source of truth for the version: sync Cargo.toml so the
+      # built binary reports the released version (env!("CARGO_PKG_VERSION")).
+      - name: Sync crate version to the tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          perl -0777 -pi -e "s/^version = \"[^\"]*\"/version = \"$V\"/m" Cargo.toml
+          grep '^version' Cargo.toml
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -74,6 +84,7 @@ jobs:
           mkdir -p dist/bundle dist/runtime dist/installer
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           cp target/${{ matrix.target }}/release/shelves-devtools dist/
+          cp shelveshub.config.json dist/
           cp -r bundle/. dist/bundle/
           cp -r runtime/. dist/runtime/
           cp -r ${{ matrix.installer_dir }}/. dist/installer/
@@ -86,6 +97,7 @@ jobs:
           New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer | Out-Null
           Copy-Item target\${{ matrix.target }}\release\${{ matrix.binary }} dist\
           Copy-Item target\${{ matrix.target }}\release\shelves-devtools.exe dist\
+          Copy-Item shelveshub.config.json dist\
           Copy-Item -Recurse bundle\* dist\bundle\
           Copy-Item -Recurse runtime\* dist\runtime\
           Copy-Item -Recurse ${{ matrix.installer_dir }}\* dist\installer\

@@ -15,6 +15,8 @@ sudo chmod +x "$INSTALL_DIR/$BINARY"
 
 [[ -d bundle ]] && sudo mkdir -p "$INSTALL_DIR/bundle" && sudo cp -r bundle/. "$INSTALL_DIR/bundle/"
 [[ -d runtime ]] && sudo mkdir -p "$INSTALL_DIR/runtime" && sudo cp -r runtime/. "$INSTALL_DIR/runtime/"
+# Config file: install it, but never overwrite one the user has already edited.
+[[ -f shelveshub.config.json && ! -f "$INSTALL_DIR/shelveshub.config.json" ]] && sudo cp shelveshub.config.json "$INSTALL_DIR/"
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 [[ -d backend ]] && sudo mkdir -p "$INSTALL_DIR/backend" && sudo cp -r backend/. "$INSTALL_DIR/backend/"
 

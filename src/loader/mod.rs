@@ -379,6 +379,16 @@ pub(super) fn i18n_stamp(host_runtime_path: &Path) -> String {
     )
 }
 
+/// Expose the host-facing config to the runtime so it derives the RPC endpoint and
+/// the contract version from the daemon (one source) instead of hardcoding them.
+pub(super) fn config_stamp(config: &Config) -> String {
+    let obj = serde_json::json!({
+        "rpcEndpoint": format!("http://{}", config.rpc_addr),
+        "hostApiVersion": crate::HOST_API_VERSION,
+    });
+    format!("window.__SHELVES_CONFIG__ = {obj};\n")
+}
+
 fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
     // Fresh context: drop any stale native-tab trip so this inject re-arms cleanly.
     // A boot's mid-load reload leaves an unconfirmed "armed" that the next inject
@@ -389,7 +399,12 @@ fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
         Ok(source) => {
             // Inline the per-locale dictionaries first so the runtime's i18n reads
             // them the moment it evaluates.
-            let source = format!("{}{}", i18n_stamp(&config.host_runtime_path), source);
+            let source = format!(
+                "{}{}{}",
+                config_stamp(config),
+                i18n_stamp(&config.host_runtime_path),
+                source
+            );
             match client.evaluate(&source) {
                 Ok(_) => log_info("loader", "Host runtime injected."),
                 Err(e) => log_error("loader", &format!("Host runtime eval failed: {e}")),

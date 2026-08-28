@@ -16,8 +16,9 @@ pub mod rpc;
 pub mod state;
 pub mod store;
 
-/// Version of the `HostApi` contract this loader implements. Mirrors
-/// `HOST_API_VERSION` in `src/runtime/host/contract.ts` (and the injected host
-/// runtime) — keep the two in sync. Served over RPC as `getHostApiVersion` so a
-/// bundle can perform a startup handshake before relying on host capabilities.
-pub const HOST_API_VERSION: &str = "1.1.0";
+/// Version of the `HostApi` contract this loader implements. **Derived** at build
+/// time from the shared `@deck-shelves/host` contract (`host/dist/index.d.ts`) via
+/// `build.rs`, so it never drifts from the contract; the injected runtime receives
+/// the same value stamped by the loader (no hardcoded copy). Served over RPC as
+/// `getHostApiVersion` so a bundle can handshake before relying on host capabilities.
+pub const HOST_API_VERSION: &str = env!("SHELVES_HOST_API_VERSION");

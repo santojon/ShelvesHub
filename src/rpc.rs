@@ -168,6 +168,29 @@ fn dispatch(body: &str) -> String {
             }
             None => err("bundle path not configured"),
         },
+        // Host self-install of a PLUGIN update (`host.updates.applyUpdate`): obtain the
+        // given release asset (or the newest) and swap the injected bundle in place; the
+        // renderer reload the runtime triggers afterwards re-boots the plugin on it.
+        Some("applyUpdate") => match state::populate_config() {
+            Some((path, prerelease)) => {
+                let asset_url = parsed
+                    .as_ref()
+                    .and_then(|v| v.get("args"))
+                    .and_then(|a| a.get("assetUrl"))
+                    .and_then(Value::as_str);
+                match crate::populate::apply_update(path, asset_url, *prerelease) {
+                    Ok(url) => {
+                        log_info("rpc", &format!("Applied plugin update: {url}"));
+                        ok(r#"{"applied":true}"#.to_string())
+                    }
+                    Err(e) => {
+                        log_error("rpc", &format!("applyUpdate failed: {e}"));
+                        err(&e)
+                    }
+                }
+            }
+            None => err("bundle path not configured"),
+        },
         // The host's own settings (the fallback panel's auto-update toggle).
         Some("getConfig") => match state::hub_config_path() {
             Some(path) => match serde_json::to_string(&crate::store::load(path)) {

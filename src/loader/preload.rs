@@ -69,6 +69,7 @@ pub(super) fn run_preload(config: Config) {
     if config.native_qam {
         source.push_str(&format!("{NATIVE_QAM_GLOBAL} = true;\n"));
     }
+    source.push_str(&super::config_stamp(&config));
     source.push_str(&super::i18n_stamp(&config.host_runtime_path));
     source.push_str(GATE_PREFIX);
     source.push_str(&runtime);

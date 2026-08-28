@@ -55,6 +55,7 @@ rsync -az -e "$RSH" runtime/shelves-host.js "$DECK_USER@$DECK_HOST:$REMOTE_HOME_
 rsync -az -e "$RSH" runtime/i18n/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/i18n/"
 rsync -az -e "$RSH" runtime/backend/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/backend/"
 rsync -az -e "$RSH" "$BUNDLE" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/bundle/index.js"
+rsync -az -e "$RSH" shelveshub.config.json "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/shelveshub.config.json"
 
 # Generate the user service pointing at the actual deploy path (the static unit
 # assumes ~/.local/share/shelveshub, which may differ from DECK_DEPLOY_PATH).
