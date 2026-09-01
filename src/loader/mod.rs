@@ -37,6 +37,17 @@ pub const FORCE_OWNER_GLOBAL: &str = "window.__SHELVES_FORCE_OWNER__";
 /// Access tab path (`SHELVES_NATIVE_QAM=1`). Read once at runtime boot.
 pub const NATIVE_QAM_GLOBAL: &str = "window.__SHELVES_NATIVE_QAM__";
 
+// The bundle reads `host.ui.*` at boot to render. On a sole host the runtime's
+// UI discovery is CHUNKED (async — it yields so it never stalls the main thread),
+// so `host.ui` is not fully populated the instant the runtime finishes; the
+// runtime signals `window.__SHELVES_UI_READY__` when the scan lands. These wrap
+// the bundle so its self-invoke is deferred until that signal — otherwise the
+// bundle captures a half-empty `host.ui` (modals/menus/nav `undefined`) and its
+// richer UI silently breaks. Coexist sets the flag synchronously (it borrows the
+// loader's UI), so the gate boots immediately there.
+pub(super) const BUNDLE_GATE_PREFIX: &str = "\nfunction __shelvesBootBundle(){\n";
+pub(super) const BUNDLE_GATE_SUFFIX: &str = "\n}\nif(window.__SHELVES_UI_READY__){__shelvesBootBundle();}else{var __bn=0,__biv=setInterval(function(){if(window.__SHELVES_UI_READY__||++__bn>600){clearInterval(__biv);__shelvesBootBundle();}},20);}\n";
+
 /// Outcome of one injection cycle.
 enum Tick {
     /// Bundle confirmed active in the renderer.
@@ -283,7 +294,12 @@ fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick>
         );
         return Ok(Tick::NotConfirmed);
     }
-    inject_bundle(&mut client, &source, env!("CARGO_PKG_VERSION"))?;
+    // Defer the bundle's boot until the runtime has populated `host.ui` (the
+    // async chunked scan signals `__SHELVES_UI_READY__`); the runtime and bundle
+    // are separate evaluates here, so without this the bundle boots before the
+    // scan lands and captures a half-empty `host.ui`.
+    let gated = format!("{BUNDLE_GATE_PREFIX}{source}{BUNDLE_GATE_SUFFIX}");
+    inject_bundle(&mut client, &gated, env!("CARGO_PKG_VERSION"))?;
 
     // Confirm the marker is now present rather than trusting a silent eval.
     Ok(if probe_injected(&mut client)? {
@@ -390,11 +406,12 @@ pub(super) fn config_stamp(config: &Config) -> String {
 }
 
 fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
-    // Fresh context: drop any stale native-tab trip so this inject re-arms cleanly.
-    // A boot's mid-load reload leaves an unconfirmed "armed" that the next inject
-    // would read as a crash and trip — but the standard inject is safe; the daemon
-    // health gate is the real crash-loop guard.
-    let _ = client.evaluate("try{localStorage.removeItem('shelves.nativeQamTrip')}catch(e){} true");
+    // The runtime's trip breaker is now self-healing: it stamps each arm with a
+    // timestamp and only trips on a STALE arm (a genuinely dead session), so a
+    // boot double-inject (recent arm) re-arms instead of tripping. We must NOT clear
+    // the trip here — doing so on every inject would wipe a legitimate trip and let
+    // a crashing native path retry forever (a crash loop). The daemon health gate +
+    // the runtime breaker together guard it.
     match fs::read_to_string(&config.host_runtime_path) {
         Ok(source) => {
             // Inline the per-locale dictionaries first so the runtime's i18n reads

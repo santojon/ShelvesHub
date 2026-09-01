@@ -382,6 +382,117 @@
         ? Object.values(panelDetails[0]).filter(function (exp) { return srcOf(exp).indexOf(".PanelSection") < 0; })[0]
         : undefined;
     },
+    // ── Extended host.ui surface (sole host) ─────────────────────────────────
+    // The QAM panel needs only the widgets above, but the full plugin UI (its
+    // own screens, dialogs, menus, navigation) needs more. Under a loader the
+    // plugin reaches those through the loader; as the sole host we resolve
+    // Steam's own from the webpack (same discovery technique). Each is guarded
+    // so a miss never blocks the rest.
+    function () {
+      // Modals. `showModal` wraps Steam's raw opener with the argument shape the
+      // plugin calls; `ConfirmModal` is Steam's confirm dialog.
+      var showModalRaw = Steam.findModuleExport(function (e) {
+        return typeof e === "function" && srcOf(e).indexOf("props.bDisableBackgroundDismiss") >= 0 && !(e.prototype && e.prototype.Cancel);
+      });
+      if (showModalRaw) {
+        UI.showModal = function (modal, parent, props) {
+          props = props || {};
+          return showModalRaw(modal, parent || window, props.strTitle || "ShelvesHub", props, undefined, { bHideActions: props.bHideActionIcons });
+        };
+      }
+      UI.ConfirmModal = Steam.findModuleExport(function (e) {
+        var s = srcOf(e);
+        return s.indexOf("bUpdateDisabled") >= 0 && s.indexOf("closeModal") >= 0 && s.indexOf("onGamepadCancel") >= 0;
+      });
+      UI.showContextMenu = Steam.findModuleExport(function (e) {
+        var s = srcOf(e);
+        return typeof e === "function" && s.indexOf("GetContextMenuManagerFromWindow(") >= 0 && s.indexOf(".CreateContextMenuInstance(") >= 0;
+      });
+    },
+    function () {
+      // Context menu + form inputs.
+      var menuDetails = Steam.findModuleDetailsByExport(function (e) {
+        return renderSrc(e).indexOf("bPlayAudio:") >= 0 || (e && e.prototype && e.prototype.OnOKButton && e.prototype.OnMouseEnter);
+      });
+      UI.Menu = Steam.findModuleExport(function (e) {
+        return e && e.prototype && e.prototype.HideIfSubmenu && e.prototype.HideMenu;
+      }) || (menuDetails && menuDetails[0]
+        ? Object.values(menuDetails[0]).find(function (e) { var s = srcOf(e); return s.indexOf("useId") >= 0 && s.indexOf("labelId") >= 0; })
+        : undefined);
+      UI.MenuItem = menuDetails ? menuDetails[1] : undefined;
+      UI.Dropdown = _commonValues.find(function (m) { return m && m.prototype && m.prototype.SetSelectedOption && m.prototype.BuildMenu; });
+      var ddRe = propListRegex(["dropDownControlRef", "description"], false);
+      var ddInternal = _commonValues.find(function (m) { return m && ddRe.test(srcOf(m)); });
+      if (ddInternal) UI.DropdownItem = function (props) { return h(ddInternal, Object.assign({ childrenContainerWidth: "min" }, props || {})); };
+      UI.TextField = _commonValues.find(function (m) { return m && m.validateUrl && m.validateEmail; });
+    },
+    function () {
+      // Tabs, Spinner, and Navigation (the plugin's screen routing + Back).
+      var tabsModule = Steam.findModuleByExport(function (e) {
+        var s = srcOf(e); return s.indexOf(".TabRowTabs") >= 0 && s.indexOf("activeTab:") >= 0;
+      });
+      if (tabsModule) UI.Tabs = Object.values(tabsModule).find(function (e) { return e && e.type && srcOf(e.type).indexOf("(function()") >= 0; });
+      UI.Spinner = Steam.findModuleExport(function (e) {
+        var s = srcOf(e); return s.indexOf("Steam Spinner") >= 0 && s.indexOf("src") >= 0;
+      });
+      var Router = Steam.findModuleExport(function (e) { return e && e.Navigate && e.NavigationManager; });
+      if (Router) {
+        var navFn = function (name, handler) {
+          return function () {
+            var win;
+            try { win = window.SteamUIStore.GetFocusedWindowInstance(); } catch (e) {}
+            if (!win) win = (Router.WindowStore && (Router.WindowStore.GamepadUIMainWindowInstance || (Router.WindowStore.SteamUIWindows && Router.WindowStore.SteamUIWindows[0]))) || null;
+            if (!win) { log("nav: no window for " + name); return; }
+            try { var t = handler ? handler(win) : null; (t || win)[name].apply(t || win, arguments); }
+            catch (e) { log("nav " + name + ":", e && e.message); }
+          };
+        };
+        var navigator = function (w) { return w.Navigator; };
+        var menuStore = function (w) { return w.MenuStore; };
+        UI.Navigation = {
+          Navigate: navFn("Navigate"),
+          NavigateBack: navFn("NavigateBack"),
+          NavigateToAppProperties: navFn("AppProperties", navigator),
+          NavigateToExternalWeb: navFn("ExternalWeb", navigator),
+          NavigateToLibraryTab: navFn("LibraryTab", navigator),
+          NavigateToSteamWeb: navFn("NavigateToSteamWeb"),
+          OpenSideMenu: navFn("OpenSideMenu", menuStore),
+          OpenQuickAccessMenu: navFn("OpenQuickAccessMenu", menuStore),
+          OpenMainMenu: navFn("OpenMainMenu", menuStore),
+          CloseSideMenus: navFn("CloseSideMenus", menuStore),
+          NavigateToLayoutPreview: Router.NavigateToLayoutPreview ? Router.NavigateToLayoutPreview.bind(Router) : undefined,
+          OpenPowerMenu: Router.OpenPowerMenu ? Router.OpenPowerMenu.bind(Router) : undefined
+        };
+      }
+    },
+    function () {
+      // Structural dialog components (DialogBody / DialogControlsSection): Steam
+      // exposes these as div wrappers distinguishable only by the class name they
+      // render, so render each candidate with empty props and map by the leading
+      // class name (guarded — a render can throw).
+      var byClass = {};
+      _commonValues.forEach(function (m) {
+        if (!m || typeof m !== "object") return;
+        var rs = renderSrc(m);
+        if (rs.indexOf('jsx)("div",{...') < 0 && rs.indexOf('jsx)("div",Object.assign({},') < 0 &&
+          rs.indexOf('createElement("div",{...') < 0 && rs.indexOf('createElement("div",Object.assign({},') < 0) return;
+        try {
+          var el = m.render({});
+          var cn = el && el.props && el.props.className;
+          if (cn) { var key = cn.split(" ")[0]; if (!byClass[key]) byClass[key] = m; }
+        } catch (e) {}
+      });
+      UI.DialogBody = byClass.DialogBody;
+      UI.DialogControlsSection = byClass.DialogControlsSection;
+      // GamepadButton is a static enum, not a component — provide it directly.
+      UI.GamepadButton = {
+        INVALID: 0, OK: 1, CANCEL: 2, SECONDARY: 3, OPTIONS: 4, BUMPER_LEFT: 5, BUMPER_RIGHT: 6,
+        TRIGGER_LEFT: 7, TRIGGER_RIGHT: 8, DIR_UP: 9, DIR_DOWN: 10, DIR_LEFT: 11, DIR_RIGHT: 12,
+        SELECT: 13, START: 14, LSTICK_CLICK: 15, RSTICK_CLICK: 16, LSTICK_TOUCH: 17, RSTICK_TOUCH: 18,
+        LPAD_TOUCH: 19, LPAD_CLICK: 20, RPAD_TOUCH: 21, RPAD_CLICK: 22, REAR_LEFT_UPPER: 23,
+        REAR_LEFT_LOWER: 24, REAR_RIGHT_UPPER: 25, REAR_RIGHT_LOWER: 26, STEAM_GUIDE: 27, STEAM_QUICK_MENU: 28
+      };
+    },
   ];
   function runUiStep(i) { try { uiSteps[i](); } catch (e) { log("ui step " + i + ":", e && e.message); } }
   function ensureUi() {
@@ -403,7 +514,16 @@
       setTimeout(next, 80);
     })();
   }
-  if (React && !COEXIST) ensureUi();
+  // Publish "Steam's UI is populated" as a window global so the preload gate can
+  // defer the bundle boot until host.ui is ready (the bundle reads host.ui.* at
+  // boot). Coexist sets it synchronously (the borrow below); sole-host sets it
+  // from the chunked scan's onDone. Idempotent + safe if window is unavailable.
+  function signalUiReady() { try { window.__SHELVES_UI_READY__ = true; } catch (e) {} }
+  // Sole host: no loader to borrow from, so the webpack must be scanned for Steam's
+  // UI — but CHUNKED (one step per timer tick), NEVER the sync all-at-once scan,
+  // which stalls the main thread at boot → black screen. Signal readiness when the
+  // scan lands so the preload gate releases the bundle only once host.ui exists.
+  if (React && !COEXIST) ensureUiChunked(function () { signalUiReady(); });
   // Coexist: the loader already resolved every Steam UI component — borrow them
   // directly. A webpack discovery scan on the INJECT path (even chunked) stalls the
   // renderer main thread long enough to collapse the Steam UI windows (black
@@ -420,6 +540,9 @@
         log("QAM UI: borrowed from loader (no scan) — " + Object.keys(UI).length + " components.");
       }
     } catch (e) {}
+    // Coexist UI is ready synchronously (borrowed above, or the bundle is dormant
+    // under the loader anyway) — release the bundle gate now, no wait.
+    signalUiReady();
   }
 
   // Steam's Focusable — the single component the QAM tab panel needs to join
@@ -524,6 +647,192 @@
     return fiber;
   }
 
+  // ── RouterHook: register full-screen routes and patch existing ones ────────
+  // The plugin's own screens (About/Settings) are React-Router routes, and its
+  // home shelves are injected by PATCHING the /library/home route's render. Under
+  // a loader the loader supplies this hook; as the sole host we patch Steam's own
+  // gamepad router: find its node by the `Settings.Root()` its render mentions,
+  // then wrap that render to splice our routes into the route list and apply our
+  // per-path patches. Best-effort throughout — a failure never tears the UI down
+  // (afterPatch swallows handler errors and returns the original render).
+  function makeRouterHook() {
+    var routes = new Map(); // path -> { component, props }
+    var routePatches = new Map(); // path -> Set<patch>
+    var globalComponents = new Map(); // id -> component (always-rendered, e.g. the home bridge)
+    var RouteComp = null;
+    var patched = false;
+    var OUR_ARRAY = "__shelvesRoutes"; // marks the sub-array we append
+    var IS_PATCHED = "__shelvesRoutePatched"; // marks an already-patched route
+
+    function findRoute() {
+      if (RouteComp) return RouteComp;
+      try {
+        var mod = Steam.findModuleByExport(function (e) { return e === "router-backstack"; }, 20);
+        if (mod) {
+          RouteComp = Object.values(mod).find(function (e) {
+            return typeof e === "function" && /routePath:.\.match\?\.path./.test(srcOf(e));
+          }) || null;
+        }
+      } catch (e) { log("routerHook: Route discovery:", e && e.message); }
+      return RouteComp;
+    }
+
+    // Apply registered patches to the existing routes in one route-list array.
+    function applyPatches(routeList) {
+      for (var i = 0; i < routeList.length; i++) {
+        var route = routeList[i];
+        if (!route || !route.props || !route.props.path) continue;
+        var set = routePatches.get(route.props.path);
+        if (!set || !set.size) continue;
+        if (route.props.children && route.props.children[IS_PATCHED]) continue;
+        set.forEach(function (patch) {
+          try {
+            var res = patch(Object.assign({}, route.props));
+            if (res && res.children !== undefined) route.props.children = res.children;
+          } catch (e) { log("routePatch:", e && e.message); }
+        });
+        try { if (route.props.children) route.props.children[IS_PATCHED] = true; } catch (e) {}
+      }
+    }
+
+    // Splice our registered routes into the (main) route-list array as a nested
+    // array at a stable slot (React flattens nested arrays of children).
+    function injectRoutes(routeList) {
+      if (!routes.size) return;
+      var Route = findRoute();
+      if (!Route) return;
+      var slot = -1;
+      for (var i = 0; i < routeList.length; i++) { if (routeList[i] && routeList[i][OUR_ARRAY]) { slot = i; break; } }
+      var arr = [];
+      arr[OUR_ARRAY] = true;
+      routes.forEach(function (entry, path) {
+        var inner = React.createElement(entry.component);
+        arr.push(React.createElement(Route, Object.assign({ path: path }, entry.props || {}),
+          ErrorBoundary ? React.createElement(ErrorBoundary, null, inner) : inner));
+      });
+      if (slot >= 0) routeList[slot] = arr; else routeList.push(arr);
+    }
+
+    // Wrap the router render: its output is a Fragment whose children are the
+    // route-list containers; patch each list, inject our routes into the first.
+    function handleRender(_args, ret) {
+      try {
+        if (!ret || !ret.props) return ret;
+        var top = ret.props.children;
+        var containers = Array.isArray(top) ? top : [top];
+        var first = true;
+        for (var i = 0; i < containers.length; i++) {
+          var c = containers[i];
+          if (c && c.props && Array.isArray(c.props.children)) {
+            applyPatches(c.props.children);
+            if (first) { injectRoutes(c.props.children); first = false; }
+          }
+        }
+        // Render always-on global components (the home bridge) as keyed siblings
+        // of the routes so they mount regardless of the active route and reconcile
+        // in place across router re-renders (stable key → no re-mount).
+        if (globalComponents.size) {
+          var extras = [];
+          globalComponents.forEach(function (comp, id) {
+            try { extras.push(React.createElement(comp, { key: "shg-" + id })); } catch (e) {}
+          });
+          return React.createElement(React.Fragment, { key: "shg-wrap" }, ret, extras);
+        }
+      } catch (e) { log("routerHook render:", e && e.message); }
+      return ret;
+    }
+
+    var routerFiber = null; // the mounted route-declaring fiber, for re-rendering
+    function ensurePatched() {
+      if (patched || !React) return patched;
+      try {
+        var rf = getReactRoot(document.getElementById("root"));
+        if (!rf) return false;
+        var node = findInReactTree(rf, function (n) {
+          var t = n && (n.elementType || n.type);
+          if (!t) return false;
+          if (srcOf(t).indexOf("Settings.Root()") >= 0) return true;
+          try { if (t.type && srcOf(t.type).indexOf("Settings.Root()") >= 0) return true; } catch (e) {}
+          return false;
+        });
+        if (!node) return false;
+        var et = node.elementType || node.type;
+        if (!et || typeof et.type !== "function") return false;
+        routerFiber = node;
+        if (!et.type.__shelvesPatched) { afterPatch(et, "type", handleRender); log("routerHook: router patched."); }
+        patched = true;
+        return true;
+      } catch (e) { log("routerHook: patch failed:", e && e.message); return false; }
+    }
+
+    // The route-declaring component is a memoized fiber that captured its render
+    // fn at mount (before our patch) and does NOT re-render on navigation — so
+    // point the LIVE fiber's `type` at the patched fn, invalidate its memo props
+    // (so a reconcile can't bail on it), and force the nearest class ancestor to
+    // re-render. That single re-render runs our patched render, which splices our
+    // routes into the live route table + applies our patches; react-router then
+    // matches them on navigation. Debounced — many addRoute/addPatch calls at boot
+    // collapse into one force.
+    var forcePending = false;
+    function doForce() {
+      forcePending = false;
+      if (!routerFiber) return;
+      try {
+        var et = routerFiber.elementType;
+        if (et && typeof et.type === "function") {
+          routerFiber.type = et.type;
+          if (routerFiber.alternate) routerFiber.alternate.type = et.type;
+        }
+        var stamp = { __shForce: Date.now() };
+        routerFiber.memoizedProps = Object.assign({}, stamp, routerFiber.memoizedProps);
+        if (routerFiber.alternate) routerFiber.alternate.memoizedProps = Object.assign({}, stamp, routerFiber.alternate.memoizedProps || {});
+        var p = routerFiber.return, hops = 0;
+        while (p && hops++ < 80) {
+          if (p.stateNode && typeof p.stateNode.forceUpdate === "function") { p.stateNode.forceUpdate(); return; }
+          p = p.return;
+        }
+        log("routerHook: no updatable ancestor to force.");
+      } catch (e) { log("routerHook force:", e && e.message); }
+    }
+    function scheduleForce() { if (forcePending) return; forcePending = true; setTimeout(doForce, 0); }
+
+    // The router node may not be mounted the instant a route is registered — poll
+    // until the patch lands (idempotent; capped), then force the re-render.
+    var tries = 0;
+    function ensureWithRetry() {
+      if (ensurePatched()) { scheduleForce(); return; }
+      if (tries++ < 400) setTimeout(ensureWithRetry, 100);
+    }
+
+    return {
+      addRoute: function (path, component, props) { log("routerHook.addRoute", path); routes.set(path, { component: component, props: props || {} }); ensureWithRetry(); },
+      removeRoute: function (path) { routes.delete(path); },
+      addPatch: function (path, patch) { log("routerHook.addPatch", path); if (!routePatches.has(path)) routePatches.set(path, new Set()); routePatches.get(path).add(patch); ensureWithRetry(); return patch; },
+      removePatch: function (path, patch) { var s = routePatches.get(path); if (s) s.delete(patch); return patch; },
+      // Always-on global components (the plugin's home bridge, which renders
+      // elsewhere and PORTALS the shelves into its own mount). Rendered as stable,
+      // keyed siblings of the routes in handleRender — so they mount once and
+      // reconcile in place (no re-mount, no leaked subscriptions).
+      addGlobalComponent: function (a, b) {
+        var id, comp;
+        if (typeof a === "string") { id = a; comp = b; }
+        else if (a && a.component) { id = a.id || ("g" + globalComponents.size); comp = a.component; }
+        else { comp = a; id = (a && (a.displayName || a.name)) || ("g" + globalComponents.size); }
+        if (!comp) return function () {};
+        log("routerHook.addGlobalComponent", id);
+        globalComponents.set(id, comp);
+        ensureWithRetry();
+        return function () { globalComponents["delete"](id); scheduleForce(); };
+      },
+      removeGlobalComponent: function (a) {
+        if (typeof a === "string") { globalComponents["delete"](a); }
+        else if (a && a.id) { globalComponents["delete"](a.id); }
+        else { globalComponents.forEach(function (v, k) { if (v === a) globalComponents["delete"](k); }); }
+        scheduleForce();
+      }
+    };
+  }
+  var routerHook = makeRouterHook();
 
   // ── QAM: register a native tab in the Quick Access Menu ───────────────────
   // The tab-list builder hook returns the tabs array; we append our tab(s) to
@@ -554,12 +863,27 @@
     function tripSet(v) { try { window.localStorage.setItem(TRIP_KEY, v); } catch (_) {} }
     function tripClear() { try { window.localStorage.removeItem(TRIP_KEY); } catch (_) {} }
     var tripped = false;
-    if (NATIVE_QAM_ENABLED) {
+    // A RECENT arm is a legitimate boot double-inject (the renderer reloaded before
+    // our first healthy render — common mid-boot), so re-arm cleanly instead of
+    // tripping. Only a STALE arm (a genuinely dead previous session) trips. Arms are
+    // stamped `armed:<ms>`; a bare `armed` (pre-timestamp runtime) counts as stale.
+    var STALE_ARM_MS = 15000;
+    // The breaker guards ONLY the sole/owner path, where the webpack UI scan can
+    // black-screen. In COEXIST the UI is borrowed from the loader (no scan, no
+    // collapse risk), so the breaker must never engage there — otherwise an armed
+    // state left by a restart before the QAM first renders would false-trip and
+    // silently kill our tab on every later boot.
+    if (NATIVE_QAM_ENABLED && !COEXIST) {
       var prior = tripGet();
-      if (prior === "armed") {
-        tripSet("tripped:" + Date.now());
-        tripped = true;
-        log("QAM native: previous arm never confirmed — TRIPPED. Overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
+      if (prior && prior.indexOf("armed") === 0) {
+        var armTs = parseInt(prior.split(":")[1] || "0", 10) || 0;
+        if (Date.now() - armTs > STALE_ARM_MS) {
+          tripSet("tripped:" + Date.now());
+          tripped = true;
+          log("QAM native: previous arm never confirmed (stale) — TRIPPED. Overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
+        } else {
+          log("QAM native: recent arm (boot re-inject) — re-arming, not tripping.");
+        }
       } else if (prior && prior.indexOf("tripped") === 0) {
         tripped = true;
         log("QAM native: breaker is tripped (" + prior + ") — overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
@@ -1088,9 +1412,11 @@
         if (bv.type.__shelvesPatched) { patched = true; return true; }
         // Register our key so the tab is first-class (class + focus/visibility).
         registerTabEnum();
-        // Arm the breaker: if this session never confirms a healthy patched
-        // render, the next boot trips and forces standing down.
-        tripSet("armed");
+        // Arm the breaker (timestamped): if this session never confirms a healthy
+        // patched render, a LATER boot (arm gone stale) trips and stands down — but a
+        // boot double-inject (recent arm) re-arms instead of tripping. Sole/owner
+        // only — COEXIST borrows the UI and can't collapse, so it never arms.
+        if (!COEXIST) tripSet("armed:" + Date.now());
         var handler = function (args, ret) {
           try {
             if (args && args[0] && typeof args[0].visible !== "undefined") lastVisible = args[0].visible;
@@ -1111,18 +1437,18 @@
         // Re-point the live fiber's `type` to the now-patched inner function
         // (reached via `elementType`; the fiber's own `type` is a wrapper), so
         // an already-open menu picks up the tab without waiting for a remount.
-        // This re-point synchronously mutates a LIVE fiber. In OWNER mode a
-        // late/arbitrary-timed inject tears the Steam UI down (confirmed on-device
-        // — the immediate black screen), so it stays opt-in there. In COEXISTENCE
-        // the patch is tab-only (no host, no heavy owner-mode scan) and the
-        // re-point is SAFE — verified on-device (no UI collapse) and in the
-        // scenario harness — so enable it by default there, letting an
-        // already-mounted menu show our tab without waiting for a remount (the
-        // late-daemon-injection case). Force with `window.__SHELVES_FIBER_REPOINT__`.
-        var doRepoint = COEXIST;
-        try { if (window.__SHELVES_FIBER_REPOINT__ === true) doRepoint = true; } catch (e) {}
+        // This re-point synchronously mutates a LIVE fiber. It was once believed
+        // unsafe in OWNER (sole-host) mode — a late inject there black-screened —
+        // but that collapse was the boot-timing/scan issue (the runtime running
+        // during Steam's first paint), since resolved by injecting post-settle. A
+        // re-point on an ALREADY-SETTLED renderer is safe in BOTH modes — verified
+        // on-device in sole mode (tab appears, no UI collapse) and in the scenario
+        // harness. The daemon injects post-settle, exactly the safe window, so
+        // enable it by default; opt out with `window.__SHELVES_FIBER_REPOINT__ = false`.
+        var doRepoint = true;
+        try { if (window.__SHELVES_FIBER_REPOINT__ === false) doRepoint = false; } catch (e) {}
         if (doRepoint) { patchMountedConsumer(bv, embedded); }
-        else { log("QAM native: mounted re-point OFF (owner mode; opt in via __SHELVES_FIBER_REPOINT__)."); }
+        else { log("QAM native: mounted re-point OFF (opt out via __SHELVES_FIBER_REPOINT__=false)."); }
       } catch (e) {
         tripClear();
         log("QAM installPatch failed:", e && e.message);
@@ -1227,10 +1553,19 @@
           .then(function (j) { if (!j.ok) throw new Error("rpc.call(" + method + "): " + j.error); return j.result; });
       },
     },
+    // The concrete router hook — the plugin resolves this (falling back from a
+    // loader's hook) to register its screens and patch the home. Exposed both as
+    // `routerHook` (what the plugin looks for by name) and behind `routes`.
+    routerHook: routerHook,
     routes: {
-      register: function (path, component) { log("routes.register", path); return { dispose: function () { log("routes.remove", path); } }; },
-      addRoute: function (p) { log("routes.addRoute", p); },
-      removeRoute: function (p) { log("routes.removeRoute", p); },
+      register: function (path, component) {
+        routerHook.addRoute(path, component);
+        return { dispose: function () { routerHook.removeRoute(path); } };
+      },
+      addRoute: function (path, component, props) { routerHook.addRoute(path, component, props); },
+      removeRoute: function (path) { routerHook.removeRoute(path); },
+      addPatch: function (path, patch) { return routerHook.addPatch(path, patch); },
+      removePatch: function (path, patch) { return routerHook.removePatch(path, patch); },
     },
     notifications: {
       toast: function (opts) { opts = opts || {}; this.send(opts.title || "", opts.body || "", opts.durationMs); },

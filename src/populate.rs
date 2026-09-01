@@ -228,7 +228,9 @@ pub fn apply_update(
     curl_download(url, &tmp)?;
     if !is_real_bundle(&tmp) {
         let _ = fs::remove_file(&tmp);
-        return Err(format!("downloaded update looks truncated/placeholder: {url}"));
+        return Err(format!(
+            "downloaded update looks truncated/placeholder: {url}"
+        ));
     }
     fs::rename(&tmp, dest).map_err(|e| format!("swap update into place: {e}"))?;
     log_info("populate", &format!("Applied plugin update from {url}"));

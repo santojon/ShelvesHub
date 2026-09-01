@@ -138,7 +138,10 @@ impl Config {
             settings_dir,
             force_owner: match env::var("SHELVES_FORCE_OWNER") {
                 Ok(v) => v.eq_ignore_ascii_case("shelveshub"),
-                Err(_) => file.get("force_owner").and_then(Value::as_bool).unwrap_or(false),
+                Err(_) => file
+                    .get("force_owner")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
             },
             native_qam: cfg_bool(&file, "SHELVES_NATIVE_QAM", "native_qam"),
             recover_cmd: env::var("SHELVES_RECOVER_CMD")

@@ -4,7 +4,7 @@
 
 use std::fs;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
@@ -14,21 +14,40 @@ use crate::logger::{log_error, log_info, log_warning};
 
 use super::{FORCE_OWNER_GLOBAL, NATIVE_QAM_GLOBAL, OWNER_KIND};
 
-// The document-start script runs BEFORE Steam's webpack is up, so the preloaded
-// runtime + bundle are wrapped in a poll that defers them until React is findable
-// (the idle-boot point). Running there — before the QAM/home first mount — lets
-// the tab + home patches take on the first render, so no risky live-fiber
-// re-point (which black-screens on a late inject) is needed.
+// The document-start script runs BEFORE Steam's UI is up. Booting as soon as
+// React is merely *findable* runs our runtime+bundle DURING Steam's own first
+// paint, which collapses the renderer (black screen) — proven on-device: the
+// identical payload injected into a SETTLED renderer is completely healthy, but
+// at document-start it black-screens. So we defer the boot until Steam has
+// SETTLED and the main thread is IDLE (the state live-inject proved safe):
+//   `__shelvesSteamReady` — DOM signal that Steam mounted (readyState complete +
+//     SteamClient + a populated #root). Replaces the old webpack-`push` React
+//     probe, which was unreliable (returned no-req.c once the app was up).
+//   then a `requestAnimationFrame` idle gate — rAF gaps are ~17ms when idle and
+//     stall during boot's long tasks (requestIdleCallback never fires in Steam's
+//     renderer, but rAF does), so a run of smooth frames means Steam finished its
+//     heavy boot work. Bounded by frame-count and wall-clock caps so it always
+//     boots eventually. (Trade-off: booting post-settle means the home's first
+//     paint has no shelves yet — they appear on the next render/navigation.)
 const GATE_PREFIX: &str = r#"(function(){
-function __shelvesReady(){try{var k=Object.keys(window).filter(function(x){return x.indexOf("webpackChunk")===0&&Array.isArray(window[x])})[0];if(!k)return false;var req;window[k].push([[Symbol("shelves-ready")],{},function(r){req=r}]);if(!req||!req.c)return false;var ids=Object.keys(req.c);for(var i=0;i<ids.length;i++){try{var ex=req.c[ids[i]]&&req.c[ids[i]].exports;var m=ex&&(ex.default||ex);if(m&&typeof m.createElement==="function"&&typeof m.useState==="function")return true}catch(e){}}return false}catch(e){return false}}
+function __shelvesSteamReady(){try{if(document.readyState!=="complete")return false;if(typeof window.SteamClient==="undefined")return false;var root=document.getElementById("root");return !!(root&&root.children&&root.children.length>0)}catch(e){return false}}
 function __shelvesBoot(){
 "#;
 
 const GATE_SUFFIX: &str = r#"
 }
-if(__shelvesReady()){__shelvesBoot();}else{var __n=0,__iv=setInterval(function(){if(__shelvesReady()){clearInterval(__iv);__shelvesBoot();}else if(++__n>1200){clearInterval(__iv);}},50);}
+var __shBooted=false;function __shBootOnce(){if(__shBooted)return;__shBooted=true;try{__shelvesBoot()}catch(e){}}
+function __shPerfNow(){return (window.performance&&performance.now)?performance.now():Date.now()}
+function __shelvesGo(){var idle=0,last=__shPerfNow(),frames=0;function frame(){var now=__shPerfNow(),gap=now-last;last=now;if(gap<34)idle++;else idle=0;if(idle>=30){__shBootOnce();return}if(++frames>3600){__shBootOnce();return}requestAnimationFrame(frame)}if(typeof requestAnimationFrame==="function")requestAnimationFrame(frame);else setTimeout(__shBootOnce,3000)}
+if(__shelvesSteamReady()){__shelvesGo();}else{var __n=0,__iv=setInterval(function(){if(__shelvesSteamReady()){clearInterval(__iv);__shelvesGo();}else if(++__n>2400){clearInterval(__iv);__shelvesGo();}},50);}
+setTimeout(__shBootOnce,60000);
 })();
 "#;
+
+// The bundle is deferred until `window.__SHELVES_UI_READY__` so it never reads a
+// half-populated `host.ui` — shared with the normal inject path (see the constants
+// in the parent module).
+use super::{BUNDLE_GATE_PREFIX, BUNDLE_GATE_SUFFIX};
 
 /// Preload mode: register the host runtime at document-start on every (re)load
 /// of the Steam renderer, via browser-level auto-attach. The runtime then runs
@@ -74,14 +93,25 @@ pub(super) fn run_preload(config: Config) {
     source.push_str(GATE_PREFIX);
     source.push_str(&runtime);
     if !bundle.is_empty() {
-        source.push('\n');
+        // Defer the bundle's self-invoke until the runtime signals host.ui is ready.
+        source.push_str(BUNDLE_GATE_PREFIX);
         source.push_str(&bundle);
+        source.push_str(BUNDLE_GATE_SUFFIX);
     }
     source.push_str(GATE_SUFFIX);
 
     // A Steam restart tears down the CEF, dropping the browser connection —
-    // reconnect and re-arm auto-attach each time.
+    // reconnect and re-arm auto-attach each time. While Steam is DOWN the connect
+    // fails immediately; retrying at a fixed fast cadence floods the CEF debug
+    // endpoint with refused connects, which wedges it (EAGAIN) and then keeps the
+    // Steam UI from coming back after the restart. So back off exponentially on
+    // fast failures (Steam down) and reset once a session actually connects and
+    // runs for a while (connected, then Steam later restarts).
+    let base = Duration::from_millis(250);
+    let max = Duration::from_secs(5);
+    let mut delay = base;
     loop {
+        let started = Instant::now();
         match preload_session(&config, &source) {
             Ok(()) => {}
             Err(e) => log_warning(
@@ -89,7 +119,12 @@ pub(super) fn run_preload(config: Config) {
                 &format!("Preload session dropped ({e}) — reconnecting…"),
             ),
         }
-        thread::sleep(Duration::from_millis(250));
+        if started.elapsed() < Duration::from_secs(2) {
+            delay = (delay * 2).min(max); // fast failure → Steam is down; ease off
+        } else {
+            delay = base; // a real session ran → reset to the responsive cadence
+        }
+        thread::sleep(delay);
     }
 }
 

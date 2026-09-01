@@ -67,6 +67,7 @@ printf '%s\n' \
   "[Service]" \
   "Environment=SHELVES_NATIVE_QAM=${SHELVES_NATIVE_QAM:-1}" \
   "Environment=SHELVES_OWNER_SETTLE_SECS=${SHELVES_OWNER_SETTLE_SECS:-25}" \
+  "Environment=SHELVES_PRELOAD=${SHELVES_PRELOAD:-0}" \
   "ExecStart=$REMOTE_HOME_DIR/shelveshub" \
   "Restart=always" \
   "RestartSec=10" \
