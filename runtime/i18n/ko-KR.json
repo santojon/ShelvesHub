@@ -8,5 +8,7 @@
   "action_update_hub": "ShelvesHub 업데이트",
   "action_logs": "로그 보기",
   "action_auto_update": "자동 업데이트",
-  "action_back": "뒤로"
+  "action_back": "뒤로",
+  "logs_empty": "아직 로그가 없습니다.",
+  "logs_refresh": "새로 고침"
 }

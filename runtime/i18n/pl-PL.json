@@ -8,5 +8,7 @@
   "action_update_hub": "Zaktualizuj ShelvesHub",
   "action_logs": "Wyświetl dzienniki",
   "action_auto_update": "Aktualizacje automatyczne",
-  "action_back": "Wstecz"
+  "action_back": "Wstecz",
+  "logs_empty": "Brak dzienników.",
+  "logs_refresh": "Odśwież"
 }

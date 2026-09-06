@@ -243,6 +243,35 @@ fn dispatch(body: &str) -> String {
                 Err(e) => err(&format!("serialize logs: {e}")),
             }
         }
+        // Host runtime forwards its own leveled/scoped log entries here so the
+        // log viewer shows one merged stream (daemon + runtime). Args is an array
+        // of `{ level, scope, msg, t }`; each becomes a formatted ring line.
+        Some("pushLogs") => {
+            let mut n: u64 = 0;
+            if let Some(arr) = parsed
+                .as_ref()
+                .and_then(|v| v.get("args"))
+                .and_then(Value::as_array)
+            {
+                for e in arr {
+                    let level = match e.get("level").and_then(Value::as_str) {
+                        Some("ERROR") | Some("error") => crate::logger::LogLevel::Error,
+                        Some("WARN") | Some("warn") => crate::logger::LogLevel::Warn,
+                        _ => crate::logger::LogLevel::Info,
+                    };
+                    let scope = e.get("scope").and_then(Value::as_str).unwrap_or("UI");
+                    let msg = e
+                        .get("msg")
+                        .and_then(Value::as_str)
+                        .or_else(|| e.get("message").and_then(Value::as_str))
+                        .unwrap_or("");
+                    let t_ms = e.get("t").and_then(Value::as_i64);
+                    crate::logger::log_runtime(level, scope, msg, t_ms);
+                    n += 1;
+                }
+            }
+            ok(n.to_string())
+        }
         // Update ShelvesHub itself. Replacing + relaunching the running binary
         // from here is not safe yet, so report an honest status rather than a dead
         // button (in-place self-update is a future release).

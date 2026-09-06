@@ -8,5 +8,7 @@
   "action_update_hub": "ShelvesHub aktualisieren",
   "action_logs": "Protokolle anzeigen",
   "action_auto_update": "Automatische Updates",
-  "action_back": "Zurück"
+  "action_back": "Zurück",
+  "logs_empty": "Noch keine Protokolle.",
+  "logs_refresh": "Aktualisieren"
 }

@@ -35,8 +35,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   — written atomically with a rolling backup and healed from that backup if the
   file is ever missing or corrupt, so a crash or a bad shutdown never loses or
   corrupts it.
-- New requests `getConfig`, `setAutoUpdate` and `getLogs` back the fallback
-  panel's toggle and log view.
+- New requests `getConfig`, `setAutoUpdate`, `getLogs` and `pushLogs` back the
+  fallback panel's toggle and log view.
+- The **Logs view now shows one merged stream** — the host runtime and the
+  service side by side, newest first — where every line carries a **level**
+  (info / warning / error) and a **category**, colour-coded, with a refresh
+  control. The runtime forwards its warnings and errors (and, with verbose
+  logging on, everything) to the service so both surfaces read the same, and its
+  console output is now badged and categorized to match.
 - A **scenario test harness** (`scripts/harness.sh`) runs the injected runtime
   against a mock of the Steam UI in a headless browser, covering the native tab,
   coexistence mirroring, the sole-host path and the fallback panel without a
@@ -138,3 +144,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - The loader now injects into Steam's main app context (`SharedJSContext`)
   instead of the Big Picture wrapper window — verified on a real Steam Deck,
   where it correctly detects the Steam UI.
+
+### Fixed
+- The tree-patching the host lends to the plugin now preserves each component's
+  shape — memoized and forwarded components are wrapped in kind rather than
+  flattened to a plain function. A wrong wrapper could throw during a render and
+  blank the home; the home now renders reliably while the plugin's patches (such
+  as replacing the native recents row) still apply.
+- In standalone mode the card context menu now opens from the on-screen action
+  buttons, and the platform's React handles are published so the plugin's menu
+  and modal code find them.

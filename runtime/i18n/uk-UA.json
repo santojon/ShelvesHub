@@ -8,5 +8,7 @@
   "action_update_hub": "Оновити ShelvesHub",
   "action_logs": "Переглянути журнали",
   "action_auto_update": "Автоматичні оновлення",
-  "action_back": "Назад"
+  "action_back": "Назад",
+  "logs_empty": "Журналів ще немає.",
+  "logs_refresh": "Оновити"
 }

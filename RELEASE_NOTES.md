@@ -41,6 +41,10 @@ is pushed — the notes below are picked up and published with the release.
   to fetch the latest Deck Shelves and view logs, plus an **Automatic updates**
   on/off switch that sticks: it is saved with a rolling backup, so it survives a
   crash or a restart without losing or corrupting your settings.
+- **Logs you can actually read.** The Logs view now shows one stream — the host
+  runtime and the service together, newest first — with each line tagged by
+  level (info / warning / error) and category and colour-coded, plus a refresh
+  control, so tracking down a problem no longer means scraping a console.
 
 This release also includes the work that turned the loader from a skeleton
 into something that actually runs Deck Shelves.

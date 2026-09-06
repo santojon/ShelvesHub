@@ -149,6 +149,24 @@ Logs on the Deck:
 ssh deck@deck.local 'journalctl --user -u shelveshub -f'
 ```
 
+### Log structure and the in-app viewer
+
+Logs are **leveled** (`INFO` / `WARN` / `ERROR`) and **scoped** by category
+(service side: `loader`, `backend`, `rpc`, …; runtime side: `HOST`, `UI`,
+`ROUTER`, `QAM`, `MENU`, `NAV`, `RPC`, `UPDATE`). Each line is
+`[LEVEL] [timestamp] [scope] message`, and the service keeps a bounded ring of
+the most recent lines that the `getLogs` request returns.
+
+The host runtime forwards its own entries to that ring over the `pushLogs`
+request — warnings and errors always, and everything when verbose logging is on
+(`window.__SHELVES_LOG_VERBOSE__ = true` in the renderer) — so `getLogs` returns
+**one merged stream** of runtime and service lines. The runtime also keeps its
+last entries in `window.__SHELVES_LOG__` (objects `{t, level, scope, msg}`) for
+direct inspection over the DevTools connection.
+
+The **Logs** action in the host's own tab renders that merged stream as a badged,
+scrollable list (newest first) with a refresh control.
+
 ---
 
 ## Third-party dependencies & licensing

@@ -8,5 +8,7 @@
   "action_update_hub": "更新 ShelvesHub",
   "action_logs": "查看日志",
   "action_auto_update": "自动更新",
-  "action_back": "返回"
+  "action_back": "返回",
+  "logs_empty": "暂无日志。",
+  "logs_refresh": "刷新"
 }

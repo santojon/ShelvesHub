@@ -8,5 +8,7 @@
   "action_update_hub": "ShelvesHub'ı güncelle",
   "action_logs": "Günlükleri görüntüle",
   "action_auto_update": "Otomatik güncellemeler",
-  "action_back": "Geri"
+  "action_back": "Geri",
+  "logs_empty": "Henüz günlük yok.",
+  "logs_refresh": "Yenile"
 }

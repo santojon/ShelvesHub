@@ -8,5 +8,7 @@
   "action_update_hub": "ShelvesHub を更新",
   "action_logs": "ログを表示",
   "action_auto_update": "自動更新",
-  "action_back": "戻る"
+  "action_back": "戻る",
+  "logs_empty": "まだログがありません。",
+  "logs_refresh": "更新"
 }

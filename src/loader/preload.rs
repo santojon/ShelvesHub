@@ -14,33 +14,27 @@ use crate::logger::{log_error, log_info, log_warning};
 
 use super::{FORCE_OWNER_GLOBAL, NATIVE_QAM_GLOBAL, OWNER_KIND};
 
-// The document-start script runs BEFORE Steam's UI is up. Booting as soon as
-// React is merely *findable* runs our runtime+bundle DURING Steam's own first
-// paint, which collapses the renderer (black screen) — proven on-device: the
-// identical payload injected into a SETTLED renderer is completely healthy, but
-// at document-start it black-screens. So we defer the boot until Steam has
-// SETTLED and the main thread is IDLE (the state live-inject proved safe):
-//   `__shelvesSteamReady` — DOM signal that Steam mounted (readyState complete +
-//     SteamClient + a populated #root). Replaces the old webpack-`push` React
-//     probe, which was unreliable (returned no-req.c once the app was up).
-//   then a `requestAnimationFrame` idle gate — rAF gaps are ~17ms when idle and
-//     stall during boot's long tasks (requestIdleCallback never fires in Steam's
-//     renderer, but rAF does), so a run of smooth frames means Steam finished its
-//     heavy boot work. Bounded by frame-count and wall-clock caps so it always
-//     boots eventually. (Trade-off: booting post-settle means the home's first
-//     paint has no shelves yet — they appear on the next render/navigation.)
+// The document-start script runs BEFORE Steam's UI is up. It gates the boot on the
+// SAME Steam lifecycle signal the loader's loader uses (a plugin loader frontend/index.ts):
+//   window.App.BFinishedInitBeforeLogin() ?? window.App.BFinishedInitStageOne()
+// This is a Steam-blessed "ready for plugins, before login/home" point — early
+// enough that the runtime + plugin register BEFORE Steam builds the home nav tree
+// and finalizes system-button input routing (the timing gap that broke VIEW/OPTIONS
+// + edge-nav on a late inject), and safe (Steam is past stage-1 init, not mid-render
+// — the loader does its full webpack scan here without collapsing). It replaces the old
+// DOM-ready + rAF idle gate, which fired mid-boot and black-screened. Because the
+// routerHook's afterPatch lands before the home route first renders, routes / home
+// patch / recents-hide / edge-nav all take on first paint — no re-point needed.
 const GATE_PREFIX: &str = r#"(function(){
-function __shelvesSteamReady(){try{if(document.readyState!=="complete")return false;if(typeof window.SteamClient==="undefined")return false;var root=document.getElementById("root");return !!(root&&root.children&&root.children.length>0)}catch(e){return false}}
+function __shelvesSteamReady(){try{var a=window.App;return !!((a&&a.BFinishedInitBeforeLogin&&a.BFinishedInitBeforeLogin())||(a&&a.BFinishedInitStageOne&&a.BFinishedInitStageOne()))}catch(e){return false}}
 function __shelvesBoot(){
 "#;
 
 const GATE_SUFFIX: &str = r#"
 }
 var __shBooted=false;function __shBootOnce(){if(__shBooted)return;__shBooted=true;try{__shelvesBoot()}catch(e){}}
-function __shPerfNow(){return (window.performance&&performance.now)?performance.now():Date.now()}
-function __shelvesGo(){var idle=0,last=__shPerfNow(),frames=0;function frame(){var now=__shPerfNow(),gap=now-last;last=now;if(gap<34)idle++;else idle=0;if(idle>=30){__shBootOnce();return}if(++frames>3600){__shBootOnce();return}requestAnimationFrame(frame)}if(typeof requestAnimationFrame==="function")requestAnimationFrame(frame);else setTimeout(__shBootOnce,3000)}
-if(__shelvesSteamReady()){__shelvesGo();}else{var __n=0,__iv=setInterval(function(){if(__shelvesSteamReady()){clearInterval(__iv);__shelvesGo();}else if(++__n>2400){clearInterval(__iv);__shelvesGo();}},50);}
-setTimeout(__shBootOnce,60000);
+if(__shelvesSteamReady()){__shBootOnce();}else{var __iv=setInterval(function(){if(__shelvesSteamReady()){clearInterval(__iv);__shBootOnce();}},16);}
+setTimeout(__shBootOnce,120000);
 })();
 "#;
 
@@ -136,7 +130,16 @@ fn preload_session(config: &Config, source: &str) -> cdp::Result<()> {
     // `waitForDebuggerOnStart:false`: never leave a target paused (that wedges
     // the Steam UI); we register the document-start script as early as the
     // Target domain allows, which applies to that target's next document.
-    client.call(
+    //
+    // Fire-and-forget via `send`, NOT `call`: `call` reads until it sees the
+    // command's response id and DISCARDS every event that arrives meanwhile —
+    // and `setAutoAttach` immediately emits `attachedToTarget` for targets that
+    // ALREADY EXIST (the live SharedJSContext, and after a Steam restart the
+    // fresh renderer, which usually comes up during our reconnect). `call` would
+    // swallow exactly those attach events, so the poll loop below would never
+    // register and the runtime would never run. `send` lets the response and all
+    // `attachedToTarget` events (existing and new) flow to the poll loop.
+    client.send(
         "Target.setAutoAttach",
         json!({ "autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true }),
     )?;
@@ -186,15 +189,35 @@ fn preload_attached(client: &mut CdpClient, msg: &Value, source: &str, needle: O
                     || url.contains("steamloopback"))
         }
     };
+    let label = if title.is_empty() { url } else { title };
+    log_info(
+        "loader",
+        &format!("Preload: attached type={ttype} \"{label}\" (match={matches})"),
+    );
     if matches {
         let _ = client.send_on_session("Page.enable", json!({}), sid);
+        // Runs at this target's NEXT document creation — the early-load path for a
+        // fresh renderer whose document has not loaded yet.
         let _ = client.send_on_session(
             "Page.addScriptToEvaluateOnNewDocument",
             json!({ "source": source }),
             sid,
         );
-        let label = if title.is_empty() { url } else { title };
-        log_info("loader", &format!("Preload: registered on \"{label}\""));
+        // Also run it NOW. When we attach to an ALREADY-LOADED renderer — the live
+        // SharedJSContext, or a fresh one whose document loaded during our
+        // reconnect — the doc-start hook above missed the current document, so
+        // without this the runtime never runs until the next reload. The runtime's
+        // gate defers its real boot to the right Steam lifecycle point, and its
+        // `__shelvesRuntime` guard makes a later doc-start evaluation idempotent.
+        let _ = client.send_on_session(
+            "Runtime.evaluate",
+            json!({ "expression": source, "userGesture": true, "awaitPromise": false }),
+            sid,
+        );
+        log_info(
+            "loader",
+            &format!("Preload: registered + evaluated on \"{label}\""),
+        );
     }
     // Harmless no-op unless a target happens to be waiting for a debugger.
     let _ = client.send_on_session("Runtime.runIfWaitingForDebugger", json!({}), sid);

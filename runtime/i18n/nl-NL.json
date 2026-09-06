@@ -8,5 +8,7 @@
   "action_update_hub": "ShelvesHub bijwerken",
   "action_logs": "Logboeken bekijken",
   "action_auto_update": "Automatische updates",
-  "action_back": "Terug"
+  "action_back": "Terug",
+  "logs_empty": "Nog geen logs.",
+  "logs_refresh": "Vernieuwen"
 }

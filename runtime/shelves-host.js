@@ -25,20 +25,74 @@
   if (window.__SHELVES_HOST__ && window.__SHELVES_HOST__.__shelvesRuntime) {
     return window.__SHELVES_HOST__.version;
   }
-  function log() {
-    var a = [].slice.call(arguments);
-    try { console.log.apply(console, ["[shelves-host]"].concat(a)); } catch (e) {}
-    // Also buffer to a global so the daemon / devtools can read the runtime's own
-    // log via a single eval, without holding a live console stream open (which is
-    // hard to capture on-device). Bounded ring; newest last.
+  // ── Structured logging ────────────────────────────────────────────────────
+  // Leveled (INFO/WARN/ERROR) + scoped, the same shape the plugin uses, so the
+  // runtime and the daemon read as ONE consistent stream in the log viewer.
+  // Every entry is: styled in the renderer console (%c badges), buffered as
+  // {t,level,scope,msg} in `window.__SHELVES_LOG__` (bounded ring, newest last),
+  // and — WARN/ERROR always, INFO only when `window.__SHELVES_LOG_VERBOSE__` —
+  // forwarded (debounced set) to the daemon's ring via the `pushLogs` RPC so
+  // `getLogs` returns host + daemon lines together.
+  var LOG_SCOPE_COLOR = {
+    HOST: "#22c55e", UI: "#a78bfa", ROUTER: "#ec4899", QAM: "#06b6d4",
+    MENU: "#f59e0b", NAV: "#3b82f6", RPC: "#0ea5e9", UPDATE: "#14b8a6",
+  };
+  var LOG_LEVEL_BG = { INFO: "#0ea5e9", WARN: "#f59e0b", ERROR: "#ef4444" };
+  var _logQueue = [];
+  var _logFlushTimer = null;
+  function _logFlushNow() {
+    _logFlushTimer = null;
+    if (!_logQueue.length) return;
+    var set = _logQueue.splice(0, _logQueue.length);
     try {
-      var b = (window.__SHELVES_LOG__ = window.__SHELVES_LOG__ || []);
-      b.push(a.map(function (x) {
-        try { return typeof x === "string" ? x : JSON.stringify(x); } catch (e) { return String(x); }
-      }).join(" "));
-      if (b.length > 300) b.shift();
+      fetch(RPC_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "pushLogs", args: set }),
+      }).catch(function () {});
     } catch (e) {}
   }
+  function _logForward(entry) {
+    var verbose = false;
+    try { verbose = !!window.__SHELVES_LOG_VERBOSE__; } catch (e) {}
+    if (entry.level === "INFO" && !verbose) return; // INFO is opt-in (like the plugin)
+    _logQueue.push(entry);
+    if (_logQueue.length > 200) _logQueue.shift();
+    if (!_logFlushTimer) { try { _logFlushTimer = setTimeout(_logFlushNow, 1000); } catch (e) {} }
+  }
+  function _logText(args) {
+    return args.map(function (x) {
+      try { return typeof x === "string" ? x : JSON.stringify(x); } catch (e) { return String(x); }
+    }).join(" ");
+  }
+  function hlog(scope, level, msg, ctx) {
+    scope = scope || "HOST"; level = level || "INFO";
+    var text = ctx === undefined ? String(msg) : String(msg) + " " + _logText([ctx]);
+    try {
+      var sc = LOG_SCOPE_COLOR[scope] || "#8b5cf6";
+      var lb = LOG_LEVEL_BG[level] || "#0ea5e9";
+      var m = level === "ERROR" ? console.error : level === "WARN" ? console.warn : console.log;
+      m.call(console, "%cShelvesHub%c" + scope + "%c " + text,
+        "background:" + lb + ";color:#04121f;padding:1px 4px;font-weight:800;border-radius:2px 0 0 2px",
+        "background:" + sc + ";color:#04121f;padding:1px 4px;font-weight:800;border-radius:0 2px 2px 0",
+        "color:#93c5fd;font-weight:600");
+    } catch (e) {}
+    var entry = { t: Date.now(), level: level, scope: scope, msg: text };
+    try {
+      var b = (window.__SHELVES_LOG__ = window.__SHELVES_LOG__ || []);
+      b.push(entry);
+      if (b.length > 300) b.shift();
+    } catch (e) {}
+    _logForward(entry);
+    return entry;
+  }
+  function logInfo(scope, msg, ctx) { return hlog(scope, "INFO", msg, ctx); }
+  function logWarn(scope, msg, ctx) { return hlog(scope, "WARN", msg, ctx); }
+  function logError(scope, msg, ctx) { return hlog(scope, "ERROR", msg, ctx); }
+  // Back-compat: existing `log(...args)` call sites map to INFO/HOST with the
+  // joined-args message (same text as before) — so nothing that logs today
+  // changes beyond gaining a level/scope, the styled badge, and the buffer entry.
+  function log() { return hlog("HOST", "INFO", _logText([].slice.call(arguments))); }
 
   // ── Coexistence: never break another host, but always keep OUR tab ────────
   // Two separable things this runtime does:
@@ -147,7 +201,7 @@
         })[0];
         if (!key) { captureTried = false; return; } // webpack not up yet — retry later
         window[key].push([[Symbol("shelveshub")], {}, function (r) { req = r; }]);
-      } catch (e) { log("webpack capture failed:", e && e.message); }
+      } catch (e) { logWarn("HOST", "webpack capture failed: " + (e && e.message)); }
     }
 
     // Incremental: chunks keep loading long after boot starts, so every call
@@ -294,6 +348,18 @@
   var ReactStack = Steam.getReactStack();
   var React = ReactStack.React;
   function h() { return React.createElement.apply(React, arguments); }
+
+  // Steam's platform React globals (SP_REACT / SP_REACTDOM / SP_JSX). This Steam
+  // build does not set them in this JS context, but the plugin reads them directly
+  // (its React accessor and the menu passive-capture hook, which patches
+  // SP_REACT.createElement) — without them the game context menu can't build. Publish
+  // the SAME React stack we discovered from Steam's webpack, only when absent. These
+  // are Steam's own platform globals, not a loader surface — the host stays neutral.
+  try {
+    if (React && !window.SP_REACT) window.SP_REACT = React;
+    if (ReactStack.ReactDOM && !window.SP_REACTDOM) window.SP_REACTDOM = ReactStack.ReactDOM;
+    if (ReactStack.jsx && !window.SP_JSX) window.SP_JSX = ReactStack.jsx;
+  } catch (e) {}
 
   // Build a regex matching a minified `const {a:b,c:d}` prop destructuring, in
   // the given prop order (Steam component discovery technique).
@@ -523,7 +589,7 @@
   // UI — but CHUNKED (one step per timer tick), NEVER the sync all-at-once scan,
   // which stalls the main thread at boot → black screen. Signal readiness when the
   // scan lands so the preload gate releases the bundle only once host.ui exists.
-  if (React && !COEXIST) ensureUiChunked(function () { signalUiReady(); });
+  if (React && !COEXIST) ensureUiChunked(function () { augmentHostUi(signalUiReady); });
   // Coexist: the loader already resolved every Steam UI component — borrow them
   // directly. A webpack discovery scan on the INJECT path (even chunked) stalls the
   // renderer main thread long enough to collapse the Steam UI windows (black
@@ -580,7 +646,7 @@
       constructor(p) { super(p); this.state = { err: null }; }
       static getDerivedStateFromError(err) { return { err: err }; }
       componentDidCatch(e, info) {
-        log("panel render error:", e && e.message);
+        logWarn("UI", "panel render error: " + (e && e.message));
         try { window.__SHELVES_NATIVE_ERR__ = { message: e && e.message, stack: e && e.stack, componentStack: info && info.componentStack }; } catch (x) {}
       }
       render() {
@@ -593,23 +659,67 @@
   }
 
   // ── React tree patch helpers ──────────────────────────────────────────────
-  // GenericPatchHandler: (args, ret) => newRet. Wraps obj[prop].
-  function afterPatch(obj, prop, handler) {
-    var orig = obj[prop];
-    var patched = function () {
-      var ret = orig.apply(this, arguments);
-      try { return handler(arguments, ret); } catch (e) { log("patch handler:", e && e.message); return ret; }
+  // GenericPatchHandler: (args, ret) => newRet. This mirrors the tree-patcher
+  // semantics the plugin's menu / recents code relies on, so the same plugin
+  // works here as under a loader — but the internals stay neutrally named.
+  //
+  // The plugin patches `element.type` slots directly (the native recents replace
+  // does three nested `afterPatch(el, "type", …)`). On this Steam an `element.type`
+  // is very often a React `memo` — an OBJECT, not a callable — or a `forwardRef`.
+  // A wrapper that simply re-invokes the original as a function then breaks
+  // (a memo is not callable → throws at render → the whole route unmounts). So
+  // `afterPatch` PRESERVES the original's shape: it wraps a memo's inner render
+  // component (`.type`), a forwardRef's `.render`, or a plain function directly,
+  // and `handler.call(this, …)` binds `this` so class-render handlers can read
+  // `this.props` (the card menu's inject path resolves the shelf id from it).
+  function reactTag(v) { try { return v && v.$$typeof ? "" + v.$$typeof : null; } catch (e) { return null; } }
+  function wrapRenderFn(origFn, handler, options, patch) {
+    var f = function () {
+      var ret = origFn.apply(this, arguments);
+      try { ret = handler.call(this, arguments, ret); }
+      catch (e) { log("patch handler:", e && e.message); }
+      if (options.singleShot) patch.unpatch();
+      return ret;
     };
-    // Carry the original's own props and reported source forward. Steam matches
-    // components by `type.toString()` (webpack filters, render paths); a wrapper
-    // that reports its own source — or drops the original's static props —
-    // breaks that matching. Object.assign onto a FUNCTION target stays callable
-    // (the non-callable trap is only `Object.assign({}, fn)`).
-    try { Object.assign(patched, orig); } catch (e) {}
-    try { patched.toString = function () { return orig.toString(); }; } catch (e) {}
-    patched.__shelvesPatched = true;
-    obj[prop] = patched;
-    return orig;
+    // Carry the original's static props + reported source forward so Steam's
+    // `type.toString()` webpack/render matching keeps working.
+    try { Object.assign(f, origFn); } catch (e) {}
+    try { f.toString = function () { return origFn.toString(); }; } catch (e) {}
+    try { f.__shelvesPatched = true; } catch (e) {}
+    return f;
+  }
+  function afterPatch(object, property, handler, options) {
+    options = options || {};
+    var orig = object[property];
+    var patch = {
+      object: object, property: property, handler: handler, original: orig,
+      patchedFunction: null, hasUnpatched: false,
+      unpatch: function () {
+        if (patch.hasUnpatched) return;
+        try { object[property] = patch.original; } catch (e) {}
+        patch.hasUnpatched = true;
+      },
+    };
+    var replacement, tag = reactTag(orig);
+    if (tag && tag.indexOf("react.memo") >= 0 && orig.type) {
+      // memo → React renders memo.type(props); wrap the inner render component.
+      var memo = {}; for (var mk in orig) memo[mk] = orig[mk];
+      memo.type = wrapRenderFn(orig.type, handler, options, patch);
+      replacement = memo;
+    } else if (tag && tag.indexOf("react.forward_ref") >= 0 && typeof orig.render === "function") {
+      var fr = {}; for (var fk in orig) fr[fk] = orig[fk];
+      fr.render = wrapRenderFn(orig.render, handler, options, patch);
+      replacement = fr;
+    } else if (typeof orig === "function") {
+      replacement = wrapRenderFn(orig, handler, options, patch);
+    } else {
+      return patch; // nothing renderable/callable to wrap — leave the slot as-is
+    }
+    patch.patchedFunction = replacement;
+    try { replacement.__shelvesPatch = patch; } catch (e) {}
+    try { replacement.__shelvesPatched = true; } catch (e) {}
+    object[property] = replacement;
+    return patch;
   }
 
   // findInTree / findInReactTree: recursive search walking the given keys.
@@ -689,7 +799,7 @@
           try {
             var res = patch(Object.assign({}, route.props));
             if (res && res.children !== undefined) route.props.children = res.children;
-          } catch (e) { log("routePatch:", e && e.message); }
+          } catch (e) { log("routePatch:", route.props.path, e && e.message); }
         });
         try { if (route.props.children) route.props.children[IS_PATCHED] = true; } catch (e) {}
       }
@@ -762,7 +872,7 @@
         if (!et.type.__shelvesPatched) { afterPatch(et, "type", handleRender); log("routerHook: router patched."); }
         patched = true;
         return true;
-      } catch (e) { log("routerHook: patch failed:", e && e.message); return false; }
+      } catch (e) { logWarn("ROUTER", "patch failed: " + (e && e.message)); return false; }
     }
 
     // The route-declaring component is a memoized fiber that captured its render
@@ -886,7 +996,7 @@
         }
       } else if (prior && prior.indexOf("tripped") === 0) {
         tripped = true;
-        log("QAM native: breaker is tripped (" + prior + ") — overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
+        logError("QAM", "breaker is tripped (" + prior + ") — overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
       }
       if (tripped) NATIVE_QAM_ENABLED = false;
     }
@@ -1021,6 +1131,16 @@
       // null = still loading the setting; then a boolean mirrors the store.
       var au = React.useState(null);
       var autoUpdate = au[0], setAutoUpdate = au[1];
+      // null = hub view; an array = the log viewer showing merged daemon+runtime lines.
+      var lg = React.useState(null);
+      var logs = lg[0], setLogs = lg[1];
+      function viewLogs() {
+        setBusy("logs");
+        hostRpc("getLogs", 200).then(function (r) {
+          setBusy(null);
+          setLogs(r && r.ok && Array.isArray(r.result) ? r.result : []);
+        }, function () { setBusy(null); setLogs([]); });
+      }
       React.useEffect(function () {
         var alive = true;
         hostRpc("getConfig").then(function (r) {
@@ -1032,6 +1152,7 @@
       }, []);
       var on = autoUpdate === true;
       function run(id, method) {
+        if (method === "getLogs") { viewLogs(); return; }
         setBusy(id);
         hostRpc(method).then(function () { setBusy(null); }, function () { setBusy(null); });
       }
@@ -1042,6 +1163,36 @@
           setBusy(null);
           if (r && r.ok && r.result && typeof r.result.auto_update === "boolean") setAutoUpdate(r.result.auto_update);
         }, function () { setBusy(null); setAutoUpdate(!next); });
+      }
+
+      // ── Log viewer ── merged daemon + runtime lines (getLogs), each parsed
+      // from `[LEVEL] [ts] [scope] msg` into a badged row (level colour + scope),
+      // so it reads like the plugin's Advanced → Logs. Newest first, scrollable.
+      if (logs !== null) {
+        var parseLine = function (line) {
+          var m = /^\[(\w+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+([\s\S]*)$/.exec(String(line));
+          return m ? { level: m[1].toUpperCase(), ts: m[2], scope: m[3], msg: m[4] }
+                   : { level: "INFO", ts: "", scope: "", msg: String(line) };
+        };
+        var logRow = function (line, i) {
+          var p = parseLine(line);
+          var lb = LOG_LEVEL_BG[p.level] || "#64748b";
+          var sc = LOG_SCOPE_COLOR[p.scope] || "rgba(255,255,255,0.14)";
+          return h("div", { key: "l" + i, style: { display: "flex", gap: "6px", alignItems: "baseline", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: "11px", lineHeight: "1.35", fontFamily: "monospace" } },
+            h("span", { style: { flex: "0 0 auto", background: lb, color: "#04121f", padding: "0 4px", borderRadius: "2px", fontWeight: "800" } }, p.level),
+            p.scope ? h("span", { style: { flex: "0 0 auto", background: sc, color: "#04121f", padding: "0 4px", borderRadius: "2px", fontWeight: "700" } }, p.scope) : null,
+            h("span", { style: { flex: "1 1 auto", color: "rgba(255,255,255,0.88)", wordBreak: "break-word", whiteSpace: "pre-wrap" } }, p.msg),
+            p.ts ? h("span", { style: { flex: "0 0 auto", color: "rgba(255,255,255,0.4)" } }, p.ts.slice(11)) : null);
+        };
+        var rows = logs.length
+          ? logs.slice().reverse().map(logRow)
+          : [h("div", { key: "empty", style: { opacity: 0.6, fontSize: "13px", padding: "8px 0" } }, I18N.t("logs_empty"))];
+        return h("div", { style: { padding: "12px 14px", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }, "data-fb": "logs-view" },
+          h("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flex: "0 0 auto" } },
+            clickable(function () { setLogs(null); }, { "data-fb": "logs-back", style: { display: "flex", alignItems: "center", justifyContent: "center", width: "36px", height: "32px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", cursor: "pointer", border: "none" } }, [fbIcon("back")]),
+            h("div", { style: { fontSize: "16px", fontWeight: "700", flex: "1 1 auto" } }, I18N.t("action_logs")),
+            clickable(function () { viewLogs(); }, { "data-fb": "logs-refresh", style: { fontSize: "12px", padding: "6px 10px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", cursor: "pointer", border: "none", color: "#fff" } }, [I18N.t("logs_refresh")])),
+          h("div", { style: { flex: "1 1 auto", overflowY: "auto", minHeight: "0" } }, rows));
       }
 
       // ── Native Steam components (theme-aware, gamepad-focusable, native focus
@@ -1076,9 +1227,11 @@
           actBtn("download", "download", "action_download", "populateBundle"),
           actBtn("update", "update", "action_update_hub", "selfUpdate"),
           actBtn("logs", "logs", "action_logs", "getLogs"),
-          // The toggle row goes edge-to-edge like the plugin's (its own native
-          // padding insets the label/switch), so it breaks out of the section's
-          // horizontal padding — the focus highlight then reaches the QAM edge.
+          // The toggle row goes edge-to-edge (breaks out of the section's horizontal
+          // padding) so the focus highlight reaches the QAM edge, exactly like the
+          // plugin's rows. The label/switch are then inset by padding the Field's
+          // CONTENT below (via the discovered gamepadDialog Field class), NOT this
+          // wrapper — so the highlight stays end-to-end while the content is spaced.
           h("div", { className: "shelves-toggle-row", style: { marginTop: "10px", marginLeft: "-14px", marginRight: "-14px" } }, h(TF, {
             label: I18N.t("action_auto_update"),
             checked: on, disabled: !!busy && busy !== "auto",
@@ -1189,11 +1342,20 @@
         "box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;" +
         "border-radius:4px;}";
       // Our edge-to-edge toggle row's Field has 0 horizontal padding, so its label/
-      // switch touch the sides. Pad the Field's CONTENT (not the wrapper): the
-      // highlight/background still reaches the QAM edge, only the content insets.
-      // Field class comes from the loader (coexist); scoped to our toggle row.
+      // switch would touch the QAM edges. Pad the Field's CONTENT (not the wrapper):
+      // the highlight/background still reaches the QAM edge, only the content insets.
+      // The Field class is Steam's own gamepadDialog CSS class — discovered from the
+      // webpack in sole mode (no loader), or borrowed from the loader in coexist.
       try {
-        var _fieldCls = (window.DFL && window.DFL.gamepadDialogClasses && window.DFL.gamepadDialogClasses.Field) || "";
+        var _gpdCls = null;
+        try {
+          _gpdCls = Steam.findModule(function (e) {
+            return e && typeof e === "object" && typeof e.Field === "string" &&
+              typeof e.GamepadDialogContent === "string" && typeof e.StandardPadding === "string";
+          });
+        } catch (e) {}
+        var _fieldCls = (_gpdCls && _gpdCls.Field) ||
+          (window.DFL && window.DFL.gamepadDialogClasses && window.DFL.gamepadDialogClasses.Field) || "";
         if (_fieldCls) ringCss += ".shelves-panel .shelves-toggle-row ." + _fieldCls +
           "{padding-left:14px!important;padding-right:14px!important;}";
       } catch (e) {}
@@ -1252,7 +1414,7 @@
           e[NATIVE_TAB_NAME] = NATIVE_TAB_KEY;
           log("QAM enum registered: key " + NATIVE_TAB_KEY + " = " + NATIVE_TAB_NAME + ".");
         }
-      } catch (err) { log("QAM registerTabEnum error:", err && err.message); }
+      } catch (err) { logWarn("QAM", "registerTabEnum error: " + (err && err.message)); }
     }
 
     function buildTab() {
@@ -1303,7 +1465,7 @@
         for (var i = 0; i < tabs.length; i++) { if (tabs[i] && tabs[i].key === after) { at = i + 1; break; } }
       }
       tabs.splice(at, 0, tab); // insert in place (array mutable; element props may be frozen)
-      if (!confirmed) { confirmed = true; tripClear(); log("QAM native: tab inserted, healthy."); }
+      if (!confirmed) { confirmed = true; tripClear(); logInfo("QAM", "tab inserted, healthy."); }
     }
 
     // Reach the tabs array from a render output and push our tab. The array
@@ -1412,16 +1574,24 @@
         if (bv.type.__shelvesPatched) { patched = true; return true; }
         // Register our key so the tab is first-class (class + focus/visibility).
         registerTabEnum();
-        // Arm the breaker (timestamped): if this session never confirms a healthy
-        // patched render, a LATER boot (arm gone stale) trips and stands down — but a
-        // boot double-inject (recent arm) re-arms instead of tripping. Sole/owner
-        // only — COEXIST borrows the UI and can't collapse, so it never arms.
-        if (!COEXIST) tripSet("armed:" + Date.now());
+        // The breaker is armed by the RISKY operations only — the handler's live
+        // render (below) and the mounted-consumer re-point — NOT here at patch
+        // install. Arming at install left the breaker armed on every boot until the
+        // user first OPENED the QAM (the only place it confirmed); a reload before
+        // that (e.g. a Steam restart) then read a stale arm and false-tripped,
+        // silently killing the tab on all later boots. Arming around the actual
+        // render means a boot that never opens the QAM never arms, so it can't
+        // false-trip — while a render that truly tears the UI down still leaves a
+        // stale arm that trips the next boot.
         var handler = function (args, ret) {
           try {
+            // Arm just before our first live render into the QAM tree; a healthy
+            // insert clears it (injectTabs → confirmed). Sole/owner only — COEXIST
+            // borrows the UI and cannot collapse.
+            if (!confirmed && !COEXIST) tripSet("armed:" + Date.now());
             if (args && args[0] && typeof args[0].visible !== "undefined") lastVisible = args[0].visible;
             injectTabs(ret);
-          } catch (e) { log("QAM append error (ignored):", e && e.message); }
+          } catch (e) { logWarn("QAM", "append error (ignored): " + (e && e.message)); }
           return ret;
         };
         // The menu has two consumers that both render the tab list; patch each
@@ -1451,7 +1621,7 @@
         else { log("QAM native: mounted re-point OFF (opt out via __SHELVES_FIBER_REPOINT__=false)."); }
       } catch (e) {
         tripClear();
-        log("QAM installPatch failed:", e && e.message);
+        logWarn("QAM", "installPatch failed: " + (e && e.message));
       }
       return patched;
     }
@@ -1468,6 +1638,10 @@
           return n && (n.elementType === bv || (embedded && n.elementType === embedded));
         });
         if (node && node.elementType && node.elementType.type) {
+          // Re-point only prepares the fiber; the actual render (and any collapse
+          // risk) happens later through the handler, which arms itself. Arming here
+          // would leave a lingering arm when the QAM is closed (no render follows),
+          // re-creating the false-trip. So do NOT arm here.
           node.type = node.elementType.type;
           if (node.alternate) node.alternate.type = node.type;
           log("QAM native: re-pointed already-mounted consumer.");
@@ -1616,6 +1790,269 @@
     if (q && pend && pend.length) { for (var pi = 0; pi < pend.length; pi++) { try { q.registerPanel(pend[pi]); } catch (e) {} } pend.length = 0; }
   } catch (e) {}
 
+  // Build the loader-style class map: the array of Steam CSS-class modules (each
+  // an object whose values are all obfuscated class-name strings). The plugin reads
+  // this off the loader global for stable native-class discovery; without a loader
+  // it falls back to fragile DOM probing. Mirrors the loader's own filter.
+  function buildClassMap() {
+    var out = [];
+    try {
+      var it = Steam.modules.values(), n;
+      while (!(n = it.next()).done) {
+        var m = n.value;
+        if (!m || typeof m !== "object" || m.__esModule) continue;
+        var keys = Object.keys(m);
+        if (keys.length === 0 || keys.length >= 1000) continue;
+        if (keys.length === 1 && m.version) continue; // a version-only module
+        if (m.AboutSettings) continue; // the localization module
+        var allStrings = true;
+        for (var i = 0; i < keys.length; i++) {
+          var d = Object.getOwnPropertyDescriptor(m, keys[i]);
+          if ((d && d.get) || typeof m[keys[i]] !== "string") { allStrings = false; break; }
+        }
+        if (allStrings) out.push(m);
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  // A class module discovered by a set of required string keys (the loader exposes
+  // several such maps: gamepadDialog, gamepadContextMenu, quickAccessMenu, …).
+  function findClassModule(requiredKeys) {
+    return Steam.findModule(function (m) {
+      if (!m || typeof m !== "object") return false;
+      for (var i = 0; i < requiredKeys.length; i++) {
+        if (typeof m[requiredKeys[i]] !== "string") return false;
+      }
+      return true;
+    });
+  }
+
+  // React's internal hook dispatcher — needed to stub hooks for fakeRenderComponent
+  // (renders a function component off-tree to read its output, so the plugin's menu
+  // discovery can locate the class/type to patch). Handles the React 18 secret-
+  // internals shape and the React 19 one.
+  function internalHooks() {
+    try {
+      var d = React && React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+      if (d && d.ReactCurrentDispatcher && d.ReactCurrentDispatcher.current) return d.ReactCurrentDispatcher.current;
+    } catch (e) {}
+    try {
+      var ci = React && React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+      if (ci) { for (var k in ci) { var p = ci[k]; if (p && p.useEffect) return p; } }
+    } catch (e) {}
+    return null;
+  }
+  var _savedHooks = null;
+  function applyHookStubs(customHooks) {
+    var h = internalHooks();
+    if (!h) return null;
+    _savedHooks = {
+      useContext: h.useContext, useCallback: h.useCallback, useLayoutEffect: h.useLayoutEffect,
+      useEffect: h.useEffect, useMemo: h.useMemo, useRef: h.useRef, useState: h.useState,
+    };
+    h.useCallback = function (cb) { return cb; };
+    h.useContext = function (cb) { return cb && cb._currentValue; };
+    h.useLayoutEffect = function () {};
+    h.useMemo = function (cb) { return cb; };
+    h.useEffect = function () {};
+    h.useRef = function (val) { return { current: val || {} }; };
+    h.useState = function (v) { var val = v; return [val, function (n) { val = n; }]; };
+    if (customHooks) { for (var ck in customHooks) h[ck] = customHooks[ck]; }
+    return h;
+  }
+  function removeHookStubs() {
+    var h = internalHooks();
+    if (h && _savedHooks) { for (var k in _savedHooks) h[k] = _savedHooks[k]; }
+    _savedHooks = null;
+  }
+  // Restore the dispatcher even if the component throws mid-render — a leaked
+  // stub would corrupt the NEXT real render (this runs from an event handler, so
+  // no React render is interleaved, but the finally keeps a throw from leaking).
+  function fakeRenderComponent(fun, customHooks) {
+    var h = applyHookStubs(customHooks);
+    try { return fun(h); }
+    catch (e) { return null; }
+    finally { removeHookStubs(); }
+  }
+  // Loader-style findModuleChild: first truthy result of `filter` over each
+  // module (and its `.default`).
+  function findModuleChild(filter) {
+    var it = Steam.modules.values(), n;
+    while (!(n = it.next()).done) {
+      var m = n.value, variants = [m && m.default, m];
+      for (var i = 0; i < variants.length; i++) {
+        try { var r = filter(variants[i]); if (r) return r; } catch (e) {}
+      }
+    }
+    return undefined;
+  }
+
+  // Sole host: the plugin resolves its frontend-library helpers per host (it falls
+  // back to `__SHELVES_HOST__.ui` when no loader is present — the plugin's neutral
+  // path). Our `host.ui` already carries the discovered Steam components; augment it
+  // IN PLACE with the extra helpers the plugin's menu/class code needs (webpack
+  // finders, react-tree/patch utilities, the GamepadButton enum, menu sub-components,
+  // and the native class maps). We do NOT publish any loader-named global (`window.DFL`)
+  // — the host stays neutral; the plugin reads these off the host adapter instead.
+  //
+  // The plugin's UI shim reads MenuGroup + the native class maps at bundle-boot, so
+  // they must be resolved BEFORE the bundle is released (signalUiReady). But those
+  // module scans are heavy — running them all synchronously blocks the main thread
+  // long enough to starve STEAM's own home render (observed: whole home comes up
+  // empty). So run them CHUNKED (one per timer tick, yielding between — like the UI
+  // scan), and only call `onDone` (signalUiReady) once they finish.
+  function augmentHostUi(onDone) {
+    if (UI.__loaderAugmented || !React) { if (onDone) onDone(); return; }
+    UI.__loaderAugmented = true;
+    // Cheap assignments (references + literals — no scans): safe to do now. These
+    // are all references the plugin calls ON DEMAND (menu open, native-recents
+    // render) — never invoked here at boot — so publishing them is free. The
+    // tree-patcher (afterPatch) preserves the original's React shape (memo /
+    // forwardRef / function), which the native recents replace requires — it
+    // patches `element.type` slots that are `memo` OBJECTS on this Steam, and a
+    // naive function wrapper threw at render and unmounted the whole route.
+    try {
+      UI.staticClasses = {};
+      UI.afterPatch = afterPatch;
+      UI.findInTree = findInTree;
+      UI.findInReactTree = findInReactTree;
+      UI.findModuleByExport = Steam.findModuleByExport;
+      UI.findModuleChild = findModuleChild;
+      UI.fakeRenderComponent = fakeRenderComponent;
+      UI.GamepadButton = {
+        INVALID: 0, OK: 1, CANCEL: 2, SECONDARY: 3, OPTIONS: 4, BUMPER_LEFT: 5, BUMPER_RIGHT: 6,
+        TRIGGER_LEFT: 7, TRIGGER_RIGHT: 8, DIR_UP: 9, DIR_DOWN: 10, DIR_LEFT: 11, DIR_RIGHT: 12,
+        SELECT: 13, START: 14, LSTICK_CLICK: 15, RSTICK_CLICK: 16, LSTICK_TOUCH: 17, RSTICK_TOUCH: 18,
+        LPAD_TOUCH: 19, LPAD_CLICK: 20, RPAD_TOUCH: 21, RPAD_CLICK: 22, REAR_LEFT_UPPER: 23,
+        REAR_LEFT_LOWER: 24, REAR_RIGHT_UPPER: 25, REAR_RIGHT_LOWER: 26, STEAM_GUIDE: 27, STEAM_QUICK_MENU: 28,
+      };
+    } catch (e) {}
+    // Heavy module scans — one per tick.
+    var tasks = [
+      function () {
+        UI.MenuSeparator = Steam.findModuleExport(function (e) {
+          return typeof e === "function" && /className:.+?\.ContextMenuSeparator/.test(srcOf(e));
+        });
+      },
+      function () {
+        var groupMod = Steam.findModuleByExport(function (e) {
+          try {
+            return !!(e && e.prototype && e.prototype.Focus && e.prototype.OnOKButton &&
+              e.prototype.render && srcOf(e.prototype.render).indexOf('"emphasis"==this.props.tone') >= 0);
+          } catch (x) { return false; }
+        });
+        UI.MenuGroup = groupMod && Object.values(groupMod).find(function (e) {
+          return typeof e === "function" && srcOf(e).indexOf("bInGamepadUI:") >= 0;
+        });
+      },
+      function () { UI.gamepadDialogClasses = findClassModule(["Field", "GamepadDialogContent", "StandardPadding"]); },
+      function () { UI.gamepadContextMenuClasses = findClassModule(["ContextMenuSeparator", "contextMenuItem"]) || findClassModule(["contextMenuItem"]); },
+      function () { UI.quickAccessMenuClasses = findClassModule(["QuickAccessMenu", "Tab"]) || findClassModule(["Tab", "TabBadge"]); },
+      function () { UI.quickAccessControlsClasses = findClassModule(["ScrollPanel", "PanelSection"]) || findClassModule(["PanelSection", "PanelSectionTitle"]); },
+      function () { UI.scrollPanelClasses = findClassModule(["ScrollPanel", "ScrollY"]); },
+      function () { UI.classMap = buildClassMap(); },
+    ];
+    var i = 0;
+    (function next() {
+      if (i >= tasks.length) {
+        log("host.ui augmented with loader-equivalent helpers (neutral, no global).");
+        if (onDone) onDone();
+        return;
+      }
+      try { tasks[i](); } catch (e) {}
+      i++;
+      setTimeout(next, 60);
+    })();
+  }
+
+  // The root node of Steam's main home gamepad-nav tree (GamepadUI_Full_Root), or
+  // null. Shared by the hidden-node prune and the unhandled-button bridge below.
+  function mainNavRoot() {
+    var ctrl = window.FocusNavController;
+    if (!ctrl) return null;
+    var ctx = ctrl.m_ActiveContext || ctrl.m_LastActiveContext;
+    if (!ctx || !ctx.m_rgGamepadNavigationTrees) return null;
+    var trees = ctx.m_rgGamepadNavigationTrees;
+    var arr = Array.isArray(trees) ? trees : (trees.values ? Array.from(trees.values()) : []);
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] && arr[i].m_ID === "GamepadUI_Full_Root") return arr[i].Root || arr[i].m_Root || null;
+    }
+    return null;
+  }
+
+  // Sole host: hidden native home sections (recents "Jogo atual", news/friends
+  // "Novidades") stay 0x0 but remain FOCUSABLE gamepad nav nodes, so DOWN from the
+  // search bar stops on each invisible node before reaching our shelves (extra dpad
+  // presses). Under a loader they never linger as nav nodes; here they do. Remove 0x0
+  // nodes that are NOT ours from the home nav tree — but REVERSIBLY: each removed node
+  // is recorded, and the moment its element becomes visible again (the plugin
+  // re-enabled that section) it is put straight back, so re-enabling recents / the
+  // home tabs still works. The 0x0 test only ever removes ALREADY-hidden nodes, so it
+  // obeys whatever the plugin shows or hides — the plugin needs no changes. Steam
+  // rebuilds the tree on real remounts (not on a CSS-only show/hide, which is exactly
+  // why the restore step is needed), so this re-runs on a modest interval.
+  var _prunedNodes = [];
+  function pruneHiddenNavNodes() {
+    try {
+      var root = mainNavRoot();
+      if (!root) return;
+      var zeroSize = function (el) {
+        if (!el || !el.getBoundingClientRect) return false;
+        var r = el.getBoundingClientRect();
+        return r.width === 0 && r.height === 0;
+      };
+      var ours = function (el) {
+        try {
+          var m = el.ownerDocument && el.ownerDocument.getElementById("deck-shelves-home-root");
+          return !!(m && m.contains(el));
+        } catch (e) { return false; }
+      };
+      var touched = false;
+      // Restore pass: any node we removed whose element is now VISIBLE again goes
+      // back into its parent (nav order is fixed by clearing m_bChildrenSorted, so
+      // Steam re-sorts by DOM position). Drop records whose element has detached.
+      for (var k = _prunedNodes.length - 1; k >= 0; k--) {
+        var rec = _prunedNodes[k];
+        var el = rec.node && rec.node.m_element;
+        var attached = !!(el && el.ownerDocument && el.ownerDocument.contains(el));
+        if (!attached) { _prunedNodes.splice(k, 1); continue; }
+        if (!zeroSize(el)) {
+          try {
+            if (rec.parent && rec.parent.m_rgChildren && rec.parent.m_rgChildren.indexOf(rec.node) < 0) {
+              rec.parent.m_rgChildren.push(rec.node);
+              rec.parent.m_bChildrenSorted = false;
+              touched = true;
+            }
+          } catch (e) {}
+          _prunedNodes.splice(k, 1);
+        }
+      }
+      // Prune pass: remove currently-hidden 0x0 native nodes, recording each so the
+      // restore pass can put it back when the plugin shows that section again.
+      (function walk(node, depth) {
+        if (!node || !node.m_rgChildren || depth > 6) return;
+        var kids = node.m_rgChildren;
+        for (var j = kids.length - 1; j >= 0; j--) {
+          var c = kids[j];
+          if (c && c.m_element && zeroSize(c.m_element) && !ours(c.m_element)) {
+            kids.splice(j, 1);
+            _prunedNodes.push({ node: c, parent: node });
+            touched = true;
+          } else {
+            walk(c, depth + 1);
+          }
+        }
+      })(root, 0);
+      if (touched) { try { root.m_bChildrenSorted = false; } catch (e) {} }
+    } catch (e) {}
+  }
+  var _navPruneTimer = null;
+  function startNavPrune() {
+    if (_navPruneTimer) return;
+    _navPruneTimer = setInterval(pruneHiddenNavNodes, 500);
+  }
+
   // (A) Host API — installed only when we are NOT coexisting with another
   // loader. In coexistence we leave `__SHELVES_HOST__` unset so the other
   // loader's Deck Shelves keeps selecting its own adapter (safety invariant).
@@ -1623,6 +2060,10 @@
   if (!COEXIST) {
     window.__SHELVES_HOST__ = host;
     try { window.__DECK_SHELVES_OWNER__ = "shelveshub"; } catch (e) {}
+    startNavPrune();
+    // NOTE: host.ui is augmented with loader-equivalent helpers from the UI-scan's
+    // onDone (before signalUiReady), so it's complete when the bundle's shim binds
+    // to `__SHELVES_HOST__.ui` — see the ensureUiChunked call near the UI section.
   } else {
     try { if (!window.__DECK_SHELVES_OWNER__) window.__DECK_SHELVES_OWNER__ = "decky"; } catch (e) {}
   }

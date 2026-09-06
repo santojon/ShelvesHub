@@ -8,5 +8,7 @@
   "action_update_hub": "Actualizar ShelvesHub",
   "action_logs": "Ver registros",
   "action_auto_update": "Actualizaciones automáticas",
-  "action_back": "Atrás"
+  "action_back": "Atrás",
+  "logs_empty": "Aún no hay registros.",
+  "logs_refresh": "Actualizar"
 }
