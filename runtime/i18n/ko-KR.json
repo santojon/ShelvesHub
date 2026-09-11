@@ -1,6 +1,7 @@
 {
   "hub_title": "ShelvesHub",
   "hub_update_restart": "ShelvesHub 업데이트 사용 가능 — 다시 시작하여 적용하세요",
+  "hub_update_staged": "ShelvesHub 업데이트를 다운로드했습니다 — 다시 시작하여 완료하세요",
   "hub_subtitle": "호스트 옵션 및 유지 관리.",
   "unavailable_title": "Deck Shelves가 로드되지 않았습니다",
   "unavailable_body": "이 호스트에서 Deck Shelves 번들을 실행할 수 없습니다.",
@@ -35,5 +36,6 @@
   "cfg_bundle": "Bundle path",
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
-  "sec_updates": "업데이트"
+  "sec_updates": "업데이트",
+  "updates_managed_elsewhere": "여기서는 플러그인 로더가 업데이트를 관리합니다."
 }

@@ -75,6 +75,9 @@ BROWSER_ARGS=(
   --no-first-run --no-default-browser-check --disable-features=Translate
   "file://$HARNESS"
 )
+# Chromium as root in a container needs --no-sandbox and a larger-than-default
+# shared-memory workaround; opt in via HARNESS_NO_SANDBOX=1.
+[[ "${HARNESS_NO_SANDBOX:-0}" == "1" ]] && BROWSER_ARGS=(--no-sandbox --disable-dev-shm-usage "${BROWSER_ARGS[@]}")
 [[ "$HEADLESS" == "1" ]] && BROWSER_ARGS=(--headless=new "${BROWSER_ARGS[@]}")
 
 echo "[i] Launching browser..."

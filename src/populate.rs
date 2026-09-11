@@ -407,18 +407,272 @@ fn newest_hub_release_tag(releases_json: &str) -> Option<String> {
     None
 }
 
-/// Scaffold for the hub's OWN in-place self-update — NOT yet implemented. A
-/// running binary cannot reliably overwrite itself while executing on every OS,
-/// so applying a hub update needs a download-to-side + swap-on-restart (or a
-/// service-manager restart). Until that lands, the update check records the
-/// available version (`state::set_pending_hub_update`) and the hub screen shows a
-/// "restart to update" notice. Wire the real per-OS download + staged swap +
-/// restart here when ready; the check + notification plumbing is already in place.
-pub fn apply_hub_update(_prerelease: bool) -> Result<String, String> {
-    Err(
-        "hub self-update is not yet implemented — update via the installer/service, then restart"
-            .to_string(),
-    )
+/// The release-package asset names for the running OS, in priority order. Each
+/// package ships the same binary for its platform (the SteamOS and desktop-Linux
+/// packages carry the byte-identical x86_64 binary and differ only in installer
+/// scripts, which self-update does not need), so any match works — the list is
+/// just so a missing preferred asset falls back to the alternate.
+fn hub_package_candidates() -> &'static [&'static str] {
+    #[cfg(target_os = "macos")]
+    {
+        &["shelveshub-macos.tar.gz"]
+    }
+    #[cfg(target_os = "windows")]
+    {
+        &["shelveshub-windows.zip"]
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        // Prefer the SteamOS package on the Deck; either yields the same binary.
+        if is_steamos() {
+            &["shelveshub-steamos.tar.gz", "shelveshub-linux.tar.gz"]
+        } else {
+            &["shelveshub-linux.tar.gz", "shelveshub-steamos.tar.gz"]
+        }
+    }
+}
+
+/// The binary file name inside a release package for this OS.
+fn hub_binary_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "shelveshub.exe"
+    } else {
+        "shelveshub"
+    }
+}
+
+/// Best-effort SteamOS detection (the Deck), for choosing the preferred package.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn is_steamos() -> bool {
+    fs::read_to_string("/etc/os-release")
+        .map(|s| s.to_lowercase().contains("steamos"))
+        .unwrap_or(false)
+}
+
+/// The `browser_download_url` of the first asset in a release whose name matches
+/// one of `names` (pure — tested without the network).
+fn find_asset_url_by_names(release: &serde_json::Value, names: &[&str]) -> Option<String> {
+    let assets = release.get("assets")?.as_array()?;
+    for want in names {
+        for asset in assets {
+            if asset.get("name").and_then(serde_json::Value::as_str) == Some(*want) {
+                if let Some(url) = asset
+                    .get("browser_download_url")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    return Some(url.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Does the file head look like a native executable for the running OS? Guards
+/// against staging a truncated/HTML error page over the daemon binary (pure).
+fn looks_like_executable(head: &[u8]) -> bool {
+    if cfg!(target_os = "windows") {
+        head.starts_with(b"MZ") // PE / DOS stub
+    } else if cfg!(target_os = "macos") {
+        // Mach-O (either endianness) or a fat/universal binary.
+        matches!(
+            head,
+            [0xFE, 0xED, 0xFA, 0xCE, ..]
+                | [0xCE, 0xFA, 0xED, 0xFE, ..]
+                | [0xFE, 0xED, 0xFA, 0xCF, ..]
+                | [0xCF, 0xFA, 0xED, 0xFE, ..]
+                | [0xCA, 0xFE, 0xBA, 0xBE, ..]
+                | [0xBE, 0xBA, 0xFE, 0xCA, ..]
+        )
+    } else {
+        head.starts_with(&[0x7F, b'E', b'L', b'F']) // ELF
+    }
+}
+
+/// The newest ShelvesHub release object for the channel (whole JSON, so the tag
+/// AND the asset list are available). `prerelease` widens to the beta channel.
+fn latest_hub_release(prerelease: bool) -> Result<serde_json::Value, String> {
+    if prerelease {
+        let all: serde_json::Value = serde_json::from_str(&curl_text(HUB_RELEASES_ALL_URL)?)
+            .map_err(|e| format!("parse releases: {e}"))?;
+        all.as_array()
+            .and_then(|rs| {
+                rs.iter()
+                    .find(|r| r.get("draft").and_then(serde_json::Value::as_bool) != Some(true))
+                    .cloned()
+            })
+            .ok_or_else(|| "no published ShelvesHub release found".to_string())
+    } else {
+        serde_json::from_str(&curl_text(HUB_RELEASES_LATEST_URL)?)
+            .map_err(|e| format!("parse release: {e}"))
+    }
+}
+
+/// Extract `archive` into `dest` via `tar` (GNU tar for `.tar.gz`; bsdtar, present
+/// on Windows 10+, transparently handles the `.zip` used there).
+fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
+    fs::create_dir_all(dest).map_err(|e| format!("create {}: {e}", dest.display()))?;
+    let name = archive.to_string_lossy().to_lowercase();
+    let flag = if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
+        "-xzf"
+    } else {
+        "-xf"
+    };
+    let status = Command::new("tar")
+        .arg(flag)
+        .arg(archive)
+        .arg("-C")
+        .arg(dest)
+        .status()
+        .map_err(|e| format!("tar (is it installed?): {e}"))?;
+    if !status.success() {
+        return Err(format!(
+            "tar exit {:?} extracting {}",
+            status.code(),
+            archive.display()
+        ));
+    }
+    Ok(())
+}
+
+/// Put `new_bin` in place of the running executable at `exe`. A running binary
+/// cannot be overwritten in place uniformly across OSes, so this stages the swap:
+/// the change lands on disk now and the NEW binary runs after the next restart.
+///  - Unix: write beside `exe` on the same filesystem, mark it executable, then
+///    atomically `rename` over `exe` (the running process keeps its open inode).
+///  - Windows: move the running `exe` aside to `*.old` (allowed while running),
+///    then copy the new binary into `exe`; the stale `*.old` is cleaned up on the
+///    next start.
+fn stage_binary_swap(new_bin: &Path, exe: &Path) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let old = exe.with_extension("old");
+        let _ = fs::remove_file(&old);
+        fs::rename(exe, &old).map_err(|e| format!("move running exe aside: {e}"))?;
+        if let Err(e) = copy_into(new_bin, exe) {
+            let _ = fs::rename(&old, exe); // roll back so the service still runs
+            return Err(e);
+        }
+        Ok(())
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let staged = exe.with_file_name(format!(
+            "{}.new",
+            exe.file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("shelveshub")
+        ));
+        copy_into(new_bin, &staged)?;
+        fs::set_permissions(&staged, fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("chmod staged binary: {e}"))?;
+        fs::rename(&staged, exe).map_err(|e| {
+            let _ = fs::remove_file(&staged);
+            format!("replace running binary: {e}")
+        })?;
+        Ok(())
+    }
+}
+
+/// Best-effort removal of leftover self-update artifacts beside the running
+/// binary: an interrupted staged copy (`*.new`) on any OS, and the moved-aside
+/// previous binary (`*.old`) on Windows (which could not be deleted while it was
+/// the running process, but can be now). Never fails the daemon.
+pub fn cleanup_stale_update_artifacts() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    if let Some(name) = exe.file_name().and_then(|s| s.to_str()) {
+        let _ = fs::remove_file(exe.with_file_name(format!("{name}.new")));
+    }
+    #[cfg(windows)]
+    {
+        let _ = fs::remove_file(exe.with_extension("old"));
+    }
+}
+
+/// Whether the daemon is running under a service manager that will relaunch it
+/// automatically after a clean exit (macOS launchd `KeepAlive`, systemd
+/// `Restart=always`) — so the caller can restart into the staged binary by
+/// exiting. A manually-launched daemon (dev runs) returns `false`: it stays up
+/// and the "restart to apply" notice tells the user to restart.
+pub fn under_relaunching_service() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::env::var("XPC_SERVICE_NAME")
+            .map(|v| !v.is_empty() && v != "0")
+            .unwrap_or(false)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::env::var_os("INVOCATION_ID").is_some()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        false
+    }
+}
+
+/// Apply the hub's OWN update: download the newest release package for this OS,
+/// verify the binary inside it, and stage it over the running executable (see
+/// `stage_binary_swap`). Returns the release tag that was staged on success. The
+/// staged binary takes effect on the next restart — the caller decides whether to
+/// restart now (via a relaunching service manager) or leave the "restart to
+/// apply" notice. `prerelease` widens to the beta channel.
+pub fn apply_hub_update(prerelease: bool) -> Result<String, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("locate running binary: {e}"))?;
+    let release = latest_hub_release(prerelease)?;
+    let tag = release_tag(&release).ok_or_else(|| "release has no usable tag".to_string())?;
+
+    let url = find_asset_url_by_names(&release, hub_package_candidates()).ok_or_else(|| {
+        format!(
+            "release {tag} has no package for this platform ({})",
+            hub_package_candidates().first().copied().unwrap_or("?")
+        )
+    })?;
+
+    // Work in a unique temp dir so a partial download/extract never touches the
+    // install directory until the verified swap.
+    let work = std::env::temp_dir().join(format!("shelveshub-update-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&work);
+    fs::create_dir_all(&work).map_err(|e| format!("create work dir: {e}"))?;
+
+    let cleanup = |r: Result<String, String>| {
+        let _ = fs::remove_dir_all(&work);
+        r
+    };
+
+    let archive = work.join(url.rsplit('/').next().unwrap_or("package"));
+    if let Err(e) = curl_download(&url, &archive) {
+        return cleanup(Err(e));
+    }
+    if let Err(e) = extract_archive(&archive, &work) {
+        return cleanup(Err(e));
+    }
+
+    let new_bin = work.join(hub_binary_name());
+    let head = match fs::read(&new_bin) {
+        Ok(bytes) => bytes,
+        Err(e) => return cleanup(Err(format!("extracted binary missing: {e}"))),
+    };
+    if head.len() < REAL_BUNDLE_MIN_BYTES as usize || !looks_like_executable(&head) {
+        return cleanup(Err(
+            "downloaded binary failed verification (truncated or not an executable)".to_string(),
+        ));
+    }
+
+    if let Err(e) = stage_binary_swap(&new_bin, &exe) {
+        return cleanup(Err(e));
+    }
+    log_info(
+        "populate",
+        &format!(
+            "Hub update {tag} staged over {} (restart to apply).",
+            exe.display()
+        ),
+    );
+    cleanup(Ok(tag))
 }
 
 /// Given a GitHub release-download URL (`.../<owner>/<repo>/releases/download/<tag>/<file>`),
@@ -569,6 +823,85 @@ mod tests {
             find_iife_asset_url(json).as_deref(),
             Some("https://x/index.iife.js")
         );
+    }
+
+    #[test]
+    fn hub_update_finds_platform_package_in_priority_order() {
+        let release: serde_json::Value = serde_json::from_str(
+            r#"{"assets":[
+                {"name":"shelveshub-linux.tar.gz","browser_download_url":"https://x/linux"},
+                {"name":"shelveshub-steamos.tar.gz","browser_download_url":"https://x/steamos"},
+                {"name":"shelveshub-macos.tar.gz","browser_download_url":"https://x/mac"}
+            ]}"#,
+        )
+        .unwrap();
+        // First name in the list wins; a missing preferred name falls back.
+        assert_eq!(
+            find_asset_url_by_names(
+                &release,
+                &["shelveshub-steamos.tar.gz", "shelveshub-linux.tar.gz"]
+            )
+            .as_deref(),
+            Some("https://x/steamos")
+        );
+        assert_eq!(
+            find_asset_url_by_names(
+                &release,
+                &["shelveshub-windows.zip", "shelveshub-macos.tar.gz"]
+            )
+            .as_deref(),
+            Some("https://x/mac")
+        );
+        assert!(find_asset_url_by_names(&release, &["shelveshub-windows.zip"]).is_none());
+        // The running OS always has at least one candidate name.
+        assert!(!hub_package_candidates().is_empty());
+    }
+
+    #[test]
+    fn stage_binary_swap_replaces_the_target_in_place() {
+        let dir = std::env::temp_dir().join(format!("shelveshub-swaptest-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join(if cfg!(windows) {
+            "shelveshub.exe"
+        } else {
+            "shelveshub"
+        });
+        let new_bin = dir.join("downloaded");
+        fs::write(&exe, b"OLD-BINARY-CONTENTS").unwrap();
+        fs::write(&new_bin, b"NEW-BINARY-CONTENTS-1234567890").unwrap();
+
+        stage_binary_swap(&new_bin, &exe).unwrap();
+
+        // The target path now carries the new contents.
+        assert_eq!(fs::read(&exe).unwrap(), b"NEW-BINARY-CONTENTS-1234567890");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&exe).unwrap().permissions().mode() & 0o111,
+                0o111
+            );
+        }
+        #[cfg(windows)]
+        {
+            // The running binary was moved aside for cleanup on next start.
+            assert!(exe.with_extension("old").exists());
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn executable_magic_recognized_for_this_os() {
+        // The right magic for the compile target passes; obvious non-executables fail.
+        #[cfg(target_os = "windows")]
+        assert!(looks_like_executable(b"MZ\x90\x00"));
+        #[cfg(target_os = "macos")]
+        assert!(looks_like_executable(&[0xCF, 0xFA, 0xED, 0xFE, 0, 0]));
+        #[cfg(all(unix, not(target_os = "macos")))]
+        assert!(looks_like_executable(&[0x7F, b'E', b'L', b'F', 0, 0]));
+        assert!(!looks_like_executable(b"<!DOCTYPE html>"));
+        assert!(!looks_like_executable(b""));
     }
 
     #[test]

@@ -79,16 +79,22 @@ sleep 0.6
 HEADLESS_FLAG="--headless=new"
 [[ "$HEADLESS" == "0" ]] && HEADLESS_FLAG=""
 
+# Chromium refuses to run as root without --no-sandbox, and Docker's default
+# /dev/shm is too small for it — opt in when running inside a container.
+SANDBOX_FLAGS=""
+[[ "${HARNESS_NO_SANDBOX:-0}" == "1" ]] && SANDBOX_FLAGS="--no-sandbox --disable-dev-shm-usage"
+
 # assertion expression per scenario (returns "PASS …" or "FAIL …")
 assert_for() {
   case "$1" in
-    coexist-mirror)   echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.owner==="decky"&&r.specs.indexOf("deck-shelves")>=0&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
-    coexist-fallback) echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var uiOk=!!(fu&&fu.panel&&fu.hasToggle&&fu.buttons.length===4&&fu.buttons.every(function(b){return b.present&&b.hasIcon;}));var ok=r.bridge&&!r.hostInstalled&&r.specs.length===0&&r.shelvesTabPresent&&!/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&uiOk;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
+    coexist-mirror)   echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.owner==="decky"&&r.qamOwner==="shelveshub"&&r.specs.indexOf("deck-shelves")>=0&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
+    coexist-fallback) echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var uiOk=!!(fu&&fu.panel&&fu.coexistNote&&!fu.download&&!fu.update&&fu.sections.indexOf("sec-updates")>=0&&fu.sections.indexOf("sec-troubleshooting")>=0&&fu.version);var ok=r.bridge&&!r.hostInstalled&&r.specs.length===0&&r.shelvesTabPresent&&!/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&uiOk;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     sole-host)        echo 'var r=__HARNESS_REPORT__();var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.shelvesTabPresent;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     sole-host-mirror) echo 'var r=__HARNESS_REPORT__();var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.specs.indexOf("deck-shelves")>=0&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
+    sole-host-fallback) echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var uiOk=!!(fu&&fu.panel&&!fu.coexistNote&&fu.download&&fu.update&&fu.updateToggles>=1&&fu.sections.indexOf("sec-updates")>=0&&fu.sections.indexOf("sec-troubleshooting")>=0&&fu.sections.indexOf("sec-config")>=0&&fu.version);var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.specs.length===0&&r.shelvesTabPresent&&uiOk&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     coexist-late)     echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.shelvesTabPresent;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
-    coexist-native)   echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.owner==="decky"&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&(r.openHub||(r.nativeUi&&r.nativeUi.section))&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
-    coexist-fallback-native) echo 'var r=__HARNESS_REPORT__();var nu=r.nativeUi;var ok=r.bridge&&!r.hostInstalled&&r.specs.length===0&&r.shelvesTabPresent&&!!nu&&nu.section&&nu.buttons===3&&nu.toggle&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
+    coexist-native)   echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.owner==="decky"&&r.qamOwner==="shelveshub"&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
+    coexist-fallback-native) echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var uiOk=!!(fu&&fu.panel&&fu.coexistNote&&!fu.download&&fu.sections.indexOf("sec-updates")>=0&&fu.version);var ok=r.bridge&&!r.hostInstalled&&r.specs.length===0&&r.shelvesTabPresent&&uiOk&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
   esac
 }
 
@@ -96,7 +102,7 @@ run_scenario() {
   local sc="$1"
   local udir; udir="$(mktemp -d)"
   # shellcheck disable=SC2086
-  "$BROWSER_BIN" $HEADLESS_FLAG --remote-debugging-port="$PORT" --user-data-dir="$udir" \
+  "$BROWSER_BIN" $HEADLESS_FLAG $SANDBOX_FLAGS --remote-debugging-port="$PORT" --user-data-dir="$udir" \
     --no-first-run --no-default-browser-check --disable-gpu --disable-extensions \
     --disable-background-networking "$PAGE?scenario=$sc" >/dev/null 2>&1 &
   local pid=$!
@@ -120,7 +126,7 @@ run_scenario() {
 
 echo "[i] Running scenarios…"
 FAILED=0
-for sc in coexist-mirror coexist-fallback sole-host sole-host-mirror coexist-late coexist-native coexist-fallback-native; do
+for sc in coexist-mirror coexist-fallback sole-host sole-host-mirror sole-host-fallback coexist-late coexist-native coexist-fallback-native; do
   run_scenario "$sc" || FAILED=$((FAILED + 1))
 done
 

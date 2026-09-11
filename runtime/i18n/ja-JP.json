@@ -1,6 +1,7 @@
 {
   "hub_title": "ShelvesHub",
   "hub_update_restart": "ShelvesHub の更新があります — 再起動して適用してください",
+  "hub_update_staged": "ShelvesHub の更新をダウンロードしました — 再起動して完了してください",
   "hub_subtitle": "ホストのオプションとメンテナンス。",
   "unavailable_title": "Deck Shelves が読み込まれていません",
   "unavailable_body": "このホストで Deck Shelves バンドルを起動できませんでした。",
@@ -35,5 +36,6 @@
   "cfg_bundle": "Bundle path",
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
-  "sec_updates": "アップデート"
+  "sec_updates": "アップデート",
+  "updates_managed_elsewhere": "ここでは更新はプラグインローダーが管理します。"
 }

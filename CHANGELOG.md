@@ -44,15 +44,21 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - **Automatic updates now actually update.** While the host is running Deck
   Shelves itself and automatic updates are on, it periodically checks the Deck
   Shelves releases for a newer version on the chosen channel, and when one is
-  found it downloads it, swaps the bundle in place, and reloads — so Deck Shelves
-  stays current on its own and its "update available" prompt clears. The check is
-  throttled, only runs when the host owns the bundle (never alongside another
-  host that manages its own copy), and never replaces a working bundle unless a
-  genuinely newer release is published.
-- When a newer version of the host **itself** is available and automatic updates
-  are on, the host's own panel now shows a **"restart to update"** notice
-  (localized). Applying a host update in place is not automatic yet — restart the
-  service to pick it up.
+  found it downloads it and swaps the bundle **in place — without reloading the
+  whole interface**: the new bundle is applied by re-running Deck Shelves on the
+  live view, so it stays current on its own and its "update available" prompt
+  clears with no visible restart of the Steam UI. The same in-place swap also
+  picks up a bundle replaced on disk by hand. The check is throttled, only runs
+  when the host owns the bundle (never alongside another host that manages its own
+  copy), and never replaces a working bundle unless a genuinely newer release is
+  published.
+- The host can now **update itself**. When a newer host version is available, the
+  **Update ShelvesHub** action downloads the release package for this platform,
+  verifies the binary, and swaps it in place; when the host runs as a managed
+  service it then restarts itself to finish, otherwise it shows a localized
+  **"downloaded — restart to finish"** notice. A newer version detected while
+  automatic updates are on still surfaces the localized **"restart to update"**
+  notice.
 - The **Logs view now shows one merged stream** — the host runtime and the
   service side by side, newest first — where every line carries a **level**
   (info / warning / error) and a **category**, colour-coded, with a refresh
@@ -65,6 +71,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   against a mock of the Steam UI in a headless browser, covering the native tab,
   coexistence mirroring, the sole-host path and the fallback panel without a
   device.
+- The service **finds Steam's debug connection even if its port changes.** It
+  probes the configured port first and falls back to the well-known ports, at
+  start-up and again if the connection is lost for a while — so an environment
+  where Steam's port differs no longer needs a manual override.
 - The service now **obtains the Deck Shelves bundle on its own** when it is not
   already present: it uses a local copy if there is one, otherwise copies the
   built bundle from an installed plugin loader, otherwise downloads the newest
@@ -185,3 +195,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - In standalone mode the card context menu now opens from the on-screen action
   buttons, and the platform's React handles are published so the plugin's menu
   and modal code find them.
+- Alongside another host, **exactly one Deck Shelves tab now appears** — the
+  host's. When the host adds its own tab, Deck Shelves retracts the early tab it
+  had shown on its own, and only once the host's tab has actually appeared, so
+  there is never a moment with two tabs or none.
+- The injection loop can no longer spin. A poll interval of `0` (from an edited
+  config) previously made the loop retry with no pause, and when the Steam
+  renderer was unreachable it would keep opening connections until the system ran
+  out of them. The interval is now floored at one second, so the service always
+  waits between attempts and stays idle when there is nothing to do.

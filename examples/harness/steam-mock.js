@@ -36,6 +36,43 @@
   var S = window.__HARNESS__ || {};
   var MEMO = Symbol.for("react.memo");
 
+  // ── Hermetic RPC stub ───────────────────────────────────────────────────────
+  // The runtime fetches `getRuntimeConfig` / `getConfig` / `getLogs` from the
+  // daemon's RPC endpoint to populate the fallback panel's Configuration / Updates
+  // / Logs sections. In the harness there is no daemon, so we stub `fetch` to the
+  // RPC endpoint with canned, representative results — the scenario harness stays
+  // hermetic (no live daemon needed, no silent dependence on one). Only the RPC
+  // endpoint is intercepted; anything else falls through to the real fetch.
+  (function stubRpc() {
+    var RPC_HOST = "127.0.0.1:60123"; // matches the runtime's default RPC_ENDPOINT
+    var results = {
+      getRuntimeConfig: {
+        loader_possible: true, native_qam: true, prerelease: false,
+        interval_secs: 30, owner_settle_secs: 0, force_owner: "", recover_cmd: "",
+        paused: false, pending_hub_update: null, hub_update_staged: false,
+        config_file: "/mock/shelveshub.config.json",
+      },
+      getConfig: {
+        auto_update: false, auto_update_hub: true, hub_prerelease: false,
+        auto_update_plugin: true, plugin_prerelease: false, version: "0.0.1",
+        paused: false, pending_hub_update: null, hub_update_staged: false,
+      },
+      getLogs: [],
+    };
+    var realFetch = window.fetch ? window.fetch.bind(window) : null;
+    window.fetch = function (url, opts) {
+      try {
+        if (typeof url === "string" && url.indexOf(RPC_HOST) >= 0) {
+          var method = "";
+          try { method = JSON.parse((opts && opts.body) || "{}").method || ""; } catch (e) {}
+          var result = Object.prototype.hasOwnProperty.call(results, method) ? results[method] : true;
+          return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, result: result }); } });
+        }
+      } catch (e) {}
+      return realFetch ? realFetch(url, opts) : Promise.reject(new Error("no fetch"));
+    };
+  })();
+
   // ── QuickAccessTab enum (Steam's numeric tab keys) ────────────────────────
   var QuickAccessTab = {
     Notifications: 0,
@@ -285,6 +322,7 @@
       hostInstalled: !!window.__SHELVES_HOST__,
       owner: String(window.__DECK_SHELVES_OWNER__ || ""),
       bridge: !!q,
+      qamOwner: String(window.__SHELVES_QAM_OWNER__ || ""),
       mode: q && q.mode ? String(q.mode()) : "n/a",
       specs: q && q._specs ? Object.keys(q._specs) : [],
       pending: (window.__SHELVES_QAM_PENDING__ || []).length,
@@ -296,18 +334,21 @@
       fallbackUi: (function () {
         var panel = document.querySelector("[data-fb-panel]");
         if (!panel) return null;
-        var buttons = ["download", "update", "logs", "auto"].map(function (id) {
-          var el = panel.querySelector('[data-fb="' + id + '"]');
-          return { id: id, present: !!el, hasIcon: !!(el && el.querySelector("svg")) };
+        var sections = [].map.call(panel.querySelectorAll('[data-fb^="sec-"]'), function (n) {
+          return (n.getAttribute("data-fb") || "").replace(/^sec-/, "");
         });
-        return { panel: true, buttons: buttons, hasToggle: !!panel.querySelector('[data-fb="auto"]') };
-      })(),
-      nativeUi: (function () {
-        if (!document.querySelector('[data-native="section"]')) return null;
+        var has = function (id) { return !!panel.querySelector('[data-fb="' + id + '"]'); };
         return {
-          section: true,
-          buttons: document.querySelectorAll('[data-native="button"]').length,
-          toggle: !!document.querySelector('[data-native="toggle"]'),
+          panel: true,
+          sections: sections,
+          download: has("download"),
+          update: has("update"),
+          logs: has("logs"),
+          disableHub: has("adv-pause"),
+          coexistNote: has("updates-note"),
+          version: has("version"),
+          // The auto-update hierarchy renders one row per visible toggle (data-fb="upd-*").
+          updateToggles: panel.querySelectorAll('[data-fb^="upd-"]').length,
         };
       })(),
       openHub: !!document.querySelector('[data-fb="open-hub"]'),

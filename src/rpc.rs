@@ -157,7 +157,15 @@ fn dispatch(body: &str) -> String {
         // API — record it as an explicit init confirmation from the bundle side.
         Some("bundleReady") => {
             state::set_bundle_ready(true);
-            log_info("rpc", "Bundle reported ready (initialisation confirmed).");
+            match state::millis_since_injected() {
+                Some(ms) => log_info(
+                    "rpc",
+                    &format!(
+                        "Bundle reported ready (initialisation confirmed) — {ms}ms after injection."
+                    ),
+                ),
+                None => log_info("rpc", "Bundle reported ready (initialisation confirmed)."),
+            }
             ok("true".to_string())
         }
         // Health of the hosted Python backend (loader-local, not proxied).
@@ -214,6 +222,10 @@ fn dispatch(body: &str) -> String {
                         obj.insert(
                             "pending_hub_update".to_string(),
                             state::pending_hub_update().map_or(Value::Null, Value::String),
+                        );
+                        obj.insert(
+                            "hub_update_staged".to_string(),
+                            Value::Bool(state::hub_update_staged()),
                         );
                         obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
                         obj.insert(
@@ -361,6 +373,10 @@ fn dispatch(body: &str) -> String {
                     state::pending_hub_update().map_or(Value::Null, Value::String),
                 );
                 obj.insert(
+                    "hub_update_staged".to_string(),
+                    Value::Bool(state::hub_update_staged()),
+                );
+                obj.insert(
                     "config_file".to_string(),
                     state::config_file_path()
                         .map_or(Value::Null, |p| Value::String(p.display().to_string())),
@@ -452,13 +468,46 @@ fn dispatch(body: &str) -> String {
             }
             ok(n.to_string())
         }
-        // Update ShelvesHub itself. Replacing + relaunching the running binary
-        // from here is not safe yet, so report an honest status rather than a dead
-        // button (in-place self-update is a future release).
-        Some("selfUpdate") => ok(format!(
-            r#"{{"updated":false,"version":"{}","message":"Update ShelvesHub through its installer or service; in-place self-update is not yet available."}}"#,
-            env!("CARGO_PKG_VERSION")
-        )),
+        // Update ShelvesHub itself: download the newest release package for this
+        // OS and stage its binary over the running one (see populate::apply_hub_update).
+        // A running binary can't be swapped live, so this takes effect on restart —
+        // when running under a relaunching service manager the daemon restarts itself
+        // (respond first, then exit); otherwise the "restart to apply" notice stands.
+        Some("selfUpdate") => {
+            let prerelease = state::hub_config_path()
+                .map(|p| crate::store::load(p).hub_prerelease)
+                .unwrap_or(false);
+            match crate::populate::apply_hub_update(prerelease) {
+                Ok(tag) => {
+                    state::set_hub_update_staged(true);
+                    state::set_pending_hub_update(Some(tag.clone()));
+                    let restarting = crate::populate::under_relaunching_service();
+                    log_info(
+                        "rpc",
+                        &format!("Hub self-update {tag} staged (restarting={restarting})."),
+                    );
+                    if restarting {
+                        // Exit after the response flushes so the service manager
+                        // relaunches into the staged binary. The renderer keeps the
+                        // current runtime until the new daemon re-injects.
+                        std::thread::spawn(|| {
+                            std::thread::sleep(std::time::Duration::from_millis(1500));
+                            log_info("rpc", "Restarting to apply hub update.");
+                            std::process::exit(0);
+                        });
+                    }
+                    ok(format!(
+                        r#"{{"updated":true,"restarting":{restarting},"version":"{}","tag":"{}"}}"#,
+                        env!("CARGO_PKG_VERSION"),
+                        tag.replace('"', "'")
+                    ))
+                }
+                Err(e) => {
+                    log_error("rpc", &format!("selfUpdate failed: {e}"));
+                    err(&e)
+                }
+            }
+        }
         // Anything else is a data method owned by the hosted Python backend.
         Some(other) if backend::enabled() => {
             let args = parsed

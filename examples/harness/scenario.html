@@ -13,6 +13,7 @@
           "coexist-fallback": { coexist: true, pluginPanel: false },
           "sole-host": { coexist: false },
           "sole-host-mirror": { coexist: false, pluginPanel: true },
+          "sole-host-fallback": { coexist: false, pluginPanel: false },
           "coexist-late": { coexist: true, pluginPanel: true, lateMount: true },
           "coexist-native": { coexist: true, pluginPanel: true, nativeUi: true },
           "coexist-fallback-native": { coexist: true, pluginPanel: false, nativeUi: true },
@@ -28,6 +29,41 @@
         window.addEventListener("error", function (e) {
           window.__HARNESS_ERRORS__.push(String((e && (e.message || e.error)) || e));
         });
+
+        // Hermetic RPC: the runtime fetches getConfig / getRuntimeConfig / getLogs
+        // from the daemon (127.0.0.1:60123) to build the fallback panel's Updates,
+        // Configuration and Status sections. The harness has no daemon, so stub the
+        // endpoint with canned responses shaped exactly like the daemon's
+        // `{ok, result}` — otherwise those sections silently don't render and the
+        // harness would only pass where a real daemon happens to be listening.
+        var RC = {
+          cef_host: "127.0.0.1", cef_port: 8080, rpc_addr: "127.0.0.1:60123",
+          interval_secs: 30, owner_settle_secs: 0, native_qam: true, prerelease: false,
+          force_owner: false, recover_cmd: "", bundle_path: "/harness/bundle.js",
+          backend: "", version: "0.0.0-harness", loader_possible: true,
+          editable: ["native_qam", "prerelease", "owner_settle_secs", "interval_secs", "force_owner", "recover_cmd"],
+          paused: false, pending_hub_update: null, hub_update_staged: false,
+          config_file: "/harness/shelveshub.config.json",
+        };
+        var UC = {
+          auto_update: false, auto_update_hub: true, hub_prerelease: false,
+          auto_update_plugin: true, plugin_prerelease: false, bundle_tag: "",
+          pending_hub_update: null, hub_update_staged: false, paused: false, version: "0.0.0-harness",
+        };
+        var RESP = { getRuntimeConfig: RC, getConfig: UC, getLogs: [] };
+        var _fetch = window.fetch;
+        window.fetch = function (url, opts) {
+          try {
+            if (opts && typeof opts.body === "string") {
+              var b = JSON.parse(opts.body);
+              if (b && b.method) {
+                var result = b.method in RESP ? RESP[b.method] : true;
+                return Promise.resolve(new Response(JSON.stringify({ ok: true, result: result }), { status: 200, headers: { "Content-Type": "application/json" } }));
+              }
+            }
+          } catch (e) {}
+          return _fetch ? _fetch.apply(this, arguments) : Promise.reject(new Error("fetch unavailable"));
+        };
       })();
     </script>
     <script src="vendor/react.js"></script>

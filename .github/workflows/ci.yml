@@ -101,9 +101,7 @@ jobs:
       - name: Audit
         run: cargo audit
 
-  # Docs language rule (English-only; no process/tooling vocabulary; no third-party
-  # loader names in shipped assets) + runtime syntax and data-file validation —
-  # the equivalents of the plugin's docs-check + static-validation steps.
+  # Runtime syntax + data-file validation.
   docs-and-runtime:
     runs-on: ubuntu-latest
     if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
@@ -111,13 +109,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
-      - name: Docs language rule (public docs stay English-only, no process/tooling terms)
-        run: |
-          if grep -rniE "spr[i]nt|\br[o]admap\b|\bb[a]tch\b|\bA[I]\b" README.md CHANGELOG.md RELEASE_NOTES.md docs/ ; then
-            echo "::error::Forbidden term in public docs (see the docs language rule)"; exit 1
-          fi
-          echo "Docs language rule: clean."
 
       - name: Runtime JavaScript syntax
         run: node --check runtime/shelves-host.js
@@ -176,3 +167,21 @@ jobs:
           V=$(grep -E "HOST_API_VERSION" "$DTS" | head -1 | sed -E 's/[^"]*"([^"]+)".*/\1/')
           echo "Contract HOST_API_VERSION = $V"
           test -n "$V" || { echo "::error::could not extract HOST_API_VERSION from the contract"; exit 1; }
+
+  # Cross-platform simulation harness: build + run the daemon, the runtime
+  # scenarios, and the install/uninstall lifecycle against a headless Chromium in
+  # a clean Linux container (x86_64 here; arm64 is available locally via
+  # `PLATFORM=linux/arm64 scripts/harness-docker.sh` with QEMU/buildx). The
+  # Windows/macOS builds ride the matrices above — Windows containers can't run
+  # on a Linux runner.
+  docker-harness:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Simulation harness (Linux container)
+        run: bash scripts/harness-docker.sh

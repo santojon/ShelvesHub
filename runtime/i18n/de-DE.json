@@ -1,6 +1,7 @@
 {
   "hub_title": "ShelvesHub",
   "hub_update_restart": "ShelvesHub-Update verfügbar – zum Anwenden neu starten",
+  "hub_update_staged": "ShelvesHub-Update heruntergeladen – zum Abschließen neu starten",
   "hub_subtitle": "Host-Optionen und Wartung.",
   "unavailable_title": "Deck Shelves ist nicht geladen",
   "unavailable_body": "Das Deck-Shelves-Paket konnte auf diesem Host nicht gestartet werden.",
@@ -35,5 +36,6 @@
   "cfg_bundle": "Bundle-Pfad",
   "cfg_backend": "Daten-Backend",
   "cfg_version": "Version",
-  "sec_updates": "Updates"
+  "sec_updates": "Updates",
+  "updates_managed_elsewhere": "Updates werden hier vom Plugin-Loader verwaltet."
 }

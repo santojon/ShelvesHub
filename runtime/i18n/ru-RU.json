@@ -1,6 +1,7 @@
 {
   "hub_title": "ShelvesHub",
   "hub_update_restart": "Доступно обновление ShelvesHub — перезапустите для применения",
+  "hub_update_staged": "Обновление ShelvesHub загружено — перезапустите для завершения",
   "hub_subtitle": "Параметры и обслуживание хоста.",
   "unavailable_title": "Deck Shelves не загружен",
   "unavailable_body": "Не удалось запустить пакет Deck Shelves на этом хосте.",
@@ -35,5 +36,6 @@
   "cfg_bundle": "Bundle path",
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
-  "sec_updates": "Обновления"
+  "sec_updates": "Обновления",
+  "updates_managed_elsewhere": "Обновлениями здесь управляет загрузчик плагинов."
 }

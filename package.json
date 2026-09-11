@@ -45,6 +45,9 @@
     "deck:diag:run": "node deckprobe/scripts/py.mjs deckprobe/cli.py diag run",
     "deck:screenshot": "node deckprobe/scripts/py.mjs deckprobe/cli.py screenshot",
     "deck:perf": "node deckprobe/scripts/py.mjs deckprobe/perf-bench.py",
+    "site:screenshot": "node scripts/site/capture-screenshots.mjs",
+    "harness": "bash scripts/harness.sh",
+    "harness:docker": "bash scripts/harness-docker.sh",
     "clean": "cargo clean"
   },
   "devDependencies": {

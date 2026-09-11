@@ -1,6 +1,7 @@
 {
   "hub_title": "ShelvesHub",
   "hub_update_restart": "Dostępna aktualizacja ShelvesHub — uruchom ponownie, aby zastosować",
+  "hub_update_staged": "Pobrano aktualizację ShelvesHub — uruchom ponownie, aby zakończyć",
   "hub_subtitle": "Opcje i konserwacja hosta.",
   "unavailable_title": "Deck Shelves nie jest załadowany",
   "unavailable_body": "Nie udało się uruchomić pakietu Deck Shelves na tym hoście.",
@@ -35,5 +36,6 @@
   "cfg_bundle": "Bundle path",
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
-  "sec_updates": "Aktualizacje"
+  "sec_updates": "Aktualizacje",
+  "updates_managed_elsewhere": "Aktualizacjami zarządza tutaj program ładujący wtyczki."
 }

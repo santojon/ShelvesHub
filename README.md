@@ -7,7 +7,7 @@
 
 [![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
 [![Release](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml)
-[![Tests](https://img.shields.io/badge/cargo%20test-30%20passed-brightgreen?logo=rust&logoColor=white)](src/)
+[![Tests](https://img.shields.io/badge/cargo%20test-39%20passed-brightgreen?logo=rust&logoColor=white)](src/)
 [![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-SteamOS%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-purple?logo=steamdeck&logoColor=white)](https://github.com/ValveSoftware/SteamOS)
 [![Downloads](https://img.shields.io/github/downloads/santojon/ShelvesHub/total.svg?label=downloads&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
@@ -26,11 +26,13 @@ ShelvesHub is the independent host service for [Deck Shelves](https://github.com
 
 ## How it works
 
-The loader runs as a background service, watches for the Steam renderer, injects the Deck Shelves bundle (`bundle/index.js`) over the Chrome DevTools Protocol, and exposes a local HTTP JSON-RPC server (`127.0.0.1:60123`) the bundle uses to communicate with the host. If no bundle is present, the service obtains one first — reusing a local copy, copying it from an installed plugin loader, or downloading the newest release (`SHELVES_PRERELEASE=1` opts into pre-release versions). See [docs/debugging.md](docs/debugging.md) for the `shelves-devtools` CDP tool and the local/on-Deck debug workflow.
+The loader runs as a background service, watches for the Steam renderer, injects the Deck Shelves bundle (`bundle/index.js`) over the Chrome DevTools Protocol, and exposes a local HTTP JSON-RPC server (`127.0.0.1:60123`) the bundle uses to communicate with the host. If no bundle is present, the service obtains one first — reusing a local copy, copying it from an installed plugin loader, or downloading the newest release (`SHELVES_PRERELEASE=1` opts into pre-release versions). It can also host the Deck Shelves data backend itself, so a standalone install has the full online features (wishlist, prices, launchers) and not just local shelves. See [docs/debugging.md](docs/debugging.md) for the `shelves-devtools` CDP tool and the local/on-Deck debug workflow.
 
-The TypeScript `HostApi` contract (`src/runtime/host/`) defines what the loader provides to the bundle. The Rust process (`src/`) implements the service side.
+The shared `HostApi` contract (`@deck-shelves/host`, vendored as the `host/` submodule) defines what the host provides to the bundle, so one Deck Shelves build runs under this host or under a plugin loader unchanged. The Rust process (`src/`) implements the service side and the injected runtime (`runtime/shelves-host.js`) implements the in-renderer side.
 
-It can also give Deck Shelves its own tab in the Steam Quick Access Menu, opening the editor directly (with the plugin's icon and header). Where another host such as plugin loader is installed too, the two coexist: both tabs stay usable and edit the same settings, the plugin's wide side panel opens from whichever tab is on screen, and only one host writes settings at a time.
+It gives Deck Shelves its own tab in the Steam Quick Access Menu (on by default), opening the editor directly with the plugin's icon and header; if the bundle can't load, that tab shows a recovery panel instead of an empty tab. Where another host such as plugin loader is installed too, the two coexist: exactly one Deck Shelves tab is shown (this host's), both hosts' tabs stay usable and edit the same settings, the plugin's wide side panel opens from whichever tab is on screen, and only one host writes settings at a time.
+
+The service also **keeps itself and the bundle current**: with automatic updates on it downloads a newer Deck Shelves release and swaps it in place, and it can **update its own binary** from the latest ShelvesHub release. Update channels, a disable-until-restart switch, an editable safe subset of the configuration, and a merged host/runtime log viewer are all reachable from the tab, localized into 19 languages.
 
 ---
 
@@ -85,7 +87,7 @@ src/
   loader/                   Injection loop + preload (document-start) mode
   cdp/                      Chrome DevTools Protocol client
   rpc.rs                    TCP JSON-RPC server (127.0.0.1:60123)
-  populate.rs               Obtains / self-installs the Deck Shelves bundle
+  populate.rs               Obtains the bundle & backend; applies plugin and hub self-updates
   backend.rs                Supervises the hosted data backend
   store.rs                  The host's own settings, atomically persisted
   logger.rs config.rs state.rs
@@ -111,6 +113,10 @@ docs/
   usage.md                  Platform-specific usage notes
   debugging.md              shelves-devtools + local/on-Deck debug workflow
   troubleshooting.md        Ports, coexistence and recovery — fixes via the config file
+docker/
+  Dockerfile entrypoint.sh  Linux simulation harness — runs the runtime, a
+                            daemon→headless-Chromium injection smoke, and the
+                            install/uninstall lifecycle in a container (no device)
 ```
 
 Settings live in `shelveshub.config.json` next to the binary (env var > file >

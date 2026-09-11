@@ -1,13 +1,14 @@
 # HostApi — Contract Reference
 
-Contract version: **1.1.0** (additive-only after the 1.0.0 baseline).
+Contract version: **1.2.0** (additive-only after the 1.0.0 baseline).
 
 The `HostApi` interface defines what the ShelvesHub host process provides
 to the Deck Shelves bundle. The bundle receives this object as
 `window.__SHELVES_HOST__` at startup.
 
-The typed contract lives in `src/runtime/host/contract.ts` (with `ShelvesHostApi`
-in `shelves.ts` as the reference surface). The **executed** implementation the
+The typed contract lives in the `@deck-shelves/host` package, vendored as the
+`host/` submodule (`host/src/contract/`, with `ShelvesHostApi` in `shelves.ts` as
+the reference surface). The **executed** implementation the
 loader injects is `runtime/shelves-host.js` — that is what becomes
 `window.__SHELVES_HOST__` in the renderer. The Deck Shelves repository builds
 its bundle to consume this contract.
@@ -76,6 +77,19 @@ A dedicated panel with its own icon in the Steam Quick Access Menu.
 Implemented in `runtime/shelves-host.js`: an always-working icon rail + slide-in
 panel (works in the local harness and as a Steam overlay), with a seam
 (`tryMountNative`) for a native Steam QAM tab pending on-device validation.
+
+#### Tab-ownership handshake — `window.__SHELVES_QAM_OWNER__`
+
+When Deck Shelves runs under another loader that *also* draws its own Quick Access
+tab, exactly one Deck Shelves tab should be shown, and it should be this host's.
+The host stamps `window.__SHELVES_QAM_OWNER__` with its owner kind (e.g.
+`"shelveshub"`) **at the moment its own tab is actually inserted into the strip**
+— deliberately not when the `window.__SHELVES_QAM__` bridge is first created (that
+happens at start-up, before any tab exists). A bundle that renders its own early
+tab retracts it once this signal is set, so there is never a moment with two tabs;
+and because it is stamped only on real insertion, a host that never inserts a tab
+leaves the bundle's own tab in place as the fallback rather than both vanishing.
+Unset means no host has claimed the tab.
 
 ---
 

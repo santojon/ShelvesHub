@@ -72,7 +72,7 @@ enum Tick {
 /// brief windowless moment during a normal Steam restart.
 const COLLAPSE_HALT_THRESHOLD: u32 = 2;
 
-pub fn run(config: Config) {
+pub fn run(mut config: Config) {
     // Obtain the bundle before anything else: the sole-host case (no loader, no
     // local bundle) still brings Deck Shelves up on its own — local → copy from
     // an installed plugin loader → download the newest release. Best-effort; on a
@@ -95,13 +95,33 @@ pub fn run(config: Config) {
         return preload::run_preload(config);
     }
 
+    // Resolve the CEF debug port: Steam usually exposes 8080, but it can vary; if
+    // the configured port isn't answering at boot, fall back to the known ports.
+    if let Some(p) = resolve_cef_port(&config.cef_host, config.cef_port) {
+        if p != config.cef_port {
+            log_info(
+                "loader",
+                &format!(
+                    "CEF port {} not responding — using {p} instead.",
+                    config.cef_port
+                ),
+            );
+            config.cef_port = p;
+        }
+    }
+
     log_info("loader", "Injection loop started.");
-    let interval = Duration::from_secs(config.interval_secs);
+    // Floor the poll interval at 1s. A background watcher never needs sub-second
+    // polling, and a 0 (a stray/edited config, or the editable-config UI) would
+    // busy-spin this loop — worse, when the renderer is unreachable it would
+    // hammer connect() until the OS runs out of ephemeral ports (EADDRNOTAVAIL).
+    let interval = Duration::from_secs(config.interval_secs.max(1));
     // While the bundle is NOT yet active (renderer still settling, not confirmed,
     // etc.) poll on a short interval so the first inject lands promptly after the
     // renderer appears — otherwise a renderer that settles just after a tick waits
     // a full `interval` (up to 30s) before hosting, the visible cold-start lag.
     // Once active (or coexisting), back off to the idle `interval` to keep CPU low.
+    // `interval` is already >= 1s, so `fast` is too — never a spin.
     let fast = Duration::from_secs(2).min(interval);
     let mut consecutive_collapse: u32 = 0;
     // Tracks how long the renderer has been unclaimed, for the owner-settle guard
@@ -113,6 +133,14 @@ pub fn run(config: Config) {
     let mut last_update_check: Option<Instant> = None;
     // Tracks the troubleshooting pause so the transition INTO paused reloads once.
     let mut was_paused = false;
+    // Consecutive target-discovery failures, to re-probe the CEF port if Steam
+    // reappears on a different debug port than we resolved at boot.
+    let mut discovery_fail_streak: u32 = 0;
+    // Last-seen bundle file mtime, for the hot-swap watch: when the bundle on
+    // disk changes (an auto-update download or an external replacement) we
+    // re-inject it in place instead of reloading the whole renderer. Baselined
+    // here — AFTER the initial obtain above — so the first host is not a "change".
+    let mut last_bundle_mtime = bundle_mtime(&config.bundle_path);
 
     loop {
         // Health gate. The visible Steam UI lives in windows (Big Picture, Main
@@ -123,10 +151,33 @@ pub fn run(config: Config) {
         // `SharedJSContext` means the UI collapsed. Injecting into (or
         // `StartRestart`-ing) that state only makes it worse — so pause.
         let collapsed = match cdp::discover_targets(&config.cef_host, config.cef_port) {
-            Ok(targets) => !cdp::ui_windows_present(&targets),
+            Ok(targets) => {
+                discovery_fail_streak = 0;
+                !cdp::ui_windows_present(&targets)
+            }
             // Discovery failure = renderer unreachable (Steam closed / mid-
             // restart), not a collapse; tick() reports the same and retries.
-            Err(_) => false,
+            Err(_) => {
+                discovery_fail_streak += 1;
+                // Steam may have reappeared on a different debug port than the
+                // one we resolved at boot; after a few misses, re-probe.
+                if discovery_fail_streak >= 3 {
+                    discovery_fail_streak = 0;
+                    if let Some(p) = resolve_cef_port(&config.cef_host, config.cef_port) {
+                        if p != config.cef_port {
+                            log_info(
+                                "loader",
+                                &format!(
+                                    "CEF port {} unreachable — switching to {p}.",
+                                    config.cef_port
+                                ),
+                            );
+                            config.cef_port = p;
+                        }
+                    }
+                }
+                false
+            }
         };
 
         if collapsed {
@@ -243,7 +294,28 @@ pub fn run(config: Config) {
             auto_update_check(&config);
         }
 
-        thread::sleep(if settled { interval } else { fast });
+        // Hot-swap watch: if the bundle on disk changed since the last tick — an
+        // auto-update download just now, or an external replacement (a dev deploy) —
+        // re-inject it IN PLACE rather than reloading the whole Steam UI. Only when
+        // we host the bundle (Active); the marker clear makes the next tick re-inject,
+        // and we drop to the fast cadence so the swap lands promptly.
+        let mut swap_pending = false;
+        let now_mtime = bundle_mtime(&config.bundle_path);
+        let bundle_changed = now_mtime.is_some() && now_mtime != last_bundle_mtime;
+        last_bundle_mtime = now_mtime;
+        if hosting && bundle_changed && soft_reinject(&config) {
+            log_info(
+                "update",
+                "Bundle changed on disk — hot-swapping in place (no renderer reload).",
+            );
+            swap_pending = true;
+        }
+
+        thread::sleep(if settled && !swap_pending {
+            interval
+        } else {
+            fast
+        });
     }
 }
 
@@ -293,9 +365,14 @@ fn auto_update_check(config: &Config) {
                         }
                         log_info(
                             "update",
-                            &format!("Applied Deck Shelves update from {url}; reloading."),
+                            &format!(
+                                "Applied Deck Shelves update from {url}; hot-swapping in place."
+                            ),
                         );
-                        reload_renderer(config);
+                        // No renderer reload: the download changed the bundle file,
+                        // and the loop's on-disk watch hot-swaps it in place (clears
+                        // the marker → the next tick re-injects the new bundle). See
+                        // the bundle-mtime watch in `run`.
                     }
                     Err(e) => log_warning("update", &format!("update download failed: {e}")),
                 }
@@ -406,6 +483,64 @@ fn cmp_prerelease(a: &[String], b: &[String]) -> Ordering {
 
 /// Reload the renderer over CDP so a freshly-swapped bundle is picked up (the
 /// daemon re-injects on the next tick into the reloaded page). Best-effort.
+/// The debug ports to probe, in order: the configured one first, then Steam's
+/// known alternates (8080/8081), de-duplicated so the configured port is never
+/// probed twice.
+fn port_candidates(configured: u16) -> Vec<u16> {
+    let mut candidates = vec![configured];
+    for p in [crate::config::DEFAULT_CEF_PORT, 8081] {
+        if !candidates.contains(&p) {
+            candidates.push(p);
+        }
+    }
+    candidates
+}
+
+/// Probe the CEF debug port: try the configured port first, then Steam's known
+/// alternates, returning the first that answers target discovery. `None` when
+/// nothing responds (Steam not up yet) — the caller keeps whatever port it had
+/// and the loop keeps retrying.
+fn resolve_cef_port(host: &str, configured: u16) -> Option<u16> {
+    port_candidates(configured)
+        .into_iter()
+        .find(|&p| cdp::discover_targets(host, p).is_ok())
+}
+
+/// Modified-time of the bundle file, or `None` if it can't be read — the input
+/// to the hot-swap watch.
+fn bundle_mtime(path: &Path) -> Option<std::time::SystemTime> {
+    fs::metadata(path).ok().and_then(|m| m.modified().ok())
+}
+
+/// Hot-swap the bundle WITHOUT a full renderer reload: clear the injection marker
+/// so the next tick re-injects the (new) runtime + bundle in place. The runtime's
+/// installs are idempotent and the plugin re-registers its routes / QAM tab
+/// cleanly on re-eval (verified on-device — routerHook re-adds and the tab
+/// re-inserts with no error), so this re-runs Deck Shelves on the live renderer
+/// instead of reloading all of Steam. Returns whether the marker was cleared.
+fn soft_reinject(config: &Config) -> bool {
+    match CdpClient::connect_renderer(
+        &config.cef_host,
+        config.cef_port,
+        config.target_filter.as_deref(),
+    ) {
+        Ok(mut client) => match client.evaluate(&format!("delete {MARKER_GLOBAL}; true")) {
+            Ok(_) => {
+                state::set_injected(false);
+                true
+            }
+            Err(e) => {
+                log_warning("update", &format!("hot-swap (marker clear) failed: {e}"));
+                false
+            }
+        },
+        Err(e) => {
+            log_warning("update", &format!("hot-swap connect failed: {e}"));
+            false
+        }
+    }
+}
+
 fn reload_renderer(config: &Config) {
     match CdpClient::connect_renderer(
         &config.cef_host,
@@ -502,12 +637,23 @@ fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick>
 
     log_warning("loader", "Bundle not detected — injecting.");
 
+    // Read the bundle off disk BEFORE evaluating the runtime, so the (multi-MB)
+    // file read overlaps nothing that blocks it — and, more importantly, so the
+    // bundle source is in hand to evaluate the instant the runtime returns (its
+    // parse then overlaps the runtime's async UI scan, which gates only the
+    // bundle's BOOT, not its parse). Phase timings are logged so the cold-start
+    // budget is measurable (see the "Inject timing" line).
+    let t_read = Instant::now();
+    let source = read_bundle(config)?;
+    let read_ms = t_read.elapsed().as_millis();
+
     // Inject the host runtime first so `window.__SHELVES_HOST__` (and QAM
     // support) is present before the bundle boots. Best-effort: if it is
     // missing we still inject the bundle (it can fall back to an inert host).
+    let t_runtime = Instant::now();
     inject_host_runtime(&mut client, config);
+    let runtime_ms = t_runtime.elapsed().as_millis();
 
-    let source = read_bundle(config)?;
     // Bundle compatibility check: never inject an empty/whitespace bundle — that
     // would stamp the loader marker over a no-op and mask a packaging problem.
     // A missing file is already rejected by `read_bundle`; this catches the
@@ -527,7 +673,20 @@ fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick>
     // are separate evaluates here, so without this the bundle boots before the
     // scan lands and captures a half-empty `host.ui`.
     let gated = format!("{BUNDLE_GATE_PREFIX}{source}{BUNDLE_GATE_SUFFIX}");
+    let t_bundle = Instant::now();
     inject_bundle(&mut client, &gated, env!("CARGO_PKG_VERSION"))?;
+    let bundle_ms = t_bundle.elapsed().as_millis();
+    log_info(
+        "loader",
+        &format!(
+            "Inject timing: bundle read {read_ms}ms, runtime eval {runtime_ms}ms, bundle eval {bundle_ms}ms. \
+             (Bundle boot is then gated on the runtime's UI scan — see the runtime's \"UI scan complete\" line \
+             and the bundleReady delta.)"
+        ),
+    );
+    // Record when the bundle landed so the bundleReady RPC can report the
+    // downstream boot→initialised time (the part after the daemon's own work).
+    state::mark_injected_now();
 
     // Confirm the marker is now present rather than trusting a silent eval.
     Ok(if probe_injected(&mut client)? {
@@ -708,6 +867,15 @@ mod tests {
     fn injects_when_unclaimed_or_own() {
         assert!(may_inject("", false));
         assert!(may_inject(OWNER_KIND, false));
+    }
+
+    #[test]
+    fn port_candidates_probe_configured_first_then_alternates_deduped() {
+        // Configured is always tried first; the known alternates follow, and the
+        // configured port is never listed twice.
+        assert_eq!(port_candidates(8080), vec![8080, 8081]);
+        assert_eq!(port_candidates(8081), vec![8081, 8080]);
+        assert_eq!(port_candidates(9999), vec![9999, 8080, 8081]);
     }
 
     #[test]

@@ -571,13 +571,20 @@
     if (uiReady || !React) { if (onDone) onDone(); return; }
     uiReady = true;
     var i = 0;
+    var t0 = Date.now();
     // A plain timer, NOT requestIdleCallback: Steam's renderer is never idle, so
-    // the idle callback never fires. The gap between ticks lets the plugin run so
-    // no cumulative starvation builds up; each single scan is short (measured safe).
+    // the idle callback never fires. The gap between ticks lets the renderer breathe
+    // so a single short step (~25ms, measured safe) never stalls the main thread.
+    // In sole mode the bundle boot is GATED behind this scan (nothing else is
+    // running to starve), so a small gap is enough and keeps cold-start snappy.
     (function next() {
-      if (i >= uiSteps.length) { if (onDone) onDone(); return; }
+      if (i >= uiSteps.length) {
+        log("UI scan complete in " + (Date.now() - t0) + "ms (" + uiSteps.length + " steps).");
+        if (onDone) onDone();
+        return;
+      }
       runUiStep(i++);
-      setTimeout(next, 80);
+      setTimeout(next, 30);
     })();
   }
   // Publish "Steam's UI is populated" as a window global so the preload gate can
@@ -1228,6 +1235,11 @@
       // Effective config for this render (defaults while still loading).
       var uc = cfg || DEFAULT_UPD;
       var on = uc.auto_update === true;
+      // Coexisting with another loader (it owns the renderer): the hub does NOT
+      // host or update the plugin here — the loader does. So the update actions
+      // (download / self-install) and auto-update toggles are hidden and a note
+      // points at the loader. Detected from the owner global (sole = "shelveshub").
+      var coexist = (function () { try { var o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; } })();
       // B (CANCEL) handling: a plain onCancel/onCancelButton is NOT enough — the
       // QAM router still navigates the tab away. We must ABSORB the button-down
       // (preventDefault + stopImmediatePropagation on the event AND its inner
@@ -1270,8 +1282,13 @@
       function hubUpdateNotice() {
         var ver = uc.pending_hub_update;
         if (typeof ver !== "string" || !ver) return null;
+        // Once the update has been downloaded and staged over the binary, the
+        // wording shifts from "restart to update" to "downloaded — restart to
+        // finish" (a relaunching service applies it on its own, so this only ever
+        // shows for a manually-run daemon).
+        var label = uc.hub_update_staged === true ? "hub_update_staged" : "hub_update_restart";
         return h("div", { key: "hubupd", "data-fb": "hub-update", style: { display: "flex", alignItems: "center", gap: "8px", background: "rgba(26,159,255,0.15)", border: "1px solid rgba(26,159,255,0.45)", borderRadius: "6px", padding: "8px 10px", margin: "0 0 10px", fontSize: "13px" } },
-          fbIcon("update"), h("span", { key: "t" }, I18N.t("hub_update_restart") + " (" + ver + ")"));
+          fbIcon("update"), h("span", { key: "t" }, I18N.t(label) + " (" + ver + ")"));
       }
       // The "Advanced" area: a plugin-style collapsible whose content is grouped
       // into collapsible sub-sections (Troubleshooting / Configuration / Status),
@@ -1311,10 +1328,19 @@
       // Configuration, Status. Each carries a count badge when collapsed.
       function buildSections(useNative, TF) {
         var sections = [];
-        var upd = updRows(useNative, TF).slice();
-        upd.push(actionRow("download", "download", "action_download", "populateBundle"));
-        upd.push(actionRow("update", "update", "action_update_hub", "selfUpdate"));
-        sections.push(h(HubCollapsible, { key: "sec-upd", id: "sec-updates", title: I18N.t("sec_updates"), count: upd.length, initialOpen: true }, upd));
+        // Updates: in coexist the loader owns the plugin — show a note, no
+        // hub-hosting toggles/actions (they'd fetch+swap a bundle the loader owns).
+        var upd, updCount;
+        if (coexist) {
+          upd = [h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere"))];
+          updCount = 0;
+        } else {
+          upd = updRows(useNative, TF).slice();
+          upd.push(actionRow("download", "download", "action_download", "populateBundle"));
+          upd.push(actionRow("update", "update", "action_update_hub", "selfUpdate"));
+          updCount = upd.length;
+        }
+        sections.push(h(HubCollapsible, { key: "sec-upd", id: "sec-updates", title: I18N.t("sec_updates"), count: updCount, initialOpen: true }, upd));
         var trouble = [actionRow("logs", "logs", "action_logs", "getLogs")];
         if (rc) {
           trouble.push(advToggleRow("adv-pause", I18N.t("adv_disable_hub"), rc.paused === true, applyPaused));
@@ -1325,14 +1351,18 @@
           // Only genuine operational config here — `native_qam` (default on; a
           // recovery knob left to the config file/env) and `prerelease` (already
           // covered by the Updates section's pre-release channels) are intentionally
-          // NOT surfaced, to keep this uncluttered.
-          var conf = [
-            advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }),
-            advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), rc.owner_settle_secs),
-            advStepRow("interval_secs", I18N.t("cfg_interval"), rc.interval_secs),
-          ];
+          // NOT surfaced. The coexist-only settings (force_owner, owner_settle_secs)
+          // are shown only where another loader can exist (Linux/SteamOS) — on a
+          // pure sole host (macOS/Windows) they are inert, so they are hidden too.
+          var conf = [];
+          if (rc.loader_possible) {
+            conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
+            conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), rc.owner_settle_secs));
+          }
+          conf.push(advStepRow("interval_secs", I18N.t("cfg_interval"), rc.interval_secs));
+          var confCount = conf.length;
           if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));
-          sections.push(h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: 3 }, conf));
+          sections.push(h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: confCount }, conf));
           var status = [
             advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),
             advRoRow("rpc", I18N.t("cfg_rpc"), rc.rpc_addr || ""),
@@ -1677,6 +1707,14 @@
         for (var i = 0; i < tabs.length; i++) { if (tabs[i] && tabs[i].key === after) { at = i + 1; break; } }
       }
       tabs.splice(at, 0, tab); // insert in place (array mutable; element props may be frozen)
+      // Ownership handshake: stamp the QAM-owner signal the MOMENT our tab is
+      // actually in the strip — not when the `__SHELVES_QAM__` bridge global was
+      // first created (that happens at boot, well before this insertion). A Deck
+      // Shelves running under another loader retracts its own early tab on this
+      // signal, so exactly one Deck Shelves tab survives and it is this host's —
+      // and if this host never inserts (patch failed), the plugin keeps its tab
+      // as the fallback instead of both vanishing. See @deck-shelves/host.
+      try { window.__SHELVES_QAM_OWNER__ = "shelveshub"; } catch (e) {}
       if (!confirmed) { confirmed = true; tripClear(); logInfo("QAM", "tab inserted, healthy."); }
     }
 
@@ -1992,6 +2030,13 @@
   // coexistence. In owner mode it is the same object as `__SHELVES_HOST__.qam`.
   // Idempotent: the first runtime to patch the tab stays the registration target,
   // so a panel registered against it always feeds the tab that is actually live.
+  //
+  // NOTE: bridge presence is NOT the ownership signal — this object exists at
+  // boot, before any tab is inserted. The tab-ownership handshake uses the
+  // separate `window.__SHELVES_QAM_OWNER__` global, stamped only once our tab
+  // actually lands in the strip (see pushTab). A coexisting Deck Shelves retracts
+  // its own early tab on that, not on this bridge, so there is never a window
+  // where both tabs vanish.
   try { if (!window.__SHELVES_QAM__) window.__SHELVES_QAM__ = host.qam; } catch (e) {}
   // Drain panels a Deck Shelves registered before this bridge existed: when it
   // boots first (under another loader) it leaves them on `__SHELVES_QAM_PENDING__`.
@@ -2174,7 +2219,7 @@
       }
       try { tasks[i](); } catch (e) {}
       i++;
-      setTimeout(next, 60);
+      setTimeout(next, 30);
     })();
   }
 

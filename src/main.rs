@@ -6,6 +6,11 @@ fn main() {
     log_info("main", "ShelvesHub starting...");
     log_info("main", concat!("Version: ", env!("CARGO_PKG_VERSION")));
 
+    // A prior self-update stages the binary swap and takes effect on this start;
+    // clear any leftover swap artifacts (an interrupted `.new`, the moved-aside
+    // `.old` on Windows) now that the new binary is the one running.
+    populate::cleanup_stale_update_artifacts();
+
     let mut config = Config::from_env();
 
     // Beta channel for the bundle + backend obtains combines three sources, so
@@ -80,6 +85,11 @@ fn main() {
             "bundle_path": config.bundle_path.display().to_string(),
             "backend": config.backend_dir.is_some(),
             "version": env!("CARGO_PKG_VERSION"),
+            // Whether another plugin loader (the loader) can coexist here — only on
+            // Linux/SteamOS. On macOS/Windows this is a pure sole host, so the
+            // coexist-only settings (force_owner, owner_settle_secs) are inert and
+            // the UI hides them.
+            "loader_possible": cfg!(target_os = "linux"),
         }),
     );
 

@@ -1,6 +1,7 @@
 {
   "hub_title": "ShelvesHub",
   "hub_update_restart": "ShelvesHub güncellemesi mevcut — uygulamak için yeniden başlatın",
+  "hub_update_staged": "ShelvesHub güncellemesi indirildi — tamamlamak için yeniden başlatın",
   "hub_subtitle": "Ana makine seçenekleri ve bakımı.",
   "unavailable_title": "Deck Shelves yüklü değil",
   "unavailable_body": "Deck Shelves paketi bu ana makinede başlatılamadı.",
@@ -35,5 +36,6 @@
   "cfg_bundle": "Bundle path",
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
-  "sec_updates": "Güncellemeler"
+  "sec_updates": "Güncellemeler",
+  "updates_managed_elsewhere": "Güncellemeler burada eklenti yükleyici tarafından yönetilir."
 }

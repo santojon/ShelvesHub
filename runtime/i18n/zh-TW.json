@@ -1,6 +1,7 @@
 {
   "hub_title": "ShelvesHub",
   "hub_update_restart": "ShelvesHub 有可用更新 — 重新啟動以套用",
+  "hub_update_staged": "ShelvesHub 更新已下載 — 重新啟動以完成",
   "hub_subtitle": "主機選項與維護。",
   "unavailable_title": "Deck Shelves 未載入",
   "unavailable_body": "無法在此主機上啟動 Deck Shelves 套件。",
@@ -35,5 +36,6 @@
   "cfg_bundle": "Bundle path",
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
-  "sec_updates": "更新"
+  "sec_updates": "更新",
+  "updates_managed_elsewhere": "此處更新由外掛程式載入器管理。"
 }
