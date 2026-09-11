@@ -162,9 +162,13 @@ jobs:
 
       - name: Contract present and version derivable
         run: |
-          DTS=host/dist/index.d.ts
-          test -f "$DTS" || { echo "::error::$DTS missing — @deck-shelves/host submodule not checked out"; exit 1; }
-          V=$(grep -E "HOST_API_VERSION" "$DTS" | head -1 | sed -E 's/[^"]*"([^"]+)".*/\1/')
+          # Read the committed contract SOURCE, not the built dist/index.d.ts —
+          # dist/ is a build artifact the submodule does not commit, so a plain
+          # `submodules: recursive` checkout never has it (build.rs reads dist too
+          # but falls back gracefully; this job asserts the source is present).
+          SRC=host/src/contract/index.ts
+          test -f "$SRC" || { echo "::error::$SRC missing — @deck-shelves/host submodule not checked out"; exit 1; }
+          V=$(grep -E "HOST_API_VERSION" "$SRC" | head -1 | sed -E 's/[^"]*"([^"]+)".*/\1/')
           echo "Contract HOST_API_VERSION = $V"
           test -n "$V" || { echo "::error::could not extract HOST_API_VERSION from the contract"; exit 1; }
 
