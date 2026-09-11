@@ -155,7 +155,19 @@ impl Config {
                 }),
             preload: env_bool("SHELVES_PRELOAD"),
             prerelease: cfg_bool(&file, "SHELVES_PRERELEASE", "prerelease"),
-            owner_settle_secs: cfg_u64(&file, "SHELVES_OWNER_SETTLE_SECS", "owner_settle_secs", 0),
+            // The owner-settle wait exists only to avoid racing a plugin loader's
+            // ownership claim (coexistence). A loader runs only on Linux/SteamOS, so
+            // on macOS/Windows there is nothing to wait for — a pure sole host injects
+            // immediately, ignoring a stale non-zero config value (matters because the
+            // shipped config carries 25s for the Linux coexist case). An explicit env
+            // override still wins everywhere, for testing.
+            owner_settle_secs: if cfg!(any(target_os = "macos", target_os = "windows"))
+                && env::var("SHELVES_OWNER_SETTLE_SECS").is_err()
+            {
+                0
+            } else {
+                cfg_u64(&file, "SHELVES_OWNER_SETTLE_SECS", "owner_settle_secs", 0)
+            },
             hub_config_path,
         }
     }
@@ -193,9 +205,17 @@ impl Config {
 /// Installed layout auto-detection: a backend payload dropped at
 /// `<exe_dir>/backend/main.py` enables hosting without any configuration.
 fn default_backend_dir() -> Option<PathBuf> {
-    let exe = env::current_exe().ok()?;
-    let candidate = exe.parent()?.join("backend");
+    let candidate = backend_install_dir()?;
     candidate.join("main.py").is_file().then_some(candidate)
+}
+
+/// The canonical backend location for a sole host: `<exe dir>/backend`. Unlike
+/// `default_backend_dir` this does NOT require `main.py` to be present yet — it is
+/// the target `populate::ensure_backend` writes into before the daemon enables the
+/// data RPC (see `main.rs`).
+pub fn backend_install_dir() -> Option<PathBuf> {
+    let exe = env::current_exe().ok()?;
+    Some(exe.parent()?.join("backend"))
 }
 
 fn default_python() -> &'static str {
@@ -240,11 +260,12 @@ fn env_bool(key: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Load the optional external config file (JSON): `SHELVES_CONFIG_FILE` if set,
-/// otherwise `<exe_dir>/shelveshub.config.json`. Absent / unreadable / invalid →
-/// an empty value, so every setting falls through to its env override or default.
-fn load_config_file() -> Value {
-    let path = env::var("SHELVES_CONFIG_FILE")
+/// The external config file path: `SHELVES_CONFIG_FILE` if set, otherwise
+/// `<exe_dir>/shelveshub.config.json`. This is where the "advanced configuration"
+/// editor writes (the values apply on the next restart). `None` if the exe path
+/// can't be resolved and no override is set.
+pub fn config_file_path() -> Option<PathBuf> {
+    env::var("SHELVES_CONFIG_FILE")
         .ok()
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
@@ -252,8 +273,14 @@ fn load_config_file() -> Value {
             env::current_exe()
                 .ok()
                 .and_then(|e| e.parent().map(|d| d.join("shelveshub.config.json")))
-        });
-    match path {
+        })
+}
+
+/// Load the optional external config file (JSON): `SHELVES_CONFIG_FILE` if set,
+/// otherwise `<exe_dir>/shelveshub.config.json`. Absent / unreadable / invalid →
+/// an empty value, so every setting falls through to its env override or default.
+fn load_config_file() -> Value {
+    match config_file_path() {
         Some(p) if p.is_file() => std::fs::read_to_string(&p)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())

@@ -22,14 +22,18 @@ jobs:
             package: shelveshub-steamos.tar.gz
             oneclick_src: shelveshub.desktop
             oneclick_name: shelveshub.desktop
+            oneclick_uninstall_src: uninstall.desktop
+            oneclick_uninstall_name: uninstall-shelveshub.desktop
 
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: shelveshub
             installer_dir: installer/Linux
             package: shelveshub-linux.tar.gz
-            oneclick_src: ""
-            oneclick_name: ""
+            oneclick_src: shelveshub.desktop
+            oneclick_name: shelveshub-linux.desktop
+            oneclick_uninstall_src: uninstall.desktop
+            oneclick_uninstall_name: uninstall-shelveshub-linux.desktop
 
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -38,6 +42,8 @@ jobs:
             package: shelveshub-macos.tar.gz
             oneclick_src: install-mac.command
             oneclick_name: install-mac.command
+            oneclick_uninstall_src: uninstall-mac.command
+            oneclick_uninstall_name: uninstall-mac.command
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -46,6 +52,8 @@ jobs:
             package: shelveshub-windows.zip
             oneclick_src: install-windows.bat
             oneclick_name: install-windows.bat
+            oneclick_uninstall_src: uninstall-windows.bat
+            oneclick_uninstall_name: uninstall-windows.bat
 
     runs-on: ${{ matrix.os }}
 
@@ -124,6 +132,22 @@ jobs:
         with:
           name: ${{ matrix.oneclick_name }}
           path: ${{ matrix.oneclick_name }}
+
+      - name: Prepare one-click uninstaller (Linux / macOS)
+        if: runner.os != 'Windows' && matrix.oneclick_uninstall_src != ''
+        run: cp ${{ matrix.installer_dir }}/${{ matrix.oneclick_uninstall_src }} ${{ matrix.oneclick_uninstall_name }}
+
+      - name: Prepare one-click uninstaller (Windows)
+        if: runner.os == 'Windows' && matrix.oneclick_uninstall_src != ''
+        shell: pwsh
+        run: Copy-Item ${{ matrix.installer_dir }}\${{ matrix.oneclick_uninstall_src }} ${{ matrix.oneclick_uninstall_name }}
+
+      - name: Upload one-click uninstaller artifact
+        if: matrix.oneclick_uninstall_src != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.oneclick_uninstall_name }}
+          path: ${{ matrix.oneclick_uninstall_name }}
 
       # ── GUI installers with the app icon (clickable) ────────────────────────
       - name: Build macOS installer app

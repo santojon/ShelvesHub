@@ -14,11 +14,48 @@ use serde::{Deserialize, Serialize};
 
 /// The host's user-facing settings (kept small and additive; `serde(default)`
 /// keeps old/new files forward- and backward-compatible).
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+///
+/// Update preferences form a two-level hierarchy: `auto_update` is the master
+/// switch; the per-target switches (`auto_update_hub`, `auto_update_plugin`)
+/// and their beta channels (`hub_prerelease`, `plugin_prerelease`) only take
+/// effect while the master is on. The per-target switches default ON so that
+/// enabling the master updates both targets without extra clicks. The daemon
+/// combines these with the plugin's OWN update prefs (it honours the plugin's
+/// toggles too), never overriding them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HubSettings {
-    /// Whether the host keeps the Deck Shelves bundle up to date on its own.
+    /// Master switch — whether the host keeps anything up to date on its own.
     pub auto_update: bool,
+    /// Sub-switch: keep the ShelvesHub daemon itself up to date.
+    pub auto_update_hub: bool,
+    /// Sub-sub: draw the daemon's own updates from the pre-release channel.
+    pub hub_prerelease: bool,
+    /// Sub-switch: keep the Deck Shelves bundle (+ backend) up to date.
+    pub auto_update_plugin: bool,
+    /// Sub-sub: draw the bundle/backend from the pre-release channel.
+    pub plugin_prerelease: bool,
+    /// The release tag of the bundle the daemon last obtained/applied. Empty
+    /// until the daemon itself downloads one. The auto-update check compares this
+    /// to the latest release tag so it only re-downloads on an actual change (not
+    /// every tick). Not user-facing.
+    #[serde(default)]
+    pub bundle_tag: String,
+}
+
+impl Default for HubSettings {
+    fn default() -> Self {
+        // Master defaults OFF (opt-in); the per-target switches default ON so a
+        // single master toggle covers both without further configuration.
+        HubSettings {
+            auto_update: false,
+            auto_update_hub: true,
+            hub_prerelease: false,
+            auto_update_plugin: true,
+            plugin_prerelease: false,
+            bundle_tag: String::new(),
+        }
+    }
 }
 
 /// Load the settings, healing from the backup when the primary file is missing
@@ -102,7 +139,10 @@ mod tests {
     fn save_load_roundtrip() {
         let path = scratch("roundtrip");
         cleanup(&path);
-        let s = HubSettings { auto_update: true };
+        let s = HubSettings {
+            auto_update: true,
+            ..Default::default()
+        };
         save(&path, &s).unwrap();
         assert_eq!(load(&path), s);
         cleanup(&path);
@@ -120,13 +160,39 @@ mod tests {
         let path = scratch("corrupt");
         cleanup(&path);
         // First save establishes the file; second save rolls the first to .bak.
-        save(&path, &HubSettings { auto_update: true }).unwrap();
-        save(&path, &HubSettings { auto_update: false }).unwrap();
+        save(
+            &path,
+            &HubSettings {
+                auto_update: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        save(
+            &path,
+            &HubSettings {
+                auto_update: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         // Corrupt the primary — the backup still holds the first (auto_update:true).
         fs::write(&path, "{ not valid json").unwrap();
-        assert_eq!(load(&path), HubSettings { auto_update: true });
+        assert_eq!(
+            load(&path),
+            HubSettings {
+                auto_update: true,
+                ..Default::default()
+            }
+        );
         // …and the heal rewrote a valid primary.
-        assert_eq!(read_valid(&path), Some(HubSettings { auto_update: true }));
+        assert_eq!(
+            read_valid(&path),
+            Some(HubSettings {
+                auto_update: true,
+                ..Default::default()
+            })
+        );
         cleanup(&path);
     }
 

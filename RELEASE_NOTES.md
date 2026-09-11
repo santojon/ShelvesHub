@@ -16,6 +16,10 @@ is pushed — the notes below are picked up and published with the release.
   and Windows.
 - **Updates itself.** When a new Deck Shelves is available, the host can fetch and
   install it for you — no manual file copying.
+- **Keeps Deck Shelves current on its own.** With automatic updates on, the host
+  periodically checks for a newer Deck Shelves on your chosen channel and, when it
+  finds one, downloads it and reloads — so you stay up to date and the
+  "update available" prompt goes away without you doing anything.
 - **Brings its own copy of Deck Shelves.** If Deck Shelves is not already on the
   machine, the service fetches it — reusing a local copy, copying it from an
   installed plugin loader, or downloading the newest release — so it can run
@@ -38,13 +42,28 @@ is pushed — the notes below are picked up and published with the release.
   screen. One place to edit, whichever tab you reach for.
 - **A resilient fallback that remembers your choice.** If Deck Shelves can't be
   brought up, the host's own tab shows a compact ShelvesHub panel — icon'd actions
-  to fetch the latest Deck Shelves and view logs, plus an **Automatic updates**
-  on/off switch that sticks: it is saved with a rolling backup, so it survives a
-  crash or a restart without losing or corrupting your settings.
-- **Logs you can actually read.** The Logs view now shows one stream — the host
+  to fetch the latest Deck Shelves and view logs, plus **Automatic updates** as a
+  tidy set of switches: a master, then ShelvesHub and Deck Shelves each with their
+  own pre-release channel, where each finer switch only appears once the one above
+  it is on. Your choices are saved with a rolling backup, so they survive a crash
+  or a restart without losing or corrupting your settings.
+- **Logs you can actually read.** The Logs view shows one stream — the host
   runtime and the service together, newest first — with each line tagged by
   level (info / warning / error) and category and colour-coded, plus a refresh
-  control, so tracking down a problem no longer means scraping a console.
+  control. It **slides in over the tab**, its rows are **gamepad-navigable**, and
+  **B takes you back** — so tracking down a problem no longer means scraping a
+  console.
+- **The native tab, on by default.** The Steam menu tab now shows real buttons and
+  toggles out of the box; it proved safe as a sole host, and still falls back to
+  the on-screen panel if anything goes wrong.
+- **Shelves show up faster.** The service hosts the interface as soon as it settles
+  rather than waiting for its next slow cycle, and on macOS and Windows — where it
+  is always the only host — it hosts right away.
+- **Full Deck Shelves on macOS and Windows.** As the only host, it now brings up
+  everything, including online features (wishlist, prices, launchers) by fetching
+  the data backend for you.
+- **One-click install on Linux, too.** A double-click desktop installer for Linux
+  joins the SteamOS one.
 
 This release also includes the work that turned the loader from a skeleton
 into something that actually runs Deck Shelves.

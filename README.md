@@ -7,7 +7,7 @@
 
 [![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
 [![Release](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml)
-[![Tests](https://img.shields.io/badge/cargo%20test-28%20passed-brightgreen?logo=rust&logoColor=white)](src/)
+[![Tests](https://img.shields.io/badge/cargo%20test-30%20passed-brightgreen?logo=rust&logoColor=white)](src/)
 [![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-SteamOS%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-purple?logo=steamdeck&logoColor=white)](https://github.com/ValveSoftware/SteamOS)
 [![Downloads](https://img.shields.io/github/downloads/santojon/ShelvesHub/total.svg?label=downloads&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
@@ -40,9 +40,11 @@ It can also give Deck Shelves its own tab in the Steam Quick Access Menu, openin
 
 Download `shelveshub.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest), open it in Desktop Mode, and follow the terminal prompt. Installs to `~/.local/share/shelveshub` with a user-level systemd service — no sudo required.
 
-### Linux (from package)
+### Linux (one-click or from package)
 
-Download `shelveshub-linux.tar.gz`, extract, and run:
+One-click: download `shelveshub-linux.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest), open it, and follow the terminal prompt (it downloads and installs, prompting for sudo).
+
+From the package instead: download `shelveshub-linux.tar.gz`, extract, and run:
 
 ```bash
 sudo bash installer/install.sh
@@ -57,6 +59,21 @@ Download **`Install ShelvesHub.app`** (a clickable installer app carrying the Sh
 ### Windows
 
 Download **`shelveshub-setup.exe`** (a setup program carrying the ShelvesHub icon) from the latest release and run it, accepting the UAC prompt. A plain `install-windows.bat` script is also published.
+
+---
+
+## Uninstalling
+
+Each uninstaller stops and removes the background service and the install directory. Your Deck Shelves settings (shared with other hosts) are kept unless you pass `--purge`. A **one-click uninstaller** is published for each platform alongside the installer (double-click, like installing) — or use the commands below.
+
+| Platform | One-click | Or by hand |
+|---|---|---|
+| SteamOS / Steam Deck | `uninstall-shelveshub.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (installed copy), or `bash uninstall.sh` from the extracted package |
+| Linux | `uninstall-shelveshub-linux.desktop` | `sudo bash /opt/shelveshub/uninstall.sh` (or `sudo bash uninstall.sh` from the package) |
+| macOS | `uninstall-mac.command` | `bash ~/.local/share/shelveshub/uninstall_mac.sh` — add `--purge` to also remove settings and Steam's CEF debug flag |
+| Windows | `uninstall-windows.bat`, or **Settings → Apps** | run `uninstall.exe` in the install folder, or `installer\uninstall.ps1` from the package |
+
+`--purge` (macOS/SteamOS) additionally removes the shared Deck Shelves settings and the `.cef-enable-remote-debugging` flag; restart Steam afterward so it stops exposing the debug port.
 
 ---
 
@@ -117,8 +134,6 @@ Each release publishes the per-platform packages, one-click scripts, and clickab
 | `install-windows.bat` | Windows one-click script |
 | `Install ShelvesHub.app` (zipped) | macOS clickable installer app (with icon) |
 | `shelveshub-setup.exe` | Windows setup program (with icon) |
-
-CI builds on every PR merge; releases are tagged `v*.*.*` and trigger the release pipeline automatically — the tag sets the version.
 
 ---
 

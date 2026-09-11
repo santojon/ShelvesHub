@@ -66,6 +66,8 @@ if [[ -d "$EXTRACTED_DIR/backend" ]]; then
   mkdir -p "$INSTALL_DIR/backend"
   cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
 fi
+# Keep the uninstaller alongside the install so it's available later.
+[[ -f "$EXTRACTED_DIR/installer/uninstall.sh" ]] && cp "$EXTRACTED_DIR/installer/uninstall.sh" "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall.sh"
 
 # ── Register user systemd service ─────────────────────────────────────────────
 echo "[i] Setting up systemd user service..."

@@ -650,10 +650,13 @@
         try { window.__SHELVES_NATIVE_ERR__ = { message: e && e.message, stack: e && e.stack, componentStack: info && info.componentStack }; } catch (x) {}
       }
       render() {
-        return this.state.err
-          ? h("div", { style: { padding: "16px", color: "#ff8d8d", fontSize: "13px" } },
-              I18N.t("panel_error"))
-          : this.props.children;
+        if (!this.state.err) return this.props.children;
+        // A `fallback` element (the hub view) takes over when the wrapped panel
+        // throws — so a failed Deck Shelves render lands on the host's own hub
+        // screen (download / update / logs), not a bare error line.
+        if (this.props.fallback) return this.props.fallback;
+        return h("div", { style: { padding: "16px", color: "#ff8d8d", fontSize: "13px" } },
+          I18N.t("panel_error"));
       }
     };
   }
@@ -1029,7 +1032,10 @@
       var inner = typeof spec.render === "function"
         ? h(SpecRenderHost, { key: spec.id, spec: spec })
         : (typeof spec.content === "function" ? spec.content() : spec.content);
-      return ErrorBoundary ? h(ErrorBoundary, null, inner) : inner;
+      // On a render error, fall back to the host's hub view rather than a bare
+      // error line — the plugin failing to load should still leave the user with
+      // the host's own actions.
+      return ErrorBoundary ? h(ErrorBoundary, { fallback: h(FallbackPanel, null) }, inner) : inner;
     }
 
     // One stable native tab whose icon and panel are LAZY slots: they render
@@ -1124,16 +1130,81 @@
       if (extra) for (var k in extra) props[k] = extra[k];
       return React.createElement.apply(React, [focusableComp || "button", props].concat(kids || []));
     }
+    // Plugin-style collapsible section (chevron header + persisted open state +
+    // separator + content), mirroring the plugin's CollapsibleSection so the hub's
+    // Advanced area reads the same. Its own component so each section keeps state.
+    var HUB_SECTIONS_KEY = "ds-hub-sections";
+    function readHubSections() { try { return JSON.parse(localStorage.getItem(HUB_SECTIONS_KEY) || "{}"); } catch (e) { return {}; } }
+    function HubCollapsible(props) {
+      var id = props.id, title = props.title;
+      var s0 = readHubSections();
+      var initial = (id in s0) ? !!s0[id] : props.initialOpen === true;
+      var st = React.useState(initial);
+      var open = st[0], setOpen = st[1];
+      var toggle = function () {
+        setOpen(function (o) {
+          var n = !o;
+          try { var s = readHubSections(); s[id] = n; localStorage.setItem(HUB_SECTIONS_KEY, JSON.stringify(s)); } catch (e) {}
+          return n;
+        });
+      };
+      // Flat QAM look (like the plugin): uppercase dim header, whole-row focus
+      // highlight (background, not a ring), thin separator, no surrounding box.
+      // When collapsed, a count badge (like the plugin's) hints at the contents.
+      var chevron = h("span", { key: "c", style: { fontSize: "9px", opacity: 0.7, flex: "0 0 auto" } }, open ? "▲" : "▼");
+      var titleEl = h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, title);
+      var right = [];
+      if (!open && typeof props.count === "number" && props.count > 0) {
+        right.push(h("span", { key: "b", style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "18px", height: "18px", padding: "0 6px", borderRadius: "9px", background: "rgba(255,255,255,0.14)", fontSize: "10px", fontWeight: "700" } }, String(props.count)));
+      }
+      right.push(chevron);
+      var rightEl = h("span", { key: "r", style: { display: "flex", alignItems: "center", gap: "8px", flex: "0 0 auto" } }, right);
+      var hStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: "40px", boxSizing: "border-box", width: "100%", padding: "8px 16px", cursor: "pointer", fontWeight: "600", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px", color: "rgba(255,255,255,0.72)" };
+      var header = focusableComp
+        ? h(focusableComp, { key: "h", "data-fb": "sec-" + id, onActivate: toggle, onOKButton: toggle, focusClassName: "shelves-rowfocus", style: hStyle }, titleEl, rightEl)
+        : h("div", { key: "h", "data-fb": "sec-" + id, onClick: toggle, style: hStyle }, titleEl, rightEl);
+      var kids = [header];
+      if (open) {
+        kids.push(h("div", { key: "sep", style: { height: "1px", background: "rgba(255,255,255,0.09)" } }));
+        kids.push(h("div", { key: "ct", style: { padding: "2px 0 10px" } }, props.children));
+      }
+      return h("div", { className: "ds-hub-collapsible", style: { marginTop: "6px" } }, kids);
+    }
+    // Version footer, pinned at the end of the panel (like the plugin's).
+    function hubVersionFooter(version) {
+      return h("div", { key: "verfoot", "data-fb": "version", style: { textAlign: "center", padding: "10px 12px 6px", fontSize: "11px", lineHeight: "15px", color: "rgba(255,255,255,0.4)" } },
+        "ShelvesHub" + (version ? " · v" + version : ""));
+    }
     function FallbackPanel(props) {
       var onBack = props && props.onBack;
       var st = React.useState(null);
       var busy = st[0], setBusy = st[1];
-      // null = still loading the setting; then a boolean mirrors the store.
+      // null = still loading; then the full update-preference object mirrors the
+      // store: the master switch, the per-target switches, and their beta
+      // channels. Per-target switches default ON (see HubSettings::default).
+      var DEFAULT_UPD = { auto_update: false, auto_update_hub: true, hub_prerelease: false, auto_update_plugin: true, plugin_prerelease: false };
       var au = React.useState(null);
-      var autoUpdate = au[0], setAutoUpdate = au[1];
+      var cfg = au[0], setCfg = au[1];
       // null = hub view; an array = the log viewer showing merged daemon+runtime lines.
       var lg = React.useState(null);
       var logs = lg[0], setLogs = lg[1];
+      // Advanced section: `rc` holds the runtime-config mirror (getRuntimeConfig),
+      // fetched once on mount; `rcDirty` flags an edit this session so a "restart
+      // to apply" note shows. The collapsible open state lives in HubCollapsible.
+      var rcS = React.useState(null);
+      var rc = rcS[0], setRc = rcS[1];
+      var rd = React.useState(false);
+      var rcDirty = rd[0], setRcDirty = rd[1];
+      React.useEffect(function () {
+        var alive = true;
+        hostRpc("getRuntimeConfig").then(function (r) {
+          if (alive && r && r.ok && r.result && typeof r.result === "object") setRc(r.result);
+        }, function () {});
+        return function () { alive = false; };
+      }, []);
+      function mergeRc(patch) { var n = {}; if (rc) for (var k in rc) n[k] = rc[k]; for (var p in patch) n[p] = patch[p]; setRc(n); }
+      function applyPaused(v) { mergeRc({ paused: v }); hostRpc("setHostingPaused", v).then(function () {}, function () {}); }
+      function applyCfg(key, val) { mergeRc((function () { var o = {}; o[key] = val; return o; })()); setRcDirty(true); hostRpc("setRuntimeConfig", { key: key, value: val }).then(function () {}, function () {}); }
       function viewLogs() {
         setBusy("logs");
         hostRpc("getLogs", 200).then(function (r) {
@@ -1141,58 +1212,259 @@
           setLogs(r && r.ok && Array.isArray(r.result) ? r.result : []);
         }, function () { setBusy(null); setLogs([]); });
       }
+      // Clear the viewer's log ring on the daemon, then refresh the (now-empty) list.
+      function clearLogs() {
+        setBusy("logs");
+        hostRpc("clearLogs").then(function () { setBusy(null); setLogs([]); }, function () { setBusy(null); });
+      }
       React.useEffect(function () {
         var alive = true;
         hostRpc("getConfig").then(function (r) {
           if (!alive) return;
-          var v = r && r.ok && r.result && typeof r.result.auto_update === "boolean" ? r.result.auto_update : false;
-          setAutoUpdate(v);
-        }, function () { if (alive) setAutoUpdate(false); });
+          setCfg(r && r.ok && r.result && typeof r.result === "object" ? r.result : DEFAULT_UPD);
+        }, function () { if (alive) setCfg(DEFAULT_UPD); });
         return function () { alive = false; };
       }, []);
-      var on = autoUpdate === true;
+      // Effective config for this render (defaults while still loading).
+      var uc = cfg || DEFAULT_UPD;
+      var on = uc.auto_update === true;
+      // B (CANCEL) handling: a plain onCancel/onCancelButton is NOT enough — the
+      // QAM router still navigates the tab away. We must ABSORB the button-down
+      // (preventDefault + stopImmediatePropagation on the event AND its inner
+      // event), then run our own back action. Mirrors the plugin's sidecar cancel.
+      function makeBackButtonDown(back) {
+        return function (evt) {
+          try {
+            var d = evt && evt.detail;
+            if (!d || d.button !== 2) return false; // 2 = CANCEL (B)
+            try { evt.preventDefault(); evt.stopImmediatePropagation(); } catch (e) {}
+            try { var inner = d.event; if (inner) { inner.preventDefault(); inner.stopImmediatePropagation(); } } catch (e) {}
+            back();
+            return true;
+          } catch (e) { return false; }
+        };
+      }
+      var backToHub = function () { setLogs(null); };
+      // B follows the CURRENT context, not always "back to Deck Shelves":
+      // inside the expanded log panel B collapses it back to the hub screen;
+      // otherwise (opened from the editor) B returns to Deck Shelves. When
+      // neither applies (standalone hub, logs closed) B falls through to close
+      // the tab as usual.
+      var contextualBack = (logs !== null) ? backToHub : (onBack || null);
+      // Root wrapper for the hub view: when there is a contextual back action,
+      // wrap in a Focusable that absorbs B and runs it instead of letting the
+      // QAM router navigate the tab away.
+      function panelRoot(baseProps, kids) {
+        var useFocus = !!(contextualBack && focusableComp);
+        var props = {};
+        for (var k in baseProps) props[k] = baseProps[k];
+        if (useFocus) {
+          props.onButtonDown = makeBackButtonDown(contextualBack);
+          props.onCancel = function () { try { contextualBack(); } catch (e) {} };
+        }
+        return React.createElement.apply(React, [useFocus ? focusableComp : "div", props].concat(kids));
+      }
+      // "Restart to update" notice: shown when the daemon has detected a newer
+      // ShelvesHub release it can't self-replace in place yet (getConfig reports
+      // `pending_hub_update`). Informational — the user restarts the service to apply.
+      function hubUpdateNotice() {
+        var ver = uc.pending_hub_update;
+        if (typeof ver !== "string" || !ver) return null;
+        return h("div", { key: "hubupd", "data-fb": "hub-update", style: { display: "flex", alignItems: "center", gap: "8px", background: "rgba(26,159,255,0.15)", border: "1px solid rgba(26,159,255,0.45)", borderRadius: "6px", padding: "8px 10px", margin: "0 0 10px", fontSize: "13px" } },
+          fbIcon("update"), h("span", { key: "t" }, I18N.t("hub_update_restart") + " (" + ver + ")"));
+      }
+      // The "Advanced" area: a plugin-style collapsible whose content is grouped
+      // into collapsible sub-sections (Troubleshooting / Configuration / Status),
+      // with localized labels, centered steppers, and focusable rows.
+      var advRowStyle = { display: "flex", alignItems: "center", gap: "10px", minHeight: "40px", width: "100%", boxSizing: "border-box", padding: "6px 16px", border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontSize: "13px" };
+      var advToggleRow = function (key, label, checked, onAct) {
+        return clickable(function () { onAct(!checked); }, { key: key, "data-fb": key, "data-on": checked ? "1" : "0", focusClassName: "shelves-rowfocus", style: advRowStyle },
+          [h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left" } }, label), updSwitch(checked)]);
+      };
+      var advStepRow = function (key, label, val) {
+        var stepBtn = function (sym, delta) {
+          return clickable(function () { applyCfg(key, Math.max(0, (Number(val) || 0) + delta)); }, { key: key + sym, "data-fb": key + sym, style: { flex: "0 0 auto", width: "30px", height: "28px", borderRadius: "4px", border: "none", background: "rgba(255,255,255,0.14)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "16px", lineHeight: "1", padding: "0" } }, [sym]);
+        };
+        return h("div", { key: key, style: { display: "flex", alignItems: "center", gap: "8px", minHeight: "40px", boxSizing: "border-box", padding: "6px 16px", fontSize: "13px" } },
+          h("span", { key: "l", style: { flex: "1 1 auto" } }, label), stepBtn("−", -5), h("span", { key: "v", style: { flex: "0 0 auto", minWidth: "34px", textAlign: "center", fontFamily: "monospace" } }, String(Number(val) || 0)), stepBtn("+", 5));
+      };
+      // Read-only status rows: focusable (so the gamepad can walk them), whole-row
+      // highlight, label left + value right for a clean two-column read.
+      var advRoRow = function (key, label, val) {
+        var body = [
+          h("span", { key: "l", style: { flex: "0 0 auto", color: "rgba(255,255,255,0.72)" } }, label),
+          h("span", { key: "v", style: { flex: "1 1 auto", textAlign: "right", fontFamily: "monospace", wordBreak: "break-all", color: "rgba(255,255,255,0.92)" } }, String(val)),
+        ];
+        var st = { display: "flex", alignItems: "center", gap: "10px", minHeight: "36px", boxSizing: "border-box", padding: "6px 16px", fontSize: "12px" };
+        return focusableComp
+          ? h(focusableComp, { key: key, "data-fb": "ro-" + key, onActivate: function () {}, focusClassName: "shelves-rowfocus", style: st }, body)
+          : h("div", { key: key, style: st }, body);
+      };
+      // A flat, edge-to-edge action row (icon + label), same pattern as the other
+      // rows so buttons and toggles read as one unified list.
+      function actionRow(id, iconKey, labelKey, method) {
+        return clickable(function () { if (!busy) run(id, method); }, { key: "act-" + id, "data-fb": id, focusClassName: "shelves-rowfocus", style: { display: "flex", alignItems: "center", gap: "10px", minHeight: "40px", width: "100%", boxSizing: "border-box", padding: "6px 16px", border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontSize: "13px", opacity: (busy && busy !== id) ? 0.5 : 1 } },
+          [fbIcon(iconKey), h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left" } }, I18N.t(labelKey))]);
+      }
+      // The whole panel body as top-level collapsible sections (no "Advanced"
+      // wrapper) in the plugin's flat QAM style: Updates, Troubleshooting,
+      // Configuration, Status. Each carries a count badge when collapsed.
+      function buildSections(useNative, TF) {
+        var sections = [];
+        var upd = updRows(useNative, TF).slice();
+        upd.push(actionRow("download", "download", "action_download", "populateBundle"));
+        upd.push(actionRow("update", "update", "action_update_hub", "selfUpdate"));
+        sections.push(h(HubCollapsible, { key: "sec-upd", id: "sec-updates", title: I18N.t("sec_updates"), count: upd.length, initialOpen: true }, upd));
+        var trouble = [actionRow("logs", "logs", "action_logs", "getLogs")];
+        if (rc) {
+          trouble.push(advToggleRow("adv-pause", I18N.t("adv_disable_hub"), rc.paused === true, applyPaused));
+          if (rc.paused === true) trouble.push(h("div", { key: "pn", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_paused")));
+        }
+        sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: rc ? 2 : 1 }, trouble));
+        if (rc) {
+          // Only genuine operational config here — `native_qam` (default on; a
+          // recovery knob left to the config file/env) and `prerelease` (already
+          // covered by the Updates section's pre-release channels) are intentionally
+          // NOT surfaced, to keep this uncluttered.
+          var conf = [
+            advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }),
+            advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), rc.owner_settle_secs),
+            advStepRow("interval_secs", I18N.t("cfg_interval"), rc.interval_secs),
+          ];
+          if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));
+          sections.push(h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: 3 }, conf));
+          var status = [
+            advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),
+            advRoRow("rpc", I18N.t("cfg_rpc"), rc.rpc_addr || ""),
+            advRoRow("recover", I18N.t("cfg_recover_cmd"), rc.recover_cmd == null ? "—" : rc.recover_cmd),
+            advRoRow("bundle", I18N.t("cfg_bundle"), rc.bundle_path || ""),
+            advRoRow("backend", I18N.t("cfg_backend"), rc.backend ? "on" : "off"),
+            advRoRow("version", I18N.t("cfg_version"), rc.version || ""),
+          ];
+          sections.push(h(HubCollapsible, { key: "sec-st", id: "sec-status", title: I18N.t("adv_sec_status"), count: status.length }, status));
+        }
+        return sections;
+      }
       function run(id, method) {
         if (method === "getLogs") { viewLogs(); return; }
         setBusy(id);
         hostRpc(method).then(function () { setBusy(null); }, function () { setBusy(null); });
       }
-      function applyAuto(next) {
+      // Persist one update preference. The master goes through setAutoUpdate
+      // (kept for back-compat); the nested switches through setUpdatePref. The
+      // UI updates optimistically and reconciles with the store's echo.
+      function applyPref(key, next) {
         if (busy) return;
-        setAutoUpdate(next); setBusy("auto");
-        hostRpc("setAutoUpdate", next).then(function (r) {
+        var optimistic = {}; for (var k in uc) optimistic[k] = uc[k]; optimistic[key] = next;
+        setCfg(optimistic); setBusy("upd");
+        var method = key === "auto_update" ? "setAutoUpdate" : "setUpdatePref";
+        var args = key === "auto_update" ? next : { key: key, value: next };
+        hostRpc(method, args).then(function (r) {
           setBusy(null);
-          if (r && r.ok && r.result && typeof r.result.auto_update === "boolean") setAutoUpdate(r.result.auto_update);
-        }, function () { setBusy(null); setAutoUpdate(!next); });
+          if (r && r.ok && r.result && typeof r.result === "object") setCfg(r.result);
+        }, function () { setBusy(null); setCfg(uc); });
+      }
+      // The nested update hierarchy: master → { hub, plugin } → each a beta
+      // channel. A child is HIDDEN (not disabled) while any ancestor switch is
+      // off — the moment the parent turns on the child appears. `visible` encodes
+      // the full ancestor chain, so filtering by it hides whole sub-trees at once.
+      var UPD_ROWS = [
+        { key: "auto_update",        labelKey: "action_auto_update", depth: 0, visible: function () { return true; } },
+        { key: "auto_update_hub",    labelKey: "update_hub",         depth: 1, visible: function () { return on; } },
+        { key: "hub_prerelease",     labelKey: "update_beta",        depth: 2, visible: function () { return on && uc.auto_update_hub === true; } },
+        { key: "auto_update_plugin", labelKey: "update_plugin",      depth: 1, visible: function () { return on; } },
+        { key: "plugin_prerelease",  labelKey: "update_beta",        depth: 2, visible: function () { return on && uc.auto_update_plugin === true; } },
+      ];
+      function updSwitch(checked) {
+        return h("span", { key: "sw", style: { flex: "0 0 auto", width: "38px", height: "22px", borderRadius: "11px", position: "relative", background: checked ? "#1a9fff" : "rgba(255,255,255,0.25)" } },
+          h("span", { style: { position: "absolute", top: "2px", left: checked ? "18px" : "2px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff" } }));
+      }
+      // useNative renders each level as a native ToggleField; the plain path uses
+      // a self-contained focusable row with a hand-drawn switch. Indentation (per
+      // depth) conveys the hierarchy; rows whose ancestor is off are not rendered.
+      function updRows(useNative, TF) {
+        return UPD_ROWS.filter(function (rw) { return rw.visible(); }).map(function (rw) {
+          var checked = uc[rw.key] === true;
+          var indent = rw.depth * 20;
+          if (useNative && TF) {
+            return h("div", { key: rw.key, style: { marginLeft: indent + "px", marginTop: rw.depth ? "2px" : "10px" } },
+              h(TF, { label: I18N.t(rw.labelKey), checked: checked, disabled: !!busy, onChange: function (v) { applyPref(rw.key, !!v); } }));
+          }
+          var rowStyle = { display: "flex", alignItems: "center", gap: "10px", width: "100%", boxSizing: "border-box", padding: "10px 14px", marginTop: rw.depth ? "4px" : "8px", marginLeft: indent + "px", textAlign: "left", border: "none", borderRadius: "4px", fontSize: "14px", color: "#fff", background: "rgba(255,255,255,0.08)", cursor: busy ? "default" : "pointer" };
+          return clickable(function () { if (!busy) applyPref(rw.key, !checked); }, { key: rw.key, "data-fb": "upd-" + rw.key, "data-on": checked ? "1" : "0", style: rowStyle },
+            [h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t(rw.labelKey)), updSwitch(checked)]);
+        });
       }
 
       // ── Log viewer ── merged daemon + runtime lines (getLogs), each parsed
       // from `[LEVEL] [ts] [scope] msg` into a badged row (level colour + scope),
       // so it reads like the plugin's Advanced → Logs. Newest first, scrollable.
-      if (logs !== null) {
+      // Rendered inline below the hub actions (an expandable panel that keeps the
+      // ShelvesHub screen visible); the gamepad reaches it in the normal nav flow.
+      function buildLogView() {
         var parseLine = function (line) {
           var m = /^\[(\w+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+([\s\S]*)$/.exec(String(line));
           return m ? { level: m[1].toUpperCase(), ts: m[2], scope: m[3], msg: m[4] }
                    : { level: "INFO", ts: "", scope: "", msg: String(line) };
         };
+        // Each row is a Focusable item (gamepad-navigable, like the plugin's
+        // Advanced → Logs list), falling back to a plain <div> before Focusable
+        // is discovered. Steam moves focus row-to-row and scrolls the container.
         var logRow = function (line, i) {
           var p = parseLine(line);
           var lb = LOG_LEVEL_BG[p.level] || "#64748b";
           var sc = LOG_SCOPE_COLOR[p.scope] || "rgba(255,255,255,0.14)";
-          return h("div", { key: "l" + i, style: { display: "flex", gap: "6px", alignItems: "baseline", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: "11px", lineHeight: "1.35", fontFamily: "monospace" } },
-            h("span", { style: { flex: "0 0 auto", background: lb, color: "#04121f", padding: "0 4px", borderRadius: "2px", fontWeight: "800" } }, p.level),
-            p.scope ? h("span", { style: { flex: "0 0 auto", background: sc, color: "#04121f", padding: "0 4px", borderRadius: "2px", fontWeight: "700" } }, p.scope) : null,
-            h("span", { style: { flex: "1 1 auto", color: "rgba(255,255,255,0.88)", wordBreak: "break-word", whiteSpace: "pre-wrap" } }, p.msg),
-            p.ts ? h("span", { style: { flex: "0 0 auto", color: "rgba(255,255,255,0.4)" } }, p.ts.slice(11)) : null);
+          var rowStyle = { display: "flex", gap: "8px", alignItems: "baseline", padding: "7px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: "12px", lineHeight: "1.5", fontFamily: "monospace" };
+          var kids = [
+            h("span", { key: "lv", style: { flex: "0 0 auto", background: lb, color: "#04121f", padding: "0 4px", borderRadius: "2px", fontWeight: "800" } }, p.level),
+            p.scope ? h("span", { key: "sc", style: { flex: "0 0 auto", background: sc, color: "#04121f", padding: "0 4px", borderRadius: "2px", fontWeight: "700" } }, p.scope) : null,
+            h("span", { key: "ms", style: { flex: "1 1 auto", color: "rgba(255,255,255,0.88)", wordBreak: "break-word", whiteSpace: "pre-wrap" } }, p.msg),
+            p.ts ? h("span", { key: "ts", style: { flex: "0 0 auto", color: "rgba(255,255,255,0.4)" } }, p.ts.slice(11)) : null,
+          ];
+          // A Focusable only becomes a gamepad focus STOP when it has an activate
+          // handler — the plugin's log rows carry one too. Without it Steam skips
+          // the row and focus never lands in the list (the "can't focus" bug). The
+          // handler is a no-op; the row is a read-only line.
+          var props = focusableComp
+            ? { key: "l" + i, focusClassName: "shelves-rowfocus", style: rowStyle, "data-fb": "log-row", onActivate: function () {}, onOKButton: function () {} }
+            : { key: "l" + i, style: rowStyle, "data-fb": "log-row" };
+          return React.createElement.apply(React, [focusableComp || "div", props].concat(kids));
         };
         var rows = logs.length
           ? logs.slice().reverse().map(logRow)
           : [h("div", { key: "empty", style: { opacity: 0.6, fontSize: "13px", padding: "8px 0" } }, I18N.t("logs_empty"))];
-        return h("div", { style: { padding: "12px 14px", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }, "data-fb": "logs-view" },
-          h("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flex: "0 0 auto" } },
-            clickable(function () { setLogs(null); }, { "data-fb": "logs-back", style: { display: "flex", alignItems: "center", justifyContent: "center", width: "36px", height: "32px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", cursor: "pointer", border: "none" } }, [fbIcon("back")]),
-            h("div", { style: { fontSize: "16px", fontWeight: "700", flex: "1 1 auto" } }, I18N.t("action_logs")),
-            clickable(function () { viewLogs(); }, { "data-fb": "logs-refresh", style: { fontSize: "12px", padding: "6px 10px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", cursor: "pointer", border: "none", color: "#fff" } }, [I18N.t("logs_refresh")])),
-          h("div", { style: { flex: "1 1 auto", overflowY: "auto", minHeight: "0" } }, rows));
+        // Header controls in a HORIZONTAL Focusable row (back / refresh / clear) so
+        // the gamepad walks them left-to-right, not top-to-bottom.
+        var ctrlBtn = function (key, onAct, label, extraStyle) {
+          var base = { display: "inline-flex", alignItems: "center", justifyContent: "center", height: "32px", padding: "0 10px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", cursor: "pointer", border: "none", color: "#fff", fontSize: "12px" };
+          if (extraStyle) for (var s in extraStyle) base[s] = extraStyle[s];
+          return clickable(onAct, { key: key, "data-fb": "logs-" + key, focusClassName: "shelves-gpfocus", style: base }, label);
+        };
+        var ctrls = [
+          ctrlBtn("back", backToHub, [fbIcon("back")], { width: "36px", padding: "0" }),
+          h("div", { key: "ttl", style: { fontSize: "16px", fontWeight: "700", flex: "1 1 auto" } }, I18N.t("logs_title")),
+          ctrlBtn("refresh", function () { viewLogs(); }, [I18N.t("logs_refresh")]),
+          ctrlBtn("clear", function () { clearLogs(); }, [I18N.t("logs_clear")]),
+        ];
+        var header = React.createElement.apply(React, [
+          focusableComp || "div",
+          focusableComp
+            ? { "flow-children": "horizontal", style: { display: "flex", alignItems: "center", gap: "8px", flex: "0 0 auto", padding: "0 16px 8px" } }
+            : { style: { display: "flex", alignItems: "center", gap: "8px", padding: "0 16px 8px" } },
+        ].concat(ctrls));
+        // Inline, expandable list kept BELOW the hub actions (which stay visible —
+        // the ShelvesHub screen is preserved). A vertical Focusable so the gamepad
+        // walks the rows in the normal flow (no click needed to focus) and B
+        // (onButtonDown) collapses it back. Capped height with its own scroll so it
+        // never grows the panel unbounded.
+        var listProps = focusableComp
+          ? { "flow-children": "vertical", onButtonDown: makeBackButtonDown(backToHub), onCancel: backToHub, style: { maxHeight: "300px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1px" } }
+          : { style: { maxHeight: "300px", overflowY: "auto" } };
+        var list = React.createElement.apply(React, [focusableComp || "div", listProps].concat(rows));
+        return h("div", { key: "logs-view", style: { marginTop: "12px", paddingTop: "12px", borderTop: "1px solid rgba(255,255,255,0.12)" }, "data-fb": "logs-view" },
+          header,
+          h("div", { key: "gap", style: { height: "8px" } }),
+          list);
       }
 
       // ── Native Steam components (theme-aware, gamepad-focusable, native focus
@@ -1204,90 +1476,27 @@
       // here. ButtonItem/PanelSection/PanelSectionRow are deliberately NOT used —
       // the bundle never renders them in the QAM, and mounting them in the injected
       // panel collapses the Steam UI (silent main-thread stall, no throw).
-      var DB = UI.DialogButton, TF = UI.ToggleField;
-      if (nativeUiOn() && DB && TF) {
-        var iconLabel = function (icon, key) {
-          return h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" } }, fbIcon(icon), h("span", null, I18N.t(key)));
-        };
-        var actBtn = function (id, icon, key, method) {
-          return h(DB, {
-            key: id, "data-native": "button",
-            disabled: !!busy && busy !== id,
-            style: { width: "100%", marginTop: "8px" },
-            onClick: function () { if (!busy) run(id, method); },
-          }, iconLabel(icon, key));
-        };
-        return h("div", { style: { padding: "12px 14px" }, "data-native": "section" },
-          onBack
-            ? h("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" } },
-                h(DB, { "data-native": "button", style: { flex: "0 0 auto", width: "40px", minWidth: "0", maxWidth: "40px", padding: "6px 0", boxSizing: "border-box" }, onClick: onBack }, fbIcon("back")),
-                h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
-            : h("div", { style: { fontSize: "18px", fontWeight: "700", marginBottom: "2px" } }, I18N.t("hub_title")),
-          onBack ? null : h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "2px 0 8px" } }, I18N.t("unavailable_body")),
-          actBtn("download", "download", "action_download", "populateBundle"),
-          actBtn("update", "update", "action_update_hub", "selfUpdate"),
-          actBtn("logs", "logs", "action_logs", "getLogs"),
-          // The toggle row goes edge-to-edge (breaks out of the section's horizontal
-          // padding) so the focus highlight reaches the QAM edge, exactly like the
-          // plugin's rows. The label/switch are then inset by padding the Field's
-          // CONTENT below (via the discovered gamepadDialog Field class), NOT this
-          // wrapper — so the highlight stays end-to-end while the content is spaced.
-          h("div", { className: "shelves-toggle-row", style: { marginTop: "10px", marginLeft: "-14px", marginRight: "-14px" } }, h(TF, {
-            label: I18N.t("action_auto_update"),
-            checked: on, disabled: !!busy && busy !== "auto",
-            onChange: function (v) { applyAuto(!!v); },
-          })));
-      }
-
-      // ── Panel (self-contained plain elements) ──
-      var row = {
-        display: "flex", alignItems: "center", gap: "10px",
-        width: "100%", boxSizing: "border-box", padding: "10px 14px",
-        marginTop: "8px", textAlign: "left", border: "none",
-        borderRadius: "4px", fontSize: "14px", color: "#fff",
-      };
-      function actionBtn(id, icon, key, method, primary) {
-        return clickable(function () { if (!busy) run(id, method); }, {
-          key: id,
-          "data-fb": id,
-          style: Object.assign({}, row, {
-            cursor: busy ? "default" : "pointer",
-            opacity: busy && busy !== id ? 0.5 : 1,
-            background: primary ? "#1a9fff" : "rgba(255,255,255,0.08)",
-          }),
-        }, [fbIcon(icon), h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t(key))]);
-      }
-      function toggleRow() {
-        return clickable(function () { applyAuto(!on); }, {
-          key: "auto", "data-fb": "auto", "data-on": on ? "1" : "0",
-          style: Object.assign({}, row, { cursor: busy ? "default" : "pointer", background: "rgba(255,255,255,0.08)" }),
-        }, [
-          fbIcon("auto"),
-          h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t("action_auto_update")),
-          h("span", {
-            key: "sw",
-            style: { flex: "0 0 auto", width: "38px", height: "22px", borderRadius: "11px", position: "relative", background: on ? "#1a9fff" : "rgba(255,255,255,0.25)" },
-          }, h("span", { style: { position: "absolute", top: "2px", left: on ? "18px" : "2px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff" } }))
-        ]);
-      }
+      // ── One unified panel body (no native/plain split): a shared title + notice,
+      //    then the collapsible sections (native ToggleFields when available, else
+      //    the plain fallback inside them), the inline log view, and the version
+      //    footer. EDGE-TO-EDGE: the panel has NO horizontal padding — every row and
+      //    section header owns its own 16px inset, so the focus highlight reaches the
+      //    panel edges while content stays aligned (the plugin's QAM pattern). ──
+      var TF = UI.ToggleField;
+      var useNative = nativeUiOn() && !!TF;
       var titleRow = onBack
-        ? h("div", { style: { display: "flex", alignItems: "center", gap: "8px" } },
-            clickable(onBack, {
-              "data-fb": "back", title: I18N.t("action_back"),
-              style: { flex: "0 0 auto", width: "28px", height: "28px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" },
-            }, [fbIcon("back")]),
+        ? h("div", { key: "title", style: { display: "flex", alignItems: "center", gap: "8px", padding: "4px 16px 8px" } },
+            clickable(onBack, { "data-fb": "back", title: I18N.t("action_back"), focusClassName: "shelves-gpfocus", style: { flex: "0 0 auto", width: "28px", height: "28px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" } }, [fbIcon("back")]),
             h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
-        : h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title"));
-      return h(
-        "div",
-        { style: { padding: "16px 15px 10px" }, "data-fb-panel": "1" },
-        titleRow,
-        onBack ? null : h("div", { style: { fontSize: "13px", opacity: 0.7, margin: "4px 0 12px" } }, I18N.t("unavailable_body")),
-        actionBtn("download", "download", "action_download", "populateBundle", true),
-        actionBtn("update", "update", "action_update_hub", "selfUpdate"),
-        actionBtn("logs", "logs", "action_logs", "getLogs"),
-        toggleRow()
-      );
+        : h("div", { key: "title", style: { fontSize: "18px", fontWeight: "700", padding: "6px 16px 4px" } }, I18N.t("hub_title"));
+      var body = [titleRow];
+      var notice = hubUpdateNotice();
+      if (notice) body.push(h("div", { key: "nw", style: { padding: "0 16px" } }, notice));
+      if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
+      body = body.concat(buildSections(useNative, TF));
+      if (logs !== null) body.push(buildLogView());
+      body.push(hubVersionFooter(uc.version));
+      return panelRoot({ style: { padding: "8px 0 0" }, "data-fb-panel": "1" }, body);
     }
     // Our tab: the plugin's editor when present, plus a ShelvesHub row pinned at
     // the end that opens the host's hub view (the same actions as the fallback) —
@@ -1340,7 +1549,10 @@
       var ringCss =
         ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{" +
         "box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;" +
-        "border-radius:4px;}";
+        "border-radius:4px;}" +
+        // Whole-row focus highlight (a background, like the plugin's QAM rows) for
+        // section headers and Advanced rows — not the button ring above.
+        ".shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}";
       // Our edge-to-edge toggle row's Field has 0 horizontal padding, so its label/
       // switch would touch the QAM edges. Pad the Field's CONTENT (not the wrapper):
       // the highlight/background still reaches the QAM edge, only the content insets.

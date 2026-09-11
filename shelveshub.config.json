@@ -19,8 +19,8 @@
   "// owner_settle_secs": "When the renderer is present but UNCLAIMED, seconds to wait for another host (e.g. a plugin loader like the loader) to claim it before ShelvesHub hosts it itself. Default 25 is safe alongside another host (the primary setup) — a fast tick never hijacks a plugin the other host is about to load. Set 0 if ShelvesHub is the ONLY host, for an instant boot.",
   "owner_settle_secs": 25,
 
-  "// native_qam": "Show the native Steam Quick Access tab (real buttons/toggles). false ships the safe default; set true to enable it (also enabled per-service via SHELVES_NATIVE_QAM=1).",
-  "native_qam": false,
+  "// native_qam": "Show the native Steam Quick Access tab (real buttons/toggles). true is the default (sole mode uses the post-settle inject, which is collapse-safe); set false to disable it. Can also be forced per-service via SHELVES_NATIVE_QAM=1.",
+  "native_qam": true,
 
   "// prerelease": "Consider pre-release Deck Shelves builds when obtaining or self-installing the bundle (the beta channel). false = stable releases only.",
   "prerelease": false,

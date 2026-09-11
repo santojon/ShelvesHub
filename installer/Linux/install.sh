@@ -19,6 +19,8 @@ sudo chmod +x "$INSTALL_DIR/$BINARY"
 [[ -f shelveshub.config.json && ! -f "$INSTALL_DIR/shelveshub.config.json" ]] && sudo cp shelveshub.config.json "$INSTALL_DIR/"
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 [[ -d backend ]] && sudo mkdir -p "$INSTALL_DIR/backend" && sudo cp -r backend/. "$INSTALL_DIR/backend/"
+# Keep the uninstaller alongside the install so it's available later.
+[[ -f installer/uninstall.sh ]] && sudo cp installer/uninstall.sh "$INSTALL_DIR/" && sudo chmod +x "$INSTALL_DIR/uninstall.sh"
 
 sudo cp installer/shelveshub.service "$SERVICE_FILE"
 sudo chmod 644 "$SERVICE_FILE"

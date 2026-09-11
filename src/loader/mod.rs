@@ -7,6 +7,7 @@
 //! marker-less context) is handled for free: the next probe returns `false`
 //! and we re-inject.
 
+use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
 use std::thread;
@@ -17,6 +18,7 @@ use serde_json::json;
 use crate::cdp::{self, CdpClient};
 use crate::config::Config;
 use crate::logger::{log_error, log_info, log_warning};
+use crate::populate;
 use crate::state;
 
 mod preload;
@@ -95,11 +97,22 @@ pub fn run(config: Config) {
 
     log_info("loader", "Injection loop started.");
     let interval = Duration::from_secs(config.interval_secs);
+    // While the bundle is NOT yet active (renderer still settling, not confirmed,
+    // etc.) poll on a short interval so the first inject lands promptly after the
+    // renderer appears — otherwise a renderer that settles just after a tick waits
+    // a full `interval` (up to 30s) before hosting, the visible cold-start lag.
+    // Once active (or coexisting), back off to the idle `interval` to keep CPU low.
+    let fast = Duration::from_secs(2).min(interval);
     let mut consecutive_collapse: u32 = 0;
     // Tracks how long the renderer has been unclaimed, for the owner-settle guard
     // (`owner_settle_secs`): hold off owner-mode hosting until either a claim
     // appears (→ coexist) or the settle window elapses (→ sole host).
     let mut empty_since: Option<Instant> = None;
+    // Throttle for the auto-update check (see auto_update_check): first check runs
+    // on the first Active tick, then at most once per UPDATE_CHECK_INTERVAL.
+    let mut last_update_check: Option<Instant> = None;
+    // Tracks the troubleshooting pause so the transition INTO paused reloads once.
+    let mut was_paused = false;
 
     loop {
         // Health gate. The visible Steam UI lives in windows (Big Picture, Main
@@ -148,7 +161,36 @@ pub fn run(config: Config) {
         }
         consecutive_collapse = 0;
 
-        match tick(&config, &mut empty_since) {
+        // Troubleshooting pause (setHostingPaused): stand down until the service
+        // restarts (the flag is in-memory). On the transition INTO paused, reload
+        // the renderer once so the current injection is cleared and the user gets
+        // a clean Steam. While paused we never inject.
+        if state::hosting_paused() {
+            if !was_paused {
+                log_info(
+                    "loader",
+                    "Hosting paused (until restart) — standing down and reloading the renderer.",
+                );
+                reload_renderer(&config);
+            }
+            was_paused = true;
+            state::set_injected(false);
+            thread::sleep(interval);
+            continue;
+        }
+        if was_paused {
+            log_info("loader", "Hosting resumed.");
+            was_paused = false;
+        }
+
+        let result = tick(&config, &mut empty_since);
+        // Bundle hosted (Active) or the coexist tab is in place → idle cadence;
+        // anything else means we still have work to do soon → fast cadence.
+        let settled = matches!(&result, Ok(Tick::Active) | Ok(Tick::CoexistTab(_)));
+        // We host the bundle ourselves (sole/owner) only on Active — NOT coexist,
+        // where the plugin loader owns its own copy and must not be touched.
+        let hosting = matches!(&result, Ok(Tick::Active));
+        match result {
             Ok(Tick::Active) => {
                 state::set_injected(true);
                 log_info("loader", "Bundle active in renderer.");
@@ -193,7 +235,193 @@ pub fn run(config: Config) {
             }
         }
 
-        thread::sleep(interval);
+        // When we host the bundle, periodically check for a newer Deck Shelves
+        // release and apply it (if auto-update is enabled) so the plugin stays
+        // current and its update banner clears. Throttled + best-effort.
+        if hosting && last_update_check.is_none_or(|t| t.elapsed() >= UPDATE_CHECK_INTERVAL) {
+            last_update_check = Some(Instant::now());
+            auto_update_check(&config);
+        }
+
+        thread::sleep(if settled { interval } else { fast });
+    }
+}
+
+/// How often the daemon checks for a newer Deck Shelves release while hosting
+/// with auto-update on. Rare on purpose: it hits the GitHub API and, on an actual
+/// update, reloads the renderer.
+const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+/// When auto-update is enabled AND we host the bundle (sole/owner — never coexist,
+/// where the plugin loader owns its own copy), compare the latest release tag for
+/// the plugin channel to the tag we last installed; on a change, download the new
+/// bundle, record the tag, and reload the renderer so the plugin reboots on it
+/// (which clears its "update available" banner). Best-effort: any network/parse
+/// miss is a silent no-op until the next check, and a working bundle is never
+/// replaced unless a genuinely different release tag is published.
+fn auto_update_check(config: &Config) {
+    let mut settings = crate::store::load(&config.hub_config_path);
+    if !settings.auto_update {
+        state::set_pending_hub_update(None); // master off — clear any stale notice
+        return;
+    }
+    // ── Plugin bundle: download + swap + reload on a newer release. ──
+    if settings.auto_update_plugin {
+        if let Some(latest) = populate::latest_release_tag(config.prerelease) {
+            // Apply when we don't yet know what's installed (seed the tag) OR the
+            // latest on the channel is strictly newer by SEMVER — never a downgrade
+            // (so a newer beta is not replaced by an older stable on a channel switch,
+            // and a same-core stable DOES supersede its beta).
+            let apply =
+                settings.bundle_tag.is_empty() || version_is_newer(&latest, &settings.bundle_tag);
+            if apply && latest != settings.bundle_tag {
+                log_info(
+                    "update",
+                    &format!(
+                        "Deck Shelves update available (installed \"{}\" → latest \"{latest}\") — applying.",
+                        settings.bundle_tag
+                    ),
+                );
+                match populate::update_from_release(&config.bundle_path, config.prerelease) {
+                    Ok(url) => {
+                        settings.bundle_tag = latest;
+                        if let Err(e) = crate::store::save(&config.hub_config_path, &settings) {
+                            log_warning(
+                                "update",
+                                &format!("applied update but could not record tag: {e}"),
+                            );
+                        }
+                        log_info(
+                            "update",
+                            &format!("Applied Deck Shelves update from {url}; reloading."),
+                        );
+                        reload_renderer(config);
+                    }
+                    Err(e) => log_warning("update", &format!("update download failed: {e}")),
+                }
+            }
+        }
+    }
+    // ── Hub itself: detect a newer release and record a "restart to update"
+    //    notice. The in-place binary swap is scaffolded (populate::apply_hub_update)
+    //    but not yet wired, so we notify rather than self-replace. ──
+    if settings.auto_update_hub {
+        check_hub_update(settings.hub_prerelease);
+    } else {
+        state::set_pending_hub_update(None);
+    }
+}
+
+/// Hub self-update (scaffold): detect a newer ShelvesHub release for the channel
+/// and record it (`state::set_pending_hub_update`) so the hub screen shows a
+/// "restart to update" notice. The actual in-place binary swap lives in
+/// `populate::apply_hub_update` (not yet implemented). Logs only when the pending
+/// version changes, so the periodic re-check never spams the log.
+fn check_hub_update(prerelease: bool) {
+    let Some(latest) = populate::latest_hub_release_tag(prerelease) else {
+        return; // network/parse miss — leave any existing notice as-is
+    };
+    let current = env!("CARGO_PKG_VERSION");
+    if version_is_newer(&latest, current) {
+        if state::pending_hub_update().as_deref() != Some(latest.as_str()) {
+            log_info(
+                "update",
+                &format!(
+                    "ShelvesHub {latest} available (running {current}) — restart to apply; in-place self-update pending."
+                ),
+            );
+        }
+        state::set_pending_hub_update(Some(latest));
+    } else {
+        state::set_pending_hub_update(None);
+    }
+}
+
+/// True when release tag `latest` is a strictly newer version than the running
+/// `current` (CARGO_PKG_VERSION) by SEMVER PRECEDENCE — so a pre-release is lower
+/// than its release (`3.3.0-beta.2` < `3.3.0`), a higher core wins regardless of
+/// suffix (`3.3.0-beta.2` > `3.0.0`), and two pre-releases order by their
+/// identifiers (`beta.2` > `beta.1`). Channel selection (stable vs pre-release)
+/// is separate — this only orders versions the channel already allows. An
+/// unparseable version never prompts (a false negative only delays the notice).
+fn version_is_newer(latest: &str, current: &str) -> bool {
+    match (parse_semver(latest), parse_semver(current)) {
+        (Some(l), Some(c)) => semver_precedence(&l, &c) == Ordering::Greater,
+        _ => false,
+    }
+}
+
+/// (major, minor, patch) + the dot-separated pre-release identifiers (empty = a
+/// stable release). Build metadata (`+…`) is ignored, per semver.
+type Semver = ((u64, u64, u64), Vec<String>);
+
+fn parse_semver(s: &str) -> Option<Semver> {
+    let s = s.trim().trim_start_matches('v');
+    let (core, pre) = match s.split_once('-') {
+        Some((c, p)) => (c, p.split('+').next().unwrap_or("")),
+        None => (s.split('+').next().unwrap_or(s), ""),
+    };
+    let mut it = core.split('.');
+    let major = it.next()?.parse().ok()?;
+    let minor = it.next()?.parse().ok()?;
+    let patch = it.next()?.parse().ok()?;
+    let pre_ids = if pre.is_empty() {
+        Vec::new()
+    } else {
+        pre.split('.').map(str::to_string).collect()
+    };
+    Some(((major, minor, patch), pre_ids))
+}
+
+fn semver_precedence(a: &Semver, b: &Semver) -> Ordering {
+    match a.0.cmp(&b.0) {
+        Ordering::Equal => {}
+        core => return core,
+    }
+    // Equal core: a stable (no pre-release) outranks a pre-release of that core.
+    match (a.1.is_empty(), b.1.is_empty()) {
+        (true, true) => Ordering::Equal,
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (false, false) => cmp_prerelease(&a.1, &b.1),
+    }
+}
+
+/// Compare pre-release identifier lists (semver §11): numeric identifiers compare
+/// numerically and rank below alphanumeric ones; a longer list outranks a prefix.
+fn cmp_prerelease(a: &[String], b: &[String]) -> Ordering {
+    for (x, y) in a.iter().zip(b.iter()) {
+        let ord = match (x.parse::<u64>(), y.parse::<u64>()) {
+            (Ok(nx), Ok(ny)) => nx.cmp(&ny),
+            (Ok(_), Err(_)) => Ordering::Less,
+            (Err(_), Ok(_)) => Ordering::Greater,
+            (Err(_), Err(_)) => x.as_str().cmp(y.as_str()),
+        };
+        if ord != Ordering::Equal {
+            return ord;
+        }
+    }
+    a.len().cmp(&b.len())
+}
+
+/// Reload the renderer over CDP so a freshly-swapped bundle is picked up (the
+/// daemon re-injects on the next tick into the reloaded page). Best-effort.
+fn reload_renderer(config: &Config) {
+    match CdpClient::connect_renderer(
+        &config.cef_host,
+        config.cef_port,
+        config.target_filter.as_deref(),
+    ) {
+        Ok(mut client) => {
+            let _ = client.call("Page.enable", json!({}));
+            if let Err(e) = client.call("Page.reload", json!({ "ignoreCache": false })) {
+                log_warning("update", &format!("reload after update failed: {e}"));
+            }
+        }
+        Err(e) => log_warning(
+            "update",
+            &format!("reload after update: cannot connect: {e}"),
+        ),
     }
 }
 
@@ -480,6 +708,24 @@ mod tests {
     fn injects_when_unclaimed_or_own() {
         assert!(may_inject("", false));
         assert!(may_inject(OWNER_KIND, false));
+    }
+
+    #[test]
+    fn version_is_newer_uses_semver_precedence() {
+        // Core comparison.
+        assert!(version_is_newer("v0.2.0", "0.1.0"));
+        assert!(version_is_newer("0.1.1", "0.1.0"));
+        assert!(!version_is_newer("v0.1.0", "0.1.0")); // equal → not newer
+        assert!(!version_is_newer("v0.0.1", "0.1.0")); // older → not newer
+                                                       // Pre-release precedence: a stable outranks its own pre-release.
+        assert!(version_is_newer("3.3.0", "3.3.0-beta.2")); // stable > beta of same core
+        assert!(!version_is_newer("3.3.0-beta.2", "3.3.0")); // beta of same core is NOT newer
+        assert!(version_is_newer("3.3.0-beta.2", "3.3.0-beta.1")); // beta.2 > beta.1
+                                                                   // A higher core wins regardless of suffix (channel gates whether it's seen).
+        assert!(version_is_newer("3.3.0-beta.2", "3.0.0"));
+        // Unparseable never prompts.
+        assert!(!version_is_newer("not-a-version", "0.1.0"));
+        assert!(!version_is_newer("v0.2.0", "garbage"));
     }
 
     #[test]

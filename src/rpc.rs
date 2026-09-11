@@ -18,6 +18,18 @@ use crate::backend;
 use crate::logger::{log_error, log_info, log_warning};
 use crate::state;
 
+/// Operational-config keys the "advanced configuration" editor may change. The
+/// rest (host/port/paths) stay read-only — editing them can cut the panel off
+/// from the daemon. All apply on the next restart.
+const EDITABLE_CONFIG_KEYS: [&str; 6] = [
+    "native_qam",
+    "prerelease",
+    "owner_settle_secs",
+    "interval_secs",
+    "force_owner",
+    "recover_cmd",
+];
+
 pub fn serve(addr: &str) {
     let listener = match TcpListener::bind(addr) {
         Ok(l) => {
@@ -193,8 +205,24 @@ fn dispatch(body: &str) -> String {
         },
         // The host's own settings (the fallback panel's auto-update toggle).
         Some("getConfig") => match state::hub_config_path() {
-            Some(path) => match serde_json::to_string(&crate::store::load(path)) {
-                Ok(json) => ok(json),
+            Some(path) => match serde_json::to_value(crate::store::load(path)) {
+                Ok(mut v) => {
+                    // Merge in the runtime-only "restart to update" notice (the hub
+                    // has a newer release but can't self-replace its running binary
+                    // yet) so the hub screen can surface it. `null` = none.
+                    if let Some(obj) = v.as_object_mut() {
+                        obj.insert(
+                            "pending_hub_update".to_string(),
+                            state::pending_hub_update().map_or(Value::Null, Value::String),
+                        );
+                        obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
+                        obj.insert(
+                            "version".to_string(),
+                            Value::String(env!("CARGO_PKG_VERSION").to_string()),
+                        );
+                    }
+                    ok(v.to_string())
+                }
                 Err(e) => err(&format!("serialize config: {e}")),
             },
             None => err("hub config path not configured"),
@@ -227,6 +255,60 @@ fn dispatch(body: &str) -> String {
             }
             None => err("hub config path not configured"),
         },
+        // Set one of the nested update-preference switches by key (the fallback
+        // panel's update hierarchy). Args: `{ key, value }`. Unknown keys are
+        // rejected so a typo can never silently no-op.
+        Some("setUpdatePref") => match state::hub_config_path() {
+            Some(path) => {
+                let args = parsed.as_ref().and_then(|v| v.get("args"));
+                let key = args.and_then(|a| a.get("key")).and_then(Value::as_str);
+                let value = args
+                    .and_then(|a| a.get("value"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let mut settings = crate::store::load(path);
+                let applied = match key {
+                    Some("auto_update") => {
+                        settings.auto_update = value;
+                        true
+                    }
+                    Some("auto_update_hub") => {
+                        settings.auto_update_hub = value;
+                        true
+                    }
+                    Some("hub_prerelease") => {
+                        settings.hub_prerelease = value;
+                        true
+                    }
+                    Some("auto_update_plugin") => {
+                        settings.auto_update_plugin = value;
+                        true
+                    }
+                    Some("plugin_prerelease") => {
+                        settings.plugin_prerelease = value;
+                        true
+                    }
+                    _ => false,
+                };
+                if !applied {
+                    return err(&format!("unknown update pref key: {key:?}"));
+                }
+                match crate::store::save(path, &settings) {
+                    Ok(()) => {
+                        log_info("rpc", &format!("Update pref {key:?} set to {value}."));
+                        match serde_json::to_string(&settings) {
+                            Ok(json) => ok(json),
+                            Err(e) => err(&format!("serialize config: {e}")),
+                        }
+                    }
+                    Err(e) => {
+                        log_error("rpc", &format!("save config failed: {e}"));
+                        err(&format!("save config: {e}"))
+                    }
+                }
+            }
+            None => err("hub config path not configured"),
+        },
         // Recent daemon log lines (the fallback panel's "view logs" action).
         Some("getLogs") => {
             let n = parsed
@@ -241,6 +323,104 @@ fn dispatch(body: &str) -> String {
             match serde_json::to_string(&state::recent_logs(n)) {
                 Ok(json) => ok(json),
                 Err(e) => err(&format!("serialize logs: {e}")),
+            }
+        }
+        // Clear the in-memory log ring the viewer shows (the fallback panel's
+        // Clear action). The on-disk daemon log is left intact.
+        Some("clearLogs") => {
+            state::clear_logs();
+            ok("true".to_string())
+        }
+        // Troubleshooting: pause/resume hosting until the next service restart.
+        // Args: a bool (or `{ paused }`). In-memory, so a restart always resumes.
+        Some("setHostingPaused") => {
+            let paused = parsed
+                .as_ref()
+                .and_then(|v| v.get("args"))
+                .and_then(|a| {
+                    a.as_bool()
+                        .or_else(|| a.get("paused").and_then(Value::as_bool))
+                })
+                .unwrap_or(false);
+            state::set_hosting_paused(paused);
+            log_info("rpc", &format!("Hosting paused set to {paused}."));
+            ok(format!(r#"{{"paused":{paused}}}"#))
+        }
+        // Advanced configuration mirror (read): the effective operational config +
+        // which keys are editable + live state (paused / pending hub update).
+        Some("getRuntimeConfig") => {
+            let mut v = state::runtime_config().cloned().unwrap_or(Value::Null);
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert(
+                    "editable".to_string(),
+                    serde_json::json!(EDITABLE_CONFIG_KEYS),
+                );
+                obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
+                obj.insert(
+                    "pending_hub_update".to_string(),
+                    state::pending_hub_update().map_or(Value::Null, Value::String),
+                );
+                obj.insert(
+                    "config_file".to_string(),
+                    state::config_file_path()
+                        .map_or(Value::Null, |p| Value::String(p.display().to_string())),
+                );
+            }
+            ok(v.to_string())
+        }
+        // Advanced configuration mirror (write): set ONE safe operational-config
+        // key in the config file. Args: `{ key, value }`. Applies on next restart;
+        // read-only/unknown keys and wrong value types are refused.
+        Some("setRuntimeConfig") => {
+            let args = parsed.as_ref().and_then(|v| v.get("args"));
+            let key = args.and_then(|a| a.get("key")).and_then(Value::as_str);
+            let value = args
+                .and_then(|a| a.get("value"))
+                .cloned()
+                .unwrap_or(Value::Null);
+            let key = match key {
+                Some(k) if EDITABLE_CONFIG_KEYS.contains(&k) => k,
+                other => return err(&format!("refused config key (not editable): {other:?}")),
+            };
+            let coerced = match key {
+                "native_qam" | "prerelease" | "force_owner" => value.as_bool().map(Value::Bool),
+                "owner_settle_secs" | "interval_secs" => value.as_u64().map(Value::from),
+                "recover_cmd" => match &value {
+                    Value::Null => Some(Value::Null),
+                    Value::String(s) if s.is_empty() => Some(Value::Null),
+                    Value::String(s) => Some(Value::String(s.clone())),
+                    _ => None,
+                },
+                _ => None,
+            };
+            let Some(coerced) = coerced else {
+                return err(&format!("invalid value type for {key}"));
+            };
+            let Some(path) = state::config_file_path() else {
+                return err("config file path not known");
+            };
+            // Read-merge-write the config file (create if absent), preserving other
+            // keys (comments included). Values apply on the next daemon restart.
+            let mut obj = std::fs::read_to_string(path)
+                .ok()
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|v| v.as_object().cloned())
+                .unwrap_or_default();
+            obj.insert(key.to_string(), coerced);
+            let out = serde_json::to_string_pretty(&Value::Object(obj))
+                .unwrap_or_else(|_| "{}".to_string());
+            match std::fs::write(path, out) {
+                Ok(()) => {
+                    log_info(
+                        "rpc",
+                        &format!("Config file updated: {key} (restart to apply)."),
+                    );
+                    ok(r#"{"ok":true,"restartRequired":true}"#.to_string())
+                }
+                Err(e) => {
+                    log_error("rpc", &format!("write config file: {e}"));
+                    err(&format!("write config file: {e}"))
+                }
             }
         }
         // Host runtime forwards its own leveled/scoped log entries here so the

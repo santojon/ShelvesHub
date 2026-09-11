@@ -21,11 +21,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   the service log rather than failing silently.
 - When Deck Shelves cannot be loaded, the host's own tab now shows a **ShelvesHub
   panel** with recovery actions instead of an empty tab; the home always loads
-  regardless. Each action carries an icon, and **Automatic updates** is a real
-  on/off toggle whose state is saved. It is also reachable from a **ShelvesHub
-  button at the end of the host's own tab even while Deck Shelves is loaded**, and
-  its text is **localized into 19 languages** from per-locale files under
-  `runtime/i18n/` (the service inlines them at injection time).
+  regardless. Each action carries an icon, and **Automatic updates** is now a
+  nested set of switches: a master toggle, then separate **ShelvesHub** and
+  **Deck Shelves** switches, each with its own **pre-release channel** — where a
+  lower switch stays hidden until the one above it is turned on. Their state is
+  saved. The panel is also reachable from a **ShelvesHub button at the end of the
+  host's own tab even while Deck Shelves is loaded**, and its text is **localized
+  into 19 languages** from per-locale files under `runtime/i18n/` (the service
+  inlines them at injection time).
 - Running alongside another host, the host's own Quick Access tab now shows **the
   plugin's editor mirrored** into it — the plugin populates it through a
   host-neutral bridge, so one tab reaches the real editor and the other host's
@@ -35,14 +38,29 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   — written atomically with a rolling backup and healed from that backup if the
   file is ever missing or corrupt, so a crash or a bad shutdown never loses or
   corrupts it.
-- New requests `getConfig`, `setAutoUpdate`, `getLogs` and `pushLogs` back the
-  fallback panel's toggle and log view.
+- New requests `getConfig`, `setAutoUpdate`, `setUpdatePref`, `getLogs`,
+  `clearLogs` and `pushLogs` back the fallback panel's update switches and log
+  view.
+- **Automatic updates now actually update.** While the host is running Deck
+  Shelves itself and automatic updates are on, it periodically checks the Deck
+  Shelves releases for a newer version on the chosen channel, and when one is
+  found it downloads it, swaps the bundle in place, and reloads — so Deck Shelves
+  stays current on its own and its "update available" prompt clears. The check is
+  throttled, only runs when the host owns the bundle (never alongside another
+  host that manages its own copy), and never replaces a working bundle unless a
+  genuinely newer release is published.
+- When a newer version of the host **itself** is available and automatic updates
+  are on, the host's own panel now shows a **"restart to update"** notice
+  (localized). Applying a host update in place is not automatic yet — restart the
+  service to pick it up.
 - The **Logs view now shows one merged stream** — the host runtime and the
   service side by side, newest first — where every line carries a **level**
   (info / warning / error) and a **category**, colour-coded, with a refresh
   control. The runtime forwards its warnings and errors (and, with verbose
   logging on, everything) to the service so both surfaces read the same, and its
-  console output is now badged and categorized to match.
+  console output is now badged and categorized to match. The log view **slides in
+  as a panel over the tab** and its rows are **gamepad-navigable**, with the **B
+  button returning** to the panel it opened from instead of closing the tab.
 - A **scenario test harness** (`scripts/harness.sh`) runs the injected runtime
   against a mock of the Steam UI in a headless browser, covering the native tab,
   coexistence mirroring, the sole-host path and the fallback panel without a
@@ -76,11 +94,24 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - A backend payload placed at `backend/` next to the binary is detected and
   hosted automatically — no configuration needed. Installers copy that payload
   when the package carries one.
-- Experimental native Quick Access tab, off by default (`SHELVES_NATIVE_QAM=1`
-  to try it): enabling it no longer requires editing the injected runtime, a
-  trip breaker auto-disables the feature after a failed attempt instead of
-  ever crash-looping the Steam interface, and the on-screen overlay always
-  remains as the fallback.
+- The native Quick Access tab is now **on by default**. It proved safe as a sole
+  host through the post-start injection path (no start-up scan that could blank the
+  screen), and a trip breaker still auto-disables it after any failed attempt rather
+  than ever crash-looping the interface, with the on-screen overlay as the fallback.
+  Set `native_qam: false` (or leave `SHELVES_NATIVE_QAM` unset and edit the config)
+  to turn it off.
+- **Faster start.** The service now polls on a short interval until it has hosted
+  the interface, then backs off to the idle interval — so shelves appear promptly
+  after the interface settles instead of waiting for the next slow cycle. As the
+  sole host on macOS and Windows (where no other host can claim the interface) it
+  also hosts immediately, with no settle wait.
+- As the **sole host on macOS and Windows**, the service now brings up Deck Shelves
+  end to end — including its data backend (wishlist, prices, launchers, device
+  state) — by obtaining the backend the same way it obtains the bundle (a local
+  copy, a copy from an installed host, or the released download). Without it the
+  service still runs the core, local features.
+- A **clickable one-click installer for Linux** (a desktop launcher that downloads
+  and installs), alongside the existing SteamOS launcher.
 - New setting `SHELVES_OWNER_SETTLE_SECS` (default `0`): while the renderer is
   unclaimed, the service waits up to this many seconds for another host to claim
   it before hosting it itself. A sole host leaves it at `0` (immediate); running

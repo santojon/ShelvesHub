@@ -10,13 +10,20 @@ permissions:
   contents: read
 
 jobs:
+  # Full gate (format + check + test + clippy) on the Unix targets, where the
+  # unit tests' filesystem/path assumptions hold.
   validate:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -42,3 +49,130 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+
+  # Windows is compile-validated (check + clippy) but not unit-tested here — the
+  # daemon builds on Windows (see build.yml) and Windows releases ship without a
+  # dedicated hardware test for now; a real Windows install test is tracked
+  # separately.
+  windows-check:
+    runs-on: windows-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Check
+        run: cargo check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+  # Dependency vulnerability audit. Non-blocking history: keep it green by
+  # bumping advised crates; a real advisory should fail the build.
+  audit:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit
+        run: cargo audit
+
+  # Docs language rule (English-only; no process/tooling vocabulary; no third-party
+  # loader names in shipped assets) + runtime syntax and data-file validation —
+  # the equivalents of the plugin's docs-check + static-validation steps.
+  docs-and-runtime:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Docs language rule (public docs stay English-only, no process/tooling terms)
+        run: |
+          if grep -rniE "spr[i]nt|\br[o]admap\b|\bb[a]tch\b|\bA[I]\b" README.md CHANGELOG.md RELEASE_NOTES.md docs/ ; then
+            echo "::error::Forbidden term in public docs (see the docs language rule)"; exit 1
+          fi
+          echo "Docs language rule: clean."
+
+      - name: Runtime JavaScript syntax
+        run: node --check runtime/shelves-host.js
+
+      - name: Validate JSON data files (i18n + shipped config)
+        run: |
+          python3 - <<'PY'
+          import json, glob, sys
+          bad = []
+          for f in glob.glob("runtime/i18n/*.json") + ["shelveshub.config.json"]:
+              try:
+                  json.load(open(f, encoding="utf-8"))
+              except Exception as e:
+                  bad.append(f"{f}: {e}")
+          if bad:
+              print("Invalid JSON:\n" + "\n".join(bad)); sys.exit(1)
+          print("All JSON data files valid.")
+          PY
+
+      - name: i18n key parity (every locale carries the en-US keys)
+        run: |
+          python3 - <<'PY'
+          import json, glob, os, sys
+          base = json.load(open("runtime/i18n/en-US.json", encoding="utf-8"))
+          keys = set(base)
+          missing = {}
+          for f in glob.glob("runtime/i18n/*.json"):
+              d = json.load(open(f, encoding="utf-8"))
+              gap = keys - set(d)
+              if gap:
+                  missing[os.path.basename(f)] = sorted(gap)
+          if missing:
+              for loc, gap in missing.items():
+                  print(f"{loc} missing: {gap}")
+              sys.exit(1)
+          print("i18n key parity: OK.")
+          PY
+
+  # Compatibility: the daemon's HOST_API_VERSION is derived from the shared
+  # @deck-shelves/host contract at build time (build.rs). Assert the submodule is
+  # present and the derived version is NOT the fallback, so a missing submodule or
+  # a drifted contract fails CI instead of shipping a wrong compatibility number.
+  contract:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Contract present and version derivable
+        run: |
+          DTS=host/dist/index.d.ts
+          test -f "$DTS" || { echo "::error::$DTS missing — @deck-shelves/host submodule not checked out"; exit 1; }
+          V=$(grep -E "HOST_API_VERSION" "$DTS" | head -1 | sed -E 's/[^"]*"([^"]+)".*/\1/')
+          echo "Contract HOST_API_VERSION = $V"
+          test -n "$V" || { echo "::error::could not extract HOST_API_VERSION from the contract"; exit 1; }
