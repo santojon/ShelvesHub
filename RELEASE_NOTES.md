@@ -14,8 +14,9 @@ is pushed — the notes below are picked up and published with the release.
 - **Click to install.** Double-click installers for macOS and Windows, each with
   the ShelvesHub icon, alongside the one-click scripts for SteamOS, Linux, macOS
   and Windows.
-- **Updates itself.** When a new Deck Shelves is available, the host can fetch and
-  install it for you — no manual file copying.
+- **Updates itself.** When a newer ShelvesHub is available, the host can download
+  and verify the new version, swap its own binary in, and restart the service to
+  finish — or tell you to restart when it can't. No reinstall, no manual copying.
 - **Keeps Deck Shelves current on its own.** With automatic updates on, the host
   periodically checks for a newer Deck Shelves on your chosen channel and, when it
   finds one, downloads it and reloads — so you stay up to date and the
