@@ -1,7 +1,8 @@
 name: "Ops · Publish site (Pages)"
 
-# Publishes the ShelvesHub landing page (site/) to GitHub Pages. Any screenshots
-# captured by the screenshot flow live under site/img/ and ship with the page.
+# Publishes the ShelvesHub landing page (site/) to GitHub Pages. The gallery
+# references the canonical screenshots in assets/screenshots/ via
+# raw.githubusercontent (the site keeps no copies of its own).
 #
 # ONE-TIME SETUP (REQUIRED): repo Settings -> Pages -> Build and deployment ->
 # Source: "GitHub Actions". This must be done by hand once — the Actions token

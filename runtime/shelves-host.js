@@ -177,14 +177,21 @@
     }
     var LOCALE = "en-US";
     try { LOCALE = pickLocale(navigator && navigator.language); } catch (e) {}
+    // Active locale is resolved per-call so a `window.__SHELVES_LOCALE__` override
+    // (a language tag like "en-US") switches the UI language live — used for
+    // documentation screenshots and locale testing; falls back to the boot locale.
+    function activeLocale() {
+      try { if (window.__SHELVES_LOCALE__) return pickLocale(String(window.__SHELVES_LOCALE__)); } catch (e) {}
+      return LOCALE;
+    }
     function t(key) {
-      var d = DICTS[LOCALE];
+      var d = DICTS[activeLocale()];
       if (d && key in d) return d[key];
       var en = DICTS["en-US"];
       if (en && key in en) return en[key];
       return key;
     }
-    return { t: t, locale: LOCALE, pickLocale: pickLocale };
+    return { t: t, locale: LOCALE, pickLocale: pickLocale, activeLocale: activeLocale };
   })();
 
   // ── Steam webpack: module cache + finders ─────────────────────────────────

@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::logger::log_warning;
+
 /// The host's user-facing settings (kept small and additive; `serde(default)`
 /// keeps old/new files forward- and backward-compatible).
 ///
@@ -66,7 +68,15 @@ pub fn load(path: &Path) -> HubSettings {
     }
     // Primary missing/corrupt — try the backup, and if it is good, restore it.
     if let Some(s) = read_valid(&backup_path(path)) {
-        let _ = atomic_write(path, &serialize(&s));
+        if let Err(e) = atomic_write(path, &serialize(&s)) {
+            log_warning(
+                "store",
+                &format!(
+                    "recovered settings from backup but could not rewrite {} ({e}) — using the backup this run.",
+                    path.display()
+                ),
+            );
+        }
         return s;
     }
     HubSettings::default()

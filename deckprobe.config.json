@@ -1,5 +1,9 @@
 {
-  "_comment": "DeckProbe config for ShelvesHub. Loaded with .env (DECK_CDP_HOST/PORT); drive via the deck:probe / deck:diag / deck:screenshot / deck:perf scripts. DECKPROBE_* env vars override any value.",
-  "screenshots_dir": "screenshots/deck",
-  "selectors": {}
+  "_comment": "DeckProbe config for ShelvesHub. Loaded with .env (DECK_CDP_HOST/PORT); drive via the deck:probe / deck:diag / deck:screenshot / deck:perf scripts. DECKPROBE_* env vars override any value. For Mac capture: DECK_CDP_HOST=127.0.0.1 DECK_CDP_PORT=8080.",
+  "screenshots_scenarios_dir": "scripts/deckprobe-ext/screenshots/scenarios",
+  "screenshots_dir": "assets/screenshots",
+  "selectors": {
+    "QAM_SCOPE_SEL": ".deck-shelves-qam-scope,[data-fb-panel]",
+    "COLLAPSIBLE_HEADER_SEL": ".ds-collapsible-header"
+  }
 }

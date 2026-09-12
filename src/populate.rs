@@ -550,7 +550,18 @@ fn stage_binary_swap(new_bin: &Path, exe: &Path) -> Result<(), String> {
         let _ = fs::remove_file(&old);
         fs::rename(exe, &old).map_err(|e| format!("move running exe aside: {e}"))?;
         if let Err(e) = copy_into(new_bin, exe) {
-            let _ = fs::rename(&old, exe); // roll back so the service still runs
+            // Roll back so the service still runs; if THIS also fails the running
+            // binary is gone — surface it loudly with the recovery path.
+            if let Err(re) = fs::rename(&old, exe) {
+                log_error(
+                    "populate",
+                    &format!(
+                        "self-update copy failed AND rollback failed ({re}) — {} may be missing; restore it from {}.",
+                        exe.display(),
+                        old.display()
+                    ),
+                );
+            }
             return Err(e);
         }
         Ok(())

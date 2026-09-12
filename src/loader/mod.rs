@@ -755,7 +755,19 @@ pub(super) fn i18n_stamp(host_runtime_path: &Path) -> String {
     };
     let entries = match fs::read_dir(&dir) {
         Ok(e) => e,
-        Err(_) => return String::new(),
+        Err(e) => {
+            // Not fatal (the runtime falls back to raw keys), but the UI then
+            // shows message keys instead of text — worth a line so it is not a
+            // silent mystery.
+            log_warning(
+                "loader",
+                &format!(
+                    "No i18n dictionaries at {} ({e}) — the runtime UI will show raw keys.",
+                    dir.display()
+                ),
+            );
+            return String::new();
+        }
     };
     let mut map = serde_json::Map::new();
     for entry in entries.flatten() {

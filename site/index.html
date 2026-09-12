@@ -73,33 +73,57 @@
   <section id="screenshots">
     <div class="wrap">
       <h2>Screenshots</h2>
-      <p class="lead">A visual tour of ShelvesHub hosting Deck Shelves — the Home shelves, the Quick Access tab, and the fallback panel. Captured from a live Steam Big Picture session.</p>
+      <p class="lead">A look at what makes ShelvesHub more than a loader — its own management panel in the Steam Quick Access menu: automatic updates for the host and Deck Shelves, troubleshooting, editable configuration, and a merged log viewer. Captured from a live Steam Big Picture session.</p>
       <div class="shots" id="gallery"></div>
+      <div class="lightbox" id="lightbox" hidden>
+        <button class="lb-close" type="button" aria-label="Close">×</button>
+        <img alt="">
+      </div>
       <script>
-        /* Render whatever screenshots exist under img/ — drop a PNG there (see
-           docs/showcase.md) and it appears on the next publish; no build step. */
+        /* Reference the canonical screenshots in the repo (assets/screenshots/) —
+           the site keeps no copies of its own. Try the LOCAL relative path first
+           (so a local preview from the repo shows them straight away) and fall
+           back to raw.githubusercontent for the published site (site/ is the Pages
+           root, so assets/ is only reachable by URL there). Capture them with
+           `pnpm site:shots:hub`. */
         (function () {
+          var local = "../assets/screenshots/";
+          var raw = "https://raw.githubusercontent.com/santojon/ShelvesHub/main/assets/screenshots/";
           var shots = [
+            ["hub-panel.png", "The ShelvesHub panel — automatic updates for the host and Deck Shelves, with pre-release channels"],
+            ["hub-troubleshooting.png", "Troubleshooting — view the logs or disable the host until the next restart"],
+            ["hub-config.png", "Editable, safe configuration plus a read-only status readout"],
+            ["hub-logs.png", "The merged host + runtime log viewer, right in the tab"],
             ["home.png", "Your Deck Shelves Home, hosted by ShelvesHub"],
-            ["qam-tab.png", "The native Quick Access tab"],
-            ["fallback.png", "The fallback panel with recovery actions"],
-            ["coexist.png", "Coexisting alongside another host"]
+            ["qam-tab.png", "The native Quick Access tab"]
           ];
           var g = document.getElementById("gallery"), shown = 0;
+          // Lightbox: click any screenshot to see it full-size.
+          var lb = document.getElementById("lightbox");
+          var lbImg = lb.querySelector("img");
+          function openLb(src, alt) { lbImg.src = src; lbImg.alt = alt || ""; lb.hidden = false; document.body.style.overflow = "hidden"; }
+          function closeLb() { lb.hidden = true; lbImg.src = ""; document.body.style.overflow = ""; }
+          lb.addEventListener("click", function (e) { if (e.target === lb || e.target.classList.contains("lb-close")) closeLb(); });
+          document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !lb.hidden) closeLb(); });
           shots.forEach(function (s) {
             var img = new Image();
             img.onload = function () {
               shown++;
-              var fig = document.createElement("div"); fig.className = "shot";
-              var i = document.createElement("img"); i.src = "img/" + s[0]; i.alt = s[1]; i.loading = "lazy";
+              var fig = document.createElement("div"); fig.className = "shot"; fig.setAttribute("role", "button"); fig.tabIndex = 0;
+              var i = document.createElement("img"); i.src = img.src; i.alt = s[1]; i.loading = "lazy";
               var c = document.createElement("div"); c.className = "cap"; c.textContent = s[1];
               fig.appendChild(i); fig.appendChild(c); g.appendChild(fig);
+              fig.addEventListener("click", function () { openLb(img.src, s[1]); });
+              fig.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLb(img.src, s[1]); } });
             };
-            img.src = "img/" + s[0];
+            img.onerror = function () {
+              if (img.src.indexOf(raw) !== 0) { img.onerror = null; img.src = raw + s[0]; }
+            };
+            img.src = local + s[0];
           });
           setTimeout(function () {
-            if (!shown) g.innerHTML = '<div class="shots-empty">Screenshots appear here once added to <code>site/img/</code> — see <code>docs/showcase.md</code>.</div>';
-          }, 900);
+            if (!shown) g.innerHTML = '<div class="shots-empty">Screenshots appear here once captured to <code>assets/screenshots/</code> — run <code>pnpm site:shots:hub</code>.</div>';
+          }, 2000);
         })();
       </script>
     </div>

@@ -36,6 +36,25 @@ The service also **keeps itself and the bundle current**: with automatic updates
 
 ---
 
+## What it looks like
+
+ShelvesHub adds its own management panel to the Steam Quick Access menu — the part that makes it more than a loader. Captured live from a Steam Big Picture session:
+
+<div align="center">
+<table>
+<tr>
+<td align="center" width="50%"><img src="assets/screenshots/hub-panel.png" alt="Automatic updates for the host and Deck Shelves" width="240"><br><sub><b>Automatic updates</b> — host + Deck Shelves, each with a pre-release channel</sub></td>
+<td align="center" width="50%"><img src="assets/screenshots/hub-troubleshooting.png" alt="Troubleshooting section" width="240"><br><sub><b>Troubleshooting</b> — view logs, or disable the host until restart</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="assets/screenshots/hub-config.png" alt="Configuration and status" width="240"><br><sub><b>Configuration + Status</b> — an editable safe subset, and a read-only readout</sub></td>
+<td align="center" width="50%"><img src="assets/screenshots/hub-logs.png" alt="Merged log viewer" width="240"><br><sub><b>Log viewer</b> — the host and runtime logs in one stream</sub></td>
+</tr>
+</table>
+</div>
+
+---
+
 ## Installation
 
 ### SteamOS / Steam Deck (one-click)
