@@ -15,13 +15,13 @@ use crate::logger::{log_error, log_info, log_warning};
 use super::{FORCE_OWNER_GLOBAL, NATIVE_QAM_GLOBAL, OWNER_KIND};
 
 // The document-start script runs BEFORE Steam's UI is up. It gates the boot on the
-// SAME Steam lifecycle signal the loader's loader uses (a plugin loader frontend/index.ts):
+// SAME Steam lifecycle signal a plugin loader uses:
 //   window.App.BFinishedInitBeforeLogin() ?? window.App.BFinishedInitStageOne()
 // This is a Steam-blessed "ready for plugins, before login/home" point — early
 // enough that the runtime + plugin register BEFORE Steam builds the home nav tree
 // and finalizes system-button input routing (the timing gap that broke VIEW/OPTIONS
 // + edge-nav on a late inject), and safe (Steam is past stage-1 init, not mid-render
-// — the loader does its full webpack scan here without collapsing). It replaces the old
+// — a loader does its full webpack scan here without collapsing). It replaces the old
 // DOM-ready + rAF idle gate, which fired mid-boot and black-screened. Because the
 // routerHook's afterPatch lands before the home route first renders, routes / home
 // patch / recents-hide / edge-nav all take on first paint — no re-point needed.

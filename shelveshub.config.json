@@ -16,7 +16,7 @@
   "// interval_secs": "Seconds between injection-loop ticks — how often the daemon looks for the Steam renderer and (re)injects the runtime + bundle. Lower = faster recovery after a Steam restart but slightly more idle CPU; higher = calmer. 30 is a good balance.",
   "interval_secs": 30,
 
-  "// owner_settle_secs": "When the renderer is present but UNCLAIMED, seconds to wait for another host (e.g. a plugin loader like the loader) to claim it before ShelvesHub hosts it itself. Default 25 is safe alongside another host (the primary setup) — a fast tick never hijacks a plugin the other host is about to load. Set 0 if ShelvesHub is the ONLY host, for an instant boot.",
+  "// owner_settle_secs": "When the renderer is present but UNCLAIMED, seconds to wait for another host (e.g. another plugin loader) to claim it before ShelvesHub hosts it itself. Default 25 is safe alongside another host (the primary setup) — a fast tick never hijacks a plugin the other host is about to load. Set 0 if ShelvesHub is the ONLY host, for an instant boot.",
   "owner_settle_secs": 25,
 
   "// native_qam": "Show the native Steam Quick Access tab (real buttons/toggles). true is the default (sole mode uses the post-settle inject, which is collapse-safe); set false to disable it. Can also be forced per-service via SHELVES_NATIVE_QAM=1.",

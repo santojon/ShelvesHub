@@ -97,14 +97,14 @@
   // ── Coexistence: never break another host, but always keep OUR tab ────────
   // Two separable things this runtime does:
   //   (A) install `window.__SHELVES_HOST__` — the host API the bundle selects
-  //       on via its host-selection check. When a plugin loader (the loader) is already
+  //       on via its host-selection check. When a plugin loader is already
   //       hosting Deck Shelves, installing this makes ITS bundle mis-select the
   //       ShelvesHub adapter and drop its home patches. So (A) is SKIPPED in
   //       coexistence — that is the hard safety invariant: loading ShelvesHub
-  //       must never disturb the loader or its plugin.
+  //       must never disturb that loader or its plugins.
   //   (B) add our Quick Access tab — harmless, additive (a new tab in the
   //       array; it never removes the other loader's tab). This ALWAYS runs, so
-  //       ShelvesHub's tab is present with or without the loader.
+  //       ShelvesHub's tab is present with or without a loader.
   // `SHELVES_FORCE_OWNER=shelveshub` (→ `window.__SHELVES_FORCE_OWNER__`) forces
   // full ownership (installs (A) anyway), an advanced opt-in that needs the
   // loader adapter to stand down cooperatively.
@@ -508,16 +508,27 @@
       UI.Spinner = Steam.findModuleExport(function (e) {
         var s = srcOf(e); return s.indexOf("Steam Spinner") >= 0 && s.indexOf("src") >= 0;
       });
+      // Navigation: the module carrying `Navigate` + `NavigationManager` (stable),
+      // OR — on newer clients (beta/desktop) where that module is gone — the
+      // `SteamUIStore` navigation surface. `navFn` prefers the focused window's
+      // own method, then falls back to `SteamUIStore[name]`, so screen routing
+      // (About/Settings + Back) works on both. Without this the plugin's
+      // `Navigation.Navigate` degrades to a no-op in sole mode on the beta.
       var Router = Steam.findModuleExport(function (e) { return e && e.Navigate && e.NavigationManager; });
-      if (Router) {
+      var SUS = null; try { SUS = window.SteamUIStore; } catch (e) {}
+      if (Router || (SUS && typeof SUS.Navigate === "function")) {
         var navFn = function (name, handler) {
           return function () {
-            var win;
-            try { win = window.SteamUIStore.GetFocusedWindowInstance(); } catch (e) {}
-            if (!win) win = (Router.WindowStore && (Router.WindowStore.GamepadUIMainWindowInstance || (Router.WindowStore.SteamUIWindows && Router.WindowStore.SteamUIWindows[0]))) || null;
-            if (!win) { log("nav: no window for " + name); return; }
-            try { var t = handler ? handler(win) : null; (t || win)[name].apply(t || win, arguments); }
-            catch (e) { log("nav " + name + ":", e && e.message); }
+            var win = null;
+            try { if (SUS && SUS.GetFocusedWindowInstance) win = SUS.GetFocusedWindowInstance(); } catch (e) {}
+            if (!win && Router && Router.WindowStore) win = Router.WindowStore.GamepadUIMainWindowInstance || (Router.WindowStore.SteamUIWindows && Router.WindowStore.SteamUIWindows[0]) || null;
+            try {
+              var t = (handler && win) ? handler(win) : win;
+              if (t && typeof t[name] === "function") return t[name].apply(t, arguments);
+              if (win && typeof win[name] === "function") return win[name].apply(win, arguments);
+              if (SUS && typeof SUS[name] === "function") return SUS[name].apply(SUS, arguments);
+              log("nav: no target for " + name);
+            } catch (e) { log("nav " + name + ":", e && e.message); }
           };
         };
         var navigator = function (w) { return w.Navigator; };
@@ -533,8 +544,8 @@
           OpenQuickAccessMenu: navFn("OpenQuickAccessMenu", menuStore),
           OpenMainMenu: navFn("OpenMainMenu", menuStore),
           CloseSideMenus: navFn("CloseSideMenus", menuStore),
-          NavigateToLayoutPreview: Router.NavigateToLayoutPreview ? Router.NavigateToLayoutPreview.bind(Router) : undefined,
-          OpenPowerMenu: Router.OpenPowerMenu ? Router.OpenPowerMenu.bind(Router) : undefined
+          NavigateToLayoutPreview: (Router && Router.NavigateToLayoutPreview) ? Router.NavigateToLayoutPreview.bind(Router) : undefined,
+          OpenPowerMenu: (Router && Router.OpenPowerMenu) ? Router.OpenPowerMenu.bind(Router) : undefined
         };
       }
     },
@@ -626,7 +637,7 @@
   }
 
   // Steam's Focusable — the single component the QAM tab panel needs to join
-  // Steam's gamepad-focus navigation (the loader wraps its plugin view in it). It is
+  // Steam's gamepad-focus navigation (a loader wraps its plugin view in it). It is
   // discovered on demand OFF the render path (scheduled in QamHost): one webpack
   // scan, which black-screens if run during a React render but is safe when the
   // renderer is idle. Reuses UI.Focusable when the sole-host path already found it.
@@ -788,16 +799,55 @@
     var globalComponents = new Map(); // id -> component (always-rendered, e.g. the home bridge)
     var RouteComp = null;
     var patched = false;
+    var wrapperInserted = false; // true once our stateful wrapper is in the live tree
     var OUR_ARRAY = "__shelvesRoutes"; // marks the sub-array we append
     var IS_PATCHED = "__shelvesRoutePatched"; // marks an already-patched route
 
+    // Minimal router-state store: the mounted
+    // wrapper components subscribe; a route/patch/global change calls bump() to
+    // re-render them CLEANLY via React state — instead of the old fiber-repoint
+    // force, which mutated the router fiber out-of-band and left Steam's gamepad
+    // FocusNavController unable to register our route subtree (unfocusable pages),
+    // besides flashing the previous route back on repeated re-renders.
+    var listeners = new Set();
+    function bump() { listeners.forEach(function (l) { try { l(); } catch (e) {} }); }
+    function subscribe(l) { listeners.add(l); return function () { listeners["delete"](l); }; }
+
+    // FALLBACK Route resolution: reuse the type of an existing route in the live
+    // list. Only used if the source-regex (findRoute) fails on some future client.
+    // NOTE: this yields Steam's route WRAPPER (e.g. `/library/home` = a services-
+    // gated wrapper), not the raw Route — so it can carry unwanted context; the raw
+    // Route from findRoute is preferred. Cached once resolved.
+    function routeTypeFromList(routeList) {
+      if (RouteComp) return RouteComp;
+      if (!routeList) return null;
+      var first = null;
+      for (var i = 0; i < routeList.length; i++) {
+        var el = routeList[i];
+        if (el && el.type && el.props && typeof el.props.path === "string") {
+          if (!first) first = el.type;
+          if (el.props.path === "/library/home") { RouteComp = el.type; break; }
+        }
+      }
+      if (!RouteComp) RouteComp = first;
+      if (RouteComp && routerDebug()) log("[dbg] routeTypeFromList: " + typeName(RouteComp));
+      return RouteComp;
+    }
+
+    // PRIMARY Route resolution: discover the raw react-router Route via webpack
+    // source-regex (the component whose body contains `routePath:X.match?.path`).
+    // The raw component carries no wrapper context, so our pages integrate into
+    // Steam's gamepad focus/back like the platform's own routes.
     function findRoute() {
       if (RouteComp) return RouteComp;
       try {
         var mod = Steam.findModuleByExport(function (e) { return e === "router-backstack"; }, 20);
         if (mod) {
+          // multi-char (`[\w$]+`) and KEEP the trailing `.` (any char). An
+          // earlier attempt used `[.=]` for the trailing token, which is stricter
+          // than the original `.` and matched nothing on the beta.
           RouteComp = Object.values(mod).find(function (e) {
-            return typeof e === "function" && /routePath:.\.match\?\.path./.test(srcOf(e));
+            return typeof e === "function" && /routePath:[\w$]+\.match\?\.path./.test(srcOf(e));
           }) || null;
         }
       } catch (e) { log("routerHook: Route discovery:", e && e.message); }
@@ -822,54 +872,169 @@
       }
     }
 
-    // Splice our registered routes into the (main) route-list array as a nested
-    // array at a stable slot (React flattens nested arrays of children).
-    function injectRoutes(routeList) {
-      if (!routes.size) return;
-      var Route = findRoute();
-      if (!Route) return;
-      var slot = -1;
-      for (var i = 0; i < routeList.length; i++) { if (routeList[i] && routeList[i][OUR_ARRAY]) { slot = i; break; } }
+    // Build our route elements ONCE per (route-set, Route-type) and CACHE the
+    // resulting array. Steam rebuilds the route-list array on every render, so
+    // the old code — which rebuilt fresh, UNKEYED route elements each render —
+    // gave React new child identities every frame: react-router re-mounted our
+    // routes and Steam's FocusNavController lost track of focus (home shelves
+    // unfocusable) while a matched route re-appeared after any input (sticky).
+    // A cached array of KEYED elements keeps stable identities across renders, so
+    // React reconciles in place — no re-mount, no focus loss, no stickiness.
+    var builtRoutes = null, builtSig = "", builtType = null;
+    function buildOurRoutes(Route) {
+      var sig = [];
+      routes.forEach(function (_e, p) { sig.push(p); });
+      sig = sig.sort().join("|");
+      if (builtRoutes && builtSig === sig && builtType === Route) return builtRoutes;
       var arr = [];
       arr[OUR_ARRAY] = true;
       routes.forEach(function (entry, path) {
         var inner = React.createElement(entry.component);
-        arr.push(React.createElement(Route, Object.assign({ path: path }, entry.props || {}),
-          ErrorBoundary ? React.createElement(ErrorBoundary, null, inner) : inner));
+        var body = ErrorBoundary ? React.createElement(ErrorBoundary, null, inner) : inner;
+        // No `key` (`<Route path={path} {...props}>`): the array is stable/cached,
+        // so index reconciliation is stable without keys.
+        arr.push(React.createElement(Route, Object.assign({ path: path }, entry.props || {}), body));
       });
-      if (slot >= 0) routeList[slot] = arr; else routeList.push(arr);
+      builtRoutes = arr; builtSig = sig; builtType = Route;
+      return arr;
     }
 
-    // Wrap the router render: its output is a Fragment whose children are the
-    // route-list containers; patch each list, inject our routes into the first.
+    // APPEND our routes (as the stable cached nested array — React flattens it) at
+    // the END of the main route-list array. Two facts make this correct and
+    // focus-safe on both stable and beta:
+    //   1. Steam's own route elements are UNKEYED, so appending leaves them at
+    //      their original positions — React reconciles them by position and never
+    //      re-mounts them (prepending would shift every position → a full remount →
+    //      the gamepad focus loss + sticky routes we saw earlier).
+    //   2. The Switch's catch-all (`path:['/','/index.html','/sp.html']`) is
+    //      `exact`, so it does NOT shadow a trailing `/deck-shelves/*` route.
+    // Our nested array is the SAME cached object across renders with KEYED children,
+    // so React keeps our routes' identities stable too (no re-mount, no stickiness).
+    function injectRoutes(routeList) {
+      if (!routes.size) return;
+      // Prefer the RAW react-router Route (findRoute): reusing a route's wrapper
+      // type pulls in its own context/guards, disturbing gamepad focus/back for our
+      // pages. Tree-reuse (routeTypeFromList) is the fallback if the regex misses.
+      var Route = findRoute() || routeTypeFromList(routeList);
+      if (!Route) { if (routerDebug()) log("[dbg] injectRoutes: no Route type resolved"); return; }
+      var arr = buildOurRoutes(Route);
+      // Reuse the slot: the wrapper re-renders on every route-state
+      // change but operates on the SAME route-list array, so pushing unconditionally
+      // would DUPLICATE our routes on each re-render. If our array is already the
+      // last slot, replace it in place; otherwise append once.
+      var last = routeList.length ? routeList[routeList.length - 1] : null;
+      if (last && last[OUR_ARRAY]) routeList[routeList.length - 1] = arr;
+      else routeList.push(arr);
+    }
+
+    // DEBUG (read-only): describe an element tree compactly so we can see the
+    // real router render structure on a given client — element type name, which
+    // children are arrays (and their lengths), and any Route (props.path). Gated
+    // behind window.__SHELVES_ROUTER_DEBUG__ so it never runs on the normal path.
+    function typeName(t) {
+      if (t == null) return String(t);
+      if (typeof t === "string") return t;
+      if (t === React.Fragment) return "Fragment";
+      var n = t.displayName || t.name;
+      if (n) return n;
+      try { var s = srcOf(t); return "fn<" + s.slice(0, 40).replace(/\s+/g, " ") + ">"; } catch (e) { return "fn"; }
+    }
+    function describe(el, depth, path) {
+      if (depth > 6 || el == null) return;
+      if (Array.isArray(el)) {
+        log("  [dbg] " + path + " ARRAY len=" + el.length);
+        for (var i = 0; i < el.length && i < 12; i++) describe(el[i], depth + 1, path + "[" + i + "]");
+        return;
+      }
+      if (typeof el !== "object" || !el.props) return;
+      var pth = el.props.path !== undefined ? (" path=" + JSON.stringify(el.props.path)) : "";
+      var ch = el.props.children;
+      var chKind = Array.isArray(ch) ? ("array(" + ch.length + ")") : (ch && ch.props ? "elem" : (ch == null ? "none" : typeof ch));
+      log("  [dbg] " + path + " <" + typeName(el.type) + ">" + pth + " children=" + chKind);
+      if (Array.isArray(ch)) { for (var j = 0; j < ch.length && j < 12; j++) describe(ch[j], depth + 1, path + ".children[" + j + "]"); }
+      else if (ch && ch.props) describe(ch, depth + 1, path + ".children");
+    }
+    function routerDebug() { try { return !!window.__SHELVES_ROUTER_DEBUG__; } catch (e) { return false; } }
+
+    // Inject our routes + apply our patches into the router's output. Its output
+    // (confirmed on stable AND beta) is a Fragment with two children, each a
+    // container whose `children` is a route-list array: [0] = MAIN routes,
+    // [1] = in-game routes. We patch every list (home shelves live on
+    // `/library/home` in the main list) and append our routes into the main list.
+    // This runs INSIDE the wrapper component below (a real mounted component), so
+    // Steam's focus system registers the resulting subtree normally.
+    function processLists(routerOutput) {
+      if (!routerOutput || !routerOutput.props) return;
+      if (routerDebug()) { try { window.__DBG_RET__ = routerOutput; } catch (e) {} }
+      var top = routerOutput.props.children;
+      var containers = Array.isArray(top) ? top : [top];
+      var lists = [];
+      for (var i = 0; i < containers.length; i++) {
+        var c = containers[i];
+        if (c && c.props && Array.isArray(c.props.children)) lists.push(c.props.children);
+      }
+      for (var j = 0; j < lists.length; j++) applyPatches(lists[j]);
+      if (lists.length) injectRoutes(lists[0]);
+      try {
+        var st = (window.__SHELVES_ROUTER_STATS__ = window.__SHELVES_ROUTER_STATS__ || { renders: 0 });
+        st.renders++; st.lists = lists.length; st.mainLen = lists.length ? lists[0].length : 0;
+        st.routeType = RouteComp ? typeName(RouteComp) : null; st.ourRoutes = routes.size; st.builtLen = builtRoutes ? builtRoutes.length : 0;
+      } catch (e) {}
+    }
+
+    // The stateful route wrapper: it receives the router's own output as
+    // `children`, injects into that output's
+    // route lists on render, then returns it unchanged. Because the injection now
+    // happens in a normally-mounted component (not an out-of-band fiber mutation),
+    // the gamepad focus tree registers our route pages. Subscribes to the router
+    // state so a later addRoute/addPatch re-renders it without touching the fiber.
+    function ShelvesRouterWrapper(props) {
+      var st = React.useState(0);
+      React.useEffect(function () {
+        var l = function () { st[1](function (x) { return (x + 1) | 0; }); };
+        return subscribe(l);
+      }, []);
+      try { processLists(props.children); } catch (e) { log("routerHook wrapper:", e && e.message); }
+      return props.children;
+    }
+
+    // Always-on global components (the home bridge) as their own sibling subtree so
+    // they mount on any route and reconcile in place. Home-shelf gamepad-focus
+    // registration in sole mode is unresolved and handled separately.
+    function ShelvesGlobalWrapper() {
+      var st = React.useState(0);
+      React.useEffect(function () {
+        var l = function () { st[1](function (x) { return (x + 1) | 0; }); };
+        return subscribe(l);
+      }, []);
+      if (!globalComponents.size) return null;
+      var extras = [];
+      globalComponents.forEach(function (comp, id) {
+        try { extras.push(React.createElement(comp, { key: "shg-" + id })); } catch (e) {}
+      });
+      return React.createElement(React.Fragment, null, extras);
+    }
+
+    // Patch on the memoized router's render: wrap its output ONCE in our stateful
+    // wrapper (+ a sibling that renders global components). Marked so a re-entry
+    // returns as-is (guarded so a re-entry is a no-op).
     function handleRender(_args, ret) {
       try {
         if (!ret || !ret.props) return ret;
-        var top = ret.props.children;
-        var containers = Array.isArray(top) ? top : [top];
-        var first = true;
-        for (var i = 0; i < containers.length; i++) {
-          var c = containers[i];
-          if (c && c.props && Array.isArray(c.props.children)) {
-            applyPatches(c.props.children);
-            if (first) { injectRoutes(c.props.children); first = false; }
-          }
-        }
-        // Render always-on global components (the home bridge) as keyed siblings
-        // of the routes so they mount regardless of the active route and reconcile
-        // in place across router re-renders (stable key → no re-mount).
-        if (globalComponents.size) {
-          var extras = [];
-          globalComponents.forEach(function (comp, id) {
-            try { extras.push(React.createElement(comp, { key: "shg-" + id })); } catch (e) {}
-          });
-          return React.createElement(React.Fragment, { key: "shg-wrap" }, ret, extras);
-        }
+        if (routerDebug()) { try { window.__DBG_RET__ = ret; } catch (e) {} log("[dbg] ===== router render dump ====="); describe(ret, 0, "ret"); log("[dbg] ===== end dump ====="); return ret; }
+        if (ret.__shelvesWrapped) return ret;
+        wrapperInserted = true;
+        var out = React.createElement(React.Fragment, { key: "shelves-router-root" },
+          React.createElement(ShelvesRouterWrapper, { key: "shelves-router" }, ret),
+          React.createElement(ShelvesGlobalWrapper, { key: "shelves-globals" }));
+        try { out.__shelvesWrapped = true; } catch (e) {}
+        return out;
       } catch (e) { log("routerHook render:", e && e.message); }
       return ret;
     }
 
     var routerFiber = null; // the mounted route-declaring fiber, for re-rendering
+
     function ensurePatched() {
       if (patched || !React) return patched;
       try {
@@ -892,18 +1057,18 @@
       } catch (e) { logWarn("ROUTER", "patch failed: " + (e && e.message)); return false; }
     }
 
-    // The route-declaring component is a memoized fiber that captured its render
-    // fn at mount (before our patch) and does NOT re-render on navigation — so
-    // point the LIVE fiber's `type` at the patched fn, invalidate its memo props
-    // (so a reconcile can't bail on it), and force the nearest class ancestor to
-    // re-render. That single re-render runs our patched render, which splices our
-    // routes into the live route table + applies our patches; react-router then
-    // matches them on navigation. Debounced — many addRoute/addPatch calls at boot
-    // collapse into one force.
+    // ONE-TIME memo-bust: Steam's route-declaring component is memoized and
+    // captured its render fn at mount (before our afterPatch), so it will not
+    // re-render on its own to pick up our patched render. To INSERT our wrapper
+    // the first time, re-point the live fiber's `type` at the patched fn,
+    // invalidate its memo props, and forceUpdate the nearest class ancestor. Once
+    // handleRender runs, our wrapper is mounted (`wrapperInserted`) and owns all
+    // subsequent updates via React state (bump) — we NEVER touch the fiber again
+    // (the repeated fiber-repoint was what broke gamepad focus / flashed routes).
     var forcePending = false;
     function doForce() {
       forcePending = false;
-      if (!routerFiber) return;
+      if (!routerFiber || wrapperInserted) return;
       try {
         var et = routerFiber.elementType;
         if (et && typeof et.type === "function") {
@@ -921,25 +1086,30 @@
         log("routerHook: no updatable ancestor to force.");
       } catch (e) { log("routerHook force:", e && e.message); }
     }
-    function scheduleForce() { if (forcePending) return; forcePending = true; setTimeout(doForce, 0); }
+    function scheduleForce() { if (wrapperInserted || forcePending) return; forcePending = true; setTimeout(doForce, 0); }
 
     // The router node may not be mounted the instant a route is registered — poll
-    // until the patch lands (idempotent; capped), then force the re-render.
+    // until the patch lands (idempotent; capped), then do the one-time insert force.
     var tries = 0;
     function ensureWithRetry() {
       if (ensurePatched()) { scheduleForce(); return; }
       if (tries++ < 400) setTimeout(ensureWithRetry, 100);
     }
 
+    // A registration change: once the wrapper is mounted, re-render it cleanly via
+    // React state (bump) — no fiber force. Before that, ensure the router is
+    // patched and do the one-time insert force.
+    function requestUpdate() { if (wrapperInserted) { bump(); } else { ensureWithRetry(); } }
+
     return {
-      addRoute: function (path, component, props) { log("routerHook.addRoute", path); routes.set(path, { component: component, props: props || {} }); ensureWithRetry(); },
-      removeRoute: function (path) { routes.delete(path); },
-      addPatch: function (path, patch) { log("routerHook.addPatch", path); if (!routePatches.has(path)) routePatches.set(path, new Set()); routePatches.get(path).add(patch); ensureWithRetry(); return patch; },
-      removePatch: function (path, patch) { var s = routePatches.get(path); if (s) s.delete(patch); return patch; },
+      addRoute: function (path, component, props) { log("routerHook.addRoute", path); routes.set(path, { component: component, props: props || {} }); requestUpdate(); },
+      removeRoute: function (path) { routes["delete"](path); requestUpdate(); },
+      addPatch: function (path, patch) { log("routerHook.addPatch", path); if (!routePatches.has(path)) routePatches.set(path, new Set()); routePatches.get(path).add(patch); requestUpdate(); return patch; },
+      removePatch: function (path, patch) { var s = routePatches.get(path); if (s) s["delete"](patch); requestUpdate(); return patch; },
       // Always-on global components (the plugin's home bridge, which renders
-      // elsewhere and PORTALS the shelves into its own mount). Rendered as stable,
-      // keyed siblings of the routes in handleRender — so they mount once and
-      // reconcile in place (no re-mount, no leaked subscriptions).
+      // elsewhere and PORTALS the shelves into its own mount). Rendered by
+      // ShelvesGlobalWrapper as a stable sibling subtree — mounted once, reconciled
+      // in place (no re-mount, no leaked subscriptions).
       addGlobalComponent: function (a, b) {
         var id, comp;
         if (typeof a === "string") { id = a; comp = b; }
@@ -948,14 +1118,14 @@
         if (!comp) return function () {};
         log("routerHook.addGlobalComponent", id);
         globalComponents.set(id, comp);
-        ensureWithRetry();
-        return function () { globalComponents["delete"](id); scheduleForce(); };
+        requestUpdate();
+        return function () { globalComponents["delete"](id); requestUpdate(); };
       },
       removeGlobalComponent: function (a) {
         if (typeof a === "string") { globalComponents["delete"](a); }
         else if (a && a.id) { globalComponents["delete"](a.id); }
         else { globalComponents.forEach(function (v, k) { if (v === a) globalComponents["delete"](k); }); }
-        scheduleForce();
+        requestUpdate();
       }
     };
   }
@@ -1567,7 +1737,7 @@
         // Natural flow (no flex column, no overflow): the editor keeps its own
         // height and the hub button sits AFTER it — so the button never overlaps
         // the editor, and no overflow ancestor clips the plugin's IntersectionObserver
-        // (useIsActiveQamTab). The QAM panel does the scrolling, like the loader.
+        // (useIsActiveQamTab). The QAM panel does the scrolling.
         // Inset the ShelvesHub button so it aligns with the plugin's own rows and
         // our hub-screen items (which sit inside the section's 14px padding), rather
         // than sitting flush against the QAM edge.
@@ -1610,7 +1780,7 @@
       } catch (e) {}
       var styleEl = h("style", { "data-shelves": "ring" }, ringCss);
       // Wrap the panel in Steam's Focusable so it joins gamepad-focus navigation
-      // (the mirrored editor's controls and ours) — exactly how the loader wraps its
+      // (the mirrored editor's controls and ours), the way a loader wraps its
       // plugin view. Bare (touch still works) until Focusable is available.
       return focusableComp
         ? h(focusableComp, { className: "shelves-panel", style: { height: "100%" } }, styleEl, inner)
@@ -1703,7 +1873,7 @@
       // list is rebuilt fresh on every QAM render, so building a NEW tab each time
       // hands Steam a new panel element every render — remounting the mirrored
       // editor, resetting toggles/side panel, and preventing gamepad focus from
-      // settling. the loader adds its tab once; we keep ours stable the same way.
+      // settling. A loader adds its tab once; we keep ours stable the same way.
       if (!cachedTab) cachedTab = buildTab();
       var tab = cachedTab;
       tab.initialVisibility = lastVisible;
@@ -1805,7 +1975,7 @@
     // locate the node carrying `props.tabs` in the returned element tree and
     // PUSH our tab onto that array. Nothing else: no component-type cloning, no
     // tree-patcher, no live-fiber surgery — those were the black-screen vectors
-    // (on-device 2026-07-23, see internal notes/qam-native-validation.md). We only
+    // (on-device 2026-07-23). We only
     // add one element to a plain array, exactly what a native tab is.
     //
     // Timing: a mounted memo holds its pre-patch type, so this must be wrapped

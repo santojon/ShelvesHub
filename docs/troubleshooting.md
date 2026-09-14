@@ -40,8 +40,8 @@ You can also move the host with `cef_host` if debugging a remote endpoint.
 
 ## Another host on the same machine (coexistence)
 
-ShelvesHub coexists with another host (for example a plugin loader such as the loader
-Loader): it never loads the plugin twice and adds only its own tab. Two knobs:
+ShelvesHub coexists with another host (for example another plugin loader): it
+never loads the plugin twice and adds only its own tab. Two knobs:
 
 - **It hijacked a plugin the other host was about to load.** Give the other host
   time to claim the renderer first:

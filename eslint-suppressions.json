@@ -1,0 +1,71 @@
+{
+  "examples/harness/orchestrate.js": {
+    "ds-local/comment-length": {
+      "count": 1
+    },
+    "no-var": {
+      "count": 5
+    }
+  },
+  "examples/harness/steam-mock.js": {
+    "ds-local/comment-length": {
+      "count": 5
+    },
+    "no-var": {
+      "count": 41
+    }
+  },
+  "examples/harness/steam-stubs.js": {
+    "ds-local/comment-length": {
+      "count": 1
+    },
+    "no-var": {
+      "count": 4
+    }
+  },
+  "runtime/shelves-host.js": {
+    "complexity": {
+      "count": 26
+    },
+    "ds-local/comment-length": {
+      "count": 81
+    },
+    "eqeqeq": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "no-cond-assign": {
+      "count": 4
+    },
+    "no-var": {
+      "count": 383
+    }
+  },
+  "scripts/deck-devtools.mjs": {
+    "ds-local/comment-length": {
+      "count": 1
+    }
+  },
+  "scripts/local-devtools.mjs": {
+    "ds-local/comment-length": {
+      "count": 1
+    }
+  },
+  "scripts/local-run.mjs": {
+    "ds-local/comment-length": {
+      "count": 1
+    }
+  },
+  "scripts/setup.mjs": {
+    "ds-local/comment-length": {
+      "count": 1
+    }
+  },
+  "scripts/site/capture-screenshots.mjs": {
+    "ds-local/comment-length": {
+      "count": 1
+    }
+  }
+}

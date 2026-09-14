@@ -99,7 +99,7 @@ pub fn ensure_backend(dest: &Path, prerelease: bool) -> Result<String, String> {
     if dest.join("main.py").is_file() {
         return Ok(format!("local ({})", dest.display()));
     }
-    // 2. Copy from an installed plugin loader (Linux/SteamOS with the loader).
+    // 2. Copy from an installed plugin loader (Linux/SteamOS).
     if let Some(src) = loader_backend_dir() {
         if src.join("main.py").is_file() {
             copy_backend_tree(&src, dest)?;

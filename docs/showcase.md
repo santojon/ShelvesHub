@@ -1,7 +1,16 @@
 # Showcase & screenshots
 
 The landing page at [`site/`](../site/) shows a screenshot gallery. This page
-documents how those screenshots are produced and published.
+embeds the captured screenshots and documents how they are produced and published.
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Quick Access tab](../assets/screenshots/hub-panel.png) | ![Config](../assets/screenshots/hub-config.png) |
+| **Quick Access tab** — the Deck Shelves editor, opened directly. | **Config** — host settings in the panel. |
+| ![Troubleshooting](../assets/screenshots/hub-troubleshooting.png) | ![Logs](../assets/screenshots/hub-logs.png) |
+| **Troubleshooting** — recovery actions when the bundle can't load. | **Logs** — the in-panel log viewer. |
 
 ## How the site publishes
 

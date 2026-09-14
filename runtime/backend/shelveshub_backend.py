@@ -13,8 +13,7 @@ Spawned by the daemon with:
   SHELVES_SETTINGS_DIR   where the backend should keep its settings; exported
                          to the backend process as DECK_SHELVES_SETTINGS_DIR
 
-Host environment offered to the backend (see internal notes/shelveshub-backend.md
-for the changes the Deck Shelves backend needs in order to run here):
+Host environment offered to the backend:
   - env DECK_SHELVES_SETTINGS_DIR — settings directory, created beforehand;
   - stderr — free-form log sink, forwarded line by line into the daemon log;
   - class contract — `main.Plugin`, public async/sync methods, optional
@@ -72,8 +71,7 @@ if not BACKEND_DIR or not os.path.isfile(os.path.join(BACKEND_DIR, "main.py")):
 SETTINGS_DIR = os.environ.get("SHELVES_SETTINGS_DIR") or _default_settings_dir()
 os.makedirs(SETTINGS_DIR, exist_ok=True)
 # The one switch that points the backend at the ShelvesHub settings store.
-# The backend's storage layer must honour this env var first (documented in
-# internal notes/shelveshub-backend.md).
+# The backend's storage layer must honour this env var first.
 os.environ["DECK_SHELVES_SETTINGS_DIR"] = SETTINGS_DIR
 
 # Reserve fd 1 for the protocol, then route stdout (and stray print()s in
@@ -89,7 +87,6 @@ except Exception as e:  # ImportError included — report cleanly, never trace-d
     _fatal(
         f"backend failed to import ({e}). The backend must run on the "
         "standard library plus its own modules — no loader-specific imports; "
-        "see internal notes/shelveshub-backend.md for the required changes."
     )
 
 if not hasattr(_backend_main, "Plugin"):

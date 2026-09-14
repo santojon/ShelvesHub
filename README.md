@@ -30,7 +30,7 @@ The loader runs as a background service, watches for the Steam renderer, injects
 
 The shared `HostApi` contract (`@deck-shelves/host`, vendored as the `host/` submodule) defines what the host provides to the bundle, so one Deck Shelves build runs under this host or under a plugin loader unchanged. The Rust process (`src/`) implements the service side and the injected runtime (`runtime/shelves-host.js`) implements the in-renderer side.
 
-It gives Deck Shelves its own tab in the Steam Quick Access Menu (on by default), opening the editor directly with the plugin's icon and header; if the bundle can't load, that tab shows a recovery panel instead of an empty tab. Where another host such as plugin loader is installed too, the two coexist: exactly one Deck Shelves tab is shown (this host's), both hosts' tabs stay usable and edit the same settings, the plugin's wide side panel opens from whichever tab is on screen, and only one host writes settings at a time.
+It gives Deck Shelves its own tab in the Steam Quick Access Menu (on by default), opening the editor directly with the plugin's icon and header; if the bundle can't load, that tab shows a recovery panel instead of an empty tab. Where another host such as a plugin loader is installed too, the two coexist: exactly one Deck Shelves tab is shown (this host's), both hosts' tabs stay usable and edit the same settings, the plugin's wide side panel opens from whichever tab is on screen, and only one host writes settings at a time.
 
 The service also **keeps itself and the bundle current**: with automatic updates on it downloads a newer Deck Shelves release and swaps it in place, and it can **update its own binary** from the latest ShelvesHub release. Update channels, a disable-until-restart switch, an editable safe subset of the configuration, and a merged host/runtime log viewer are all reachable from the tab, localized into 19 languages.
 
@@ -52,6 +52,19 @@ ShelvesHub adds its own management panel to the Steam Quick Access menu — the 
 </tr>
 </table>
 </div>
+
+---
+
+## Documentation
+
+- [Architecture](docs/architecture.md) — how the daemon, injected runtime, and RPC server fit together.
+- [HostApi contract](docs/host-api.md) — the `window.__SHELVES_HOST__` surface the bundle consumes.
+- [Backend contract](docs/backend-contract.md) — hosting the Deck Shelves data backend over stdio.
+- [Usage](docs/usage.md) — running and configuring the service.
+- [Development](docs/development.md) — building and working on ShelvesHub.
+- [Debugging & DevTools](docs/debugging.md) — the `shelves-devtools` CDP tool and the debug workflow.
+- [Troubleshooting](docs/troubleshooting.md) — port conflicts, coexistence, and recovery.
+- [Showcase & screenshots](docs/showcase.md) — the screenshot set and how it is published.
 
 ---
 

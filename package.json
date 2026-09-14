@@ -17,6 +17,9 @@
     "check": "cargo check",
     "test": "cargo test",
     "lint": "cargo clippy -- -D warnings",
+    "lint:js": "eslint --no-warn-ignored --pass-on-unpruned-suppressions .",
+    "lint:js:baseline": "eslint --no-warn-ignored --suppress-all .",
+    "lint:js:prune": "eslint --no-warn-ignored --prune-suppressions .",
     "fmt": "cargo fmt",
     "run": "cargo run --bin shelveshub",
     "devtools": "cargo run --quiet --bin shelves-devtools --",
@@ -52,6 +55,8 @@
     "clean": "cargo clean"
   },
   "devDependencies": {
-    "dotenv-cli": "^7.4.4"
+    "dotenv-cli": "^7.4.4",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1"
   }
 }

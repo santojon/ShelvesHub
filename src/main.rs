@@ -85,7 +85,7 @@ fn main() {
             "bundle_path": config.bundle_path.display().to_string(),
             "backend": config.backend_dir.is_some(),
             "version": env!("CARGO_PKG_VERSION"),
-            // Whether another plugin loader (the loader) can coexist here — only on
+            // Whether another plugin loader can coexist here — only on
             // Linux/SteamOS. On macOS/Windows this is a pure sole host, so the
             // coexist-only settings (force_owner, owner_settle_secs) are inert and
             // the UI hides them.
