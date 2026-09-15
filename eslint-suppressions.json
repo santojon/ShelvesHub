@@ -25,10 +25,10 @@
   },
   "runtime/shelves-host.js": {
     "complexity": {
-      "count": 26
+      "count": 28
     },
     "ds-local/comment-length": {
-      "count": 81
+      "count": 83
     },
     "eqeqeq": {
       "count": 1
@@ -40,7 +40,7 @@
       "count": 4
     },
     "no-var": {
-      "count": 383
+      "count": 389
     }
   },
   "scripts/deck-devtools.mjs": {
@@ -55,7 +55,7 @@
   },
   "scripts/local-run.mjs": {
     "ds-local/comment-length": {
-      "count": 1
+      "count": 3
     }
   },
   "scripts/setup.mjs": {

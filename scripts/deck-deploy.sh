@@ -55,27 +55,35 @@ rsync -az -e "$RSH" runtime/shelves-host.js "$DECK_USER@$DECK_HOST:$REMOTE_HOME_
 rsync -az -e "$RSH" runtime/i18n/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/i18n/"
 rsync -az -e "$RSH" runtime/backend/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/backend/"
 rsync -az -e "$RSH" "$BUNDLE" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/bundle/index.js"
-rsync -az -e "$RSH" shelveshub.config.json "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/shelveshub.config.json"
+# Seed the config only if absent — never overwrite a device-side edit. The hub's
+# advanced-config editor writes this file and the daemon reads it as authoritative,
+# so a redeploy must keep the user's values (interval, native_qam, …).
+rsync -az --ignore-existing -e "$RSH" shelveshub.config.json "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/shelveshub.config.json"
 
 # Generate the user service pointing at the actual deploy path (the static unit
 # assumes ~/.local/share/shelveshub, which may differ from DECK_DEPLOY_PATH).
-printf '%s\n' \
-  "[Unit]" \
-  "Description=ShelvesHub Service" \
-  "After=network-online.target" \
-  "" \
-  "[Service]" \
-  "Environment=SHELVES_NATIVE_QAM=${SHELVES_NATIVE_QAM:-1}" \
-  "Environment=SHELVES_OWNER_SETTLE_SECS=${SHELVES_OWNER_SETTLE_SECS:-25}" \
-  "Environment=SHELVES_PRELOAD=${SHELVES_PRELOAD:-0}" \
-  "ExecStart=$REMOTE_HOME_DIR/shelveshub" \
-  "Restart=always" \
-  "RestartSec=10" \
-  "WorkingDirectory=$REMOTE_HOME_DIR" \
-  "" \
-  "[Install]" \
-  "WantedBy=default.target" \
-  | "${SSH[@]}" "cat > /home/$DECK_USER/.config/systemd/user/shelveshub.service"
+# Editable config keys (native_qam, owner_settle_secs, force_owner) come from the
+# config FILE so the hub's config editor can change them persistently — env would
+# override the file every boot. They are forced via env ONLY when the caller
+# exports the var (a deliberate sole-mode test), never by default.
+{
+  echo "[Unit]"
+  echo "Description=ShelvesHub Service"
+  echo "After=network-online.target"
+  echo ""
+  echo "[Service]"
+  echo "Environment=SHELVES_PRELOAD=${SHELVES_PRELOAD:-0}"
+  if [[ -n "${SHELVES_NATIVE_QAM:-}" ]]; then echo "Environment=SHELVES_NATIVE_QAM=$SHELVES_NATIVE_QAM"; fi
+  if [[ -n "${SHELVES_OWNER_SETTLE_SECS:-}" ]]; then echo "Environment=SHELVES_OWNER_SETTLE_SECS=$SHELVES_OWNER_SETTLE_SECS"; fi
+  if [[ -n "${SHELVES_FORCE_OWNER:-}" ]]; then echo "Environment=SHELVES_FORCE_OWNER=$SHELVES_FORCE_OWNER"; fi
+  echo "ExecStart=$REMOTE_HOME_DIR/shelveshub"
+  echo "Restart=always"
+  echo "RestartSec=10"
+  echo "WorkingDirectory=$REMOTE_HOME_DIR"
+  echo ""
+  echo "[Install]"
+  echo "WantedBy=default.target"
+} | "${SSH[@]}" "cat > /home/$DECK_USER/.config/systemd/user/shelveshub.service"
 
 # ── Enable Steam CEF remote debugging + (re)start the service ───────────────
 echo "[i] Enabling CEF remote debugging and (re)starting service..."

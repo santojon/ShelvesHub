@@ -37,5 +37,10 @@
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
   "sec_updates": "업데이트",
-  "updates_managed_elsewhere": "여기서는 플러그인 로더가 업데이트를 관리합니다."
+  "updates_managed_elsewhere": "여기서는 플러그인 로더가 업데이트를 관리합니다.",
+  "cfg_force_owner_sub": "다른 로더가 있어도 소유권을 가져옵니다",
+  "cfg_owner_settle_sub": "호스팅 전에 다른 호스트를 기다리는 초",
+  "cfg_interval_sub": "주입 확인 사이의 초",
+  "adv_disable_hub_sub": "다시 켤 때까지 주입 중지 (문제 해결)",
+  "adv_restart_apply": "다시 시작하여 적용"
 }

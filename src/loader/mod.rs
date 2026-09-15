@@ -591,14 +591,22 @@ fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick>
 
     let owner = probe_owner(&mut client)?;
 
-    // Foreign owner (another host + its Deck Shelves): coexist. We never install
-    // the host or boot the bundle here — that would double-mount / hijack. But we
-    // DO add our native QAM tab (additive, host-neutral) so ShelvesHub's tab shows
-    // alongside. The injected runtime detects the other loader itself and takes the
-    // tab-only path; the daemon just delivers it once. `!may_inject` is exactly "a
-    // foreign owner, and we are not forcing".
-    if !may_inject(&owner, config.force_owner) {
+    // Foreign owner (another live loader + its Deck Shelves): coexist. We never
+    // install the host or boot the bundle here — that would double-mount / hijack.
+    // But we DO add our native QAM tab (additive, host-neutral) so ShelvesHub's tab
+    // shows alongside. This holds EVEN WHEN `force_owner` is set: wrestling a live
+    // loader out of the renderer it already owns is not supported — the two hosts
+    // both doing a full injection into one renderer black-screens and can take the
+    // loader down. `force_owner` only skips the settle wait so a SOLE host boots
+    // immediately (below); it never overrides a loader that has already claimed.
+    if is_foreign_owner(&owner) {
         *empty_since = None;
+        if config.force_owner {
+            log_info(
+                "loader",
+                "force_owner set, but a loader already owns the renderer — standing down (takeover of a live loader is not supported; coexisting instead).",
+            );
+        }
         if !config.native_qam {
             return Ok(Tick::StoodDown(owner));
         }
@@ -712,6 +720,11 @@ fn stamp_force_owner(client: &mut CdpClient) {
         Ok(_) => log_info("loader", "Owner preference stamped (forced)."),
         Err(e) => log_warning("loader", &format!("Owner stamp failed: {e}")),
     }
+}
+
+/// A foreign owner: the renderer is claimed by someone other than us.
+fn is_foreign_owner(owner: &str) -> bool {
+    !owner.is_empty() && owner != OWNER_KIND
 }
 
 /// True when our coexistence runtime has already added its tab. In coexistence the

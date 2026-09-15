@@ -37,5 +37,10 @@
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
   "sec_updates": "アップデート",
-  "updates_managed_elsewhere": "ここでは更新はプラグインローダーが管理します。"
+  "updates_managed_elsewhere": "ここでは更新はプラグインローダーが管理します。",
+  "cfg_force_owner_sub": "他のローダーがあっても所有権を取得します",
+  "cfg_owner_settle_sub": "ホストする前に他のホストを待つ秒数",
+  "cfg_interval_sub": "インジェクション確認の間隔（秒）",
+  "adv_disable_hub_sub": "再有効化までインジェクションを停止（トラブル対応）",
+  "adv_restart_apply": "再起動して適用"
 }

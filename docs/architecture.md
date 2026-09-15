@@ -108,9 +108,13 @@ native Quick Access tab enabled (`SHELVES_NATIVE_QAM=1`) it still injects only
 its runtime, which detects the other host and adds ShelvesHub's tab alongside
 without installing its own host — so both tabs coexist and the other host's
 plugin is left untouched; otherwise the tick stands down entirely. Setting
-`SHELVES_FORCE_OWNER=shelveshub` claims ownership anyway — the daemon stamps
-`window.__SHELVES_FORCE_OWNER__` before injecting so the other adapter can
-yield cooperatively, and the plugin sees a single writer at all times.
+`SHELVES_FORCE_OWNER=shelveshub` makes ShelvesHub claim an *unclaimed* renderer
+immediately (it skips the owner-settle wait and stamps `window.__SHELVES_FORCE_OWNER__`
+so the plugin selects ShelvesHub). It does **not** override a host that has
+already claimed the renderer: a foreign claim always stands the daemon down to
+the coexist path (tab only), because two hosts both doing a full injection into
+one renderer is unstable. Force ownership is therefore a sole-host preference,
+not a takeover of a live host.
 
 While the renderer is still unclaimed, `SHELVES_OWNER_SETTLE_SECS` (config key
 `owner_settle_secs`) makes the loop wait that many seconds for a claim to appear

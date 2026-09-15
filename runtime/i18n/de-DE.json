@@ -37,5 +37,10 @@
   "cfg_backend": "Daten-Backend",
   "cfg_version": "Version",
   "sec_updates": "Updates",
-  "updates_managed_elsewhere": "Updates werden hier vom Plugin-Loader verwaltet."
+  "updates_managed_elsewhere": "Updates werden hier vom Plugin-Loader verwaltet.",
+  "cfg_force_owner_sub": "Besitz übernehmen, auch wenn ein anderer Loader aktiv ist",
+  "cfg_owner_settle_sub": "Sekunden auf einen anderen Host warten, bevor gehostet wird",
+  "cfg_interval_sub": "Sekunden zwischen Injektionsprüfungen",
+  "adv_disable_hub_sub": "Injektion bis zur Reaktivierung stoppen (Fehlersuche)",
+  "adv_restart_apply": "Zum Anwenden neu starten"
 }

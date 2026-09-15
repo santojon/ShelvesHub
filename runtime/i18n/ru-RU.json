@@ -37,5 +37,10 @@
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
   "sec_updates": "Обновления",
-  "updates_managed_elsewhere": "Обновлениями здесь управляет загрузчик плагинов."
+  "updates_managed_elsewhere": "Обновлениями здесь управляет загрузчик плагинов.",
+  "cfg_force_owner_sub": "Взять управление, даже если есть другой загрузчик",
+  "cfg_owner_settle_sub": "Секунды ожидания другого хоста перед размещением",
+  "cfg_interval_sub": "Секунды между проверками внедрения",
+  "adv_disable_hub_sub": "Остановить внедрение до повторного включения (диагностика)",
+  "adv_restart_apply": "Перезапустить для применения"
 }

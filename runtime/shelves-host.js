@@ -15,6 +15,29 @@
 (function () {
   "use strict";
 
+  /* Some clients (notably macOS Big Picture) open Steam's MAIN side menu over the
+     home during boot via Steam's own nav-tree activation (not our code); it repeats
+     then stays open. Close it during the boot window so the user lands on the home
+     — bounded and self-limiting (stops once it stays closed, or after ~10s), so a
+     later user-opened menu is never fought. `m_eOpenSideMenu === 1` is the MAIN menu. */
+  (function () {
+    try {
+      const g = window;
+      let closes = 0, stable = 0, tries = 0, t0 = 0;
+      const iv = setInterval(function () {
+        tries++;
+        const inst = g.SteamUIStore && g.SteamUIStore.WindowStore && g.SteamUIStore.WindowStore.GamepadUIMainWindowInstance;
+        const ms = inst && inst.m_MenuStore;
+        if (!ms || typeof ms.CloseSideMenus !== "function") { if (tries > 400) clearInterval(iv); return; }
+        if (!t0) t0 = Date.now();
+        const st = ms.m_eOpenSideMenu;
+        if (st === 1 && closes < 6) { try { ms.CloseSideMenus(); } catch (e) {} closes++; stable = 0; }
+        else if (st === 0) { stable++; }
+        if ((closes > 0 && stable >= 3) || closes >= 6 || Date.now() - t0 > 10000) clearInterval(iv);
+      }, 250);
+    } catch (e) {}
+  })();
+
   // Derived from the daemon's `window.__SHELVES_CONFIG__` stamp (RPC address from
   // its config, contract version from @deck-shelves/host) so nothing is hardcoded
   // here; the literals are a fallback for a standalone load without the stamp.
@@ -1389,6 +1412,37 @@
       function mergeRc(patch) { var n = {}; if (rc) for (var k in rc) n[k] = rc[k]; for (var p in patch) n[p] = patch[p]; setRc(n); }
       function applyPaused(v) { mergeRc({ paused: v }); hostRpc("setHostingPaused", v).then(function () {}, function () {}); }
       function applyCfg(key, val) { mergeRc((function () { var o = {}; o[key] = val; return o; })()); setRcDirty(true); hostRpc("setRuntimeConfig", { key: key, value: val }).then(function () {}, function () {}); }
+      /* Apply pending config edits: restart the daemon so it re-reads the config
+         file (values are only read at startup), then restart Steam so the fresh
+         daemon claims/injects on a clean boot (needed for an ownership change,
+         harmless otherwise). Shown as a top button while edits are dirty. */
+      function doApplyRestart() {
+        if (busy) return;
+        setBusy("restart");
+        hostRpc("restartService", {}).then(function () {}, function () {});
+        setTimeout(function () {
+          try { const u = window.SteamClient && window.SteamClient.User; if (u && typeof u.StartRestart === "function") u.StartRestart(false); } catch (e) {}
+        }, 600);
+      }
+      // Same pattern as the pinned "ShelvesHub" button (native DialogButton when
+      // available, else the subtle inset row) — matched colour and alignment.
+      function restartBanner() {
+        const label = I18N.t("adv_restart_apply");
+        const btn = (nativeUiOn() && UI.DialogButton)
+          ? h(UI.DialogButton, { "data-fb": "apply-restart", onClick: doApplyRestart, style: { width: "100%" } },
+              h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } }, fbIcon("update"), h("span", null, label)))
+          : clickable(doApplyRestart, {
+              "data-fb": "apply-restart", focusClassName: "shelves-gpfocus",
+              style: {
+                flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",
+                gap: "8px", width: "100%", boxSizing: "border-box", padding: "10px 14px",
+                border: "none", borderRadius: "4px",
+                background: "rgba(255,255,255,0.05)", color: "#fff", cursor: busy ? "default" : "pointer",
+                fontSize: "13px", opacity: busy ? 0.6 : 1,
+              },
+            }, [fbIcon("update"), h("span", { key: "t" }, label)]);
+        return h("div", { key: "restart-banner", style: { padding: "10px 14px 8px" } }, btn);
+      }
       function viewLogs() {
         setBusy("logs");
         hostRpc("getLogs", 200).then(function (r) {
@@ -1471,16 +1525,30 @@
       // into collapsible sub-sections (Troubleshooting / Configuration / Status),
       // with localized labels, centered steppers, and focusable rows.
       var advRowStyle = { display: "flex", alignItems: "center", gap: "10px", minHeight: "40px", width: "100%", boxSizing: "border-box", padding: "6px 16px", border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontSize: "13px" };
-      var advToggleRow = function (key, label, checked, onAct) {
-        return clickable(function () { onAct(!checked); }, { key: key, "data-fb": key, "data-on": checked ? "1" : "0", focusClassName: "shelves-rowfocus", style: advRowStyle },
-          [h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left" } }, label), updSwitch(checked)]);
+      // Short explanatory subtext under a field label (localized). Muted + tight.
+      var advSubStyle = { fontSize: "11px", color: "rgba(255,255,255,0.55)", lineHeight: "1.3", marginTop: "1px" };
+      var advLabelCol = function (label, sub) {
+        return h("div", { key: "t", style: { flex: "1 1 auto", textAlign: "left", display: "flex", flexDirection: "column", gap: "1px", minWidth: "0" } },
+          [h("span", { key: "lb" }, label), sub ? h("span", { key: "sb", style: advSubStyle }, sub) : null]);
       };
-      var advStepRow = function (key, label, val) {
+      var advToggleRow = function (key, label, sub, checked, onAct) {
+        return clickable(function () { onAct(!checked); }, { key: key, "data-fb": key, "data-on": checked ? "1" : "0", focusClassName: "shelves-rowfocus", style: advRowStyle },
+          [advLabelCol(label, sub), updSwitch(checked)]);
+      };
+      // Numeric stepper: the original two focusable − / + buttons (A activates
+      // each), wrapped in a `flow-children:"horizontal"` Focusable so the gamepad
+      // moves BETWEEN them laterally instead of vertically. Subtext under the label.
+      var advStepRow = function (key, label, sub, val) {
+        var cur = Number(val) || 0;
         var stepBtn = function (sym, delta) {
-          return clickable(function () { applyCfg(key, Math.max(0, (Number(val) || 0) + delta)); }, { key: key + sym, "data-fb": key + sym, style: { flex: "0 0 auto", width: "30px", height: "28px", borderRadius: "4px", border: "none", background: "rgba(255,255,255,0.14)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "16px", lineHeight: "1", padding: "0" } }, [sym]);
+          return clickable(function () { applyCfg(key, Math.max(0, cur + delta)); }, { key: key + sym, "data-fb": key + sym, style: { flex: "0 0 auto", width: "30px", height: "28px", borderRadius: "4px", background: "rgba(255,255,255,0.14)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "16px", lineHeight: "1" } }, [sym]);
         };
-        return h("div", { key: key, style: { display: "flex", alignItems: "center", gap: "8px", minHeight: "40px", boxSizing: "border-box", padding: "6px 16px", fontSize: "13px" } },
-          h("span", { key: "l", style: { flex: "1 1 auto" } }, label), stepBtn("−", -5), h("span", { key: "v", style: { flex: "0 0 auto", minWidth: "34px", textAlign: "center", fontFamily: "monospace" } }, String(Number(val) || 0)), stepBtn("+", 5));
+        var groupKids = [stepBtn("−", -5), h("span", { key: "v", style: { flex: "0 0 auto", minWidth: "34px", textAlign: "center", fontFamily: "monospace" } }, String(cur)), stepBtn("+", 5)];
+        var groupStyle = { display: "flex", alignItems: "center", gap: "8px", flex: "0 0 auto" };
+        var group = focusableComp
+          ? h(focusableComp, { key: "st", "flow-children": "horizontal", style: groupStyle }, groupKids)
+          : h("div", { key: "st", style: groupStyle }, groupKids);
+        return h("div", { key: key, style: { display: "flex", alignItems: "center", gap: "8px", minHeight: "40px", boxSizing: "border-box", padding: "6px 16px", fontSize: "13px" } }, [advLabelCol(label, sub), group]);
       };
       // Read-only status rows: focusable (so the gamepad can walk them), whole-row
       // highlight, label left + value right for a clean two-column read.
@@ -1512,7 +1580,7 @@
           upd = [h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere"))];
           updCount = 0;
         } else {
-          upd = updRows(useNative, TF).slice();
+          upd = updRows().slice();
           upd.push(actionRow("download", "download", "action_download", "populateBundle"));
           upd.push(actionRow("update", "update", "action_update_hub", "selfUpdate"));
           updCount = upd.length;
@@ -1520,7 +1588,7 @@
         sections.push(h(HubCollapsible, { key: "sec-upd", id: "sec-updates", title: I18N.t("sec_updates"), count: updCount, initialOpen: true }, upd));
         var trouble = [actionRow("logs", "logs", "action_logs", "getLogs")];
         if (rc) {
-          trouble.push(advToggleRow("adv-pause", I18N.t("adv_disable_hub"), rc.paused === true, applyPaused));
+          trouble.push(advToggleRow("adv-pause", I18N.t("adv_disable_hub"), I18N.t("adv_disable_hub_sub"), rc.paused === true, applyPaused));
           if (rc.paused === true) trouble.push(h("div", { key: "pn", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_paused")));
         }
         sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: rc ? 2 : 1 }, trouble));
@@ -1533,10 +1601,10 @@
           // pure sole host (macOS/Windows) they are inert, so they are hidden too.
           var conf = [];
           if (rc.loader_possible) {
-            conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
-            conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), rc.owner_settle_secs));
+            conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), I18N.t("cfg_force_owner_sub"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
+            conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
           }
-          conf.push(advStepRow("interval_secs", I18N.t("cfg_interval"), rc.interval_secs));
+          conf.push(advStepRow("interval_secs", I18N.t("cfg_interval"), I18N.t("cfg_interval_sub"), rc.interval_secs));
           var confCount = conf.length;
           if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));
           sections.push(h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: confCount }, conf));
@@ -1586,20 +1654,17 @@
         return h("span", { key: "sw", style: { flex: "0 0 auto", width: "38px", height: "22px", borderRadius: "11px", position: "relative", background: checked ? "#1a9fff" : "rgba(255,255,255,0.25)" } },
           h("span", { style: { position: "absolute", top: "2px", left: checked ? "18px" : "2px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff" } }));
       }
-      // useNative renders each level as a native ToggleField; the plain path uses
-      // a self-contained focusable row with a hand-drawn switch. Indentation (per
-      // depth) conveys the hierarchy; rows whose ancestor is off are not rendered.
-      function updRows(useNative, TF) {
+      // Render each level with the SAME flat, transparent, hand-drawn row as the
+      // Configuration/Troubleshooting toggles (`advToggleRow`) so the whole panel
+      // reads as one inset list — the boxed / native variants sat edge-to-edge and
+      // looked out of place. Depth indents (per level) convey the nested hierarchy;
+      // rows whose ancestor is off are not rendered. one flat list.
+      function updRows() {
         return UPD_ROWS.filter(function (rw) { return rw.visible(); }).map(function (rw) {
           var checked = uc[rw.key] === true;
-          var indent = rw.depth * 20;
-          if (useNative && TF) {
-            return h("div", { key: rw.key, style: { marginLeft: indent + "px", marginTop: rw.depth ? "2px" : "10px" } },
-              h(TF, { label: I18N.t(rw.labelKey), checked: checked, disabled: !!busy, onChange: function (v) { applyPref(rw.key, !!v); } }));
-          }
-          var rowStyle = { display: "flex", alignItems: "center", gap: "10px", width: "100%", boxSizing: "border-box", padding: "10px 14px", marginTop: rw.depth ? "4px" : "8px", marginLeft: indent + "px", textAlign: "left", border: "none", borderRadius: "4px", fontSize: "14px", color: "#fff", background: "rgba(255,255,255,0.08)", cursor: busy ? "default" : "pointer" };
-          return clickable(function () { if (!busy) applyPref(rw.key, !checked); }, { key: rw.key, "data-fb": "upd-" + rw.key, "data-on": checked ? "1" : "0", style: rowStyle },
-            [h("span", { key: "t", style: { flex: "1 1 auto" } }, I18N.t(rw.labelKey)), updSwitch(checked)]);
+          var rowStyle = { display: "flex", alignItems: "center", gap: "10px", width: "100%", boxSizing: "border-box", padding: "6px 16px", paddingLeft: (16 + rw.depth * 20) + "px", minHeight: "40px", border: "none", background: "transparent", color: "#fff", cursor: busy ? "default" : "pointer", fontSize: "13px" };
+          return clickable(function () { if (!busy) applyPref(rw.key, !checked); }, { key: rw.key, "data-fb": "upd-" + rw.key, "data-on": checked ? "1" : "0", focusClassName: "shelves-rowfocus", style: rowStyle },
+            [h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left" } }, I18N.t(rw.labelKey)), updSwitch(checked)]);
         });
       }
 
@@ -1697,6 +1762,7 @@
             h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
         : h("div", { key: "title", style: { fontSize: "18px", fontWeight: "700", padding: "6px 16px 4px" } }, I18N.t("hub_title"));
       var body = [titleRow];
+      if (rcDirty) body.push(restartBanner());
       var notice = hubUpdateNotice();
       if (notice) body.push(h("div", { key: "nw", style: { padding: "0 16px" } }, notice));
       if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
@@ -2372,8 +2438,13 @@
       function () {
         var groupMod = Steam.findModuleByExport(function (e) {
           try {
-            return !!(e && e.prototype && e.prototype.Focus && e.prototype.OnOKButton &&
-              e.prototype.render && srcOf(e.prototype.render).indexOf('"emphasis"==this.props.tone') >= 0);
+            if (!(e && e.prototype && e.prototype.Focus && e.prototype.OnOKButton && e.prototype.render)) return false;
+            // Match the tone/emphasis check regardless of operand order or
+            // operator spelling — the minifier reorders it across client
+            // versions (stable: "emphasis"==this.props.tone; beta:
+            // this.props.tone=="emphasis"), so an exact-string test is fragile.
+            var rs = srcOf(e.prototype.render);
+            return rs.indexOf("emphasis") >= 0 && rs.indexOf("props.tone") >= 0;
           } catch (x) { return false; }
         });
         UI.MenuGroup = groupMod && Object.values(groupMod).find(function (e) {

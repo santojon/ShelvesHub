@@ -37,5 +37,10 @@
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
   "sec_updates": "Güncellemeler",
-  "updates_managed_elsewhere": "Güncellemeler burada eklenti yükleyici tarafından yönetilir."
+  "updates_managed_elsewhere": "Güncellemeler burada eklenti yükleyici tarafından yönetilir.",
+  "cfg_force_owner_sub": "Başka bir yükleyici olsa bile sahipliği al",
+  "cfg_owner_settle_sub": "Barındırmadan önce başka bir ana makineyi bekleme (saniye)",
+  "cfg_interval_sub": "Enjeksiyon kontrolleri arasındaki saniye",
+  "adv_disable_hub_sub": "Yeniden etkinleştirilene kadar enjeksiyonu durdur (sorun giderme)",
+  "adv_restart_apply": "Uygulamak için yeniden başlat"
 }

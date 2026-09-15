@@ -37,5 +37,10 @@
   "cfg_backend": "Data-backend",
   "cfg_version": "Versie",
   "sec_updates": "Updates",
-  "updates_managed_elsewhere": "Updates worden hier beheerd door de plugin-loader."
+  "updates_managed_elsewhere": "Updates worden hier beheerd door de plugin-loader.",
+  "cfg_force_owner_sub": "Neem eigenaarschap, ook als een andere loader aanwezig is",
+  "cfg_owner_settle_sub": "Seconden wachten op een andere host vóór hosten",
+  "cfg_interval_sub": "Seconden tussen injectiecontroles",
+  "adv_disable_hub_sub": "Injectie stoppen tot opnieuw ingeschakeld (probleemoplossing)",
+  "adv_restart_apply": "Opnieuw starten om toe te passen"
 }

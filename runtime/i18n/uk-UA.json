@@ -37,5 +37,10 @@
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
   "sec_updates": "Оновлення",
-  "updates_managed_elsewhere": "Оновленнями тут керує завантажувач плагінів."
+  "updates_managed_elsewhere": "Оновленнями тут керує завантажувач плагінів.",
+  "cfg_force_owner_sub": "Перебрати керування, навіть якщо є інший завантажувач",
+  "cfg_owner_settle_sub": "Секунди очікування іншого хоста перед розміщенням",
+  "cfg_interval_sub": "Секунди між перевірками впровадження",
+  "adv_disable_hub_sub": "Зупинити впровадження до повторного ввімкнення (діагностика)",
+  "adv_restart_apply": "Перезапустити для застосування"
 }

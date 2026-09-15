@@ -8,6 +8,12 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **Shelf actions work in the game menu on the Steam Beta.** When ShelvesHub is
+  hosting on its own, the "add to shelf / highlight / hide" items now appear in a
+  game's context menu on the Steam Beta client, just as they do elsewhere.
+- **Clearer settings.** Each Configuration field now has a short description under
+  it, in your language, and the number steppers move sideways with the gamepad
+  (between − and +) instead of vertically.
 - **A native tab that looks the part.** The host's Quick Access tab now renders
   real Steam buttons and toggles — with a gamepad focus ring and a ShelvesHub icon
   that tints to your theme — so it feels like the rest of the interface.
@@ -32,10 +38,14 @@ is pushed — the notes below are picked up and published with the release.
   else is automatic.
 - **Plays nice with another host.** If Deck Shelves is already mounted by a
   different host on the same machine, the service never loads it twice or takes
-  over — it adds only its own Quick Access tab alongside. Prefer this host?
-  `SHELVES_FORCE_OWNER=shelveshub` makes the hand-over explicit and safe — one
+  over — it adds only its own Quick Access tab alongside. `SHELVES_FORCE_OWNER=shelveshub`
+  makes ShelvesHub the host when it is the only one installed (and boots it
+  immediately); it does not wrestle a host that already owns the renderer — one
   writer for your settings, always. On a shared machine, `SHELVES_OWNER_SETTLE_SECS`
   lets it wait for the other host to start before ever hosting on its own.
+- **Restart to apply, in one click.** Change a setting that needs a restart and a
+  **Restart to apply** button appears at the top of the hub page — it restarts the
+  host and Steam together so your change takes effect, in your language.
 - **Deck Shelves, right in the Steam menu.** This host's own Quick Access tab
   opens the Deck Shelves editor directly — validated on a Steam Deck. With
   another host also installed, both tabs work side by side and edit the same

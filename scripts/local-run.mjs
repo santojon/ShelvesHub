@@ -28,7 +28,7 @@
  *      SHELVES_SETTINGS_DIR (default: the daemon's per-OS location).
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, statSync, openSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, statSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { homedir, platform } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -93,6 +93,29 @@ if (!existsSync(bin)) { console.error(`[!] Daemon binary not found at ${bin} —
 
 seedBundle();
 
+// ── Seed the daemon's config file with the sole-host dev defaults ────────────
+// The daemon reads `<exe_dir>/shelveshub.config.json`. We seed dev defaults
+// (force_owner / native_qam) into that FILE instead of forcing them via env, so
+// the hub's advanced-config editor can change them and the change PERSISTS across
+// restarts (env would override the file every boot). Only missing keys are added
+// — an existing value (a user edit) is never overwritten.
+const CONFIG_FILE = join(ROOT, "target", "debug", "shelveshub.config.json");
+function seedConfig() {
+  const defaults = { force_owner: true, native_qam: true, owner_settle_secs: 0 };
+  let obj = {};
+  try { obj = JSON.parse(readFileSync(CONFIG_FILE, "utf8")); } catch { obj = {}; }
+  let changed = !existsSync(CONFIG_FILE);
+  for (const [k, v] of Object.entries(defaults)) {
+    if (!(k in obj)) { obj[k] = v; changed = true; }
+  }
+  if (!changed) { console.log(`[i] Kept existing dev config ${CONFIG_FILE} (edits preserved).`); return; }
+  try {
+    writeFileSync(CONFIG_FILE, JSON.stringify(obj, null, 2) + "\n");
+    console.log(`[i] Seeded dev config defaults into ${CONFIG_FILE} (missing keys only — edits persist).`);
+  } catch (e) { console.warn(`[!] Could not seed dev config (${e}); the daemon falls back to defaults.`); }
+}
+seedConfig();
+
 // ── Stop any previous instance ──────────────────────────────────────────────
 stopDaemon();
 
@@ -103,9 +126,13 @@ const env = {
   SHELVES_CEF_PORT: process.env.SHELVES_CEF_PORT || "8080",
   SHELVES_HOST_RUNTIME_PATH: process.env.SHELVES_HOST_RUNTIME_PATH || join(ROOT, "runtime", "shelves-host.js"),
   SHELVES_BUNDLE_PATH: MANAGED,
-  SHELVES_FORCE_OWNER: process.env.SHELVES_FORCE_OWNER || "shelveshub",
-  SHELVES_NATIVE_QAM: process.env.SHELVES_NATIVE_QAM || "1",
-  SHELVES_OWNER_SETTLE_SECS: process.env.SHELVES_OWNER_SETTLE_SECS || "0",
+  // force_owner / native_qam / owner_settle come from the seeded config FILE
+  // (see seedConfig) so the hub's config editor can change them persistently —
+  // env vars would override the file every boot. A caller can still force any
+  // of them by exporting the env var before running this script.
+  ...(process.env.SHELVES_FORCE_OWNER ? { SHELVES_FORCE_OWNER: process.env.SHELVES_FORCE_OWNER } : {}),
+  ...(process.env.SHELVES_NATIVE_QAM ? { SHELVES_NATIVE_QAM: process.env.SHELVES_NATIVE_QAM } : {}),
+  ...(process.env.SHELVES_OWNER_SETTLE_SECS ? { SHELVES_OWNER_SETTLE_SECS: process.env.SHELVES_OWNER_SETTLE_SECS } : {}),
   ...(has("--prerelease") ? { SHELVES_PRERELEASE: "1" } : {}),
 };
 const logFd = openSync(LOG, "a");

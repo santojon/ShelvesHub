@@ -37,5 +37,10 @@
   "cfg_backend": "Backend dati",
   "cfg_version": "Versione",
   "sec_updates": "Aggiornamenti",
-  "updates_managed_elsewhere": "Gli aggiornamenti sono gestiti dal loader dei plugin qui."
+  "updates_managed_elsewhere": "Gli aggiornamenti sono gestiti dal loader dei plugin qui.",
+  "cfg_force_owner_sub": "Assumi il controllo anche se è presente un altro loader",
+  "cfg_owner_settle_sub": "Secondi di attesa di un altro host prima dell'hosting",
+  "cfg_interval_sub": "Secondi tra i controlli di iniezione",
+  "adv_disable_hub_sub": "Interrompi l'iniezione fino alla riattivazione (diagnostica)",
+  "adv_restart_apply": "Riavvia per applicare"
 }

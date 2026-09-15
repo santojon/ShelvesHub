@@ -508,6 +508,27 @@ fn dispatch(body: &str) -> String {
                 }
             }
         }
+        // Restart the daemon so pending config-file edits (interval, native_qam,
+        // owner_settle, force_owner, …) take effect — they are only read at startup.
+        // Under a relaunching service manager the daemon exits (after the response
+        // flushes) and the manager relaunches a fresh process that re-reads the
+        // config; otherwise the "restart to apply" notice stands. The renderer
+        // restart (for owner claiming on a fresh boot) is the caller's job.
+        Some("restartService") => {
+            let restarting = crate::populate::under_relaunching_service();
+            log_info(
+                "rpc",
+                &format!("Service restart requested to apply config (restarting={restarting})."),
+            );
+            if restarting {
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    log_info("rpc", "Restarting to apply configuration.");
+                    std::process::exit(0);
+                });
+            }
+            ok(format!(r#"{{"restarting":{restarting}}}"#))
+        }
         // Anything else is a data method owned by the hosted Python backend.
         Some(other) if backend::enabled() => {
             let args = parsed

@@ -37,5 +37,10 @@
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
   "sec_updates": "Updates",
-  "updates_managed_elsewhere": "Updates are managed by the plugin loader here."
+  "updates_managed_elsewhere": "Updates are managed by the plugin loader here.",
+  "cfg_force_owner_sub": "Take ownership even if another loader is present",
+  "cfg_owner_settle_sub": "Seconds to wait for another host before hosting",
+  "cfg_interval_sub": "Seconds between injection checks",
+  "adv_disable_hub_sub": "Stop injecting until re-enabled (for troubleshooting)",
+  "adv_restart_apply": "Restart to apply"
 }

@@ -7,6 +7,21 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- A **Restart to apply** button appears at the top of the hub page after you
+  change a setting that needs a restart; it restarts the daemon and Steam
+  together so the new value takes effect. Translated across every shipped locale.
+- Each **Configuration** field now shows a short explanatory subtext under its
+  label — force ownership, owner-settle seconds, injection interval and the pause
+  toggle — so the effect of each control is clear at a glance. Translated across
+  every shipped locale.
+
+### Changed
+- `force_owner` no longer attempts to take the renderer from another host that
+  already owns it — wrestling a live host out of the renderer it hosts is not
+  supported and could destabilise the interface. It now stands down and coexists
+  in that case (its tab is still added alongside), and only claims ownership when
+  ShelvesHub is the sole host (where it also skips the owner-settle wait for an
+  immediate boot).
 - The native Quick Access tab now renders **native Steam controls** — real buttons
   and toggles with a gamepad focus ring — and carries a **tintable ShelvesHub
   icon**. Alongside another host it draws these from the host environment with no
@@ -187,6 +202,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   where it correctly detects the Steam UI.
 
 ### Fixed
+- On the Steam Beta client, the plugin's game context-menu additions (add to
+  shelf, highlight, hide) no longer go missing when ShelvesHub is the sole host.
+  A grouped-menu component the plugin needs was located by a source fragment that
+  the Beta client's minifier reorders (`this.props.tone` on either side of the
+  comparison), so it went unfound and the plugin's menu items silently dropped;
+  the lookup now matches either ordering.
+- The Configuration number steppers now move **sideways** with the gamepad
+  (between − and +) instead of jumping vertically, by grouping the two buttons in
+  a horizontal focus flow.
 - The tree-patching the host lends to the plugin now preserves each component's
   shape — memoized and forwarded components are wrapped in kind rather than
   flattened to a plain function. A wrong wrapper could throw during a render and

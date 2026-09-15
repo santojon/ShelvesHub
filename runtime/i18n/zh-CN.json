@@ -37,5 +37,10 @@
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
   "sec_updates": "更新",
-  "updates_managed_elsewhere": "此处更新由插件加载器管理。"
+  "updates_managed_elsewhere": "此处更新由插件加载器管理。",
+  "cfg_force_owner_sub": "即使存在其他加载器也接管所有权",
+  "cfg_owner_settle_sub": "在托管前等待其他主机的秒数",
+  "cfg_interval_sub": "注入检查之间的秒数",
+  "adv_disable_hub_sub": "在重新启用前停止注入（用于排查）",
+  "adv_restart_apply": "重启以应用"
 }

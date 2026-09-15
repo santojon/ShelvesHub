@@ -50,11 +50,18 @@ never loads the plugin twice and adds only its own tab. Two knobs:
   { "owner_settle_secs": 25 }
   ```
 
-- **You want ShelvesHub to be the host** even when another is installed:
+- **You want ShelvesHub to be the host** when it is the only one installed:
 
   ```json
   { "force_owner": true }
   ```
+
+  This makes ShelvesHub claim the renderer immediately (skipping the owner-settle
+  wait). It does **not** take the renderer away from another host that already
+  owns it — that is not supported and could destabilise the interface — so with a
+  live host present ShelvesHub stands down and coexists (its tab is still added
+  alongside). Changing this setting takes effect after a restart (use **Restart to
+  apply** on the hub page, which restarts the daemon and Steam together).
 
 ## Black screen / collapsed Steam UI
 

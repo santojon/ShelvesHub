@@ -37,5 +37,10 @@
   "cfg_backend": "Data backend",
   "cfg_version": "Version",
   "sec_updates": "Aktualizacje",
-  "updates_managed_elsewhere": "Aktualizacjami zarządza tutaj program ładujący wtyczki."
+  "updates_managed_elsewhere": "Aktualizacjami zarządza tutaj program ładujący wtyczki.",
+  "cfg_force_owner_sub": "Przejmij kontrolę, nawet gdy obecny jest inny loader",
+  "cfg_owner_settle_sub": "Sekundy oczekiwania na innego hosta przed hostowaniem",
+  "cfg_interval_sub": "Sekundy między sprawdzeniami wstrzykiwania",
+  "adv_disable_hub_sub": "Zatrzymaj wstrzykiwanie do ponownego włączenia (diagnostyka)",
+  "adv_restart_apply": "Uruchom ponownie, aby zastosować"
 }

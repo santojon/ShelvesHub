@@ -37,5 +37,10 @@
   "cfg_backend": "Backend de données",
   "cfg_version": "Version",
   "sec_updates": "Mises à jour",
-  "updates_managed_elsewhere": "Les mises à jour sont gérées par le chargeur de plugins ici."
+  "updates_managed_elsewhere": "Les mises à jour sont gérées par le chargeur de plugins ici.",
+  "cfg_force_owner_sub": "Prendre le contrôle même si un autre chargeur est présent",
+  "cfg_owner_settle_sub": "Secondes d'attente d'un autre hôte avant l'hébergement",
+  "cfg_interval_sub": "Secondes entre les vérifications d'injection",
+  "adv_disable_hub_sub": "Arrêter l'injection jusqu'à réactivation (dépannage)",
+  "adv_restart_apply": "Redémarrer pour appliquer"
 }
