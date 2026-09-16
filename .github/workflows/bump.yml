@@ -1,0 +1,210 @@
+name: "Release · Version Bump"
+
+# Bumps the version, promotes the "Unreleased" notes to a dated entry, commits,
+# tags and pushes. The tag push triggers the Release workflow, which builds the
+# packages and publishes the GitHub Release. package.json is the source of truth
+# for the version; Cargo.toml and Cargo.lock are synced to it so the built binary
+# reports the released version.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.pull_request.merged == true &&
+       (startsWith(github.event.pull_request.title, '[FIX]') ||
+        startsWith(github.event.pull_request.title, '[ENHANCEMENT]') ||
+        startsWith(github.event.pull_request.title, '[PERF]') ||
+        startsWith(github.event.pull_request.title, '[QA]') ||
+        startsWith(github.event.pull_request.title, '[REFACTOR]') ||
+        startsWith(github.event.pull_request.title, '[CLEANUP]') ||
+        startsWith(github.event.pull_request.title, '[FEATURE]')))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          token: ${{ secrets.SUBMIT_TOKEN || github.token }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Determine bump type
+        id: bump_type
+        env:
+          PR_TITLE: "${{ github.event.pull_request.title }}"
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "bump=${{ inputs.bump }}" >> "$GITHUB_OUTPUT"
+          else
+            TITLE="$PR_TITLE"
+            if [[ "$TITLE" == \[REFACTOR\]* ]]; then
+              echo "bump=major" >> "$GITHUB_OUTPUT"
+            elif [[ "$TITLE" == \[FEATURE\]* || "$TITLE" == \[CLEANUP\]* ]]; then
+              echo "bump=minor" >> "$GITHUB_OUTPUT"
+            elif [[ "$TITLE" == \[FIX\]* || "$TITLE" == \[ENHANCEMENT\]* || "$TITLE" == \[PERF\]* || "$TITLE" == \[QA\]* ]]; then
+              echo "bump=patch" >> "$GITHUB_OUTPUT"
+            else
+              echo "PR title must start with [FIX], [ENHANCEMENT], [PERF], [QA], [REFACTOR], [CLEANUP], or [FEATURE]"
+              exit 1
+            fi
+          fi
+
+      - name: Compute new version
+        id: version
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          BUMP="${{ steps.bump_type.outputs.bump }}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+          NEW="${MAJOR}.${MINOR}.${PATCH}"
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          echo "Bumping $CURRENT -> $NEW ($BUMP)"
+
+      - name: Update package.json version
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '${{ steps.version.outputs.new }}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Update pnpm-lock.yaml version
+        run: pnpm install --lockfile-only
+
+      - name: Sync Cargo.toml + Cargo.lock to the new version
+        run: |
+          NEW="${{ steps.version.outputs.new }}"
+          perl -0777 -pi -e "s/^version = \"[^\"]*\"/version = \"$NEW\"/m" Cargo.toml
+          grep '^version' Cargo.toml
+          # Rewrites Cargo.lock's own package entry to match the new manifest.
+          cargo update --workspace --offline || cargo update --workspace
+
+      - name: Update CHANGELOG.md, RELEASE_NOTES.md and announcement draft
+        run: |
+          VERSION="${{ steps.version.outputs.new }}"
+          DATE=$(date +%Y-%m-%d)
+
+          if ! grep -q "^## \[Unreleased\]" CHANGELOG.md; then
+            echo "CHANGELOG.md missing ## [Unreleased] section"
+            exit 1
+          fi
+
+          UNRELEASED_CONTENT=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' CHANGELOG.md)
+          TRIMMED=$(echo "$UNRELEASED_CONTENT" | sed '/^[[:space:]]*$/d')
+
+          if [[ -z "$TRIMMED" ]]; then
+            echo "No changes found under ## [Unreleased] in CHANGELOG.md"
+            exit 1
+          fi
+
+          sed -i "s/^## \[Unreleased\]/## [Unreleased]\n\n## [${VERSION}] - ${DATE}/" CHANGELOG.md
+
+          # Promote the user-facing RELEASE_NOTES.md too, if present. Not fatal
+          # when it's missing or empty — the release workflow falls back to
+          # CHANGELOG.md in that case.
+          if [[ -f "RELEASE_NOTES.md" ]] && grep -q "^## \[Unreleased\]" RELEASE_NOTES.md; then
+            NOTES_CONTENT=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' RELEASE_NOTES.md)
+            NOTES_TRIMMED=$(echo "$NOTES_CONTENT" | sed '/^[[:space:]]*$/d')
+            if [[ -n "$NOTES_TRIMMED" ]]; then
+              sed -i "s/^## \[Unreleased\]/## [Unreleased]\n\n## [${VERSION}] - ${DATE}/" RELEASE_NOTES.md
+            else
+              echo "RELEASE_NOTES.md [Unreleased] is empty — skipping promote (release falls back to CHANGELOG.md)"
+            fi
+          fi
+
+          # Promote the community announcement draft the same way, if present.
+          # Also not fatal when missing/empty — the post-release job falls back
+          # to the raw release body for a version with no entry.
+          if [[ -f "docs/release-announcements.md" ]] && grep -q "^## \[Unreleased\]" docs/release-announcements.md; then
+            ANNOUNCE_CONTENT=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' docs/release-announcements.md)
+            ANNOUNCE_TRIMMED=$(echo "$ANNOUNCE_CONTENT" | sed '/^[[:space:]]*$/d')
+            if [[ -n "$ANNOUNCE_TRIMMED" ]]; then
+              sed -i "s/^## \[Unreleased\]/## [Unreleased]\n\n## [${VERSION}] - ${DATE}/" docs/release-announcements.md
+            else
+              echo "docs/release-announcements.md [Unreleased] is empty — skipping promote (Reddit post falls back to the raw release body)"
+            fi
+          fi
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Configure git author
+        run: |
+          git config user.name "${{ github.repository_owner }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Stage version files
+        run: |
+          git add package.json pnpm-lock.yaml Cargo.toml Cargo.lock CHANGELOG.md
+          [[ -f RELEASE_NOTES.md ]] && git add RELEASE_NOTES.md || true
+          [[ -f docs/release-announcements.md ]] && git add docs/release-announcements.md || true
+
+      - name: Commit bump
+        run: |
+          VERSION="${{ steps.version.outputs.new }}"
+          git commit -m "chore: bump version to v${VERSION}"
+
+      - name: Tag commit
+        run: |
+          VERSION="${{ steps.version.outputs.new }}"
+          git tag "v${VERSION}"
+
+      - name: Push branch + tag
+        run: |
+          VERSION="${{ steps.version.outputs.new }}"
+          git push origin HEAD:main
+          git push origin "v${VERSION}" || git push origin --tags
