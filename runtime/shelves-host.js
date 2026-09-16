@@ -148,7 +148,14 @@
   try { FORCE_OWNER = window.__SHELVES_FORCE_OWNER__ === "shelveshub"; } catch (e) {}
   var NATIVE_QAM_REQUESTED = false;
   try { NATIVE_QAM_REQUESTED = window.__SHELVES_NATIVE_QAM__ === true; } catch (e) {}
-  var COEXIST = otherLoaderPresent() && !FORCE_OWNER; // tab yes, host no
+  var _otherLoader = otherLoaderPresent();
+  /* Cooperative ownership: a loader is present AND ShelvesHub is forced. We
+     publish the host (so the loader's Deck Shelves runs on it) and borrow the
+     loader's UI, but NEVER scan the webpack or patch the home — the loader keeps
+     the renderer and its other plugins, and its Deck Shelves renders in place.
+     Plain coexistence (loader, no force) stays tab-only (host NOT published). */
+  var COOP = _otherLoader && FORCE_OWNER;
+  var COEXIST = _otherLoader; // any loader present → no scan, borrow its UI
   if (COEXIST) {
     log("Another plugin loader detected — coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched).");
     // Safety stand-down. When the native tab is NOT requested there is nothing
@@ -159,7 +166,7 @@
     // is invasive and a suspected trigger of the Steam UI window teardown (black
     // screen). Truly inert means never touching Steam internals when we have
     // nothing to add.
-    if (!NATIVE_QAM_REQUESTED) {
+    if (!NATIVE_QAM_REQUESTED && !COOP) {
       log("Native tab not requested — standing down without touching Steam internals.");
       return;
     }
@@ -650,6 +657,12 @@
         ["Focusable", "ButtonItem", "DialogButton", "ToggleField", "SliderField", "Field", "PanelSection", "PanelSectionRow"].forEach(function (k) {
           if (_lib[k]) UI[k] = _lib[k];
         });
+        // Cooperative ownership renders the loader's Deck Shelves on OUR host, so
+        // host.ui must be the FULL component surface — copy every export the loader
+        // resolved (still no scan; these are already-resolved references).
+        if (COOP) {
+          Object.keys(_lib).forEach(function (k) { if (UI[k] == null) UI[k] = _lib[k]; });
+        }
         if (UI.Focusable) uiReady = true;
         log("QAM UI: borrowed from loader (no scan) — " + Object.keys(UI).length + " components.");
       }
@@ -1597,10 +1610,12 @@
           // recovery knob left to the config file/env) and `prerelease` (already
           // covered by the Updates section's pre-release channels) are intentionally
           // NOT surfaced. The coexist-only settings (force_owner, owner_settle_secs)
-          // are shown only where another loader can exist (Linux/SteamOS) — on a
-          // pure sole host (macOS/Windows) they are inert, so they are hidden too.
+          // are shown only when another loader is ACTUALLY present — they are inert
+          // as a sole host (no loader to force ownership from or settle behind), so
+          // they stay hidden on a pure sole platform AND on a loader-capable one
+          // whose loader is not currently running.
           var conf = [];
-          if (rc.loader_possible) {
+          if (rc.loader_possible && otherLoaderPresent()) {
             conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), I18N.t("cfg_force_owner_sub"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
             conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
           }
@@ -2562,10 +2577,22 @@
   // loader. In coexistence we leave `__SHELVES_HOST__` unset so the other
   // loader's Deck Shelves keeps selecting its own adapter (safety invariant).
   // (B) — the QAM tab — already ran above via QamHost, regardless of coexistence.
-  if (!COEXIST) {
+  if (!COEXIST || COOP) {
+    // Cooperative ownership borrows the loader's router hook so the host's routes
+    // resolve without a scan (the loader owns the renderer; our host renders in it).
+    if (COOP) {
+      try { var _dfl = window.DFL || window.deckyFrontendLib; if (_dfl && _dfl.routerHook) host.routerHook = _dfl.routerHook; } catch (e) {}
+    }
     window.__SHELVES_HOST__ = host;
-    try { window.__DECK_SHELVES_OWNER__ = "shelveshub"; } catch (e) {}
-    startNavPrune();
+    // Sole mode claims ownership outright. Cooperation only fills it in if unset,
+    // so a plugin instance that already claimed (either kind) is never clobbered.
+    try {
+      if (!COOP) { window.__DECK_SHELVES_OWNER__ = "shelveshub"; }
+      else if (!window.__DECK_SHELVES_OWNER__) { window.__DECK_SHELVES_OWNER__ = "shelveshub"; }
+    } catch (e) {}
+    // Nav pruning is an owner-mode (sole) behaviour; in cooperation the loader owns
+    // the renderer and its navigation, so we never touch it.
+    if (!COOP) startNavPrune();
     // NOTE: host.ui is augmented with loader-equivalent helpers from the UI-scan's
     // onDone (before signalUiReady), so it's complete when the bundle's shim binds
     // to `__SHELVES_HOST__.ui` — see the ensureUiChunked call near the UI section.

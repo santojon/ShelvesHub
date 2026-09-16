@@ -590,30 +590,34 @@ fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick>
     }
 
     let owner = probe_owner(&mut client)?;
+    let loader_present = probe_loader_present(&mut client)?;
 
-    // Foreign owner (another live loader + its Deck Shelves): coexist. We never
-    // install the host or boot the bundle here — that would double-mount / hijack.
-    // But we DO add our native QAM tab (additive, host-neutral) so ShelvesHub's tab
-    // shows alongside. This holds EVEN WHEN `force_owner` is set: wrestling a live
-    // loader out of the renderer it already owns is not supported — the two hosts
-    // both doing a full injection into one renderer black-screens and can take the
-    // loader down. `force_owner` only skips the settle wait so a SOLE host boots
-    // immediately (below); it never overrides a loader that has already claimed.
-    if is_foreign_owner(&owner) {
+    // A loader owns (or, under force, is present and about to claim) the renderer:
+    // coexist. We NEVER boot the bundle here — the loader loads its own copy; a
+    // second copy would double-mount. Two paths:
+    //   • Plain coexistence (no force): add ONLY our native QAM tab; never publish
+    //     the host — the loader's Deck Shelves keeps selecting its own adapter.
+    //   • Cooperative ownership (force): also inject the runtime so it publishes
+    //     `window.__SHELVES_HOST__` (cooperative mode — borrow the loader's UI, no
+    //     scan, no home takeover); the loader's Deck Shelves then binds to OUR host
+    //     while the loader keeps the renderer and its other plugins. Force is
+    //     stamped first so the runtime takes the cooperative path; the bundle is
+    //     NEVER injected (the loader provides it).
+    let cooperative = config.force_owner && loader_present;
+    if is_foreign_owner(&owner) || cooperative {
         *empty_since = None;
-        if config.force_owner {
-            log_info(
-                "loader",
-                "force_owner set, but a loader already owns the renderer — standing down (takeover of a live loader is not supported; coexisting instead).",
-            );
-        }
-        if !config.native_qam {
+        if !config.native_qam && !cooperative {
             return Ok(Tick::StoodDown(owner));
         }
         if probe_coexist_tab(&mut client)? {
-            return Ok(Tick::CoexistTab(owner)); // our tab is already present
+            return Ok(Tick::CoexistTab(owner)); // host/tab already present
         }
-        stamp_native_qam(&mut client);
+        if cooperative {
+            stamp_force_owner(&mut client);
+        }
+        if config.native_qam {
+            stamp_native_qam(&mut client);
+        }
         inject_host_runtime(&mut client, config);
         return Ok(Tick::CoexistTab(owner));
     }
@@ -732,6 +736,17 @@ fn is_foreign_owner(owner: &str) -> bool {
 /// (`probe_injected`), so this is the distinct "tab already delivered" probe.
 fn probe_coexist_tab(client: &mut CdpClient) -> cdp::Result<bool> {
     let value = client.evaluate("!!window.__SHELVES_QAM__")?;
+    Ok(value.as_bool().unwrap_or(false))
+}
+
+/// True when another plugin loader is present in the renderer (mirrors the
+/// runtime's own detection). Under force this catches a loader that has injected
+/// its globals but not yet claimed the renderer, so cooperative mode never falls
+/// through to the sole-host path and boots a second bundle over the loader's copy.
+fn probe_loader_present(client: &mut CdpClient) -> cdp::Result<bool> {
+    let expr = "!!(window.DeckyPluginLoader || window.deckyFrontendLib \
+         || (window.DFL && typeof window.DFL.definePlugin === 'function'))";
+    let value = client.evaluate(expr)?;
     Ok(value.as_bool().unwrap_or(false))
 }
 
