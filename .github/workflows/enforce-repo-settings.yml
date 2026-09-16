@@ -130,7 +130,7 @@ jobs:
                 branch,
                 required_status_checks: {
                   strict: true,
-                  contexts: ['validate', 'PR · Checklist / pr-checklist']
+                  contexts: ['validate (ubuntu-latest)', 'validate (macos-latest)', 'pr-checklist']
                 },
                 enforce_admins: false,
                 required_pull_request_reviews: null,
