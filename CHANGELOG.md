@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-16
+
 ### Added
 - A **Restart to apply** button appears at the top of the hub page after you
   change a setting that needs a restart; it restarts the daemon and Steam

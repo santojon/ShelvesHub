@@ -8,6 +8,8 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-16
+
 - **Shelf actions work in the game menu on the Steam Beta.** When ShelvesHub is
   hosting on its own, the "add to shelf / highlight / hide" items now appear in a
   game's context menu on the Steam Beta client, just as they do elsewhere.
