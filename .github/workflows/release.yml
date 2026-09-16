@@ -22,14 +22,18 @@ jobs:
             package: shelveshub-steamos.tar.gz
             oneclick_src: shelveshub.desktop
             oneclick_name: shelveshub.desktop
+            oneclick_uninstall_src: uninstall.desktop
+            oneclick_uninstall_name: uninstall-shelveshub.desktop
 
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: shelveshub
             installer_dir: installer/Linux
             package: shelveshub-linux.tar.gz
-            oneclick_src: ""
-            oneclick_name: ""
+            oneclick_src: shelveshub.desktop
+            oneclick_name: shelveshub-linux.desktop
+            oneclick_uninstall_src: uninstall.desktop
+            oneclick_uninstall_name: uninstall-shelveshub-linux.desktop
 
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -38,6 +42,8 @@ jobs:
             package: shelveshub-macos.tar.gz
             oneclick_src: install-mac.command
             oneclick_name: install-mac.command
+            oneclick_uninstall_src: uninstall-mac.command
+            oneclick_uninstall_name: uninstall-mac.command
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -46,6 +52,8 @@ jobs:
             package: shelveshub-windows.zip
             oneclick_src: install-windows.bat
             oneclick_name: install-windows.bat
+            oneclick_uninstall_src: uninstall-windows.bat
+            oneclick_uninstall_name: uninstall-windows.bat
 
     runs-on: ${{ matrix.os }}
 
@@ -65,6 +73,16 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      # The tag is the source of truth for the version: sync Cargo.toml so the
+      # built binary reports the released version (env!("CARGO_PKG_VERSION")).
+      - name: Sync crate version to the tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          perl -0777 -pi -e "s/^version = \"[^\"]*\"/version = \"$V\"/m" Cargo.toml
+          grep '^version' Cargo.toml
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -74,6 +92,7 @@ jobs:
           mkdir -p dist/bundle dist/runtime dist/installer
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           cp target/${{ matrix.target }}/release/shelves-devtools dist/
+          cp shelveshub.config.json dist/
           cp -r bundle/. dist/bundle/
           cp -r runtime/. dist/runtime/
           cp -r ${{ matrix.installer_dir }}/. dist/installer/
@@ -86,6 +105,7 @@ jobs:
           New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer | Out-Null
           Copy-Item target\${{ matrix.target }}\release\${{ matrix.binary }} dist\
           Copy-Item target\${{ matrix.target }}\release\shelves-devtools.exe dist\
+          Copy-Item shelveshub.config.json dist\
           Copy-Item -Recurse bundle\* dist\bundle\
           Copy-Item -Recurse runtime\* dist\runtime\
           Copy-Item -Recurse ${{ matrix.installer_dir }}\* dist\installer\
@@ -113,6 +133,55 @@ jobs:
           name: ${{ matrix.oneclick_name }}
           path: ${{ matrix.oneclick_name }}
 
+      - name: Prepare one-click uninstaller (Linux / macOS)
+        if: runner.os != 'Windows' && matrix.oneclick_uninstall_src != ''
+        run: cp ${{ matrix.installer_dir }}/${{ matrix.oneclick_uninstall_src }} ${{ matrix.oneclick_uninstall_name }}
+
+      - name: Prepare one-click uninstaller (Windows)
+        if: runner.os == 'Windows' && matrix.oneclick_uninstall_src != ''
+        shell: pwsh
+        run: Copy-Item ${{ matrix.installer_dir }}\${{ matrix.oneclick_uninstall_src }} ${{ matrix.oneclick_uninstall_name }}
+
+      - name: Upload one-click uninstaller artifact
+        if: matrix.oneclick_uninstall_src != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.oneclick_uninstall_name }}
+          path: ${{ matrix.oneclick_uninstall_name }}
+
+      # ── GUI installers with the app icon (clickable) ────────────────────────
+      - name: Build macOS installer app
+        if: runner.os == 'macOS'
+        run: |
+          [ -f assets/icons/icon.icns ] || { brew install librsvg; python3 -m pip install --quiet --break-system-packages pillow; }
+          bash scripts/build-mac-app.sh "$PWD/dist-app"
+
+      - name: Upload macOS installer app
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Install-ShelvesHub-app
+          path: dist-app/Install ShelvesHub.app.zip
+
+      - name: Build Windows installer (NSIS)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          New-Item -ItemType Directory -Force nsis\payload | Out-Null
+          Copy-Item dist\* nsis\payload\ -Recurse -Force
+          Copy-Item installer\Windows\register-task.ps1 nsis\payload\ -Force
+          Copy-Item installer\Windows\shelveshub.nsi nsis\ -Force
+          Copy-Item assets\icons\icon.ico nsis\icon.ico -Force
+          & "$env:ProgramFiles(x86)\NSIS\makensis.exe" nsis\shelveshub.nsi
+
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: shelveshub-setup.exe
+          path: nsis\shelveshub-setup.exe
+
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -130,6 +199,13 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          # A SemVer pre-release tag carries a `-` suffix (e.g. v1.2.3-beta.1) —
+          # mark the GitHub release as a pre-release so it stays off the "latest"
+          # channel and self-update only offers it when the beta channel is on.
+          case "$TAG" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       - name: Extract release notes
         id: notes
@@ -166,4 +242,5 @@ jobs:
           name: ShelvesHub ${{ steps.tag.outputs.tag }}
           body: ${{ steps.notes.outputs.body }}
           generate_release_notes: ${{ steps.notes.outputs.body == '' }}
+          prerelease: ${{ steps.tag.outputs.prerelease }}
           files: artifacts/**/*

@@ -5,7 +5,7 @@
 set -e
 
 REPO="santojon/ShelvesHub"
-INSTALL_DIR="/usr/local/shelveshub"
+INSTALL_DIR="$HOME/.local/share/shelveshub"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 PLIST_DEST="$LAUNCH_AGENTS_DIR/com.shelveshub.plist"
 BINARY="shelveshub"
@@ -45,10 +45,16 @@ chmod +x "$INSTALL_DIR/$BINARY"
 
 [[ -d "$EXTRACTED_DIR/bundle" ]] && mkdir -p "$INSTALL_DIR/bundle" && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
 [[ -d "$EXTRACTED_DIR/runtime" ]] && mkdir -p "$INSTALL_DIR/runtime" && cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
+# Config file: install it, but never overwrite one the user has already edited.
+[[ -f "$EXTRACTED_DIR/shelveshub.config.json" && ! -f "$INSTALL_DIR/shelveshub.config.json" ]] && cp "$EXTRACTED_DIR/shelveshub.config.json" "$INSTALL_DIR/"
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 [[ -d "$EXTRACTED_DIR/backend" ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
+# Keep the uninstaller alongside the install so it's available later.
+[[ -f "$EXTRACTED_DIR/installer/uninstall_mac.sh" ]] && cp "$EXTRACTED_DIR/installer/uninstall_mac.sh" "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall_mac.sh"
 
-cp "$EXTRACTED_DIR/installer/com.shelveshub.plist" "$PLIST_DEST"
+# Generate the agent with the real install path (a user LaunchAgent runs as the
+# user, so it lives under $HOME — never root-owned /usr/local).
+sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$EXTRACTED_DIR/installer/com.shelveshub.plist" > "$PLIST_DEST"
 chmod 644 "$PLIST_DEST"
 launchctl load "$PLIST_DEST"
 

@@ -75,6 +75,9 @@ BROWSER_ARGS=(
   --no-first-run --no-default-browser-check --disable-features=Translate
   "file://$HARNESS"
 )
+# Chromium as root in a container needs --no-sandbox and a larger-than-default
+# shared-memory workaround; opt in via HARNESS_NO_SANDBOX=1.
+[[ "${HARNESS_NO_SANDBOX:-0}" == "1" ]] && BROWSER_ARGS=(--no-sandbox --disable-dev-shm-usage "${BROWSER_ARGS[@]}")
 [[ "$HEADLESS" == "1" ]] && BROWSER_ARGS=(--headless=new "${BROWSER_ARGS[@]}")
 
 echo "[i] Launching browser..."
@@ -114,7 +117,7 @@ echo "--- window.__SHELVES_DEMO__ ---"
 "$DEVTOOLS" --port "$PORT" --target "$TARGET_FILTER" eval "window.__SHELVES_DEMO__" || true
 echo "--- QAM panel registered? ---"
 "$DEVTOOLS" --port "$PORT" --target "$TARGET_FILTER" eval \
-  "!!(window.__SHELVES_HOST__ && window.__SHELVES_HOST__.qam && window.__SHELVES_HOST__.qam._panels['deck-shelves'])" || true
+  "!!(window.__SHELVES_HOST__ && window.__SHELVES_HOST__.qam && window.__SHELVES_HOST__.qam._specs['deck-shelves'])" || true
 echo "--- rpc via host (ping/getVersion/isInjected) ---"
 "$DEVTOOLS" --port "$PORT" --target "$TARGET_FILTER" eval \
   "Promise.all([__SHELVES_HOST__.rpc.call('ping'),__SHELVES_HOST__.rpc.call('getVersion'),__SHELVES_HOST__.rpc.call('isInjected')])" || true

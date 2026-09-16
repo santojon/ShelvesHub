@@ -1,0 +1,47 @@
+name: "Ops · Publish site (Pages)"
+
+# Publishes the ShelvesHub landing page (site/) to GitHub Pages. The gallery
+# references the canonical screenshots in assets/screenshots/ via
+# raw.githubusercontent (the site keeps no copies of its own).
+#
+# ONE-TIME SETUP (REQUIRED): repo Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions". This must be done by hand once — the Actions token
+# cannot create the Pages site itself. After that, this workflow publishes on
+# every push that touches the site content. No secrets, no cost.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two Pages deploys at once; let an in-flight run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

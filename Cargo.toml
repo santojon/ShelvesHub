@@ -1,6 +1,6 @@
 [package]
 name = "shelveshub"
-version = "0.7.0"
+version = "0.0.1"
 edition = "2021"
 description = "A cross-platform loader for Deck Shelves"
 license = "MIT"
@@ -30,5 +30,17 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Blocking WebSocket client for the Chrome DevTools Protocol. ws:// only
 # (localhost / SSH-tunnelled), so TLS backends are intentionally disabled.
-tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 clap = { version = "4", features = ["derive", "env"] }
+
+# Lints, enforced the same way in CI (`cargo clippy -- -D warnings`) and locally.
+# Kept adequate — not maximally pedantic — for a small, dependency-light daemon.
+[lints.rust]
+unsafe_code = "forbid"        # the daemon and CLI need no unsafe
+unused_must_use = "deny"      # never silently drop a Result
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+# Prefer inline format args (`{x}` over `{}`, x) — matches the codebase style.
+uninlined_format_args = "warn"

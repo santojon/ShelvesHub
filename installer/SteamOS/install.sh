@@ -56,11 +56,18 @@ if [[ -d "$EXTRACTED_DIR/runtime" ]]; then
   cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
 fi
 
+# Config file: install it, but never overwrite one the user has already edited.
+if [[ -f "$EXTRACTED_DIR/shelveshub.config.json" && ! -f "$INSTALL_DIR/shelveshub.config.json" ]]; then
+  cp "$EXTRACTED_DIR/shelveshub.config.json" "$INSTALL_DIR/"
+fi
+
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 if [[ -d "$EXTRACTED_DIR/backend" ]]; then
   mkdir -p "$INSTALL_DIR/backend"
   cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
 fi
+# Keep the uninstaller alongside the install so it's available later.
+[[ -f "$EXTRACTED_DIR/installer/uninstall.sh" ]] && cp "$EXTRACTED_DIR/installer/uninstall.sh" "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall.sh"
 
 # ── Register user systemd service ─────────────────────────────────────────────
 echo "[i] Setting up systemd user service..."

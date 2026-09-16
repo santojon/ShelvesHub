@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Uninstall ShelvesHub
+GenericName=ShelvesHub Uninstaller
+Comment=Remove ShelvesHub from your Steam Deck (keeps your shelves settings)
+Exec=bash -c "T=/tmp/shelveshub-uninstall && rm -rf $T && mkdir -p $T && echo 'Fetching the uninstaller...' && curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/shelveshub-steamos.tar.gz | tar xz -C $T && (cd $T && bash installer/uninstall.sh) && rm -rf $T; echo; echo 'Press Enter to close...'; read"
+Terminal=true
+Icon=edit-delete
+Categories=Utility;System;

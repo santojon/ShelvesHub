@@ -1,5 +1,23 @@
 # ShelvesHub
 
+<div align="center">
+<p>
+  <img src="assets/logo.svg" alt="ShelvesHub" width="352">
+</p>
+
+[![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
+[![Release](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml)
+[![Tests](https://img.shields.io/badge/cargo%20test-39%20passed-brightgreen?logo=rust&logoColor=white)](src/)
+[![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](Cargo.toml)
+[![Platform](https://img.shields.io/badge/platform-SteamOS%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-purple?logo=steamdeck&logoColor=white)](https://github.com/ValveSoftware/SteamOS)
+[![Downloads](https://img.shields.io/github/downloads/santojon/ShelvesHub/total.svg?label=downloads&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
+[![GitHub release](https://img.shields.io/github/v/release/santojon/ShelvesHub?label=latest&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
+[![Forks](https://img.shields.io/github/forks/santojon/ShelvesHub?style=flat&color=blue)](https://github.com/santojon/ShelvesHub/network/members)
+[![Clones](https://img.shields.io/endpoint?url=https%3A%2F%2Fsantojon.github.io%2FDeck-Shelves%2Fstats%2Fclones-shelveshub.json)](https://github.com/santojon/ShelvesHub/graphs/traffic)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+</div>
+
 ShelvesHub is the independent host service for [Deck Shelves](https://github.com/santojon/Deck-Shelves). It injects the Deck Shelves bundle into the Steam Big Picture UI and provides the runtime API the bundle calls into — no plugin loader required.
 
 **Primary target:** SteamOS / Steam Deck. Also supported: Linux, macOS, Windows.
@@ -8,9 +26,45 @@ ShelvesHub is the independent host service for [Deck Shelves](https://github.com
 
 ## How it works
 
-The loader runs as a background service, watches for the Steam renderer, injects the Deck Shelves bundle (`bundle/index.js`) over the Chrome DevTools Protocol, and exposes a local HTTP JSON-RPC server (`127.0.0.1:60123`) the bundle uses to communicate with the host. See [docs/debugging.md](docs/debugging.md) for the `shelves-devtools` CDP tool and the local/on-Deck debug workflow.
+The loader runs as a background service, watches for the Steam renderer, injects the Deck Shelves bundle (`bundle/index.js`) over the Chrome DevTools Protocol, and exposes a local HTTP JSON-RPC server (`127.0.0.1:60123`) the bundle uses to communicate with the host. If no bundle is present, the service obtains one first — reusing a local copy, copying it from an installed plugin loader, or downloading the newest release (`SHELVES_PRERELEASE=1` opts into pre-release versions). It can also host the Deck Shelves data backend itself, so a standalone install has the full online features (wishlist, prices, launchers) and not just local shelves. See [docs/debugging.md](docs/debugging.md) for the `shelves-devtools` CDP tool and the local/on-Deck debug workflow.
 
-The TypeScript `HostApi` contract (`src/runtime/host/`) defines what the loader provides to the bundle. The Rust process (`src/`) implements the service side.
+The shared `HostApi` contract (`@deck-shelves/host`, vendored as the `host/` submodule) defines what the host provides to the bundle, so one Deck Shelves build runs under this host or under a plugin loader unchanged. The Rust process (`src/`) implements the service side and the injected runtime (`runtime/shelves-host.js`) implements the in-renderer side.
+
+It gives Deck Shelves its own tab in the Steam Quick Access Menu (on by default), opening the editor directly with the plugin's icon and header; if the bundle can't load, that tab shows a recovery panel instead of an empty tab. Where another host such as a plugin loader is installed too, the two coexist: exactly one Deck Shelves tab is shown (this host's), both hosts' tabs stay usable and edit the same settings, the plugin's wide side panel opens from whichever tab is on screen, and only one host writes settings at a time.
+
+The service also **keeps itself and the bundle current**: with automatic updates on it downloads a newer Deck Shelves release and swaps it in place, and it can **update its own binary** from the latest ShelvesHub release. Update channels, a disable-until-restart switch, an editable safe subset of the configuration, and a merged host/runtime log viewer are all reachable from the tab, localized into 19 languages.
+
+---
+
+## What it looks like
+
+ShelvesHub adds its own management panel to the Steam Quick Access menu — the part that makes it more than a loader. Captured live from a Steam Big Picture session:
+
+<div align="center">
+<table>
+<tr>
+<td align="center" width="50%"><img src="assets/screenshots/hub-panel.png" alt="Automatic updates for the host and Deck Shelves" width="240"><br><sub><b>Automatic updates</b> — host + Deck Shelves, each with a pre-release channel</sub></td>
+<td align="center" width="50%"><img src="assets/screenshots/hub-troubleshooting.png" alt="Troubleshooting section" width="240"><br><sub><b>Troubleshooting</b> — view logs, or disable the host until restart</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="assets/screenshots/hub-config.png" alt="Configuration and status" width="240"><br><sub><b>Configuration + Status</b> — an editable safe subset, and a read-only readout</sub></td>
+<td align="center" width="50%"><img src="assets/screenshots/hub-logs.png" alt="Merged log viewer" width="240"><br><sub><b>Log viewer</b> — the host and runtime logs in one stream</sub></td>
+</tr>
+</table>
+</div>
+
+---
+
+## Documentation
+
+- [Architecture](docs/architecture.md) — how the daemon, injected runtime, and RPC server fit together.
+- [HostApi contract](docs/host-api.md) — the `window.__SHELVES_HOST__` surface the bundle consumes.
+- [Backend contract](docs/backend-contract.md) — hosting the Deck Shelves data backend over stdio.
+- [Usage](docs/usage.md) — running and configuring the service.
+- [Development](docs/development.md) — building and working on ShelvesHub.
+- [Debugging & DevTools](docs/debugging.md) — the `shelves-devtools` CDP tool and the debug workflow.
+- [Troubleshooting](docs/troubleshooting.md) — port conflicts, coexistence, and recovery.
+- [Showcase & screenshots](docs/showcase.md) — the screenshot set and how it is published.
 
 ---
 
@@ -20,9 +74,11 @@ The TypeScript `HostApi` contract (`src/runtime/host/`) defines what the loader 
 
 Download `shelveshub.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest), open it in Desktop Mode, and follow the terminal prompt. Installs to `~/.local/share/shelveshub` with a user-level systemd service — no sudo required.
 
-### Linux (from package)
+### Linux (one-click or from package)
 
-Download `shelveshub-linux.tar.gz`, extract, and run:
+One-click: download `shelveshub-linux.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest), open it, and follow the terminal prompt (it downloads and installs, prompting for sudo).
+
+From the package instead: download `shelveshub-linux.tar.gz`, extract, and run:
 
 ```bash
 sudo bash installer/install.sh
@@ -30,13 +86,28 @@ sudo bash installer/install.sh
 
 Manages a system-level `shelveshub.service` via systemd.
 
-### macOS (one-click)
+### macOS
 
-Download `install-mac.command` from the latest release and double-click it in Finder. On first run, right-click → Open to bypass Gatekeeper.
+Download **`Install ShelvesHub.app`** (a clickable installer app carrying the ShelvesHub icon) from the latest release and double-click it. On first run, right-click → Open to bypass Gatekeeper. A plain `install-mac.command` script is also published.
 
-### Windows (one-click)
+### Windows
 
-Download `install-windows.bat` from the latest release and double-click it. Accept the UAC prompt — the installer runs elevated automatically.
+Download **`shelveshub-setup.exe`** (a setup program carrying the ShelvesHub icon) from the latest release and run it, accepting the UAC prompt. A plain `install-windows.bat` script is also published.
+
+---
+
+## Uninstalling
+
+Each uninstaller stops and removes the background service and the install directory. Your Deck Shelves settings (shared with other hosts) are kept unless you pass `--purge`. A **one-click uninstaller** is published for each platform alongside the installer (double-click, like installing) — or use the commands below.
+
+| Platform | One-click | Or by hand |
+|---|---|---|
+| SteamOS / Steam Deck | `uninstall-shelveshub.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (installed copy), or `bash uninstall.sh` from the extracted package |
+| Linux | `uninstall-shelveshub-linux.desktop` | `sudo bash /opt/shelveshub/uninstall.sh` (or `sudo bash uninstall.sh` from the package) |
+| macOS | `uninstall-mac.command` | `bash ~/.local/share/shelveshub/uninstall_mac.sh` — add `--purge` to also remove settings and Steam's CEF debug flag |
+| Windows | `uninstall-windows.bat`, or **Settings → Apps** | run `uninstall.exe` in the install folder, or `installer\uninstall.ps1` from the package |
+
+`--purge` (macOS/SteamOS) additionally removes the shared Deck Shelves settings and the `.cef-enable-remote-debugging` flag; restart Steam afterward so it stops exposing the debug port.
 
 ---
 
@@ -45,19 +116,26 @@ Download `install-windows.bat` from the latest release and double-click it. Acce
 ```
 src/
   main.rs                   Entry point — spawns RPC thread, starts injection loop
-  loader.rs                 Injection loop (30s interval)
+  loader/                   Injection loop + preload (document-start) mode
+  cdp/                      Chrome DevTools Protocol client
   rpc.rs                    TCP JSON-RPC server (127.0.0.1:60123)
-  logger.rs                 Structured logging
-  runtime/host/
-    contract.ts             HostApi interface (version 1.0.0)
-    shelves.ts              ShelvesHostApi — concrete implementation
-    index.ts                Barrel export
-  runtime/platform.ts       PlatformApi interface
+  populate.rs               Obtains the bundle & backend; applies plugin and hub self-updates
+  backend.rs                Supervises the hosted data backend
+  store.rs                  The host's own settings, atomically persisted
+  logger.rs config.rs state.rs
+runtime/
+  shelves-host.js           The injected host runtime (installs the HostApi + native tab)
+  i18n/                     Per-locale strings, inlined at injection time
+  backend/                  Optional data-backend runner
 installer/
   SteamOS/                  One-click .desktop + user systemd service
   Linux/                    System-wide install.sh + systemd service
-  macOS/                    install_mac.sh + launchd plist + one-click .command
-  Windows/                  install.ps1 + one-click .bat + registry file
+  macOS/                    install_mac.sh + launchd plist + one-click .command + .app
+  Windows/                  install.ps1 + one-click .bat + NSIS setup + registry file
+assets/
+  icon.svg tab-icon.svg     App icon + tintable tab icon
+  icons/                    Generated rasters (.ico / .icns / PNGs) for the installers
+shelveshub.config.json      Optional settings (RPC/CEF ports, coexistence, recovery)
 bundle/
   index.js                  Placeholder — replaced by the Deck Shelves release bundle
 docs/
@@ -65,13 +143,23 @@ docs/
   host-api.md               HostApi contract reference
   development.md            SSH development workflow
   usage.md                  Platform-specific usage notes
+  debugging.md              shelves-devtools + local/on-Deck debug workflow
+  troubleshooting.md        Ports, coexistence and recovery — fixes via the config file
+docker/
+  Dockerfile entrypoint.sh  Linux simulation harness — runs the runtime, a
+                            daemon→headless-Chromium injection smoke, and the
+                            install/uninstall lifecycle in a container (no device)
 ```
+
+Settings live in `shelveshub.config.json` next to the binary (env var > file >
+default). See [docs/troubleshooting.md](docs/troubleshooting.md) for port conflicts,
+coexistence with another host, and black-screen recovery.
 
 ---
 
 ## Releases
 
-Each release publishes 7 files:
+Each release publishes the per-platform packages, one-click scripts, and clickable installers:
 
 | File | Description |
 |---|---|
@@ -80,10 +168,10 @@ Each release publishes 7 files:
 | `shelveshub-macos.tar.gz` | macOS package |
 | `shelveshub-windows.zip` | Windows package |
 | `shelveshub.desktop` | SteamOS one-click installer |
-| `install-mac.command` | macOS one-click installer |
-| `install-windows.bat` | Windows one-click installer |
-
-CI builds on every PR merge; releases are tagged `v*.*.*` and trigger the release pipeline automatically.
+| `install-mac.command` | macOS one-click script |
+| `install-windows.bat` | Windows one-click script |
+| `Install ShelvesHub.app` (zipped) | macOS clickable installer app (with icon) |
+| `shelveshub-setup.exe` | Windows setup program (with icon) |
 
 ---
 

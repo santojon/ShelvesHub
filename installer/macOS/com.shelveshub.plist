@@ -6,17 +6,17 @@
     <string>com.shelveshub</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/shelveshub/shelveshub</string>
+        <string>__INSTALL_DIR__/shelveshub</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>WorkingDirectory</key>
-    <string>/usr/local/shelveshub</string>
+    <string>__INSTALL_DIR__</string>
     <key>StandardOutPath</key>
-    <string>/usr/local/shelveshub/logs/out.log</string>
+    <string>__INSTALL_DIR__/logs/out.log</string>
     <key>StandardErrorPath</key>
-    <string>/usr/local/shelveshub/logs/error.log</string>
+    <string>__INSTALL_DIR__/logs/error.log</string>
 </dict>
 </plist>

@@ -91,7 +91,7 @@ in-flight backend call at a time — so writes never race inside this host.
 
 ## Components
 
-### Loader (`src/loader.rs`)
+### Loader (`src/loader/`)
 
 Every tick (default 30s) it connects to the Steam CEF renderer over the Chrome
 DevTools Protocol, probes whether the bundle is already running
@@ -103,12 +103,27 @@ configurable (`src/config.rs`).
 
 Before injecting, the loop honours the renderer's single-owner claim
 (`window.__DECK_SHELVES_OWNER__`): if another host adapter already owns the
-renderer, the tick stands down instead of double-mounting the plugin. Setting
-`SHELVES_FORCE_OWNER=shelveshub` claims ownership anyway — the daemon stamps
-`window.__SHELVES_FORCE_OWNER__` before injecting so the other adapter can
-yield cooperatively, and the plugin sees a single writer at all times.
+renderer, the tick never takes over hosting or loads the plugin bundle. With the
+native Quick Access tab enabled (`SHELVES_NATIVE_QAM=1`) it still injects only
+its runtime, which detects the other host and adds ShelvesHub's tab alongside
+without installing its own host — so both tabs coexist and the other host's
+plugin is left untouched; otherwise the tick stands down entirely. Setting
+`SHELVES_FORCE_OWNER=shelveshub` makes ShelvesHub claim an *unclaimed* renderer
+immediately (it skips the owner-settle wait and stamps `window.__SHELVES_FORCE_OWNER__`
+so the plugin selects ShelvesHub). It does **not** override a host that has
+already claimed the renderer: a foreign claim always stands the daemon down to
+the coexist path (tab only), because two hosts both doing a full injection into
+one renderer is unstable. Force ownership is therefore a sole-host preference,
+not a takeover of a live host.
 
-### CDP client (`src/cdp.rs`)
+While the renderer is still unclaimed, `SHELVES_OWNER_SETTLE_SECS` (config key
+`owner_settle_secs`) makes the loop wait that many seconds for a claim to appear
+before hosting the renderer itself — so on a shared machine a fast injection cycle
+never starts hosting ahead of another host that is still starting up. The code
+default is `0`; the shipped `shelveshub.config.json` sets **25** for the primary
+(coexistence) setup. A sole host sets it back to `0` to boot immediately.
+
+### CDP client (`src/cdp/`)
 
 A from-scratch Chrome DevTools Protocol client over a blocking WebSocket
 (`tungstenite`). Discovers targets via `GET /json`, picks the Steam renderer,
@@ -153,15 +168,14 @@ example backend lives in `examples/backend/`.
 Structured log lines: `[LEVEL] [timestamp] [subsystem] message`. Levels: INFO,
 WARNING, ERROR, DEBUG. Used by all Rust modules.
 
-### Runtime — HostApi (`src/runtime/host/`)
+### Runtime — HostApi
 
-TypeScript definition of the contract between the host process and the bundle.
-
-| File | Purpose |
-|---|---|
-| `contract.ts` | `HostApi` interface + `HOST_API_VERSION = "1.0.0"` |
-| `shelves.ts` | `ShelvesHostApi` — concrete implementation; RPC delegates to the Rust server |
-| `index.ts` | Barrel re-export |
+The injected host runtime is `runtime/shelves-host.js` — a self-contained script
+the loader evaluates in the renderer. It installs `window.__SHELVES_HOST__` (the
+concrete `HostApi`) and the native Quick Access tab, and delegates RPC to the Rust
+server. The contract it implements is the shared `@deck-shelves/host` package
+(`HOST_API_VERSION = "1.2.0"`, additive-only after the 1.0 baseline); its typed
+source is vendored as the `host/` submodule (`host/src/contract/`).
 
 See [docs/host-api.md](./host-api.md) for the full contract reference.
 

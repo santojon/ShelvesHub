@@ -1,0 +1,36 @@
+{
+  "//": "ShelvesHub configuration. Precedence per setting: environment variable > this file > built-in default. Remove a key to use its default. Keys starting with // are comments (ignored by the parser — JSON has no real comments). Installed next to the binary; the daemon also honours SHELVES_CONFIG_FILE. See docs/troubleshooting.md.",
+
+  "// rpc_host": "Host the local RPC server binds to — the injected bundle talks to it on the same machine. Loopback by default; rarely changed.",
+  "rpc_host": "127.0.0.1",
+
+  "// rpc_port": "Port for the local RPC server. Change this if another program already uses 60123 (you'll see a bind error in the log).",
+  "rpc_port": 60123,
+
+  "// cef_host": "Host of Steam's CEF remote-debugging endpoint that the daemon injects into. Loopback by default.",
+  "cef_host": "127.0.0.1",
+
+  "// cef_port": "Port of Steam's CEF remote-debugging endpoint. 8080 by default. Change it if Steam exposes remote debugging on a different port (you'll see 'Connection refused' on 127.0.0.1:8080 in the log).",
+  "cef_port": 8080,
+
+  "// interval_secs": "Seconds between injection-loop ticks — how often the daemon looks for the Steam renderer and (re)injects the runtime + bundle. Lower = faster recovery after a Steam restart but slightly more idle CPU; higher = calmer. 30 is a good balance.",
+  "interval_secs": 30,
+
+  "// owner_settle_secs": "When the renderer is present but UNCLAIMED, seconds to wait for another host (e.g. another plugin loader) to claim it before ShelvesHub hosts it itself. Default 25 is safe alongside another host (the primary setup) — a fast tick never hijacks a plugin the other host is about to load. Set 0 if ShelvesHub is the ONLY host, for an instant boot.",
+  "owner_settle_secs": 25,
+
+  "// native_qam": "Show the native Steam Quick Access tab (real buttons/toggles). true is the default (sole mode uses the post-settle inject, which is collapse-safe); set false to disable it. Can also be forced per-service via SHELVES_NATIVE_QAM=1.",
+  "native_qam": true,
+
+  "// prerelease": "Consider pre-release Deck Shelves builds when obtaining or self-installing the bundle (the beta channel). false = stable releases only.",
+  "prerelease": false,
+
+  "// force_owner": "Claim renderer ownership even when another host is present, so the plugin selects ShelvesHub. Use only when you deliberately prefer ShelvesHub over another installed loader.",
+  "force_owner": false,
+
+  "// recover_cmd": "Shell command run ONCE if the daemon detects the Steam UI collapsed (a black screen where only SharedJSContext survives). Typically 'systemctl --user restart steam-launcher.service' on a Steam Deck. Empty = only pause injection and log the hint.",
+  "recover_cmd": "",
+
+  "// target": "Case-insensitive substring to force which renderer target is used. Empty = auto-detect the Steam shared JS context / Big Picture window (leave empty unless debugging).",
+  "target": ""
+}

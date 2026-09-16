@@ -18,6 +18,18 @@ use crate::backend;
 use crate::logger::{log_error, log_info, log_warning};
 use crate::state;
 
+/// Operational-config keys the "advanced configuration" editor may change. The
+/// rest (host/port/paths) stay read-only — editing them can cut the panel off
+/// from the daemon. All apply on the next restart.
+const EDITABLE_CONFIG_KEYS: [&str; 6] = [
+    "native_qam",
+    "prerelease",
+    "owner_settle_secs",
+    "interval_secs",
+    "force_owner",
+    "recover_cmd",
+];
+
 pub fn serve(addr: &str) {
     let listener = match TcpListener::bind(addr) {
         Ok(l) => {
@@ -43,7 +55,10 @@ pub fn serve(addr: &str) {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let peer = stream.peer_addr().map(|a| a.to_string()).unwrap_or_default();
+    let peer = stream
+        .peer_addr()
+        .map(|a| a.to_string())
+        .unwrap_or_default();
 
     let request = match read_request(&stream) {
         Ok(req) => req,
@@ -61,7 +76,10 @@ fn handle_connection(mut stream: TcpStream) {
     }
 
     let response_body = dispatch(&request.body);
-    log_info("rpc", &format!("{peer} -> {}", truncate_for_log(&request.body)));
+    log_info(
+        "rpc",
+        &format!("{peer} -> {}", truncate_for_log(&request.body)),
+    );
     if let Err(e) = write_response(&mut stream, 200, &response_body) {
         log_warning("rpc", &format!("Write error to {peer}: {e}"));
     }
@@ -78,7 +96,11 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
 
     let mut request_line = String::new();
     reader.read_line(&mut request_line)?;
-    let method = request_line.split_whitespace().next().unwrap_or("").to_string();
+    let method = request_line
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_string();
 
     let mut content_length = 0usize;
     loop {
@@ -111,7 +133,12 @@ fn truncate_for_log(body: &str) -> String {
     if body.len() <= MAX {
         return body.to_string();
     }
-    let cut = body.char_indices().take_while(|(i, _)| *i < MAX).last().map(|(i, c)| i + c.len_utf8()).unwrap_or(0);
+    let cut = body
+        .char_indices()
+        .take_while(|(i, _)| *i < MAX)
+        .last()
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(0);
     format!("{}… ({} bytes)", &body[..cut], body.len())
 }
 
@@ -130,7 +157,15 @@ fn dispatch(body: &str) -> String {
         // API — record it as an explicit init confirmation from the bundle side.
         Some("bundleReady") => {
             state::set_bundle_ready(true);
-            log_info("rpc", "Bundle reported ready (initialisation confirmed).");
+            match state::millis_since_injected() {
+                Some(ms) => log_info(
+                    "rpc",
+                    &format!(
+                        "Bundle reported ready (initialisation confirmed) — {ms}ms after injection."
+                    ),
+                ),
+                None => log_info("rpc", "Bundle reported ready (initialisation confirmed)."),
+            }
             ok("true".to_string())
         }
         // Health of the hosted Python backend (loader-local, not proxied).
@@ -139,6 +174,361 @@ fn dispatch(body: &str) -> String {
             backend::enabled(),
             backend::is_running()
         )),
+        // Manual bundle re-download (the fallback panel's "download" action):
+        // fetch the newest release into the bundle path; the loop re-injects it.
+        Some("populateBundle") => match state::populate_config() {
+            Some((path, prerelease)) => {
+                match crate::populate::update_from_release(path, *prerelease) {
+                    Ok(url) => {
+                        log_info("rpc", &format!("Bundle re-downloaded: {url}"));
+                        ok(serde_json::Value::String(url).to_string())
+                    }
+                    Err(e) => err(&e),
+                }
+            }
+            None => err("bundle path not configured"),
+        },
+        // Host self-install of a PLUGIN update (`host.updates.applyUpdate`): obtain the
+        // given release asset (or the newest) and swap the injected bundle in place; the
+        // renderer reload the runtime triggers afterwards re-boots the plugin on it.
+        Some("applyUpdate") => match state::populate_config() {
+            Some((path, prerelease)) => {
+                let asset_url = parsed
+                    .as_ref()
+                    .and_then(|v| v.get("args"))
+                    .and_then(|a| a.get("assetUrl"))
+                    .and_then(Value::as_str);
+                match crate::populate::apply_update(path, asset_url, *prerelease) {
+                    Ok(url) => {
+                        log_info("rpc", &format!("Applied plugin update: {url}"));
+                        ok(r#"{"applied":true}"#.to_string())
+                    }
+                    Err(e) => {
+                        log_error("rpc", &format!("applyUpdate failed: {e}"));
+                        err(&e)
+                    }
+                }
+            }
+            None => err("bundle path not configured"),
+        },
+        // The host's own settings (the fallback panel's auto-update toggle).
+        Some("getConfig") => match state::hub_config_path() {
+            Some(path) => match serde_json::to_value(crate::store::load(path)) {
+                Ok(mut v) => {
+                    // Merge in the runtime-only "restart to update" notice (the hub
+                    // has a newer release but can't self-replace its running binary
+                    // yet) so the hub screen can surface it. `null` = none.
+                    if let Some(obj) = v.as_object_mut() {
+                        obj.insert(
+                            "pending_hub_update".to_string(),
+                            state::pending_hub_update().map_or(Value::Null, Value::String),
+                        );
+                        obj.insert(
+                            "hub_update_staged".to_string(),
+                            Value::Bool(state::hub_update_staged()),
+                        );
+                        obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
+                        obj.insert(
+                            "version".to_string(),
+                            Value::String(env!("CARGO_PKG_VERSION").to_string()),
+                        );
+                    }
+                    ok(v.to_string())
+                }
+                Err(e) => err(&format!("serialize config: {e}")),
+            },
+            None => err("hub config path not configured"),
+        },
+        Some("setAutoUpdate") => match state::hub_config_path() {
+            Some(path) => {
+                let enabled = parsed
+                    .as_ref()
+                    .and_then(|v| v.get("args"))
+                    .and_then(|a| {
+                        a.as_bool()
+                            .or_else(|| a.get("enabled").and_then(Value::as_bool))
+                    })
+                    .unwrap_or(false);
+                let mut settings = crate::store::load(path);
+                settings.auto_update = enabled;
+                match crate::store::save(path, &settings) {
+                    Ok(()) => {
+                        log_info("rpc", &format!("Auto-update set to {enabled}."));
+                        match serde_json::to_string(&settings) {
+                            Ok(json) => ok(json),
+                            Err(e) => err(&format!("serialize config: {e}")),
+                        }
+                    }
+                    Err(e) => {
+                        log_error("rpc", &format!("save config failed: {e}"));
+                        err(&format!("save config: {e}"))
+                    }
+                }
+            }
+            None => err("hub config path not configured"),
+        },
+        // Set one of the nested update-preference switches by key (the fallback
+        // panel's update hierarchy). Args: `{ key, value }`. Unknown keys are
+        // rejected so a typo can never silently no-op.
+        Some("setUpdatePref") => match state::hub_config_path() {
+            Some(path) => {
+                let args = parsed.as_ref().and_then(|v| v.get("args"));
+                let key = args.and_then(|a| a.get("key")).and_then(Value::as_str);
+                let value = args
+                    .and_then(|a| a.get("value"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let mut settings = crate::store::load(path);
+                let applied = match key {
+                    Some("auto_update") => {
+                        settings.auto_update = value;
+                        true
+                    }
+                    Some("auto_update_hub") => {
+                        settings.auto_update_hub = value;
+                        true
+                    }
+                    Some("hub_prerelease") => {
+                        settings.hub_prerelease = value;
+                        true
+                    }
+                    Some("auto_update_plugin") => {
+                        settings.auto_update_plugin = value;
+                        true
+                    }
+                    Some("plugin_prerelease") => {
+                        settings.plugin_prerelease = value;
+                        true
+                    }
+                    _ => false,
+                };
+                if !applied {
+                    return err(&format!("unknown update pref key: {key:?}"));
+                }
+                match crate::store::save(path, &settings) {
+                    Ok(()) => {
+                        log_info("rpc", &format!("Update pref {key:?} set to {value}."));
+                        match serde_json::to_string(&settings) {
+                            Ok(json) => ok(json),
+                            Err(e) => err(&format!("serialize config: {e}")),
+                        }
+                    }
+                    Err(e) => {
+                        log_error("rpc", &format!("save config failed: {e}"));
+                        err(&format!("save config: {e}"))
+                    }
+                }
+            }
+            None => err("hub config path not configured"),
+        },
+        // Recent daemon log lines (the fallback panel's "view logs" action).
+        Some("getLogs") => {
+            let n = parsed
+                .as_ref()
+                .and_then(|v| v.get("args"))
+                .and_then(|a| {
+                    a.as_u64()
+                        .or_else(|| a.get("count").and_then(Value::as_u64))
+                })
+                .unwrap_or(120)
+                .min(300) as usize;
+            match serde_json::to_string(&state::recent_logs(n)) {
+                Ok(json) => ok(json),
+                Err(e) => err(&format!("serialize logs: {e}")),
+            }
+        }
+        // Clear the in-memory log ring the viewer shows (the fallback panel's
+        // Clear action). The on-disk daemon log is left intact.
+        Some("clearLogs") => {
+            state::clear_logs();
+            ok("true".to_string())
+        }
+        // Troubleshooting: pause/resume hosting until the next service restart.
+        // Args: a bool (or `{ paused }`). In-memory, so a restart always resumes.
+        Some("setHostingPaused") => {
+            let paused = parsed
+                .as_ref()
+                .and_then(|v| v.get("args"))
+                .and_then(|a| {
+                    a.as_bool()
+                        .or_else(|| a.get("paused").and_then(Value::as_bool))
+                })
+                .unwrap_or(false);
+            state::set_hosting_paused(paused);
+            log_info("rpc", &format!("Hosting paused set to {paused}."));
+            ok(format!(r#"{{"paused":{paused}}}"#))
+        }
+        // Advanced configuration mirror (read): the effective operational config +
+        // which keys are editable + live state (paused / pending hub update).
+        Some("getRuntimeConfig") => {
+            let mut v = state::runtime_config().cloned().unwrap_or(Value::Null);
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert(
+                    "editable".to_string(),
+                    serde_json::json!(EDITABLE_CONFIG_KEYS),
+                );
+                obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
+                obj.insert(
+                    "pending_hub_update".to_string(),
+                    state::pending_hub_update().map_or(Value::Null, Value::String),
+                );
+                obj.insert(
+                    "hub_update_staged".to_string(),
+                    Value::Bool(state::hub_update_staged()),
+                );
+                obj.insert(
+                    "config_file".to_string(),
+                    state::config_file_path()
+                        .map_or(Value::Null, |p| Value::String(p.display().to_string())),
+                );
+            }
+            ok(v.to_string())
+        }
+        // Advanced configuration mirror (write): set ONE safe operational-config
+        // key in the config file. Args: `{ key, value }`. Applies on next restart;
+        // read-only/unknown keys and wrong value types are refused.
+        Some("setRuntimeConfig") => {
+            let args = parsed.as_ref().and_then(|v| v.get("args"));
+            let key = args.and_then(|a| a.get("key")).and_then(Value::as_str);
+            let value = args
+                .and_then(|a| a.get("value"))
+                .cloned()
+                .unwrap_or(Value::Null);
+            let key = match key {
+                Some(k) if EDITABLE_CONFIG_KEYS.contains(&k) => k,
+                other => return err(&format!("refused config key (not editable): {other:?}")),
+            };
+            let coerced = match key {
+                "native_qam" | "prerelease" | "force_owner" => value.as_bool().map(Value::Bool),
+                "owner_settle_secs" | "interval_secs" => value.as_u64().map(Value::from),
+                "recover_cmd" => match &value {
+                    Value::Null => Some(Value::Null),
+                    Value::String(s) if s.is_empty() => Some(Value::Null),
+                    Value::String(s) => Some(Value::String(s.clone())),
+                    _ => None,
+                },
+                _ => None,
+            };
+            let Some(coerced) = coerced else {
+                return err(&format!("invalid value type for {key}"));
+            };
+            let Some(path) = state::config_file_path() else {
+                return err("config file path not known");
+            };
+            // Read-merge-write the config file (create if absent), preserving other
+            // keys (comments included). Values apply on the next daemon restart.
+            let mut obj = std::fs::read_to_string(path)
+                .ok()
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|v| v.as_object().cloned())
+                .unwrap_or_default();
+            obj.insert(key.to_string(), coerced);
+            let out = serde_json::to_string_pretty(&Value::Object(obj))
+                .unwrap_or_else(|_| "{}".to_string());
+            match std::fs::write(path, out) {
+                Ok(()) => {
+                    log_info(
+                        "rpc",
+                        &format!("Config file updated: {key} (restart to apply)."),
+                    );
+                    ok(r#"{"ok":true,"restartRequired":true}"#.to_string())
+                }
+                Err(e) => {
+                    log_error("rpc", &format!("write config file: {e}"));
+                    err(&format!("write config file: {e}"))
+                }
+            }
+        }
+        // Host runtime forwards its own leveled/scoped log entries here so the
+        // log viewer shows one merged stream (daemon + runtime). Args is an array
+        // of `{ level, scope, msg, t }`; each becomes a formatted ring line.
+        Some("pushLogs") => {
+            let mut n: u64 = 0;
+            if let Some(arr) = parsed
+                .as_ref()
+                .and_then(|v| v.get("args"))
+                .and_then(Value::as_array)
+            {
+                for e in arr {
+                    let level = match e.get("level").and_then(Value::as_str) {
+                        Some("ERROR") | Some("error") => crate::logger::LogLevel::Error,
+                        Some("WARN") | Some("warn") => crate::logger::LogLevel::Warn,
+                        _ => crate::logger::LogLevel::Info,
+                    };
+                    let scope = e.get("scope").and_then(Value::as_str).unwrap_or("UI");
+                    let msg = e
+                        .get("msg")
+                        .and_then(Value::as_str)
+                        .or_else(|| e.get("message").and_then(Value::as_str))
+                        .unwrap_or("");
+                    let t_ms = e.get("t").and_then(Value::as_i64);
+                    crate::logger::log_runtime(level, scope, msg, t_ms);
+                    n += 1;
+                }
+            }
+            ok(n.to_string())
+        }
+        // Update ShelvesHub itself: download the newest release package for this
+        // OS and stage its binary over the running one (see populate::apply_hub_update).
+        // A running binary can't be swapped live, so this takes effect on restart —
+        // when running under a relaunching service manager the daemon restarts itself
+        // (respond first, then exit); otherwise the "restart to apply" notice stands.
+        Some("selfUpdate") => {
+            let prerelease = state::hub_config_path()
+                .map(|p| crate::store::load(p).hub_prerelease)
+                .unwrap_or(false);
+            match crate::populate::apply_hub_update(prerelease) {
+                Ok(tag) => {
+                    state::set_hub_update_staged(true);
+                    state::set_pending_hub_update(Some(tag.clone()));
+                    let restarting = crate::populate::under_relaunching_service();
+                    log_info(
+                        "rpc",
+                        &format!("Hub self-update {tag} staged (restarting={restarting})."),
+                    );
+                    if restarting {
+                        // Exit after the response flushes so the service manager
+                        // relaunches into the staged binary. The renderer keeps the
+                        // current runtime until the new daemon re-injects.
+                        std::thread::spawn(|| {
+                            std::thread::sleep(std::time::Duration::from_millis(1500));
+                            log_info("rpc", "Restarting to apply hub update.");
+                            std::process::exit(0);
+                        });
+                    }
+                    ok(format!(
+                        r#"{{"updated":true,"restarting":{restarting},"version":"{}","tag":"{}"}}"#,
+                        env!("CARGO_PKG_VERSION"),
+                        tag.replace('"', "'")
+                    ))
+                }
+                Err(e) => {
+                    log_error("rpc", &format!("selfUpdate failed: {e}"));
+                    err(&e)
+                }
+            }
+        }
+        // Restart the daemon so pending config-file edits (interval, native_qam,
+        // owner_settle, force_owner, …) take effect — they are only read at startup.
+        // Under a relaunching service manager the daemon exits (after the response
+        // flushes) and the manager relaunches a fresh process that re-reads the
+        // config; otherwise the "restart to apply" notice stands. The renderer
+        // restart (for owner claiming on a fresh boot) is the caller's job.
+        Some("restartService") => {
+            let restarting = crate::populate::under_relaunching_service();
+            log_info(
+                "rpc",
+                &format!("Service restart requested to apply config (restarting={restarting})."),
+            );
+            if restarting {
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    log_info("rpc", "Restarting to apply configuration.");
+                    std::process::exit(0);
+                });
+            }
+            ok(format!(r#"{{"restarting":{restarting}}}"#))
+        }
         // Anything else is a data method owned by the hosted Python backend.
         Some(other) if backend::enabled() => {
             let args = parsed
@@ -193,7 +583,10 @@ mod tests {
 
     #[test]
     fn dispatches_ping() {
-        assert_eq!(dispatch(r#"{"method":"ping"}"#), r#"{"ok":true,"result":"pong"}"#);
+        assert_eq!(
+            dispatch(r#"{"method":"ping"}"#),
+            r#"{"ok":true,"result":"pong"}"#
+        );
     }
 
     #[test]

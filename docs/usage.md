@@ -55,7 +55,7 @@ sudo systemctl restart shelveshub
 
 1. Download `install-mac.command` from the latest release.
 2. Double-click it in Finder. On first run, right-click → Open to bypass Gatekeeper.
-3. A Terminal window opens, downloads the package, installs to `/usr/local/shelveshub`, and loads a launchd service.
+3. A Terminal window opens, downloads the package, installs to `~/.local/share/shelveshub`, and loads a launchd service.
 
 ### From package
 

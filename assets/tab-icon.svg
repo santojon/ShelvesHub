@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="ShelvesHub">
+  <!-- Tintable ShelvesHub mark: three books on a shelf over a hub node, single-
+       colour (currentColor) so it inherits the theme tint like the native QAM tab
+       icons. Three bigger books + the hub node (the ShelvesHub identity). -->
+  <rect x="5" y="2.6" width="3.7" height="11.8" rx="0.7"/>
+  <rect x="9.5" y="1" width="3.7" height="13.4" rx="0.7"/>
+  <rect x="14" y="3.4" width="3.7" height="11" rx="0.7" transform="rotate(-12 15.85 14.4)"/>
+  <rect x="3.3" y="14.4" width="17.4" height="2.1" rx="0.9"/>
+  <circle cx="12" cy="19.2" r="1.6"/>
+  <circle cx="8.6" cy="22.3" r="1"/>
+  <circle cx="12" cy="22.8" r="1"/>
+  <circle cx="15.4" cy="22.3" r="1"/>
+  <path d="M12 20.5 L9 21.9 M12 20.8 L12 21.9 M12 20.5 L15 21.9" stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round"/>
+</svg>

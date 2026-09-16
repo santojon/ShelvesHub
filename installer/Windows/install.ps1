@@ -42,6 +42,10 @@ if (Test-Path "$extractedDir\bundle") {
 if (Test-Path "$extractedDir\runtime") {
   Copy-Item -Recurse -Path "$extractedDir\runtime" -Destination $installPath -Force
 }
+# Config file: install it, but never overwrite one the user has already edited.
+if ((Test-Path "$extractedDir\shelveshub.config.json") -and -not (Test-Path "$installPath\shelveshub.config.json")) {
+  Copy-Item "$extractedDir\shelveshub.config.json" $installPath
+}
 # Optional data-backend payload: auto-detected by the service at <install>\backend.
 if (Test-Path "$extractedDir\backend") {
   Copy-Item -Recurse -Path "$extractedDir\backend" -Destination $installPath -Force

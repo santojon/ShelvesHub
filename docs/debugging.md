@@ -41,6 +41,9 @@ Configuration (all optional, env-driven — see `src/config.rs`):
 | `SHELVES_HOST_RUNTIME_PATH` | `<exe-dir>/runtime/shelves-host.js` | Host runtime (`window.__SHELVES_HOST__`, incl. QAM) |
 | `SHELVES_TARGET` | _auto_ | Title/URL substring to pick the target |
 | `SHELVES_INTERVAL_SECS` | `30` | Injection-loop interval |
+| `SHELVES_NATIVE_QAM` | `0` | Add a native Quick Access tab (`1` to enable) |
+| `SHELVES_OWNER_SETTLE_SECS` | `0` | Seconds to wait for another host to claim an unclaimed renderer before hosting it (coexistence; `0` = host immediately) |
+| `SHELVES_HUB_CONFIG` | `<settings_dir>/shelveshub.json` | The host's own settings store (auto-update preference; atomic writes + backup) |
 
 ---
 
@@ -92,6 +95,33 @@ shelves-devtools --port 9222 --target harness targets
 shelves-devtools --port 9222 --target harness inject --bundle examples/bundle/shelves-example.js
 shelves-devtools --port 9222 --target harness eval "window.__SHELVES_DEMO__"
 ```
+
+### Scenario harness
+
+`pnpm harness` runs `runtime/shelves-host.js` against a mock of Steam's UI in a
+headless browser, once per scenario, and asserts the outcome — the native tab,
+coexistence mirroring, the sole-host path and the fallback panel are all covered
+without a device. It is hermetic (the host RPC endpoint is stubbed in the mock),
+so it needs no running daemon.
+
+```bash
+pnpm harness            # headless
+HEADLESS=0 pnpm harness  # show the browser window
+```
+
+### Simulation harness in Docker (Linux)
+
+`pnpm harness:docker` builds a small Linux image and runs three checks against a
+headless Chromium in a container: the scenario harness above, a **daemon →
+headless-Chromium injection smoke** (the real daemon discovers the target over CDP
+and injects), and the **SteamOS/Linux install + uninstall lifecycle** (a recording
+`systemctl` stub stands in — it validates the scripts' file lay-down/tear-down and
+settings preservation, not systemd itself). Cross-platform validation without a
+device; wired into CI. arm64 via `PLATFORM=linux/arm64 pnpm harness:docker`.
+
+> Windows install/uninstall cannot be containerized — Docker on Linux/macOS runs
+> Linux containers only, and the Windows installer (NSIS + a PowerShell scheduled
+> task) needs a real Windows host.
 
 ---
 
@@ -145,6 +175,24 @@ Logs on the Deck:
 ```bash
 ssh deck@deck.local 'journalctl --user -u shelveshub -f'
 ```
+
+### Log structure and the in-app viewer
+
+Logs are **leveled** (`INFO` / `WARN` / `ERROR`) and **scoped** by category
+(service side: `loader`, `backend`, `rpc`, …; runtime side: `HOST`, `UI`,
+`ROUTER`, `QAM`, `MENU`, `NAV`, `RPC`, `UPDATE`). Each line is
+`[LEVEL] [timestamp] [scope] message`, and the service keeps a bounded ring of
+the most recent lines that the `getLogs` request returns.
+
+The host runtime forwards its own entries to that ring over the `pushLogs`
+request — warnings and errors always, and everything when verbose logging is on
+(`window.__SHELVES_LOG_VERBOSE__ = true` in the renderer) — so `getLogs` returns
+**one merged stream** of runtime and service lines. The runtime also keeps its
+last entries in `window.__SHELVES_LOG__` (objects `{t, level, scope, msg}`) for
+direct inspection over the DevTools connection.
+
+The **Logs** action in the host's own tab renders that merged stream as a badged,
+scrollable list (newest first) with a refresh control.
 
 ---
 
