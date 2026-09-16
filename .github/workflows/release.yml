@@ -165,6 +165,9 @@ jobs:
 
       - name: Build Windows installer (NSIS)
         if: runner.os == 'Windows'
+        # Non-fatal: the .zip package and one-click installer still ship if the
+        # optional NSIS .exe build ever fails, so it never blocks the release.
+        continue-on-error: true
         shell: pwsh
         run: |
           choco install nsis -y --no-progress
@@ -173,10 +176,11 @@ jobs:
           Copy-Item installer\Windows\register-task.ps1 nsis\payload\ -Force
           Copy-Item installer\Windows\shelveshub.nsi nsis\ -Force
           Copy-Item assets\icons\icon.ico nsis\icon.ico -Force
-          & "$env:ProgramFiles(x86)\NSIS\makensis.exe" nsis\shelveshub.nsi
+          & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" nsis\shelveshub.nsi
 
       - name: Upload Windows installer
         if: runner.os == 'Windows'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: shelveshub-setup.exe
