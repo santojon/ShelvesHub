@@ -1,0 +1,164 @@
+name: "Release · Announce (Discord + Reddit)"
+
+# On every published release (also runnable manually via workflow_dispatch):
+#   Discord — auto-posts an embed to a webhook, built from the raw GitHub
+#             release body. Secret: DISCORD_WEBHOOK_URL (skips silently if
+#             unset, so it never fails a release).
+#   Reddit  — does NOT auto-post (Reddit's API needs pre-approval). Instead it
+#             builds a ready-to-post submit link (title + body pre-filled) from
+#             that version's entry in docs/release-announcements.md (the same
+#             `## [VERSION]` extraction release.yml uses for RELEASE_NOTES /
+#             CHANGELOG), falling back to the raw release body if that version
+#             has no entry there yet — and writes the link to the workflow run's
+#             Summary — open it, click, hit Post.
+#             Variable (optional): REDDIT_SUBREDDIT (default: DeckShelves).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to post (defaults to latest published release)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  post-discord:
+    name: Post to Discord
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get release info
+        run: |
+          echo "EVENT_PATH=$GITHUB_EVENT_PATH" >> $GITHUB_ENV
+
+      - name: Post to Discord webhook
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GITHUB_EVENT_PATH: ${{ env.EVENT_PATH }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then echo "DISCORD_WEBHOOK_URL not set, skipping"; exit 0; fi
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -n "$INPUT_TAG" ]; then
+              REL_JSON=$(gh api "repos/$REPO/releases/tags/$INPUT_TAG")
+            else
+              REL_JSON=$(gh api "repos/$REPO/releases/latest")
+            fi
+            TAG_NAME=$(echo "$REL_JSON" | jq -r '.tag_name // empty')
+            NAME=$(echo "$REL_JSON" | jq -r '.name // empty')
+            BODY=$(echo "$REL_JSON" | jq -r '.body // empty')
+            URL=$(echo "$REL_JSON" | jq -r '.html_url // empty')
+            PRERELEASE=$(echo "$REL_JSON" | jq -r '.prerelease // false')
+            TAG="$TAG_NAME"
+          else
+            TAG_NAME=$(jq -r '.release.tag_name // empty' "$GITHUB_EVENT_PATH")
+            NAME=$(jq -r '.release.name // empty' "$GITHUB_EVENT_PATH")
+            BODY=$(jq -r '.release.body // empty' "$GITHUB_EVENT_PATH")
+            URL=$(jq -r '.release.html_url // empty' "$GITHUB_EVENT_PATH")
+            PRERELEASE=$(jq -r '.release.prerelease // false' "$GITHUB_EVENT_PATH")
+          fi
+          RAW_URL="https://raw.githubusercontent.com/$REPO/${TAG:-main}/assets/screenshots/hub-panel.png"
+          TITLE="$([ -n "$NAME" ] && echo "$NAME" || echo "$TAG_NAME")"
+          if [ "$PRERELEASE" = "true" ]; then TITLE="🧪 Pre-release · $TITLE"; fi
+          DESC=$(printf "%s" "$BODY" | tr -d '\r' | head -c 3800)
+          DESC="$DESC\n\nReleases: https://github.com/$REPO/releases"
+
+          PAYLOAD=$(jq -n --arg t "$TITLE" --arg d "$DESC" --arg url "$URL" --arg tag "$TAG_NAME" --arg img "$RAW_URL" '
+          {
+            username: "Release Bot",
+            thread_name: $t,
+            embeds: [
+              {
+                title: $t,
+                url: $url,
+                description: $d,
+                footer: { text: $tag },
+                image: { url: $img }
+              }
+            ]
+          }')
+          curl -s -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL" || true
+
+  reddit-link:
+    name: Reddit submit link
+    # Stable releases only — no Reddit post for alpha/beta/rc.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.release.prerelease != true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build ready-to-post Reddit link
+        env:
+          REDDIT_SUBREDDIT: ${{ vars.REDDIT_SUBREDDIT }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -n "$INPUT_TAG" ]; then
+              REL_JSON=$(gh api "repos/$REPO/releases/tags/$INPUT_TAG")
+            else
+              REL_JSON=$(gh api "repos/$REPO/releases/latest")
+            fi
+            TAG_NAME=$(echo "$REL_JSON" | jq -r '.tag_name // empty')
+            TITLE=$(echo "$REL_JSON" | jq -r '.name // .tag_name // empty')
+            BODY=$(echo "$REL_JSON"  | jq -r '.body // empty')
+            URL=$(echo "$REL_JSON"   | jq -r '.html_url // empty')
+          else
+            TAG_NAME=$(jq -r '.release.tag_name // empty' "$GITHUB_EVENT_PATH")
+            TITLE=$(jq -r '.release.name // .release.tag_name // empty' "$GITHUB_EVENT_PATH")
+            BODY=$(jq -r '.release.body // empty' "$GITHUB_EVENT_PATH")
+            URL=$(jq -r '.release.html_url // empty' "$GITHUB_EVENT_PATH")
+          fi
+          RSUB="${REDDIT_SUBREDDIT:-DeckShelves}"
+          VERSION="${TAG_NAME#v}"
+
+          # Prefer the curated post from docs/release-announcements.md — same
+          # `## [VERSION]` extraction as RELEASE_NOTES.md/CHANGELOG.md in
+          # release.yml — over the raw release body. First line of the fenced
+          # block is the title, the rest (past the blank line) is the body.
+          POST=""
+          if [[ -f "docs/release-announcements.md" ]]; then
+            SECTION=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" docs/release-announcements.md)
+            POST=$(printf '%s\n' "$SECTION" | awk '/^```/{c++; next} c==1{print}')
+          fi
+          if [[ -n "$POST" ]]; then
+            RTITLE=$(printf '%s\n' "$POST" | sed -n '1p')
+            RBODY=$(printf '%s\n' "$POST" | tail -n +3 | head -c 10000)
+          else
+            echo "No docs/release-announcements.md section for ${VERSION} — falling back to the raw release body."
+            # Title + body pre-filled (body trimmed; full notes linked). `TITLE`
+            # already carries "ShelvesHub" when it comes from `.name` (release.yml
+            # names releases "ShelvesHub vX.Y.Z") — only prepend it for the
+            # `.tag_name` fallback ("v0.1.0"), or it doubles up.
+            case "$TITLE" in
+              "ShelvesHub"*) RTITLE="$TITLE" ;;
+              *) RTITLE="ShelvesHub $TITLE" ;;
+            esac
+            RBODY=$(printf '%s\n\n---\nFull release notes: %s' "$(printf '%s' "$BODY" | tr -d '\r' | head -c 1500)" "$URL")
+          fi
+          ENC_T=$(jq -rn --arg s "$RTITLE" '$s|@uri')
+          ENC_B=$(jq -rn --arg s "$RBODY"  '$s|@uri')
+          SUBMIT="https://www.reddit.com/r/$RSUB/submit?title=$ENC_T&text=$ENC_B"
+          {
+            echo "## 📮 Post this release to r/$RSUB"
+            echo ""
+            echo "**[→ Open Reddit with the title + body pre-filled]($SUBMIT)** — review and hit *Post*."
+            echo ""
+            echo "<details><summary>If the body doesn't pre-fill, copy it</summary>"
+            echo ""
+            echo '```'
+            printf '%s\n' "$RBODY"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Reddit submit link: $SUBMIT"

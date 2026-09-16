@@ -1,0 +1,142 @@
+name: "Ops · Enforce repo settings"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 1'  # Every Monday at 08:00 UTC
+
+permissions: {}
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Ensure squash merge and delete-branch-on-merge
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.ADMIN_GH_TOKEN || github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const repoResp = await github.rest.repos.get({ owner, repo });
+            const current = repoResp.data;
+            const updates = {};
+            if (current.allow_squash_merge !== true) updates.allow_squash_merge = true;
+            if (current.allow_merge_commit !== false) updates.allow_merge_commit = false;
+            if (current.allow_rebase_merge !== false) updates.allow_rebase_merge = false;
+            if (current.delete_branch_on_merge !== true) updates.delete_branch_on_merge = true;
+            if (Object.keys(updates).length === 0) {
+              core.info('Repository merge settings already configured.');
+            } else {
+              await github.rest.repos.update({ owner, repo, ...updates });
+              core.info('Updated repository settings: ' + JSON.stringify(updates));
+            }
+
+      - name: Sync labels (create required, delete deprecated)
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.ADMIN_GH_TOKEN || github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+
+            const required = [
+              // OS labels
+              { name: "OS::SteamOS",      color: "1F8FFF", description: "Reported on SteamOS (Steam Deck)" },
+              { name: "OS::Bazzite",      color: "9333EA", description: "Reported on Bazzite" },
+              { name: "OS::Chimera",      color: "F97316", description: "Reported on ChimeraOS" },
+              { name: "OS::MacOS",        color: "A1A1AA", description: "Reported on macOS" },
+              { name: "OS::Windows",      color: "0078D6", description: "Reported on Windows" },
+              { name: "OS::OtherHoloISO", color: "10B981", description: "Reported on a HoloISO-derived distro other than the listed ones" },
+              // Host mode
+              { name: "host::sole",        color: "0e8a16", description: "ShelvesHub is the only host" },
+              { name: "host::coexist",     color: "006b75", description: "Another plugin host is also installed" },
+              { name: "host::cooperative", color: "1D76DB", description: "Another host present, ShelvesHub forced as owner" },
+              // Steam client channel
+              { name: "steam::stable",  color: "0e8a16", description: "On the Steam stable client" },
+              { name: "steam::beta",    color: "e4e669", description: "On the Steam beta client" },
+              // Type labels
+              { name: "type::bug",         color: "d73a4a", description: "Something isn't working" },
+              { name: "type::feature",     color: "0E8A16", description: "New feature or request" },
+              { name: "type::enhancement", color: "a2eeef", description: "Improvement to an existing feature" },
+              { name: "type::duplicated",  color: "cfd3d7", description: "Issue or pull request already exists" },
+              { name: "type::invalid",     color: "e4e669", description: "Not a real issue or doesn't seem right" },
+              { name: "type::wontfix",     color: "ffffff", description: "This will not be worked on" },
+              // Priority labels (auto-assigned; critical is manual-only)
+              { name: "priority::critical", color: "B60205", description: "Critical — immediate fix (crash, regression, security)" },
+              { name: "priority::high",     color: "D93F0B", description: "High — prioritized fix in the next PATCH release" },
+              { name: "priority::medium",   color: "FBCA04", description: "Medium — fix planned for an upcoming release" },
+              { name: "priority::low",      color: "0E8A16", description: "Low — backlog, addressed when capacity allows" },
+              // Area labels (auto-assigned by pr-auto-labeler)
+              { name: "area::loader",     color: "5319E7", description: "src/loader/ — injection and ownership" },
+              { name: "area::cdp",        color: "5319E7", description: "src/cdp/ — debug-protocol client" },
+              { name: "area::populate",   color: "5319E7", description: "src/populate.rs — obtain / self-update" },
+              { name: "area::rpc",        color: "1D76DB", description: "src/rpc.rs — local RPC server" },
+              { name: "area::backend",    color: "FFA500", description: "Data backend runner" },
+              { name: "area::runtime",    color: "1D76DB", description: "runtime/ — injected host runtime" },
+              { name: "area::contract",   color: "5319E7", description: "host/ — shared host contract" },
+              { name: "area::installer",  color: "0E8A16", description: "installer/ — per-OS install scripts" },
+              { name: "area::i18n",       color: "FFD700", description: "runtime/i18n/ — locale files" },
+              { name: "area::docs",       color: "0075CA", description: "docs/ — documentation" },
+              { name: "area::ci",         color: "000000", description: ".github/ / scripts/ — workflows and tooling" },
+              { name: "area::daemon",     color: "5319E7", description: "src/ — daemon core" },
+              // Lifecycle / triage labels
+              { name: "stale",          color: "795548", description: "No recent activity — pending triage or auto-close" },
+              { name: "needs-info",     color: "FBCA04", description: "Waiting on the reporter for more information" },
+              { name: "needs-decision", color: "5319E7", description: "Open question — needs a maintainer decision" },
+              { name: "keep-open",      color: "0E8A16", description: "Exempt from stale automation — never auto-close" },
+            ];
+
+            // Default GitHub labels replaced by the namespaced ones above.
+            const deprecated = ["bug", "enhancement", "documentation", "duplicate", "invalid", "question", "wontfix"];
+
+            const existing = await github.paginate(github.rest.issues.listLabelsForRepo, { owner, repo, per_page: 100 });
+            const existingMap = new Map(existing.map(l => [l.name, l]));
+
+            for (const label of required) {
+              if (existingMap.has(label.name)) {
+                const cur = existingMap.get(label.name);
+                if (cur.color !== label.color || cur.description !== label.description) {
+                  await github.rest.issues.updateLabel({ owner, repo, name: label.name, color: label.color, description: label.description });
+                  core.info(`Updated label: ${label.name}`);
+                }
+              } else {
+                await github.rest.issues.createLabel({ owner, repo, ...label });
+                core.info(`Created label: ${label.name}`);
+              }
+            }
+
+            for (const name of deprecated) {
+              if (existingMap.has(name)) {
+                await github.rest.issues.deleteLabel({ owner, repo, name });
+                core.info(`Deleted deprecated label: ${name}`);
+              }
+            }
+
+      - name: Ensure branch protection defaults
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.ADMIN_GH_TOKEN || github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = (context.payload.repository && context.payload.repository.default_branch) || 'main';
+            // Required status checks: CI's `validate` job + the PR-body
+            // checklist validator. The owner / admin can still bypass; this
+            // just blocks accidental merges of PRs that haven't filled the
+            // checklist or run CI to green.
+            try {
+              await github.rest.repos.updateBranchProtection({
+                owner,
+                repo,
+                branch,
+                required_status_checks: {
+                  strict: true,
+                  contexts: ['validate', 'PR · Checklist / pr-checklist']
+                },
+                enforce_admins: false,
+                required_pull_request_reviews: null,
+                restrictions: null
+              });
+              core.info(`Branch protection for ${branch} ensured.`);
+            } catch (e) {
+              core.warning('Failed to update branch protection: ' + e.message);
+            }

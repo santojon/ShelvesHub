@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Community & support (Discord)
+    url: https://discord.gg/EChuVEDakk
+    about: Questions, help and general discussion.
+  - name: Community (Reddit)
+    url: https://www.reddit.com/r/DeckShelves/
+    about: Share setups and ask the community.
+  - name: Documentation
+    url: https://santojon.github.io/ShelvesHub/
+    about: Installation, usage and troubleshooting guides.
