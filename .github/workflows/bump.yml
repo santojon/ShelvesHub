@@ -189,7 +189,9 @@ jobs:
 
       - name: Stage version files
         run: |
-          git add package.json pnpm-lock.yaml Cargo.toml Cargo.lock CHANGELOG.md
+          git add package.json pnpm-lock.yaml Cargo.toml CHANGELOG.md
+          # Cargo.lock is gitignored in this repo — only stage it if it's tracked.
+          git ls-files --error-unmatch Cargo.lock >/dev/null 2>&1 && git add Cargo.lock || true
           [[ -f RELEASE_NOTES.md ]] && git add RELEASE_NOTES.md || true
           [[ -f docs/release-announcements.md ]] && git add docs/release-announcements.md || true
 
