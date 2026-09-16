@@ -1,0 +1,89 @@
+name: "Triage · Label priority"
+
+on:
+  issues:
+    types: [opened, edited, reopened, labeled, unlabeled]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute priority
+        id: compute
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const issue = context.payload.issue;
+            if (!issue) return "";
+            const labels = (issue.labels ?? []).map(l => (l.name || "").toLowerCase());
+            const has = (...names) => names.some(n => labels.includes(n.toLowerCase()));
+
+            // Honor manual overrides: any existing priority other than the
+            // auto-applied `low` is left alone. The auto `low` stays
+            // re-evaluatable so signals arriving in a later `labeled` event
+            // (type::bug, OS::*) can upgrade the bucket.
+            const existingPrio = labels.find(l => /^priority::/.test(l)) || null;
+            const allowReeval = existingPrio === "priority::low";
+            if (existingPrio && !allowReeval) return "";
+
+            const title = (issue.title || "").toLowerCase();
+            const body  = (issue.body  || "").toLowerCase();
+            const text  = `${title}\n${body}`;
+
+            const isBug = has("type::bug") || /^\s*\[?\s*bug\b/.test(title);
+            // A supported target platform (Steam Deck / desktop OS) — bugs here
+            // are prioritized over reports on unsupported environments.
+            const isSupportedOs =
+              has("os::steamos", "os::macos", "os::windows", "os::bazzite", "os::chimera") ||
+              /\bsteam\s*os\b|\bsteamos\b|\bsteam\s*deck\b|\bmacos\b|\bmac\s*os\b|\bwindows\b|\bbazzite\b/i.test(text);
+
+            let priority = null;
+            if (isBug && isSupportedOs) {
+              priority = "priority::high";
+            } else if (isBug) {
+              priority = "priority::medium";
+            } else {
+              priority = "priority::low";
+            }
+
+            if (!priority || priority === existingPrio) return "";
+            const removeLow = existingPrio === "priority::low" && priority !== "priority::low";
+            return JSON.stringify({ priority, removeLow });
+
+      - name: Apply priority label
+        if: steps.compute.outputs.result != ''
+        uses: actions/github-script@v7
+        env:
+          RESULT: ${{ steps.compute.outputs.result }}
+        with:
+          script: |
+            const { priority, removeLow } = JSON.parse(process.env.RESULT);
+            const issue = context.payload.issue;
+            if (removeLow) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: "priority::low",
+                });
+              } catch (e) {
+                core.warning(`removeLabel(priority::low) failed: ${e?.message ?? e}`);
+              }
+            }
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [priority],
+              });
+              core.info(`Applied ${priority} to issue #${issue.number}`);
+            } catch (e) {
+              core.warning(`addLabels failed: ${e?.message ?? e}`);
+            }

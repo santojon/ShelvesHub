@@ -1,0 +1,33 @@
+name: "[ENHANCEMENT] Enhancement"
+description: Improve something that already exists
+title: "[ENHANCEMENT] "
+labels: ["type::enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before submitting:** check if a similar suggestion already exists.
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: What ShelvesHub does today that could be better.
+    validations:
+      required: true
+
+  - type: textarea
+    id: improvement
+    attributes:
+      label: Suggested improvement
+      description: How it should behave instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that helps explain the suggestion.
+    validations:
+      required: false

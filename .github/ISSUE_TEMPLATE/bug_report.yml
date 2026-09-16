@@ -1,0 +1,114 @@
+name: "[BUG] Bug Report"
+description: Something is broken or behaving unexpectedly
+title: "[BUG] "
+labels: ["type::bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before submitting:** check if a similar issue already exists.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start Steam
+        2. Open the Quick Access panel
+        3. See error
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: ShelvesHub version
+      description: 'Shown in the status panel and in the service log (the "Version" line).'
+      placeholder: "e.g. 0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: host_mode
+    attributes:
+      label: Host mode
+      description: How is ShelvesHub running?
+      options:
+        - Sole (ShelvesHub is the only host)
+        - Coexist (another plugin host is also installed)
+        - Cooperative (another host present, ShelvesHub forced as owner)
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: steam_channel
+    attributes:
+      label: Steam client channel
+      description: Are you on the Steam stable client or the Steam beta client?
+      options:
+        - Stable
+        - Beta / Pre-release
+        - Unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      description: Which OS are you running?
+      options:
+        - SteamOS (Steam Deck)
+        - Bazzite
+        - HoloISO
+        - ChimeraOS
+        - Other Linux
+        - Windows
+        - macOS
+        - Other / Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version
+      description: Output of `cat /etc/os-release` (Linux), or the version under Settings → System. For SteamOS use the build number.
+      placeholder: "e.g. SteamOS 3.7.21, Bazzite 41, Windows 11 23H2, macOS 15.5"
+    validations:
+      required: true
+
+  - type: input
+    id: steam_client
+    attributes:
+      label: Steam client version
+      description: Steam → top-left menu → Steam → "About Steam" — the build date / version.
+      placeholder: "e.g. 1748993579 (Stable, Apr 21 2026)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Service log, screenshots, or anything else useful. The log path is shown at service start.
+    validations:
+      required: false

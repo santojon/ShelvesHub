@@ -37,4 +37,19 @@ on Windows run them under WSL / Git Bash.
 - Add unit tests where appropriate. CI currently runs builds for Linux, macOS, and Windows.
 
 ## Commits and PRs
-- Use clear commit messages. For automated releases, consider following conventional commits (feat:, fix:, chore:, docs:, etc.).
+- Use clear commit messages.
+- **PR titles must start with a tag** — the automated version bump and the
+  `PR · Checklist` gate both depend on it:
+  - `[FIX]` — bug fix
+  - `[ENHANCEMENT]` — small improvement
+  - `[PERF]` — performance improvement
+  - `[QA]` — test harness / instrumentation
+  - `[REFACTOR]` — refactor/restructure
+  - `[CLEANUP]` — code cleanup
+  - `[FEATURE]` — new feature
+
+  Example: `[FIX] Keep the service running after a Steam restart`.
+- Merged PRs bump the version automatically: `[REFACTOR]` → major, `[FEATURE]`/`[CLEANUP]` → minor, the rest → patch. See `.github/workflows/bump.yml`.
+- Add your change under `## [Unreleased]` in both `CHANGELOG.md` (technical) and `RELEASE_NOTES.md` (user-facing). The version bump promotes these to a dated entry, and the release body is extracted from them.
+- Fill in the PR template checklist — the `PR · Checklist` check enforces it.
+- Issue and PR triage labels are applied automatically; see [.github/TRIAGE.md](.github/TRIAGE.md).

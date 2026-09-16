@@ -1,0 +1,82 @@
+name: "PR · Auto-label"
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false || github.event.action == 'ready_for_review'
+    steps:
+      - name: Detect type + area labels
+        id: detect
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const num   = pr.number;
+
+            // ── 1. TYPE: parsed from the PR title tag.
+            const title = (pr.title ?? "").toLowerCase();
+            const titleType =
+              /^\[?\s*(fix|bug|hotfix)\b/.test(title)                      ? "type::bug" :
+              /^\[?\s*(feat|feature)\b/.test(title)                        ? "type::feature" :
+              /^\[?\s*(enh|enhance|enhancement|improve)\b/.test(title)     ? "type::enhancement" :
+              null;
+
+            // ── 2. AREA: from changed file paths.
+            const filesResp = await github.paginate(
+              github.rest.pulls.listFiles,
+              { owner, repo, pull_number: num, per_page: 100 }
+            );
+            const paths = filesResp.map(f => f.filename);
+
+            const areaRules = [
+              { label: "area::loader",    test: p => p.startsWith("src/loader/") },
+              { label: "area::cdp",       test: p => p.startsWith("src/cdp/") },
+              { label: "area::populate",  test: p => p === "src/populate.rs" },
+              { label: "area::rpc",       test: p => p === "src/rpc.rs" },
+              { label: "area::backend",   test: p => p === "src/backend.rs" || p.startsWith("runtime/backend/") },
+              { label: "area::i18n",      test: p => p.startsWith("runtime/i18n/") },
+              { label: "area::runtime",   test: p => (p.startsWith("runtime/") && !p.startsWith("runtime/backend/") && !p.startsWith("runtime/i18n/")) || p.startsWith("src/runtime/") || p.startsWith("src/components/") },
+              { label: "area::contract",  test: p => p.startsWith("host/") },
+              { label: "area::installer", test: p => p.startsWith("installer/") },
+              { label: "area::docs",      test: p => p.startsWith("docs/") || p === "README.md" || p === "CONTRIBUTING.md" || p === "SECURITY.md" || p === "NOTICE.md" },
+              { label: "area::ci",        test: p => p.startsWith(".github/") || p.startsWith("scripts/") },
+              { label: "area::daemon",    test: p => /^src\/[^/]+\.rs$/.test(p) || p.startsWith("src/bin/") },
+            ];
+            const areaLabels = new Set();
+            for (const path of paths) {
+              for (const { label, test } of areaRules) {
+                if (test(path)) areaLabels.add(label);
+              }
+            }
+
+            // ── 3. Compute final label set. Pre-existing labels are preserved;
+            // we only ADD missing labels, never remove anything already set.
+            const wanted = new Set([...areaLabels]);
+            if (titleType) wanted.add(titleType);
+
+            const current = (pr.labels ?? []).map(l => l.name);
+            return [...wanted].filter(l => !current.includes(l));
+
+      - name: Apply PR labels
+        if: steps.detect.outputs.result != '[]'
+        uses: actions/github-script@v7
+        env:
+          LABELS: ${{ steps.detect.outputs.result }}
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: JSON.parse(process.env.LABELS),
+            });
