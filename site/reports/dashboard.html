@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShelvesHub — Dashboard</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    .dash-wrap { max-width: var(--maxw); margin: 0 auto; padding: 32px 20px 64px; }
+    .dash-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .dash-head h1 { margin: 0; font-size: 24px; }
+    .dash-head .muted { color: var(--fg-dim); font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 20px 0 8px; }
+    .card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--card-shadow); padding: 16px 18px; }
+    .card .k { color: var(--fg-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .card .v { font-size: 28px; font-weight: 700; margin-top: 6px; line-height: 1.1; }
+    .card .s { color: var(--fg-dim); font-size: 12px; margin-top: 4px; }
+    .card .v.accent { color: var(--accent); }
+    section h2 { font-size: 15px; margin: 28px 0 10px; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .row:last-child { border-bottom: 0; }
+    .row .lbl { flex: 1; }
+    .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-dim); }
+    .pill.ok { color: #15a34a; border-color: rgba(21,163,74,.4); }
+    .note { color: var(--fg-dim); font-size: 12px; margin-top: 24px; line-height: 1.5; }
+    a.back { color: var(--accent); text-decoration: none; font-size: 13px; }
+    .chart-cap { color: var(--fg-dim); font-size: 11px; margin-top: 6px; }
+    .bar { flex: 0 0 45%; height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
+    .bar-fill { display: block; height: 100%; background: var(--accent); }
+    .bar-num { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--fg-dim); font-size: 13px; min-width: 48px; text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="dash-wrap">
+    <div class="dash-head">
+      <div>
+        <h1>ShelvesHub · Dashboard</h1>
+        <div class="muted"><a class="back" href="../">← ShelvesHub</a> · usage &amp; release status</div>
+      </div>
+      <div class="muted" id="updated">—</div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><div class="k">Latest release</div><div class="v accent" id="release">—</div><div class="s" id="releaseDate"></div></div>
+      <div class="card"><div class="k">GitHub downloads</div><div class="v" id="downloads">—</div><div class="s">all releases, cumulative</div></div>
+      <div class="card"><div class="k">Views (14d)</div><div class="v" id="views">—</div><div class="s">repository traffic</div></div>
+      <div class="card"><div class="k">Clones (14d)</div><div class="v" id="clones">—</div><div class="s">repository traffic</div></div>
+    </div>
+
+    <section>
+      <h2>Platform coverage</h2>
+      <div class="card">
+        <div class="row"><span class="lbl">SteamOS (Steam Deck)</span><span class="pill ok">shipped</span></div>
+        <div class="row"><span class="lbl">Linux</span><span class="pill ok">shipped</span></div>
+        <div class="row"><span class="lbl">macOS</span><span class="pill ok">shipped</span></div>
+        <div class="row"><span class="lbl">Windows</span><span class="pill">CI-built · install test pending</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Quality gates</h2>
+      <div class="card">
+        <div class="row"><span class="lbl"><code>cargo test</code></span><span class="pill ok">passing</span></div>
+        <div class="row"><span class="lbl"><code>cargo clippy -D warnings</code></span><span class="pill ok">clean</span></div>
+        <div class="row"><span class="lbl"><code>cargo fmt --check</code></span><span class="pill ok">clean</span></div>
+        <div class="row"><span class="lbl"><code>cargo audit</code></span><span class="pill ok">0 advisories</span></div>
+        <div class="row"><span class="lbl">Docker simulation harness</span><span class="pill ok">green</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Downloads over time</h2>
+      <div class="card"><div id="dl-trend">Not enough history yet — populated after a few weekly snapshots.</div></div>
+    </section>
+
+    <section>
+      <h2>By release</h2>
+      <div class="card"><div id="by-release">—</div></div>
+    </section>
+
+    <p class="note">
+      Usage numbers refresh weekly from <code>site/stats/*.json</code> (the
+      <b>Ops · Site stats</b> workflow). Per-version metric trends and CI-report history
+      are planned for a later phase. Quality-gate rows reflect the CI gate on the default branch.
+    </p>
+  </div>
+
+  <script>
+    (function () {
+      var fmt = function (n) {
+        if (n == null || isNaN(n)) return "—";
+        return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+      };
+      var set = function (id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+      fetch("../stats/summary.json", { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) {
+          if (!s) return;
+          set("release", s.release || "—");
+          set("releaseDate", s.releaseDate ? "published " + s.releaseDate : "");
+          set("downloads", fmt(s.downloads));
+          set("views", fmt(s.views14d));
+          set("clones", fmt(s.clones14d));
+          if (s.updated) set("updated", "updated " + String(s.updated).slice(0, 10));
+        })
+        .catch(function () {});
+
+      function lineChart(rows, key) {
+        rows = (rows || []).filter(function (r) { return r && r.date; });
+        if (rows.length < 2) return "Not enough history yet — populated after a few weekly snapshots.";
+        var w = 600, h = 140, pad = 10, n = rows.length;
+        var vals = rows.map(function (r) { return +r[key] || 0; });
+        var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals), span = (max - min) || 1;
+        var pts = rows.map(function (r, i) {
+          var x = pad + (i / (n - 1)) * (w - 2 * pad);
+          var y = h - pad - ((vals[i] - min) / span) * (h - 2 * pad);
+          return x.toFixed(1) + "," + y.toFixed(1);
+        }).join(" ");
+        return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="' + h + '" preserveAspectRatio="none">'
+          + '<polygon points="' + pad + ',' + (h - pad) + ' ' + pts + ' ' + (w - pad) + ',' + (h - pad) + '" style="fill:var(--accent);opacity:.12"/>'
+          + '<polyline points="' + pts + '" style="fill:none;stroke:var(--accent);stroke-width:2"/></svg>'
+          + '<div class="chart-cap">' + rows[0].date + ' → ' + rows[n - 1].date + ' · latest ' + fmt(vals[n - 1]) + '</div>';
+      }
+      function releaseBars(rels) {
+        rels = (rels || []).filter(function (r) { return r && r.tag; });
+        if (!rels.length) return "No releases yet.";
+        var max = Math.max.apply(null, rels.map(function (r) { return +r.downloads || 0; })) || 1;
+        return rels.slice().reverse().map(function (r) {
+          var pct = Math.round(((+r.downloads || 0) / max) * 100);
+          return '<div class="row"><span class="lbl">' + r.tag + '</span>'
+            + '<span class="bar"><span class="bar-fill" style="width:' + pct + '%"></span></span>'
+            + '<span class="bar-num">' + fmt(+r.downloads || 0) + '</span></div>';
+        }).join("");
+      }
+      function load(url, id, render) {
+        fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) { if (d) { var el = document.getElementById(id); if (el) el.innerHTML = render(d); } })
+          .catch(function () {});
+      }
+      load("stats/history.json", "dl-trend", function (h) { return lineChart(h, "downloads"); });
+      load("../stats/releases.json", "by-release", function (r) { return releaseBars(r); });
+    })();
+  </script>
+</body>
+</html>
