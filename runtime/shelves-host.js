@@ -1439,13 +1439,15 @@
       }
       // Same pattern as the pinned "ShelvesHub" button (native DialogButton when
       // available, else the subtle inset row) — matched colour and alignment.
-      function restartBanner() {
-        const label = I18N.t("adv_restart_apply");
-        const btn = (nativeUiOn() && UI.DialogButton)
-          ? h(UI.DialogButton, { "data-fb": "apply-restart", onClick: doApplyRestart, style: { width: "100%" } },
+      // Full-width action button shared by the restart and hub-update banners,
+      // so both look and behave the same (icon + centered label; native
+      // DialogButton when available, focusable clickable fallback otherwise).
+      function bannerButton(dataFb, label, onClick) {
+        return (nativeUiOn() && UI.DialogButton)
+          ? h(UI.DialogButton, { "data-fb": dataFb, onClick: onClick, style: { width: "100%" } },
               h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } }, fbIcon("update"), h("span", null, label)))
-          : clickable(doApplyRestart, {
-              "data-fb": "apply-restart", focusClassName: "shelves-gpfocus",
+          : clickable(onClick, {
+              "data-fb": dataFb, focusClassName: "shelves-gpfocus",
               style: {
                 flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",
                 gap: "8px", width: "100%", boxSizing: "border-box", padding: "10px 14px",
@@ -1454,7 +1456,10 @@
                 fontSize: "13px", opacity: busy ? 0.6 : 1,
               },
             }, [fbIcon("update"), h("span", { key: "t" }, label)]);
-        return h("div", { key: "restart-banner", style: { padding: "10px 14px 8px" } }, btn);
+      }
+      function restartBanner() {
+        return h("div", { key: "restart-banner", style: { padding: "10px 14px 8px" } },
+          bannerButton("apply-restart", I18N.t("adv_restart_apply"), doApplyRestart));
       }
       function viewLogs() {
         setBusy("logs");
@@ -1531,8 +1536,8 @@
         // finish" (a relaunching service applies it on its own, so this only ever
         // shows for a manually-run daemon).
         var label = uc.hub_update_staged === true ? "hub_update_staged" : "hub_update_restart";
-        return h("div", { key: "hubupd", "data-fb": "hub-update", style: { display: "flex", alignItems: "center", gap: "8px", background: "rgba(26,159,255,0.15)", border: "1px solid rgba(26,159,255,0.45)", borderRadius: "6px", padding: "8px 10px", margin: "0 0 10px", fontSize: "13px" } },
-          fbIcon("update"), h("span", { key: "t" }, I18N.t(label) + " (" + ver + ")"));
+        return h("div", { key: "hubupd", style: { padding: "10px 14px 8px" } },
+          bannerButton("hub-update", I18N.t(label) + " (" + ver + ")", doApplyRestart));
       }
       // The "Advanced" area: a plugin-style collapsible whose content is grouped
       // into collapsible sub-sections (Troubleshooting / Configuration / Status),

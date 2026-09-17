@@ -311,11 +311,15 @@ pub fn run(mut config: Config) {
             swap_pending = true;
         }
 
-        thread::sleep(if settled && !swap_pending {
-            interval
+        // A sole/owner host re-polls on a shorter idle cadence than the calm
+        // coexist one, so it notices a Steam restart within a few seconds instead
+        // of up to a full `interval`. Coexist stays calm — the loader owns it.
+        let idle = if hosting {
+            interval.min(SOLE_IDLE)
         } else {
-            fast
-        });
+            interval
+        };
+        thread::sleep(if settled && !swap_pending { idle } else { fast });
     }
 }
 
@@ -323,6 +327,11 @@ pub fn run(mut config: Config) {
 /// with auto-update on. Rare on purpose: it hits the GitHub API and, on an actual
 /// update, reloads the renderer.
 const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+/// Idle re-poll cadence for a sole/owner host (caps the configured `interval_secs`
+/// only while WE host the bundle). Short so a Steam restart is noticed within a
+/// few seconds; a coexisting host keeps the calm configured interval instead.
+const SOLE_IDLE: Duration = Duration::from_secs(5);
 
 /// When auto-update is enabled AND we host the bundle (sole/owner — never coexist,
 /// where the plugin loader owns its own copy), compare the latest release tag for
