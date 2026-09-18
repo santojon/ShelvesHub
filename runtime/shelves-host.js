@@ -1484,11 +1484,12 @@
       // Effective config for this render (defaults while still loading).
       var uc = cfg || DEFAULT_UPD;
       var on = uc.auto_update === true;
-      // Coexisting with another loader (it owns the renderer): the hub does NOT
-      // host or update the plugin here — the loader does. So the update actions
-      // (download / self-install) and auto-update toggles are hidden and a note
-      // points at the loader. Detected from the owner global (sole = "shelveshub").
-      var coexist = (function () { try { var o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; } })();
+      /* Coexisting with another loader (it owns the renderer): the hub does NOT
+         host or update the plugin here — the loader does, so the update actions
+         and auto-update toggles are hidden and a note points at the loader.
+         COOPERATIVE (a loader present but WE forced ownership) means the hub owns
+         + manages updates → not coexist; COOP is reliable, the owner can lag. */
+      var coexist = !COOP && (function () { try { var o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; } })();
       // B (CANCEL) handling: a plain onCancel/onCancelButton is NOT enough — the
       // QAM router still navigates the tab away. We must ABSORB the button-down
       // (preventDefault + stopImmediatePropagation on the event AND its inner
