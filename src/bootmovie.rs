@@ -28,11 +28,16 @@ fn slot_names() -> &'static [&'static str] {
     if cfg!(target_os = "macos") || cfg!(windows) {
         &["bigpicture_startup.webm"]
     } else {
-        // Linux / SteamOS: Gaming Mode on LCD (deck) or OLED, plus Big Picture
-        // launched from desktop mode.
+        // Linux / SteamOS: Steam ships several startup movies and plays a
+        // different one by device/context, so cover them all — the small LCD/OLED
+        // throbbers (deck/oled), the fullscreen SteamOS startups, and Big Picture
+        // launched from desktop mode. Overriding every candidate is what makes the
+        // animation take effect regardless of which one Gaming Mode actually reads.
         &[
             "deck_startup.webm",
             "oled_startup.webm",
+            "steam_os_startup.webm",
+            "steam_os_family_startup.webm",
             "bigpicture_startup.webm",
         ]
     }

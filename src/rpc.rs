@@ -21,12 +21,13 @@ use crate::state;
 /// Operational-config keys the "advanced configuration" editor may change. The
 /// rest (host/port/paths) stay read-only — editing them can cut the panel off
 /// from the daemon. All apply on the next restart.
-const EDITABLE_CONFIG_KEYS: [&str; 6] = [
+const EDITABLE_CONFIG_KEYS: [&str; 7] = [
     "native_qam",
     "prerelease",
     "owner_settle_secs",
     "interval_secs",
     "force_owner",
+    "desktop_ui",
     "recover_cmd",
 ];
 
@@ -445,7 +446,9 @@ fn dispatch(body: &str) -> String {
                 other => return err(&format!("refused config key (not editable): {other:?}")),
             };
             let coerced = match key {
-                "native_qam" | "prerelease" | "force_owner" => value.as_bool().map(Value::Bool),
+                "native_qam" | "prerelease" | "force_owner" | "desktop_ui" => {
+                    value.as_bool().map(Value::Bool)
+                }
                 "owner_settle_secs" | "interval_secs" => value.as_u64().map(Value::from),
                 "recover_cmd" => match &value {
                     Value::Null => Some(Value::Null),

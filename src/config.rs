@@ -54,6 +54,12 @@ pub struct Config {
     /// runtime attempts the native Quick Access tab (guarded by a trip
     /// breaker; overlay remains the fallback). Off by default.
     pub native_qam: bool,
+    /// EXPERIMENTAL. When false (the default), the loader only injects while the
+    /// Steam gamepad / Big Picture UI is on screen; in the plain desktop client
+    /// it stands down, since the shelves are built for the gamepad Home and read
+    /// wrong there. When true (`SHELVES_DESKTOP_UI=1`), inject in the desktop
+    /// client too.
+    pub desktop_ui: bool,
     /// Shell command run once when the loader detects the Steam UI windows have
     /// collapsed (a black screen where only `SharedJSContext` survives). Defaults
     /// to a per-platform command (`default_recover_cmd`) — SteamOS restarts the
@@ -153,6 +159,7 @@ impl Config {
                     .unwrap_or(false),
             },
             native_qam: cfg_bool(&file, "SHELVES_NATIVE_QAM", "native_qam"),
+            desktop_ui: cfg_bool(&file, "SHELVES_DESKTOP_UI", "desktop_ui"),
             recover_cmd: env::var("SHELVES_RECOVER_CMD")
                 .ok()
                 .filter(|s| !s.is_empty())

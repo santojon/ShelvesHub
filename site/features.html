@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShelvesHub — All Features</title>
+  <meta name="description" content="The full ShelvesHub feature list — the independent host that runs Deck Shelves on Steam without a plugin loader.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="lang-switch" role="group" aria-label="Language">
+    <button type="button" data-lang="en" aria-pressed="true">EN</button>
+    <button type="button" data-lang="pt" aria-pressed="false">PT</button>
+  </div>
+
+  <header class="subnav">
+    <div class="wrap subnav-inner">
+      <a class="subnav-brand" href="index.html">
+        <img src="img/shelveshub-icon.svg" alt="" width="30" height="30">
+        <span>ShelvesHub</span>
+      </a>
+      <a class="subnav-back" href="index.html" data-i18n="nav.backHome">← Back to home</a>
+    </div>
+  </header>
+
+  <header class="page-hero">
+    <div class="wrap">
+      <span class="eyebrow" data-i18n="featuresPage.eyebrow">Everything ShelvesHub does</span>
+      <h1 data-i18n="featuresPage.title">All Features</h1>
+      <p class="lead" data-i18n="featuresPage.sub">The complete list of what the host brings to Deck Shelves on Steam — no plugin loader required.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <div class="feature-rows">
+        <div class="feature-row"><div class="fr-media"><img loading="lazy" alt="Its own Quick Access tab" data-shot="qam-tab.png"></div><div class="fr-text"><h3 data-i18n="feat.qam.t">Its own Quick Access tab</h3><p data-i18n="feat.qam.d">A native Steam Quick Access tab that opens the Deck Shelves editor directly, with its icon and header. Where another host is installed too, exactly one tab shows and both stay usable.</p></div></div>
+        <div class="feature-row"><div class="fr-media"><img loading="lazy" alt="Automatic updates" data-shot="hub-panel.png"></div><div class="fr-text"><h3 data-i18n="feat.updates.t">Automatic updates, host and plugin</h3><p data-i18n="feat.updates.d">Updates itself in place and keeps Deck Shelves current on your chosen channel — a master switch, then ShelvesHub and Deck Shelves each with their own pre-release channel.</p></div></div>
+        <div class="feature-row"><div class="fr-media"><img loading="lazy" alt="Full Deck Shelves, hosted here" data-shot="home.png"></div><div class="fr-text"><h3 data-i18n="feat.backend.t">Full Deck Shelves, hosted here</h3><p data-i18n="feat.backend.d">Brings its own copy of Deck Shelves and runs the data backend itself — wishlist, prices and launchers — so a standalone install has the complete online experience, not just local shelves.</p></div></div>
+        <div class="feature-row"><div class="fr-media"><img loading="lazy" alt="Troubleshooting and recovery" data-shot="hub-troubleshooting.png"></div><div class="fr-text"><h3 data-i18n="feat.recovery.t">Troubleshooting &amp; recovery</h3><p data-i18n="feat.recovery.d">A health-gate pauses instead of making a black screen worse, and runs a per-platform recovery. A fallback panel offers recovery actions when Deck Shelves can't come up.</p></div></div>
+        <div class="feature-row"><div class="fr-media"><img loading="lazy" alt="Editable configuration and status" data-shot="hub-config.png"></div><div class="fr-text"><h3 data-i18n="feat.config.t">Editable config + status</h3><p data-i18n="feat.config.d">A safe subset of the configuration is editable right in the tab, each field described in your language, alongside a read-only status readout of the effective settings.</p></div></div>
+        <div class="feature-row"><div class="fr-media"><img loading="lazy" alt="Merged log viewer" data-shot="hub-logs.png"></div><div class="fr-text"><h3 data-i18n="feat.logs.t">Merged log viewer</h3><p data-i18n="feat.logs.d">The host runtime and the service in one gamepad-navigable stream, newest first, each line tagged by level and category and colour-coded — no console scraping.</p></div></div>
+      </div>
+
+      <h2 class="features-list-title" data-i18n="featuresPage.listTitle">Complete feature list</h2>
+      <p class="features-list-note" data-i18n="featuresPage.listNote">Straight from the project README — the always-current list.</p>
+      <div class="card">
+        <ul class="features-list">
+          <li><strong>No plugin loader required</strong> — hosts Deck Shelves by itself by injecting its bundle into the Steam Big Picture UI over the Chrome DevTools Protocol.</li>
+          <li><strong>Coexists with another host</strong> — if a plugin loader is also installed, the two run side by side: exactly one Deck Shelves tab shows, both hosts' tabs edit the same settings, and only one writes settings at a time.</li>
+          <li><strong>Cross-platform</strong> — SteamOS and the Steam Deck are the primary target; also Linux, macOS and Windows, each with a one-click installer and a plain script.</li>
+          <li><strong>Universal macOS binary</strong> — the macOS download runs natively on both Apple Silicon and Intel Macs; CI verifies the shipped binary is universal.</li>
+          <li><strong>Native Quick Access tab</strong> — opens the Deck Shelves editor directly, with real Steam buttons and toggles, a gamepad focus ring and a theme-tinted icon; a recovery panel shows instead if the bundle can't load.</li>
+          <li><strong>Brings its own copy of Deck Shelves</strong> — reuses a local copy, copies one from an installed loader, or downloads the newest release (<code>SHELVES_PRERELEASE=1</code> opts into pre-releases).</li>
+          <li><strong>Hosts the data backend</strong> — supervises the Deck Shelves data backend over stdio, restarts it on crashes and surfaces its logs, so wishlist, prices, backups and friends work on a standalone install.</li>
+          <li><strong>Updates itself</strong> — downloads and verifies a newer ShelvesHub, swaps its own binary in place, and restarts the service to finish (or asks you to restart when it can't).</li>
+          <li><strong>Keeps Deck Shelves current</strong> — with automatic updates on, checks periodically and installs a newer release in place, then reloads, so the "update available" prompt clears on its own.</li>
+          <li><strong>Update channels</strong> — stable and pre-release are separate for the host and for Deck Shelves; each finer switch only appears once the one above it is on.</li>
+          <li><strong>Optional boot animation</strong> — installs a short startup animation into Steam's own startup-movie slot, with a Deck-native 1280×800 cut and a 1080p desktop cut chosen per platform; a live toggle, removed when turned off.</li>
+          <li><strong>Resilient by design</strong> — a windows-collapse health gate never force-restarts Steam; it pauses and, on a confirmed black screen, runs a per-platform recovery (restart the Deck's Gaming Mode session, or bring Steam back into Big Picture on desktop).</li>
+          <li><strong>Version-skew safe settings</strong> — the host's own settings store preserves keys it doesn't recognise, so running mixed versions across machines never silently drops a setting.</li>
+          <li><strong>Gamepad UI aware</strong> — by default it hosts only while the gamepad / Big Picture UI is on screen; an experimental toggle (macOS / Windows) also injects into the plain desktop client.</li>
+          <li><strong>Restart to apply, in one click</strong> — changing a setting that needs a restart surfaces a button that restarts the host and Steam together so the change takes effect.</li>
+          <li><strong>Editable safe configuration</strong> — a curated subset of the operational config is editable in the tab, with a read-only status readout of the effective values.</li>
+          <li><strong>Merged log viewer</strong> — host + runtime in one gamepad-navigable, colour-coded stream, newest first, with a refresh control; B takes you back.</li>
+          <li><strong>Disable until restart</strong> — a troubleshooting switch stands the host down until the next service restart without uninstalling anything.</li>
+          <li><strong>One shared contract</strong> — the <code>@deck-shelves/host</code> API defines what the host provides, so one Deck Shelves build runs under this host or under a plugin loader unchanged.</li>
+          <li><strong>Localized</strong> — the host tab is translated into 19 languages.</li>
+          <li><strong>No-device verification</strong> — a Docker simulation harness runs the runtime, a daemon → headless-Chromium injection smoke, and the install / uninstall lifecycle in a container.</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <section id="donate" class="donate">
+    <div class="wrap">
+      <div class="donate-box">
+        <div>
+          <h2 data-i18n="donate.h">Enjoying ShelvesHub?</h2>
+          <p data-i18n="donate.p">It's free and open source. If it's useful to you, a small tip helps keep it maintained — entirely optional.</p>
+        </div>
+        <a class="btn kofi" href="https://ko-fi.com/santojon" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.3 4.6 14a5 5 0 0 1 7-7.1l.4.4.4-.4a5 5 0 0 1 7 7.1z"/></svg>
+          <span data-i18n="donate.btn">Support on Ko-fi</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <p class="foot-bottom" data-i18n="footer.copy">© 2026 ShelvesHub · MIT-licensed · built by Jonathan Santos · <a href="index.html" data-i18n="nav.backHome">← Back to home</a></p>
+    </div>
+  </footer>
+
+  <script>
+    /* Self-contained i18n for this subpage (English is the source; pt-BR is the
+       one added translation). Same mechanism as the home page, with only the
+       keys this page uses. The feature list itself stays as authored. */
+    (function () {
+      var STORE_KEY = "shelveshub-lang";
+      var PT = {
+        "nav.backHome": "← Voltar para o início",
+        "featuresPage.eyebrow": "Tudo o que o ShelvesHub faz",
+        "featuresPage.title": "Todos os recursos",
+        "featuresPage.sub": "A lista completa do que o host traz para o Deck Shelves no Steam — sem carregador de plugins.",
+        "featuresPage.listTitle": "Lista completa de recursos",
+        "featuresPage.listNote": "Direto do README do projeto — a lista sempre atual.",
+        "feat.qam.t": "Sua própria aba no Quick Access",
+        "feat.qam.d": "Uma aba nativa no Quick Access do Steam que abre o editor do Deck Shelves direto, com ícone e cabeçalho. Com outro host instalado, aparece exatamente uma aba e ambas continuam usáveis.",
+        "feat.updates.t": "Atualizações automáticas, host e plugin",
+        "feat.updates.d": "Atualiza a si mesmo no lugar e mantém o Deck Shelves em dia no canal escolhido — um interruptor mestre e, abaixo, ShelvesHub e Deck Shelves cada um com seu canal de pré-lançamento.",
+        "feat.backend.t": "Deck Shelves completo, hospedado aqui",
+        "feat.backend.d": "Traz a própria cópia do Deck Shelves e roda o backend de dados por conta própria — lista de desejos, preços e lançadores — para uma instalação standalone ter a experiência online completa, não só prateleiras locais.",
+        "feat.recovery.t": "Solução de problemas e recuperação",
+        "feat.recovery.d": "Uma proteção de saúde pausa em vez de piorar uma tela preta, e roda uma recuperação por plataforma. Um painel de fallback oferece ações de recuperação quando o Deck Shelves não sobe.",
+        "feat.config.t": "Config editável + status",
+        "feat.config.d": "Um subconjunto seguro da configuração é editável na própria aba, cada campo descrito no seu idioma, ao lado de uma leitura somente-leitura das settings efetivas.",
+        "feat.logs.t": "Visualizador de logs unificado",
+        "feat.logs.d": "O runtime do host e o serviço em um fluxo navegável por gamepad, mais recentes primeiro, cada linha marcada por nível e categoria e colorida — sem raspar console.",
+        "donate.h": "Curtindo o ShelvesHub?",
+        "donate.p": "É gratuito e de código aberto. Se ele te for útil, uma pequena contribuição ajuda a mantê-lo — totalmente opcional.",
+        "donate.btn": "Apoiar no Ko-fi",
+        "footer.copy": "© 2026 ShelvesHub · Licença MIT · feito por Jonathan Santos · <a href=\"index.html\">← Voltar para o início</a>"
+      };
+      var EN = {};
+      function collect(attr) {
+        var nodes = document.querySelectorAll("[" + attr + "]");
+        for (var i = 0; i < nodes.length; i++) {
+          var key = nodes[i].getAttribute(attr);
+          if (!(key in EN)) EN[key] = attr === "data-i18n-html" ? nodes[i].innerHTML : nodes[i].textContent;
+        }
+      }
+      collect("data-i18n"); collect("data-i18n-html");
+      function applyOne(attr, prop, dict) {
+        var nodes = document.querySelectorAll("[" + attr + "]");
+        for (var i = 0; i < nodes.length; i++) {
+          var key = nodes[i].getAttribute(attr);
+          var val = dict && (key in dict) ? dict[key] : EN[key];
+          if (val != null) nodes[i][prop] = val;
+        }
+      }
+      function normalize(l) { return (String(l || "").toLowerCase().indexOf("pt") === 0) ? "pt" : "en"; }
+      function apply(lang) {
+        var dict = lang === "pt" ? PT : null;
+        // footer.copy carries markup in both languages → set as HTML.
+        applyOne("data-i18n", "textContent", dict);
+        var fc = document.querySelector('[data-i18n="footer.copy"]');
+        if (fc) fc.innerHTML = (dict && dict["footer.copy"]) || EN["footer.copy"];
+        document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
+        var btns = document.querySelectorAll(".lang-switch [data-lang]");
+        for (var i = 0; i < btns.length; i++) btns[i].setAttribute("aria-pressed", btns[i].getAttribute("data-lang") === lang ? "true" : "false");
+      }
+      var stored = null; try { stored = localStorage.getItem(STORE_KEY); } catch (e) {}
+      apply(normalize(stored || (navigator.language || navigator.userLanguage)));
+      var sw = document.querySelector(".lang-switch");
+      if (sw) sw.addEventListener("click", function (e) {
+        var b = e.target.closest ? e.target.closest("[data-lang]") : null;
+        if (!b) return;
+        var l = b.getAttribute("data-lang");
+        try { localStorage.setItem(STORE_KEY, l); } catch (er) {}
+        apply(l);
+      });
+
+      // Screenshots: local relative path first, raw.githubusercontent fallback.
+      var local = "../assets/screenshots/", raw = "https://raw.githubusercontent.com/santojon/ShelvesHub/main/assets/screenshots/";
+      var imgs = document.querySelectorAll("img[data-shot]");
+      for (var j = 0; j < imgs.length; j++) {
+        (function (img) {
+          var name = img.getAttribute("data-shot");
+          img.onerror = function () { if (img.src.indexOf(raw) !== 0) { img.onerror = null; img.src = raw + name; } };
+          img.src = local + name;
+        })(imgs[j]);
+      }
+    })();
+  </script>
+</body>
+</html>

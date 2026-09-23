@@ -91,6 +91,7 @@ fn main() {
             "interval_secs": config.interval_secs,
             "owner_settle_secs": config.owner_settle_secs,
             "native_qam": config.native_qam,
+            "desktop_ui": config.desktop_ui,
             "boot_movie": config.boot_movie,
             "prerelease": config.prerelease,
             "force_owner": config.force_owner,

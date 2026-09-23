@@ -161,3 +161,39 @@ footer { border-top: 1px solid var(--border); padding: 44px 0 40px; color: var(-
 @media (max-width: 560px) {
   .fresh-box, .donate-box { flex-direction: column; align-items: flex-start; }
 }
+
+.see-all { text-align: center; margin: 26px 0 0; }
+.see-all a { font-weight: 600; }
+
+/* Features subpage */
+.subnav { border-bottom: 1px solid var(--border); background: var(--bg-elev); position: sticky; top: 0; z-index: 20; }
+.subnav-inner { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+.subnav-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--fg); font-weight: 700; }
+.subnav-brand:hover { text-decoration: none; }
+.subnav-back { color: var(--fg-dim); font-size: 0.9rem; }
+.page-hero { text-align: center; padding: 56px 20px 8px; }
+.page-hero .eyebrow { display: inline-block; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+.page-hero h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+.page-hero .lead { margin: 0 auto; }
+main { padding: 32px 0 56px; }
+.feature-rows { display: grid; gap: 16px; margin-bottom: 40px; }
+.feature-row { display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--card-shadow); overflow: hidden; }
+.feature-row:nth-child(even) { grid-template-columns: 1fr 260px; }
+.feature-row:nth-child(even) .fr-media { order: 2; }
+.fr-media { background: var(--bg); align-self: stretch; display: flex; }
+.fr-media img { width: 100%; height: 100%; max-height: 200px; object-fit: contain; display: block; }
+.fr-text { padding: 18px 20px; }
+.fr-text h3 { margin: 0 0 6px; font-size: 1.1rem; }
+.fr-text p { margin: 0; color: var(--fg-dim); font-size: 0.95rem; }
+.features-list-title { font-size: 1.3rem; margin: 8px 0 4px; }
+.features-list-note { color: var(--fg-dim); font-size: 0.85rem; margin: 0 0 14px; }
+.features-list { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.features-list li { color: var(--fg-dim); font-size: 0.95rem; line-height: 1.5; }
+.features-list li strong { color: var(--fg); }
+.features-list code { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 1px 5px; font-size: 0.85em; }
+
+@media (max-width: 620px) {
+  .feature-row, .feature-row:nth-child(even) { grid-template-columns: 1fr; }
+  .feature-row:nth-child(even) .fr-media { order: 0; }
+  .fr-media img { max-height: 180px; }
+}

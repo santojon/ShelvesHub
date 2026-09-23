@@ -1427,8 +1427,9 @@
       function mergeRc(patch) { var n = {}; if (rc) for (var k in rc) n[k] = rc[k]; for (var p in patch) n[p] = patch[p]; setRc(n); }
       function applyPaused(v) { mergeRc({ paused: v }); hostRpc("setHostingPaused", v).then(function () {}, function () {}); }
       // The boot animation is a live toggle: the daemon installs/removes the movie
-      // on the spot (no restart), so it does NOT go through the restart-dirty path.
-      function applyBootMovie(v) { mergeRc({ boot_movie: v }); hostRpc("setBootMovie", v).then(function () {}, function () {}); }
+      // on the spot. The movie itself is only read by Steam on its next start, so
+      // surface the "restart to apply" banner (Steam replays the startup movie).
+      function applyBootMovie(v) { mergeRc({ boot_movie: v }); setRcDirty(true); hostRpc("setBootMovie", v).then(function () {}, function () {}); }
       function applyCfg(key, val) { mergeRc((function () { var o = {}; o[key] = val; return o; })()); setRcDirty(true); hostRpc("setRuntimeConfig", { key: key, value: val }).then(function () {}, function () {}); }
       /* Apply pending config edits: restart the daemon so it re-reads the config
          file (values are only read at startup), then restart Steam so the fresh
@@ -1641,6 +1642,12 @@
             conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
           }
           conf.push(advToggleRow("cfg-boot_movie", I18N.t("cfg_boot_movie"), I18N.t("cfg_boot_movie_sub"), rc.boot_movie === true, applyBootMovie));
+          // Experimental: inject in the plain desktop client too (default off →
+          // gamepad / Big Picture only). Only meaningful where a desktop client
+          // exists (macOS / Windows), so hide it on the Deck's Gaming Mode.
+          if (!rc.loader_possible) {
+            conf.push(advToggleRow("cfg-desktop_ui", I18N.t("cfg_desktop_ui"), I18N.t("cfg_desktop_ui_sub"), rc.desktop_ui === true, function (v) { applyCfg("desktop_ui", v); }));
+          }
           conf.push(advStepRow("interval_secs", I18N.t("cfg_interval"), I18N.t("cfg_interval_sub"), rc.interval_secs));
           var confCount = conf.length;
           if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));

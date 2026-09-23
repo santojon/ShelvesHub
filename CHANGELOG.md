@@ -17,14 +17,22 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   (`config/uioverrides/movies/deck_startup.webm`), so the Deck UI plays it on
   launch — it uses Steam's native startup-movie feature rather than drawing an
   overlay. It is a live toggle: turning it on installs the movie immediately and
-  turning it off removes it, no restart needed. Two source cuts ship — a 1280x800
-  16:10 cut for the Steam Deck's native panel and a 1080p 16:9 cut for desktop —
-  and the matching one is chosen per platform. Because Steam plays a different
-  startup-movie file per device, the host installs the animation under every name
-  the platform might use (`deck_startup.webm` / `oled_startup.webm` on the Deck,
-  `bigpicture_startup.webm` on desktop). The animation plays on the next boot into
-  the Steam gamepad UI; on SteamOS you may also need to select it under Settings →
-  Customization → Startup Movie. Sources live under `assets/boot/`.
+  turning it off removes it. Because the movie is only read by Steam on its next
+  start, toggling it now surfaces the **Restart to apply** banner (which restarts
+  Steam so the startup movie replays). Two source cuts ship — a 1280x800 16:10 cut
+  for the Steam Deck's native panel and a 1080p 16:9 cut for desktop — and the
+  matching one is chosen per platform. Because Steam plays a different startup-movie
+  file per device, the host installs the animation (as a symlink, the way animation
+  managers do, falling back to a copy) under every name the platform might use —
+  `deck_startup.webm`, `oled_startup.webm`, `steam_os_startup.webm`,
+  `steam_os_family_startup.webm` and `bigpicture_startup.webm` on SteamOS,
+  `bigpicture_startup.webm` on desktop. Sources live under `assets/boot/`.
+- **Experimental: desktop-client shelves.** A `desktop_ui` toggle (off by default,
+  shown on macOS/Windows). By default the loader hosts the shelves only while the
+  Steam gamepad / Big Picture UI is on screen and stands down in the plain desktop
+  client (where the gamepad Home shelves read wrong and aren't reachable by
+  gamepad), clearing an existing injection on the transition. Turn it on to inject
+  in the desktop client too.
 - **Per-platform recovery command.** When the loader detects the Steam UI has
   collapsed (a black screen), it now runs a sensible default recovery for the host —
   SteamOS restarts the Gaming Mode session, macOS/Windows bounce Steam back into

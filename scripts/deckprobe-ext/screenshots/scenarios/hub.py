@@ -21,7 +21,14 @@ import time
 from pathlib import Path
 from typing import Dict
 
-from deckprobe.screenshots.lib.nav import navigate_to_ds_qam, close_qam, _qam_eval, OPEN_QAM_EXPR
+from deckprobe.screenshots.lib.nav import (
+    navigate_to_ds_qam,
+    close_qam,
+    navigate_home,
+    home_via_mainmenu,
+    _qam_eval,
+    OPEN_QAM_EXPR,
+)
 from deckprobe.screenshots.lib.capture import _capture
 from deckprobe.screenshots.lib.cdp import Session, list_targets
 from deckprobe.screenshots.lib.registry import register
@@ -170,3 +177,108 @@ def hub_logs(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
                 break
         time.sleep(0.5)
     return _shot(sjc, host, port, out_dir, {"sec-troubleshooting": True}, "hub-logs.png", extra=open_logs)
+
+
+# ── Deck Shelves views (the tab this host opens + the Home it hosts) ─────────
+def _scope_clip_expr(sel: str) -> str:
+    # The DS editor scope's box can be far taller than its content (a tall QAM
+    # document with everything at the top). Clip to the lowest child that carries
+    # actual text — the last real row — so the shot doesn't keep a big empty black
+    # tail; fall back to a height cap if that finds nothing.
+    return (
+        "(function(){var p=document.querySelector(%s);if(!p)return null;"
+        "var r=p.getBoundingClientRect();if(r.width<50||r.height<50)return null;"
+        "var maxB=0;var all=p.querySelectorAll('*');"
+        "for(var i=0;i<all.length;i++){var e=all[i];var t=false;"
+        "for(var n=e.firstChild;n;n=n.nextSibling){if(n.nodeType===3&&n.textContent.trim()){t=true;break;}}"
+        "if(!t)continue;var c=e.getBoundingClientRect();"
+        "if(c.width>4&&c.height>4&&c.bottom>maxB&&c.bottom<=r.bottom+1)maxB=c.bottom;}"
+        "var bottom=maxB>r.top+80?maxB+16:Math.min(r.bottom,r.top+1500);"
+        "return {x:0,y:0,width:Math.ceil(r.right)+8,height:Math.ceil(bottom)+4,scale:1};})()"
+    ) % json.dumps(sel)
+
+
+def _capture_scope(host: str, port: int, out_path: Path, sel: str):
+    """Capture a QuickAccess target, clipped to the first element matching `sel`."""
+    expr = _scope_clip_expr(sel)
+    for _ in range(5):
+        for t in [x for x in list_targets(host, port) if "quickaccess" in (x.get("title", "") or "").lower()]:
+            sess = None
+            try:
+                sess = Session.open(host, port, t)
+                clip = sess.evaluate(expr)
+                if isinstance(clip, dict):
+                    p = _capture(sess, out_path, clip=clip, from_surface=True)
+                    if p and p.exists() and p.stat().st_size > 3000:
+                        return p
+            except Exception:
+                pass
+            finally:
+                if sess is not None:
+                    try:
+                        sess.close()
+                    except Exception:
+                        pass
+        time.sleep(0.7)
+    return out_path if out_path.exists() else None
+
+
+def _capture_bigpicture(host: str, port: int, out_path: Path):
+    """Capture the full Big Picture window surface (the Home lives here)."""
+    for _ in range(5):
+        for t in list_targets(host, port):
+            title = (t.get("title", "") or "").lower()
+            url = (t.get("url", "") or "").lower()
+            if "big picture" in title or "gamepad" in url:
+                sess = None
+                try:
+                    sess = Session.open(host, port, t)
+                    p = _capture(sess, out_path, clip=None, from_surface=True)
+                    if p and p.exists() and p.stat().st_size > 5000:
+                        return p
+                except Exception:
+                    pass
+                finally:
+                    if sess is not None:
+                        try:
+                            sess.close()
+                        except Exception:
+                            pass
+        time.sleep(0.7)
+    return out_path if out_path.exists() else None
+
+
+@register("qam_tab")
+def qam_tab(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
+    """The Deck Shelves editor tab in the QAM — its options (NOT the ShelvesHub
+    panel, which `hub_panel` captures). Reaches the DS editor scope exactly the
+    way the hub scenarios do (via `navigate_to_ds_qam`, which owns the QAM
+    toggling — a manual close-first desyncs it), just WITHOUT clicking open-hub."""
+    reached = False
+    for _ in range(4):
+        if navigate_to_ds_qam(sjc, host, port):
+            reached = True
+            break
+        time.sleep(1.0)
+    if not reached:
+        close_qam(sjc)
+        return {}
+    _set_locale(sjc, host, port)
+    time.sleep(0.6)
+    out = out_dir / "qam-tab.png"
+    p = _capture_scope(host, port, out, ".deck-shelves-qam-scope")
+    close_qam(sjc)
+    return {"qam-tab.png": p} if p else {}
+
+
+@register("home")
+def home(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
+    """The Deck Shelves Home — the custom shelves this host injects, full-screen."""
+    _set_locale(sjc, host, port)
+    close_qam(sjc)
+    if not home_via_mainmenu(sjc, host, port):
+        navigate_home(sjc)
+    time.sleep(2.0)
+    out = out_dir / "home.png"
+    p = _capture_bigpicture(host, port, out)
+    return {"home.png": p} if p else {}

@@ -12,10 +12,14 @@ is pushed — the notes below are picked up and published with the release.
   universal build, so ShelvesHub launches natively on any Mac.
 - **Optional boot animation.** Turn it on to play a short Deck Shelves startup
   animation when the Steam gamepad UI launches — it uses Steam's own startup-movie
-  feature; turning it on installs it right away and turning it off removes it, no
-  restart. A Deck-native 1280×800 cut and a 1080p desktop cut ship, and the right
-  one is used for your device. It shows on the next boot into the gamepad UI (on
-  SteamOS, also set it under Settings → Customization → Startup Movie). Off by default.
+  feature. A Deck-native 1280×800 cut and a 1080p desktop cut ship, and the right
+  one is used for your device; the animation is placed under every startup-movie
+  name Steam might use so it takes effect whatever your device. Toggling it shows a
+  **Restart to apply** button (the movie is replayed when Steam restarts). Off by default.
+- **Shelves stay in the gamepad UI (experimental desktop toggle).** On macOS and
+  Windows the host now hosts your shelves only while Steam's gamepad / Big Picture
+  UI is on screen, not in the plain desktop client where they don't belong. A new
+  experimental toggle lets you opt back into the desktop client if you want it.
 - **Automatic black-screen recovery.** If the Steam interface ever collapses, the
   host now runs a recovery step made for your system — restarting the Steam Deck's
   Gaming Mode session, or bringing Steam back into Big Picture on macOS and Windows.

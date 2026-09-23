@@ -39,6 +39,8 @@
   "cfg_mode": "Modo de propriedade",
   "cfg_boot_movie": "Animação de inicialização",
   "cfg_boot_movie_sub": "Reproduz uma animação ao abrir a interface de controle do Steam",
+  "cfg_desktop_ui": "Prateleiras no cliente desktop (experimental)",
+  "cfg_desktop_ui_sub": "Também mostra as prateleiras no cliente desktop, não só no Big Picture",
   "sec_updates": "Atualizações",
   "updates_managed_elsewhere": "As atualizações são gerenciadas pelo carregador de plugins aqui.",
   "cfg_force_owner_sub": "Assumir o controle mesmo se houver outro carregador",
