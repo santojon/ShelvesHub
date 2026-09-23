@@ -147,6 +147,32 @@ def _shot(sjc, host, port, out_dir, want_open, name, extra=None):
     return {name: p} if p else {}
 
 
+@register("qam_tab")
+def qam_tab(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
+    """The Deck Shelves editor tab in the QAM — its options (NOT the ShelvesHub
+    panel, which `hub_panel` captures). Registered FIRST so the full flow captures
+    it while the QAM is fresh — the hub scenarios' repeated navigation degrades the
+    QAM toggle for the rest of the run. Reaches the DS editor scope via
+    `navigate_to_ds_qam` (which owns the QAM toggling — a manual close-first
+    desyncs it), just WITHOUT clicking open-hub. Uses the helpers defined further
+    down (resolved at call time)."""
+    reached = False
+    for _ in range(4):
+        if navigate_to_ds_qam(sjc, host, port):
+            reached = True
+            break
+        time.sleep(1.0)
+    if not reached:
+        close_qam(sjc)
+        return {}
+    _set_locale(sjc, host, port)
+    time.sleep(0.6)
+    out = out_dir / "qam-tab.png"
+    p = _capture_scope(host, port, out, ".deck-shelves-qam-scope", max_h=760)
+    close_qam(sjc)
+    return {"qam-tab.png": p} if p else {}
+
+
 @register("hub_panel")
 def hub_panel(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
     """ShelvesHub panel — the Updates section open (master auto-update +
@@ -180,27 +206,23 @@ def hub_logs(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
 
 
 # ── Deck Shelves views (the tab this host opens + the Home it hosts) ─────────
-def _scope_clip_expr(sel: str) -> str:
-    # The DS editor scope's box can be far taller than its content (a tall QAM
-    # document with everything at the top). Clip to the lowest child that carries
-    # actual text — the last real row — so the shot doesn't keep a big empty black
-    # tail; fall back to a height cap if that finds nothing.
+def _scope_clip_expr(sel: str, max_h: int = 0) -> str:
+    # Clip from the QAM document ORIGIN (0,0) so the tab header — the "Deck
+    # Shelves" title, its icons, and the left tab-icon strip, all ABOVE the
+    # `.deck-shelves-qam-scope` element — is included, not just the options list.
+    # `max_h` (CSS px, absolute from the top) caps the height so the shot stops at
+    # the section options instead of the whole tall scrollable tab.
+    cap = ("Math.min(r.bottom, %d)" % max_h) if max_h else "r.bottom"
     return (
         "(function(){var p=document.querySelector(%s);if(!p)return null;"
         "var r=p.getBoundingClientRect();if(r.width<50||r.height<50)return null;"
-        "var maxB=0;var all=p.querySelectorAll('*');"
-        "for(var i=0;i<all.length;i++){var e=all[i];var t=false;"
-        "for(var n=e.firstChild;n;n=n.nextSibling){if(n.nodeType===3&&n.textContent.trim()){t=true;break;}}"
-        "if(!t)continue;var c=e.getBoundingClientRect();"
-        "if(c.width>4&&c.height>4&&c.bottom>maxB&&c.bottom<=r.bottom+1)maxB=c.bottom;}"
-        "var bottom=maxB>r.top+80?maxB+16:Math.min(r.bottom,r.top+1500);"
-        "return {x:0,y:0,width:Math.ceil(r.right)+8,height:Math.ceil(bottom)+4,scale:1};})()"
-    ) % json.dumps(sel)
+        "return {x:0,y:0,width:Math.ceil(r.right)+8,height:Math.ceil(%s)+4,scale:1};})()"
+    ) % (json.dumps(sel), cap)
 
 
-def _capture_scope(host: str, port: int, out_path: Path, sel: str):
+def _capture_scope(host: str, port: int, out_path: Path, sel: str, max_h: int = 0):
     """Capture a QuickAccess target, clipped to the first element matching `sel`."""
-    expr = _scope_clip_expr(sel)
+    expr = _scope_clip_expr(sel, max_h)
     for _ in range(5):
         for t in [x for x in list_targets(host, port) if "quickaccess" in (x.get("title", "") or "").lower()]:
             sess = None
@@ -246,29 +268,6 @@ def _capture_bigpicture(host: str, port: int, out_path: Path):
                             pass
         time.sleep(0.7)
     return out_path if out_path.exists() else None
-
-
-@register("qam_tab")
-def qam_tab(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
-    """The Deck Shelves editor tab in the QAM — its options (NOT the ShelvesHub
-    panel, which `hub_panel` captures). Reaches the DS editor scope exactly the
-    way the hub scenarios do (via `navigate_to_ds_qam`, which owns the QAM
-    toggling — a manual close-first desyncs it), just WITHOUT clicking open-hub."""
-    reached = False
-    for _ in range(4):
-        if navigate_to_ds_qam(sjc, host, port):
-            reached = True
-            break
-        time.sleep(1.0)
-    if not reached:
-        close_qam(sjc)
-        return {}
-    _set_locale(sjc, host, port)
-    time.sleep(0.6)
-    out = out_dir / "qam-tab.png"
-    p = _capture_scope(host, port, out, ".deck-shelves-qam-scope")
-    close_qam(sjc)
-    return {"qam-tab.png": p} if p else {}
 
 
 @register("home")
