@@ -26,10 +26,21 @@
     .pill.ok { color: #15a34a; border-color: rgba(21,163,74,.4); }
     .note { color: var(--fg-dim); font-size: 12px; margin-top: 24px; line-height: 1.5; }
     a.back { color: var(--accent); text-decoration: none; font-size: 13px; }
-    .chart-cap { color: var(--fg-dim); font-size: 11px; margin-top: 6px; }
+    .chart-cap { color: var(--fg-dim); font-size: 11px; margin-top: 8px; }
+    .chart-empty { color: var(--fg-dim); font-size: 13px; }
     .bar { flex: 0 0 45%; height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
     .bar-fill { display: block; height: 100%; background: var(--accent); }
     .bar-num { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--fg-dim); font-size: 13px; min-width: 48px; text-align: right; }
+    /* Chart internals */
+    .chart { position: relative; }
+    .chart svg { display: block; width: 100%; }
+    .pt { fill: var(--bg-elev); stroke: var(--accent); stroke-width: 2; cursor: pointer; transition: r .1s ease; }
+    .pt:hover { r: 5.5; }
+    .vmark { stroke: var(--fg-dim); stroke-width: 1; stroke-dasharray: 3 3; opacity: .5; }
+    .vlabel { fill: var(--fg-dim); font-size: 10px; font-family: inherit; }
+    .chart-tip { position: fixed; z-index: 50; pointer-events: none; background: var(--bg-elev); border: 1px solid var(--border); box-shadow: var(--card-shadow); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--fg); opacity: 0; transform: translateY(4px); transition: opacity .1s ease, transform .1s ease; white-space: nowrap; }
+    .chart-tip.show { opacity: 1; transform: translateY(0); }
+    .chart-tip b { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -50,11 +61,21 @@
     </div>
 
     <section>
+      <h2>Downloads over time</h2>
+      <div class="card"><div class="chart" id="dl-trend"><div class="chart-empty">Loading…</div></div></div>
+    </section>
+
+    <section>
+      <h2>By release</h2>
+      <div class="card"><div id="by-release">—</div></div>
+    </section>
+
+    <section>
       <h2>Platform coverage</h2>
       <div class="card">
         <div class="row"><span class="lbl">SteamOS (Steam Deck)</span><span class="pill ok">shipped</span></div>
         <div class="row"><span class="lbl">Linux</span><span class="pill ok">shipped</span></div>
-        <div class="row"><span class="lbl">macOS</span><span class="pill ok">shipped</span></div>
+        <div class="row"><span class="lbl">macOS (Intel + Apple Silicon)</span><span class="pill ok">shipped</span></div>
         <div class="row"><span class="lbl">Windows</span><span class="pill">CI-built · install test pending</span></div>
       </div>
     </section>
@@ -70,22 +91,17 @@
       </div>
     </section>
 
-    <section>
-      <h2>Downloads over time</h2>
-      <div class="card"><div id="dl-trend">Not enough history yet — populated after a few weekly snapshots.</div></div>
-    </section>
-
-    <section>
-      <h2>By release</h2>
-      <div class="card"><div id="by-release">—</div></div>
-    </section>
-
     <p class="note">
       Usage numbers refresh weekly from <code>site/stats/*.json</code> (the
-      <b>Ops · Site stats</b> workflow). Per-version metric trends and CI-report history
-      are planned for a later phase. Quality-gate rows reflect the CI gate on the default branch.
+      <b>Ops · Site stats</b> workflow), which appends one dated row per run to
+      <code>site/reports/stats/history.json</code>. The downloads trend is anchored at each
+      release date (v0.1.0 starts the series at zero) and grows as snapshots accrue; hover a
+      point for its date and cumulative total. Quality-gate rows reflect the CI gate on the
+      default branch.
     </p>
   </div>
+
+  <div class="chart-tip" id="chart-tip"></div>
 
   <script>
     (function () {
@@ -94,6 +110,7 @@
         return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
       };
       var set = function (id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+
       fetch("../stats/summary.json", { cache: "no-store" })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (s) {
@@ -107,40 +124,83 @@
         })
         .catch(function () {});
 
-      function lineChart(rows, key) {
-        rows = (rows || []).filter(function (r) { return r && r.date; });
-        if (rows.length < 2) return "Not enough history yet — populated after a few weekly snapshots.";
-        var w = 600, h = 140, pad = 10, n = rows.length;
-        var vals = rows.map(function (r) { return +r[key] || 0; });
-        var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals), span = (max - min) || 1;
-        var pts = rows.map(function (r, i) {
-          var x = pad + (i / (n - 1)) * (w - 2 * pad);
-          var y = h - pad - ((vals[i] - min) / span) * (h - 2 * pad);
-          return x.toFixed(1) + "," + y.toFixed(1);
-        }).join(" ");
-        return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="' + h + '" preserveAspectRatio="none">'
-          + '<polygon points="' + pad + ',' + (h - pad) + ' ' + pts + ' ' + (w - pad) + ',' + (h - pad) + '" style="fill:var(--accent);opacity:.12"/>'
-          + '<polyline points="' + pts + '" style="fill:none;stroke:var(--accent);stroke-width:2"/></svg>'
-          + '<div class="chart-cap">' + rows[0].date + ' → ' + rows[n - 1].date + ' · latest ' + fmt(vals[n - 1]) + '</div>';
+      // ── Shared floating tooltip for every chart point ────────────────────
+      var tip = document.getElementById("chart-tip");
+      function showTip(html, x, y) {
+        tip.innerHTML = html;
+        tip.classList.add("show");
+        var r = tip.getBoundingClientRect();
+        tip.style.left = Math.max(8, Math.min(window.innerWidth - r.width - 8, x - r.width / 2)) + "px";
+        tip.style.top = Math.max(8, y - r.height - 12) + "px";
       }
+      function hideTip() { tip.classList.remove("show"); }
+
+      // ── Downloads-over-time trend: area + line, hoverable points, and a
+      // dashed version marker at each release date. Self-contained SVG. ──
+      function trendChart(rows, releases) {
+        rows = (rows || []).filter(function (r) { return r && r.date; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+        var host = document.getElementById("dl-trend");
+        if (rows.length < 2) { host.innerHTML = '<div class="chart-empty">Not enough history yet — populated as weekly snapshots accrue.</div>'; return; }
+        var w = 640, h = 180, padX = 14, padTop = 22, padBot = 24, n = rows.length;
+        var vals = rows.map(function (r) { return +r.downloads || 0; });
+        var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals), span = (max - min) || 1;
+        var X = function (i) { return padX + (i / (n - 1)) * (w - 2 * padX); };
+        var Y = function (v) { return h - padBot - ((v - min) / span) * (h - padTop - padBot); };
+        var pts = rows.map(function (r, i) { return X(i).toFixed(1) + "," + Y(vals[i]).toFixed(1); }).join(" ");
+
+        var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Downloads over time">';
+        // Version markers at dates that match a release.
+        var relByDate = {};
+        (releases || []).forEach(function (r) { if (r && r.date && r.tag) relByDate[r.date] = r.tag; });
+        rows.forEach(function (r, i) {
+          if (!relByDate[r.date]) return;
+          var x = X(i).toFixed(1);
+          svg += '<line class="vmark" x1="' + x + '" y1="' + padTop + '" x2="' + x + '" y2="' + (h - padBot) + '"/>';
+          svg += '<text class="vlabel" x="' + x + '" y="' + (padTop - 8) + '" text-anchor="middle">' + relByDate[r.date] + '</text>';
+        });
+        // Area + line.
+        svg += '<polygon points="' + padX + ',' + (h - padBot) + ' ' + pts + ' ' + (w - padX) + ',' + (h - padBot) + '" style="fill:var(--accent);opacity:.12"/>';
+        svg += '<polyline points="' + pts + '" style="fill:none;stroke:var(--accent);stroke-width:2"/>';
+        // Hoverable points (data on each circle; tooltip is delegated below).
+        rows.forEach(function (r, i) {
+          svg += '<circle class="pt" data-pt cx="' + X(i).toFixed(1) + '" cy="' + Y(vals[i]).toFixed(1) + '" r="3.5" data-date="' + r.date + '" data-val="' + vals[i] + '"/>';
+        });
+        svg += '</svg><div class="chart-cap">' + rows[0].date + ' → ' + rows[n - 1].date + ' · latest ' + fmt(vals[n - 1]) + ' cumulative downloads</div>';
+        host.innerHTML = svg;
+
+        // Delegated tooltip: works for every point, including re-rendered ones.
+        host.addEventListener("mousemove", function (e) {
+          var c = e.target && e.target.getAttribute && e.target.getAttribute("data-pt") !== null ? e.target : null;
+          if (!c) { hideTip(); return; }
+          var box = c.getBoundingClientRect();
+          showTip("<b>" + c.getAttribute("data-val") + "</b> downloads<br>" + c.getAttribute("data-date"),
+            box.left + box.width / 2, box.top);
+        });
+        host.addEventListener("mouseleave", hideTip);
+      }
+
       function releaseBars(rels) {
         rels = (rels || []).filter(function (r) { return r && r.tag; });
         if (!rels.length) return "No releases yet.";
         var max = Math.max.apply(null, rels.map(function (r) { return +r.downloads || 0; })) || 1;
         return rels.slice().reverse().map(function (r) {
           var pct = Math.round(((+r.downloads || 0) / max) * 100);
-          return '<div class="row"><span class="lbl">' + r.tag + '</span>'
+          return '<div class="row"><span class="lbl">' + r.tag + (r.date ? ' <span style="color:var(--fg-dim);font-size:12px">· ' + r.date + '</span>' : '') + '</span>'
             + '<span class="bar"><span class="bar-fill" style="width:' + pct + '%"></span></span>'
             + '<span class="bar-num">' + fmt(+r.downloads || 0) + '</span></div>';
         }).join("");
       }
-      function load(url, id, render) {
-        fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (d) { var el = document.getElementById(id); if (el) el.innerHTML = render(d); } })
-          .catch(function () {});
-      }
-      load("stats/history.json", "dl-trend", function (h) { return lineChart(h, "downloads"); });
-      load("../stats/releases.json", "by-release", function (r) { return releaseBars(r); });
+
+      // Load the history + releases together so the trend can annotate release dates.
+      Promise.all([
+        fetch("stats/history.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
+        fetch("../stats/releases.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+      ]).then(function (res) {
+        var history = res[0] || [], releases = res[1] || [];
+        trendChart(history, releases);
+        var br = document.getElementById("by-release");
+        if (br) br.innerHTML = releaseBars(releases);
+      });
     })();
   </script>
 </body>

@@ -70,6 +70,29 @@ pub fn hosting_paused() -> bool {
     HOSTING_PAUSED.load(Ordering::Relaxed)
 }
 
+/// Live state of the optional boot animation. Toggled by the `setBootMovie` RPC,
+/// which installs or removes the movie immediately; the source WebM to install
+/// from is fixed at boot. The atomic mirrors the config flag so the hub screen
+/// echoes the current on/off without a restart.
+static BOOT_MOVIE_ENABLED: AtomicBool = AtomicBool::new(false);
+static BOOT_MOVIE_SOURCE: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_boot_movie_enabled(value: bool) {
+    BOOT_MOVIE_ENABLED.store(value, Ordering::Relaxed);
+}
+
+pub fn boot_movie_enabled() -> bool {
+    BOOT_MOVIE_ENABLED.load(Ordering::Relaxed)
+}
+
+pub fn set_boot_movie_source(path: PathBuf) {
+    let _ = BOOT_MOVIE_SOURCE.set(path);
+}
+
+pub fn boot_movie_source() -> Option<&'static PathBuf> {
+    BOOT_MOVIE_SOURCE.get()
+}
+
 /// Record whether the Deck Shelves bundle is currently active in the renderer.
 pub fn set_injected(value: bool) {
     INJECTED.store(value, Ordering::Relaxed);

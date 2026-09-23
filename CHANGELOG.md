@@ -6,6 +6,37 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- **macOS now runs on Intel Macs too.** The macOS package ships a **universal
+  binary** (`lipo`-merged `arm64` + `x86_64`), so ShelvesHub runs natively on both
+  Apple Silicon and Intel Macs — previously the build was Apple-Silicon-only and
+  would not launch on an Intel Mac. CI verifies the shipped macOS binary is
+  universal and fails the release if it isn't.
+- **Optional boot animation.** A `boot_movie` toggle (off by default) installs a
+  short Deck Shelves startup animation into Steam's own startup-movie slot
+  (`config/uioverrides/movies/deck_startup.webm`), so the Deck UI plays it on
+  launch — it uses Steam's native startup-movie feature rather than drawing an
+  overlay. It is a live toggle: turning it on installs the movie immediately and
+  turning it off removes it, no restart needed. Two source cuts ship — a 1280x800
+  16:10 cut for the Steam Deck's native panel and a 1080p 16:9 cut for desktop —
+  and the matching one is chosen per platform. Because Steam plays a different
+  startup-movie file per device, the host installs the animation under every name
+  the platform might use (`deck_startup.webm` / `oled_startup.webm` on the Deck,
+  `bigpicture_startup.webm` on desktop). The animation plays on the next boot into
+  the Steam gamepad UI; on SteamOS you may also need to select it under Settings →
+  Customization → Startup Movie. Sources live under `assets/boot/`.
+- **Per-platform recovery command.** When the loader detects the Steam UI has
+  collapsed (a black screen), it now runs a sensible default recovery for the host —
+  SteamOS restarts the Gaming Mode session, macOS/Windows bounce Steam back into
+  Big Picture — instead of only logging a hint. `SHELVES_RECOVER_CMD` (or config
+  `recover_cmd`) still overrides it.
+
+### Changed
+- **The host's own settings store now preserves unknown keys.** If a newer
+  ShelvesHub writes a setting an older build doesn't recognise, the older build no
+  longer drops it when it reads and re-saves the file — so downgrading or running
+  mixed versions across machines can't silently lose settings (version-skew safe).
+
 ## [0.1.0] - 2026-09-16
 
 ### Added

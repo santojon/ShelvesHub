@@ -21,7 +21,7 @@
 
 ShelvesHub is the independent host service for [Deck Shelves](https://github.com/santojon/Deck-Shelves). It injects the Deck Shelves bundle into the Steam Big Picture UI and provides the runtime API the bundle calls into — no plugin loader required.
 
-**Primary target:** SteamOS / Steam Deck. Also supported: Linux, macOS, Windows.
+**Primary target:** SteamOS / Steam Deck. Also supported: Linux, macOS (Intel and Apple Silicon — the download is a universal binary), Windows.
 
 ---
 
@@ -89,7 +89,7 @@ Manages a system-level `shelveshub.service` via systemd.
 
 ### macOS
 
-Download **`Install ShelvesHub.app`** (a clickable installer app carrying the ShelvesHub icon) from the latest release and double-click it. On first run, right-click → Open to bypass Gatekeeper. A plain `install-mac.command` script is also published.
+Download **`Install ShelvesHub.app`** (a clickable installer app carrying the ShelvesHub icon) from the latest release and double-click it. On first run, right-click → Open to bypass Gatekeeper. A plain `install-mac.command` script is also published. The macOS build is a **universal binary**, so it runs natively on both Apple Silicon and Intel Macs.
 
 ### Windows
 

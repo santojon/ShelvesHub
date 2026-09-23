@@ -28,7 +28,9 @@ body {
   margin: 0;
   font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
   color: var(--fg);
-  background: var(--bg);
+  /* The top glow lives on the page (not the hero) so it stays anchored to the
+     top whether or not the fresh-release banner is showing above the hero. */
+  background: var(--bg) radial-gradient(1200px 400px at 50% -80px, rgba(26, 159, 255, 0.14), transparent 70%) no-repeat;
 }
 img { max-width: 100%; }
 a { color: var(--accent); text-decoration: none; }
@@ -39,7 +41,6 @@ a:hover { text-decoration: underline; }
 .hero {
   text-align: center;
   padding: 72px 20px 56px;
-  background: radial-gradient(1200px 400px at 50% -10%, rgba(26, 159, 255, 0.14), transparent 70%);
 }
 .hero img.logo { width: 96px; height: 96px; }
 .hero h1 { font-size: 2.4rem; margin: 18px 0 6px; letter-spacing: -0.02em; }
@@ -104,4 +105,59 @@ section .lead { color: var(--fg-dim); margin: 0 0 28px; max-width: 680px; }
 .faq summary { font-weight: 600; cursor: pointer; }
 .faq p { color: var(--fg-dim); margin: 10px 0 0; }
 
-footer { border-top: 1px solid var(--border); padding: 32px 0 56px; color: var(--fg-dim); font-size: 0.9rem; text-align: center; }
+footer { border-top: 1px solid var(--border); padding: 44px 0 40px; color: var(--fg-dim); font-size: 0.9rem; }
+.foot-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 28px; text-align: left; }
+.foot-brand .foot-logo { display: inline-flex; align-items: center; gap: 10px; color: var(--fg); font-weight: 700; font-size: 1.05rem; }
+.foot-brand .foot-logo:hover { text-decoration: none; }
+.foot-brand .foot-logo img { width: 34px; height: 34px; }
+.foot-brand p { margin: 12px 0 0; max-width: 42ch; line-height: 1.5; }
+.foot-brand .heart { color: #ff5e5b; }
+.foot-col h4 { margin: 0 0 10px; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg); }
+.foot-col a { display: block; padding: 3px 0; color: var(--fg-dim); }
+.foot-col a:hover { color: var(--accent); }
+.foot-rule { border: none; border-top: 1px solid var(--border); margin: 32px 0 20px; }
+.foot-bottom { text-align: center; margin: 0; }
+
+@media (max-width: 720px) {
+  .foot-grid { grid-template-columns: 1fr 1fr; gap: 24px; }
+  .foot-brand { grid-column: 1 / -1; }
+}
+
+/* Language switcher — small pill, fixed top-right */
+.lang-switch { position: fixed; top: 12px; right: 14px; z-index: 90; display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elev); box-shadow: var(--card-shadow); }
+.lang-switch button { border: none; background: transparent; color: var(--fg-dim); font: inherit; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.03em; padding: 4px 10px; border-radius: 999px; cursor: pointer; line-height: 1; }
+.lang-switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.lang-switch button:hover[aria-pressed="false"] { color: var(--fg); }
+
+/* Fresh-release CTA — top of the page, no divider; a light gradient banner in
+   the same style as the plugin site's top CTA (fixed light card in both themes). */
+.fresh { border-top: none; padding: 22px 0 0; }
+.fresh-box { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 16px 24px; border-radius: 16px; border: 1px solid rgba(26, 159, 255, 0.35); background: linear-gradient(120deg, #eef5ff, #dcebff 55%, #cfe4ff); box-shadow: 0 16px 40px rgba(20, 50, 120, 0.16); color: #0b1f47; }
+.fresh-txt { display: flex; align-items: center; gap: 16px; }
+.fresh-ico { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 auto; border-radius: 12px; color: #1668d6; background: rgba(26, 159, 255, 0.16); }
+.fresh-ico svg { width: 22px; height: 22px; }
+.fresh-txt h2 { margin: 0; font-size: 1.12rem; border: none; color: #0b1f47; }
+.fresh-txt p { margin: 2px 0 0; color: #3a5488; font-size: 0.9rem; }
+.fresh-box .btn.primary { background: #1a9fff; color: #fff; border-color: transparent; box-shadow: 0 10px 24px rgba(26, 159, 255, 0.28); }
+
+/* Release notes */
+.rel-head { margin-bottom: 20px; }
+.ver-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 700; color: var(--accent); background: var(--bg-elev); background: color-mix(in srgb, var(--accent) 12%, var(--bg-elev)); border: 1px solid var(--border); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 999px; padding: 3px 10px; }
+.ver-chip svg { width: 15px; height: 15px; }
+#releases .date { color: var(--fg-dim); font-size: 0.9rem; margin: 8px 0 14px; }
+.rel-links { display: flex; gap: 10px; flex-wrap: wrap; }
+.rn-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.rn-list li { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--bg-elev); }
+.rn-list b { display: block; margin: 0 0 4px; font-size: 0.98rem; }
+.rn-list p { margin: 0; color: var(--fg-dim); font-size: 0.9rem; }
+
+/* Donation — discreet */
+.donate-box { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 20px 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); }
+.donate-box h2 { margin: 0; font-size: 1.15rem; border: none; }
+.donate-box p { margin: 4px 0 0; color: var(--fg-dim); font-size: 0.92rem; max-width: 46ch; }
+.btn.kofi { background: #ff5e5b; border-color: transparent; color: #fff; }
+.btn.kofi svg { color: #fff; }
+
+@media (max-width: 560px) {
+  .fresh-box, .donate-box { flex-direction: column; align-items: flex-start; }
+}

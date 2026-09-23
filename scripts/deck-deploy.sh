@@ -49,12 +49,14 @@ BIN="target/$TARGET/release/shelveshub"
 
 # ── Deploy binary + host runtime + bundle ───────────────────────────────────
 echo "[i] Deploying to $DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR ..."
-"${SSH[@]}" "mkdir -p '$REMOTE_HOME_DIR/bundle' '$REMOTE_HOME_DIR/runtime/backend' '/home/$DECK_USER/.config/systemd/user'"
+"${SSH[@]}" "mkdir -p '$REMOTE_HOME_DIR/bundle' '$REMOTE_HOME_DIR/runtime/backend' '$REMOTE_HOME_DIR/assets/boot' '/home/$DECK_USER/.config/systemd/user'"
 rsync -az -e "$RSH" "$BIN" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/shelveshub"
 rsync -az -e "$RSH" runtime/shelves-host.js "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/shelves-host.js"
 rsync -az -e "$RSH" runtime/i18n/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/i18n/"
 rsync -az -e "$RSH" runtime/backend/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/backend/"
 rsync -az -e "$RSH" "$BUNDLE" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/bundle/index.js"
+# Optional boot-animation sources (both cuts; the daemon picks the Deck's 1280x800).
+rsync -az -e "$RSH" assets/boot/deck_startup.webm assets/boot/deck_startup_1280x800.webm "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/assets/boot/"
 # Seed the config only if absent — never overwrite a device-side edit. The hub's
 # advanced-config editor writes this file and the daemon reads it as authoritative,
 # so a redeploy must keep the user's values (interval, native_qam, …).

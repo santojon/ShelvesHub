@@ -574,7 +574,18 @@ fn reload_renderer(config: &Config) {
 /// checks observe whether the UI windows come back. Deliberately fire-and-forget
 /// so a slow/hanging recovery never blocks the injection loop.
 fn run_recovery(cmd: &str) {
-    match std::process::Command::new("sh").arg("-c").arg(cmd).spawn() {
+    // Windows has no `sh`; use the platform shell so a per-OS default (and any
+    // override) runs where it is deployed.
+    let mut command = if cfg!(windows) {
+        let mut c = std::process::Command::new("cmd");
+        c.arg("/C").arg(cmd);
+        c
+    } else {
+        let mut c = std::process::Command::new("sh");
+        c.arg("-c").arg(cmd);
+        c
+    };
+    match command.spawn() {
         Ok(_) => log_info("loader", &format!("Recovery command launched: {cmd}")),
         Err(e) => log_error("loader", &format!("Recovery command failed to launch: {e}")),
     }

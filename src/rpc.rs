@@ -358,6 +358,46 @@ fn dispatch(body: &str) -> String {
             log_info("rpc", &format!("Hosting paused set to {paused}."));
             ok(format!(r#"{{"paused":{paused}}}"#))
         }
+        // Optional boot animation: a live on/off toggle (not a restart-required
+        // config value). Args: a bool (or `{ enabled }`). Turning it on installs
+        // the bundled startup movie into Steam's slot immediately; off removes it.
+        // The choice is persisted to the config file so it survives a restart.
+        Some("setBootMovie") => {
+            let enabled = parsed
+                .as_ref()
+                .and_then(|v| v.get("args"))
+                .and_then(|a| {
+                    a.as_bool()
+                        .or_else(|| a.get("enabled").and_then(Value::as_bool))
+                })
+                .unwrap_or(false);
+            let Some(source) = state::boot_movie_source() else {
+                return err("boot movie source not known");
+            };
+            match crate::bootmovie::apply(enabled, source) {
+                Ok(_) => {
+                    state::set_boot_movie_enabled(enabled);
+                    // Persist to the config file so the choice survives a restart.
+                    if let Some(path) = state::config_file_path() {
+                        let mut obj = std::fs::read_to_string(path)
+                            .ok()
+                            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                            .and_then(|v| v.as_object().cloned())
+                            .unwrap_or_default();
+                        obj.insert("boot_movie".to_string(), Value::Bool(enabled));
+                        if let Ok(out) = serde_json::to_string_pretty(&Value::Object(obj)) {
+                            let _ = std::fs::write(path, out);
+                        }
+                    }
+                    log_info("rpc", &format!("Boot movie set to {enabled}."));
+                    ok(format!(r#"{{"boot_movie":{enabled}}}"#))
+                }
+                Err(e) => {
+                    log_error("rpc", &format!("setBootMovie failed: {e}"));
+                    err(&e)
+                }
+            }
+        }
         // Advanced configuration mirror (read): the effective operational config +
         // which keys are editable + live state (paused / pending hub update).
         Some("getRuntimeConfig") => {
@@ -368,6 +408,12 @@ fn dispatch(body: &str) -> String {
                     serde_json::json!(EDITABLE_CONFIG_KEYS),
                 );
                 obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
+                // Live boot-animation state (toggled without a restart) overrides
+                // the boot snapshot so the hub screen echoes the current on/off.
+                obj.insert(
+                    "boot_movie".to_string(),
+                    Value::Bool(state::boot_movie_enabled()),
+                );
                 obj.insert(
                     "pending_hub_update".to_string(),
                     state::pending_hub_update().map_or(Value::Null, Value::String),

@@ -32,24 +32,52 @@
   </script>
 </head>
 <body>
+  <!-- Language switcher: auto-detects the browser locale, remembers a manual
+       choice. English is the source; pt-BR is the first added translation. -->
+  <div class="lang-switch" role="group" aria-label="Language">
+    <button type="button" data-lang="en" aria-pressed="true">EN</button>
+    <button type="button" data-lang="pt" aria-pressed="false">PT</button>
+  </div>
+
+  <!-- FRESH-RELEASE CTA — sits at the very top (above the hero), no divider;
+       revealed by JS only when the latest release is <= 7 days old (the
+       date/version in the Release notes section are build-time content). -->
+  <section id="fresh" class="fresh" data-fresh-cta hidden>
+    <div class="wrap">
+      <div class="fresh-box">
+        <div class="fresh-txt">
+          <span class="fresh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span>
+          <div>
+            <h2 data-i18n-html="fresh.title">New release <span data-fresh-version></span> is out!</h2>
+            <p data-i18n="fresh.desc">A fresh version of ShelvesHub just dropped — update now.</p>
+          </div>
+        </div>
+        <a class="btn primary" data-fresh-dl href="https://github.com/santojon/ShelvesHub/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>
+          <span data-i18n="fresh.download">Download latest</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
   <header class="hero">
     <div class="wrap">
       <img class="logo" src="img/shelveshub-icon.svg" alt="ShelvesHub">
       <h1>ShelvesHub</h1>
-      <p class="tagline">Run <strong>Deck Shelves</strong> on Steam — no plugin loader required.</p>
-      <p class="sub">SteamOS · Linux · macOS · Windows</p>
+      <p class="tagline" data-i18n-html="hero.tagline"><strong>Deck Shelves.</strong> Anywhere Steam runs.</p>
+      <p class="sub" data-i18n-html="hero.sub">The official standalone host for <strong>Deck Shelves</strong> — SteamOS, Linux, macOS and Windows, with or without a plugin loader.</p>
       <div class="cta">
         <a class="btn primary" href="https://github.com/santojon/ShelvesHub/releases/latest">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>
-          Download
+          <span data-i18n="btn.download">Download</span>
         </a>
         <a class="btn" href="https://github.com/santojon/ShelvesHub">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 5 18 5.3 18 5.3c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
-          View on GitHub
+          <span data-i18n="btn.github">View on GitHub</span>
         </a>
         <a class="btn" href="https://santojon.github.io/Deck-Shelves/">
           <svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="2.6" width="3.7" height="11.8" rx="0.7"/><rect x="9.5" y="1" width="3.7" height="13.4" rx="0.7"/><rect x="14" y="3.4" width="3.7" height="11" rx="0.7" transform="rotate(-12 15.85 14.4)"/><rect x="3.3" y="14.4" width="17.4" height="2.1" rx="0.9"/></svg>
-          Deck Shelves
+          <span data-i18n="btn.deckshelves">Deck Shelves</span>
         </a>
       </div>
     </div>
@@ -57,23 +85,35 @@
 
   <section id="what">
     <div class="wrap">
-      <h2>What it is</h2>
-      <p class="lead">ShelvesHub is a small background service that brings <a href="https://github.com/santojon/Deck-Shelves">Deck Shelves</a> to your Steam Home screen on its own. It injects the Deck Shelves bundle into the Steam Big Picture interface over the Chrome DevTools Protocol and provides the runtime API the bundle calls into — so you get custom shelves without installing a plugin loader.</p>
+      <h2 data-i18n="what.h2">What it is</h2>
+      <p class="lead" data-i18n-html="what.lead">ShelvesHub is a small background service that brings <a href="https://github.com/santojon/Deck-Shelves">Deck Shelves</a> to your Steam Home screen on its own. It injects the Deck Shelves bundle into the Steam Big Picture interface over the Chrome DevTools Protocol and provides the runtime API the bundle calls into — so you get custom shelves without installing a plugin loader.</p>
       <div class="grid">
-        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><h3>No loader required</h3></div><p>Runs Deck Shelves directly on Steam. If another plugin loader is also installed, the two coexist — both tabs stay usable and edit the same settings.</p></div>
-        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg><h3>Cross-platform</h3></div><p>SteamOS and Steam Deck are the primary target; also runs on Linux, macOS and Windows, with one-click installers and scripts for each.</p></div>
-        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg><h3>Its own Quick Access tab</h3></div><p>Optionally adds a native Quick Access tab that opens the Deck Shelves editor directly, with its icon and header.</p></div>
-        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v8a2 2 0 0 1-1 1.7l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 12v10"/></svg><h3>Brings its own copy</h3></div><p>If Deck Shelves isn't present, the service fetches it — reusing a local copy, copying from an installed loader, or downloading the newest release.</p></div>
-        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg><h3>Keeps updated</h3></div><p>Can install a Deck Shelves update in place and reload, so updating never needs a manual file copy.</p></div>
-        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-4z"/></svg><h3>Resilient</h3></div><p>A health-gate and recovery keep the Steam interface safe; a fallback panel offers recovery actions and a merged, categorized log viewer.</p></div>
+        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><h3 data-i18n="card.loader.t">No loader required</h3></div><p data-i18n="card.loader.d">Runs Deck Shelves directly on Steam. If another plugin loader is also installed, the two coexist — both tabs stay usable and edit the same settings.</p></div>
+        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg><h3 data-i18n="card.cross.t">Cross-platform</h3></div><p data-i18n="card.cross.d">SteamOS and Steam Deck are the primary target; also runs on Linux, macOS and Windows, with one-click installers and scripts for each.</p></div>
+        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg><h3 data-i18n="card.tab.t">Its own Quick Access tab</h3></div><p data-i18n="card.tab.d">Optionally adds a native Quick Access tab that opens the Deck Shelves editor directly, with its icon and header.</p></div>
+        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v8a2 2 0 0 1-1 1.7l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 12v10"/></svg><h3 data-i18n="card.bring.t">Brings its own copy</h3></div><p data-i18n="card.bring.d">If Deck Shelves isn't present, the service fetches it — reusing a local copy, copying from an installed loader, or downloading the newest release.</p></div>
+        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg><h3 data-i18n="card.update.t">Keeps updated</h3></div><p data-i18n="card.update.d">Can install a Deck Shelves update in place and reload, so updating never needs a manual file copy.</p></div>
+        <div class="card"><div class="card-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-4z"/></svg><h3 data-i18n="card.resilient.t">Resilient</h3></div><p data-i18n="card.resilient.d">A health-gate and recovery keep the Steam interface safe; a fallback panel offers recovery actions and a merged, categorized log viewer.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <h2 data-i18n="install.h2">Install</h2>
+      <p class="lead" data-i18n-html="install.lead">Grab the package for your platform from the latest release, then run its installer. Full steps and uninstall instructions are in the <a href="https://github.com/santojon/ShelvesHub#installation">README</a>.</p>
+      <div class="steps">
+        <div class="step" data-i18n-html="install.step1">Download the package for your OS from the <a href="https://github.com/santojon/ShelvesHub/releases/latest">latest release</a>.</div>
+        <div class="step" data-i18n-html="install.step2">Run the one-click installer (or <code>install</code> script). It sets up a background service that starts with your session.</div>
+        <div class="step" data-i18n-html="install.step3">Open Steam Big Picture — your Deck Shelves Home appears. To remove it later, run the matching <code>uninstall</code> script.</div>
       </div>
     </div>
   </section>
 
   <section id="screenshots">
     <div class="wrap">
-      <h2>Screenshots</h2>
-      <p class="lead">A look at what makes ShelvesHub more than a loader — its own management panel in the Steam Quick Access menu: automatic updates for the host and Deck Shelves, troubleshooting, editable configuration, and a merged log viewer. Captured from a live Steam Big Picture session.</p>
+      <h2 data-i18n="shots.h2">Screenshots</h2>
+      <p class="lead" data-i18n="shots.lead">A look at what makes ShelvesHub more than a loader — its own management panel in the Steam Quick Access menu: automatic updates for the host and Deck Shelves, troubleshooting, editable configuration, and a merged log viewer. Captured from a live Steam Big Picture session.</p>
       <div class="shots" id="gallery"></div>
       <div class="lightbox" id="lightbox" hidden>
         <button class="lb-close" type="button" aria-label="Close">×</button>
@@ -129,48 +169,274 @@
     </div>
   </section>
 
-  <section id="install">
+  <!-- RELEASE NOTES: the version/date drive the fresh-release CTA above; the
+       "What's New" list is per-release content and is not translated. -->
+  <section id="releases">
     <div class="wrap">
-      <h2>Install</h2>
-      <p class="lead">Grab the package for your platform from the latest release, then run its installer. Full steps and uninstall instructions are in the <a href="https://github.com/santojon/ShelvesHub#installation">README</a>.</p>
-      <div class="steps">
-        <div class="step">Download the package for your OS from the <a href="https://github.com/santojon/ShelvesHub/releases/latest">latest release</a>.</div>
-        <div class="step">Run the one-click installer (or <code>install</code> script). It sets up a background service that starts with your session.</div>
-        <div class="step">Open Steam Big Picture — your Deck Shelves Home appears. To remove it later, run the matching <code>uninstall</code> script.</div>
+      <div class="rel-head">
+        <span class="ver-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-6.2-6.2a2 2 0 0 1-.6-1.4V5a2 2 0 0 1 2-2h5a2 2 0 0 1 1.4.6l6.4 6.4a2 2 0 0 1 0 2.8z"/><path d="M7.5 7.5h.01"/></svg>
+          <span data-rn-version>v0.1.0</span>
+        </span>
+        <h2 data-i18n="releases.h2">What's New</h2>
+        <p class="date"><span data-i18n="releases.latest">Latest release</span> · <span data-rn-date>September 16, 2026</span></p>
+        <div class="rel-links">
+          <a class="btn" href="https://github.com/santojon/ShelvesHub/blob/main/RELEASE_NOTES.md"><span data-i18n="releases.notes">Release notes</span></a>
+          <a class="btn" href="https://github.com/santojon/ShelvesHub/releases"><span data-i18n="releases.older">Older releases</span></a>
+        </div>
       </div>
+      <ul class="rn-list" data-rn-list>
+        <li>
+          <b>Deck Shelves, right in the Steam menu</b>
+          <p>This host adds its own Quick Access tab that opens the Deck Shelves editor directly — with its icon and header. Alongside another host, both tabs work and edit the same settings.</p>
+        </li>
+        <li>
+          <b>Updates itself, and keeps Deck Shelves current</b>
+          <p>The host can download, verify and swap in a newer version of itself, and — with automatic updates on — install a newer Deck Shelves in place and reload, on your chosen channel.</p>
+        </li>
+        <li>
+          <b>Real data, hosted here</b>
+          <p>As a standalone install it runs the Deck Shelves data backend itself — wishlist, prices and launchers — supervising it and surfacing its logs in one place.</p>
+        </li>
+        <li>
+          <b>Plays nice with another host</b>
+          <p>If Deck Shelves is already mounted by a different host, ShelvesHub never loads it twice or takes over — it adds only its own tab, and one writer owns your settings.</p>
+        </li>
+      </ul>
     </div>
   </section>
 
   <section id="faq">
     <div class="wrap">
-      <h2>FAQ</h2>
+      <h2 data-i18n="faq.h2">FAQ</h2>
       <div class="faq">
-        <details><summary>Do I need a plugin loader?</summary><p>No. ShelvesHub hosts Deck Shelves by itself. If another plugin loader is already installed, ShelvesHub coexists with it rather than replacing it.</p></details>
-        <details><summary>Which platforms are supported?</summary><p>SteamOS and the Steam Deck are the primary target. It also runs on Linux, macOS and Windows.</p></details>
-        <details><summary>Does it change my Steam install or games?</summary><p>No. It runs as a background service and injects the interface at runtime; it doesn't modify Steam's files, your library, or your saves.</p></details>
-        <details><summary>How do I uninstall it?</summary><p>Use the one-click uninstaller for your platform (published alongside the installer), or run the uninstall script — see the README's Uninstalling section. Your Deck Shelves settings are kept unless you choose to purge them.</p></details>
+        <details><summary data-i18n="faq.q1">Do I need a plugin loader?</summary><p data-i18n="faq.a1">No. ShelvesHub hosts Deck Shelves by itself. If another plugin loader is already installed, ShelvesHub coexists with it rather than replacing it.</p></details>
+        <details><summary data-i18n="faq.q2">Which platforms are supported?</summary><p data-i18n="faq.a2">SteamOS and the Steam Deck are the primary target. It also runs on Linux, macOS and Windows.</p></details>
+        <details><summary data-i18n="faq.q3">Does it change my Steam install or games?</summary><p data-i18n="faq.a3">No. It runs as a background service and injects the interface at runtime; it doesn't modify Steam's files, your library, or your saves.</p></details>
+        <details><summary data-i18n="faq.q4">How do I uninstall it?</summary><p data-i18n="faq.a4">Use the one-click uninstaller for your platform (published alongside the installer), or run the uninstall script — see the README's Uninstalling section. Your Deck Shelves settings are kept unless you choose to purge them.</p></details>
       </div>
     </div>
   </section>
 
   <section id="troubleshooting">
     <div class="wrap">
-      <h2>Troubleshooting</h2>
+      <h2 data-i18n="trouble.h2">Troubleshooting</h2>
       <div class="faq">
-        <details><summary>The screen went black or the Steam interface disappeared.</summary><p>ShelvesHub detects this and pauses injection instead of making it worse — it never force-restarts Steam. Recovery is to restart the Steam session service (on a Steam Deck, restart <code>steam-launcher</code>); on desktop, restarting Steam brings the windows back. It resumes on its own once the interface returns.</p></details>
-        <details><summary>My shelves take a few seconds to appear after Big Picture opens.</summary><p>The service waits for the interface to settle before injecting, then loads your shelves — a short delay on a cold start is expected. It hosts as soon as the interface is ready rather than on a fixed timer.</p></details>
-        <details><summary>Deck Shelves keeps showing “update available”, or isn’t updating on its own.</summary><p>Open the ShelvesHub panel and turn on <strong>Automatic updates</strong> (and the Deck Shelves / pre-release sub-switches as you like). The host then checks periodically and installs a newer release in place, so the prompt clears. Stable and pre-release are separate channels — a pre-release is only offered when its channel is on.</p></details>
-        <details><summary>Two Deck Shelves tabs, or a missing tab, with another loader installed.</summary><p>In coexistence only one tab should show. If it looks doubled or empty after switching hosts, reload the interface (or restart the service) to clear the transient state.</p></details>
-        <details><summary>How do I read the logs, or turn the host off temporarily?</summary><p>Open the ShelvesHub tab: the panel has a built-in log viewer, and an advanced section with troubleshooting options (including disabling the host until the next restart and mirroring the service configuration).</p></details>
-        <details><summary>Nothing loads / it can’t reach Steam.</summary><p>ShelvesHub talks to Steam over its local debugging interface, which the installer enables. The first time, a full Steam restart may be needed for that to take effect.</p></details>
+        <details><summary data-i18n="trouble.q1">The screen went black or the Steam interface disappeared.</summary><p data-i18n="trouble.a1">ShelvesHub detects this and pauses injection instead of making it worse — it never force-restarts Steam. Recovery is to restart the Steam session service (on a Steam Deck, restart <code>steam-launcher</code>); on desktop, restarting Steam brings the windows back. It resumes on its own once the interface returns.</p></details>
+        <details><summary data-i18n="trouble.q2">My shelves take a few seconds to appear after Big Picture opens.</summary><p data-i18n="trouble.a2">The service waits for the interface to settle before injecting, then loads your shelves — a short delay on a cold start is expected. It hosts as soon as the interface is ready rather than on a fixed timer.</p></details>
+        <details><summary data-i18n="trouble.q3">Deck Shelves keeps showing “update available”, or isn’t updating on its own.</summary><p data-i18n="trouble.a3">Open the ShelvesHub panel and turn on <strong>Automatic updates</strong> (and the Deck Shelves / pre-release sub-switches as you like). The host then checks periodically and installs a newer release in place, so the prompt clears. Stable and pre-release are separate channels — a pre-release is only offered when its channel is on.</p></details>
+        <details><summary data-i18n="trouble.q4">Two Deck Shelves tabs, or a missing tab, with another loader installed.</summary><p data-i18n="trouble.a4">In coexistence only one tab should show. If it looks doubled or empty after switching hosts, reload the interface (or restart the service) to clear the transient state.</p></details>
+        <details><summary data-i18n="trouble.q5">How do I read the logs, or turn the host off temporarily?</summary><p data-i18n="trouble.a5">Open the ShelvesHub tab: the panel has a built-in log viewer, and an advanced section with troubleshooting options (including disabling the host until the next restart and mirroring the service configuration).</p></details>
+        <details><summary data-i18n="trouble.q6">Nothing loads / it can’t reach Steam.</summary><p data-i18n="trouble.a6">ShelvesHub talks to Steam over its local debugging interface, which the installer enables. The first time, a full Steam restart may be needed for that to take effect.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Discreet donation area -->
+  <section id="donate" class="donate">
+    <div class="wrap">
+      <div class="donate-box">
+        <div>
+          <h2 data-i18n="donate.h">Enjoying ShelvesHub?</h2>
+          <p data-i18n="donate.p">It's free and open source. If it's useful to you, a small tip helps keep it maintained — entirely optional.</p>
+        </div>
+        <a class="btn kofi" href="https://ko-fi.com/santojon" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.3 4.6 14a5 5 0 0 1 7-7.1l.4.4.4-.4a5 5 0 0 1 7 7.1z"/></svg>
+          <span data-i18n="donate.btn">Support on Ko-fi</span>
+        </a>
       </div>
     </div>
   </section>
 
   <footer>
     <div class="wrap">
-      <p>ShelvesHub · MIT-licensed · <a href="https://github.com/santojon/ShelvesHub">GitHub</a> · <a href="https://github.com/santojon/Deck-Shelves">Deck Shelves</a> · <a href="reports/dashboard.html">Dashboard</a></p>
+      <div class="foot-grid">
+        <div class="foot-brand">
+          <a class="foot-logo" href="#" aria-label="ShelvesHub — back to top">
+            <img src="img/shelveshub-icon.svg" alt="" width="34" height="34">
+            <span>ShelvesHub</span>
+          </a>
+          <p data-i18n-html="footer.built">Built with <span class="heart">♥</span> by <a href="https://github.com/santojon">Jonathan Santos</a>. The independent, open-source host that runs Deck Shelves on Steam — no plugin loader required.</p>
+        </div>
+        <nav class="foot-col">
+          <h4 data-i18n="footer.explore">Explore</h4>
+          <a href="#what" data-i18n="what.h2">What it is</a>
+          <a href="#install" data-i18n="install.h2">Install</a>
+          <a href="#screenshots" data-i18n="shots.h2">Screenshots</a>
+          <a href="#releases" data-i18n="releases.h2">What's New</a>
+          <a href="#faq" data-i18n="faq.h2">FAQ</a>
+        </nav>
+        <nav class="foot-col">
+          <h4 data-i18n="footer.project">Project</h4>
+          <a href="https://github.com/santojon/ShelvesHub">GitHub</a>
+          <a href="https://github.com/santojon/ShelvesHub/releases" data-i18n="footer.releases">Releases</a>
+          <a href="reports/dashboard.html" data-i18n="footer.dashboard">Dashboard</a>
+          <a href="https://github.com/santojon/ShelvesHub/blob/main/LICENSE" data-i18n="footer.license">License</a>
+        </nav>
+        <nav class="foot-col">
+          <h4 data-i18n="footer.more">More</h4>
+          <a href="https://santojon.github.io/Deck-Shelves/" data-i18n="btn.deckshelves">Deck Shelves</a>
+          <a href="https://ko-fi.com/santojon" data-i18n="donate.btn">Support on Ko-fi</a>
+        </nav>
+      </div>
+      <hr class="foot-rule">
+      <p class="foot-bottom" data-i18n="footer.copy">© 2026 ShelvesHub · MIT-licensed · built by Jonathan Santos</p>
     </div>
   </footer>
+
+  <script>
+    /* ── i18n + fresh-release CTA ──────────────────────────────────────────
+       English is the source of truth (in the HTML); pt-BR is the first added
+       translation. The browser locale picks the initial language; a manual
+       choice is remembered. Only static chrome is translated — per-release
+       content (the "What's New" list) stays as authored. */
+    (function () {
+      var STORE_KEY = "shelveshub-lang";
+      // pt-BR dictionary. Keys map to [data-i18n] (text) / [data-i18n-html]
+      // (markup) nodes. English is read from the page, so only pt lives here.
+      var PT = {
+        "hero.tagline": "<strong>Deck Shelves.</strong> Onde o Steam roda.",
+        "hero.sub": "O host standalone oficial do <strong>Deck Shelves</strong> — SteamOS, Linux, macOS e Windows, com ou sem um carregador de plugins.",
+        "btn.download": "Baixar",
+        "btn.github": "Ver no GitHub",
+        "btn.deckshelves": "Deck Shelves",
+        "fresh.title": "Novo lançamento <span data-fresh-version></span> disponível!",
+        "fresh.desc": "Uma nova versão do ShelvesHub acaba de sair — atualize agora.",
+        "fresh.download": "Baixar a mais recente",
+        "what.h2": "O que é",
+        "what.lead": "O ShelvesHub é um pequeno serviço em segundo plano que leva o <a href=\"https://github.com/santojon/Deck-Shelves\">Deck Shelves</a> para a sua tela Inicial do Steam por conta própria. Ele injeta o pacote do Deck Shelves na interface do Steam Big Picture pelo Chrome DevTools Protocol e fornece a API de runtime que o pacote usa — então você tem prateleiras personalizadas sem instalar um carregador de plugins.",
+        "card.loader.t": "Sem carregador",
+        "card.loader.d": "Roda o Deck Shelves direto no Steam. Se outro carregador de plugins também estiver instalado, os dois coexistem — as duas abas continuam usáveis e editam as mesmas configurações.",
+        "card.cross.t": "Multiplataforma",
+        "card.cross.d": "SteamOS e Steam Deck são o alvo principal; também roda em Linux, macOS e Windows, com instaladores de um clique e scripts para cada um.",
+        "card.tab.t": "Sua própria aba no Quick Access",
+        "card.tab.d": "Opcionalmente adiciona uma aba nativa no Quick Access que abre o editor do Deck Shelves direto, com o ícone e o cabeçalho dele.",
+        "card.bring.t": "Traz a própria cópia",
+        "card.bring.d": "Se o Deck Shelves não estiver presente, o serviço o obtém — reaproveitando uma cópia local, copiando de um carregador instalado ou baixando a versão mais recente.",
+        "card.update.t": "Mantém atualizado",
+        "card.update.d": "Pode instalar uma atualização do Deck Shelves no lugar e recarregar, então atualizar nunca exige copiar arquivos à mão.",
+        "card.resilient.t": "Resiliente",
+        "card.resilient.d": "Uma proteção de saúde e a recuperação mantêm a interface do Steam segura; um painel de fallback oferece ações de recuperação e um visualizador de logs unificado e categorizado.",
+        "install.h2": "Instalação",
+        "install.lead": "Pegue o pacote da sua plataforma no último lançamento e rode o instalador. Passos completos e instruções de desinstalação estão no <a href=\"https://github.com/santojon/ShelvesHub#installation\">README</a>.",
+        "install.step1": "Baixe o pacote do seu sistema no <a href=\"https://github.com/santojon/ShelvesHub/releases/latest\">último lançamento</a>.",
+        "install.step2": "Rode o instalador de um clique (ou o script <code>install</code>). Ele configura um serviço em segundo plano que inicia com a sua sessão.",
+        "install.step3": "Abra o Steam Big Picture — a sua tela Inicial do Deck Shelves aparece. Para remover depois, rode o script <code>uninstall</code> correspondente.",
+        "shots.h2": "Capturas de tela",
+        "shots.lead": "Uma olhada no que faz do ShelvesHub mais que um carregador — o painel de gerenciamento dele no menu Quick Access do Steam: atualizações automáticas do host e do Deck Shelves, solução de problemas, configuração editável e um visualizador de logs unificado. Capturado de uma sessão real do Steam Big Picture.",
+        "releases.h2": "Novidades",
+        "releases.latest": "Último lançamento",
+        "releases.notes": "Notas de versão",
+        "releases.older": "Versões anteriores",
+        "faq.h2": "Perguntas frequentes",
+        "faq.q1": "Preciso de um carregador de plugins?",
+        "faq.a1": "Não. O ShelvesHub hospeda o Deck Shelves sozinho. Se outro carregador de plugins já estiver instalado, o ShelvesHub coexiste com ele em vez de substituí-lo.",
+        "faq.q2": "Quais plataformas são suportadas?",
+        "faq.a2": "SteamOS e o Steam Deck são o alvo principal. Também roda em Linux, macOS e Windows.",
+        "faq.q3": "Ele altera minha instalação do Steam ou meus jogos?",
+        "faq.a3": "Não. Ele roda como um serviço em segundo plano e injeta a interface em tempo de execução; não modifica os arquivos do Steam, sua biblioteca nem seus saves.",
+        "faq.q4": "Como faço para desinstalar?",
+        "faq.a4": "Use o desinstalador de um clique da sua plataforma (publicado junto ao instalador) ou rode o script de desinstalação — veja a seção Uninstalling do README. Suas configurações do Deck Shelves são mantidas, a menos que você escolha apagá-las.",
+        "trouble.h2": "Solução de problemas",
+        "trouble.q1": "A tela ficou preta ou a interface do Steam sumiu.",
+        "trouble.a1": "O ShelvesHub detecta isso e pausa a injeção em vez de piorar — ele nunca força o reinício do Steam. A recuperação é reiniciar o serviço da sessão do Steam (no Steam Deck, reinicie o <code>steam-launcher</code>); no desktop, reiniciar o Steam traz as janelas de volta. Ele retoma sozinho quando a interface volta.",
+        "trouble.q2": "Minhas prateleiras demoram alguns segundos para aparecer depois que o Big Picture abre.",
+        "trouble.a2": "O serviço espera a interface estabilizar antes de injetar e então carrega suas prateleiras — um pequeno atraso numa inicialização a frio é esperado. Ele hospeda assim que a interface está pronta, e não num tempo fixo.",
+        "trouble.q3": "O Deck Shelves fica mostrando “update available” ou não atualiza sozinho.",
+        "trouble.a3": "Abra o painel do ShelvesHub e ative as <strong>Atualizações automáticas</strong> (e os subinterruptores de Deck Shelves / pré-lançamento como preferir). O host então verifica periodicamente e instala uma versão mais nova no lugar, então o aviso some. Estável e pré-lançamento são canais separados — um pré-lançamento só é oferecido quando o canal dele está ligado.",
+        "trouble.q4": "Duas abas do Deck Shelves, ou uma aba faltando, com outro carregador instalado.",
+        "trouble.a4": "Em coexistência, apenas uma aba deve aparecer. Se parecer duplicada ou vazia após trocar de host, recarregue a interface (ou reinicie o serviço) para limpar o estado transitório.",
+        "trouble.q5": "Como leio os logs ou desligo o host temporariamente?",
+        "trouble.a5": "Abra a aba do ShelvesHub: o painel tem um visualizador de logs embutido e uma seção avançada com opções de solução de problemas (incluindo desligar o host até o próximo reinício e espelhar a configuração do serviço).",
+        "trouble.q6": "Nada carrega / não consegue alcançar o Steam.",
+        "trouble.a6": "O ShelvesHub fala com o Steam pela interface de depuração local, que o instalador habilita. Na primeira vez, pode ser necessário reiniciar o Steam por completo para isso ter efeito.",
+        "donate.h": "Curtindo o ShelvesHub?",
+        "donate.p": "É gratuito e de código aberto. Se ele te for útil, uma pequena contribuição ajuda a mantê-lo — totalmente opcional.",
+        "donate.btn": "Apoiar no Ko-fi",
+        "footer.built": "Feito com <span class=\"heart\">♥</span> por <a href=\"https://github.com/santojon\">Jonathan Santos</a>. O host independente e de código aberto que roda o Deck Shelves no Steam — sem carregador de plugins.",
+        "footer.explore": "Explorar",
+        "footer.project": "Projeto",
+        "footer.more": "Mais",
+        "footer.releases": "Versões",
+        "footer.dashboard": "Dashboard",
+        "footer.license": "Licença",
+        "footer.copy": "© 2026 ShelvesHub · Licença MIT · feito por Jonathan Santos"
+      };
+
+      var LANGS = { en: null, pt: PT };
+      // Capture the English source once, straight from the page.
+      var EN = {};
+      function collect(attr) {
+        var nodes = document.querySelectorAll("[" + attr + "]");
+        for (var i = 0; i < nodes.length; i++) {
+          var key = nodes[i].getAttribute(attr);
+          if (!(key in EN)) EN[key] = attr === "data-i18n-html" ? nodes[i].innerHTML : nodes[i].textContent;
+        }
+      }
+      collect("data-i18n");
+      collect("data-i18n-html");
+
+      function applyOne(attr, prop, dict) {
+        var nodes = document.querySelectorAll("[" + attr + "]");
+        for (var i = 0; i < nodes.length; i++) {
+          var key = nodes[i].getAttribute(attr);
+          var val = dict && (key in dict) ? dict[key] : EN[key];
+          if (val != null) nodes[i][prop] = val;
+        }
+      }
+
+      function normalize(l) { return (String(l || "").toLowerCase().indexOf("pt") === 0) ? "pt" : "en"; }
+
+      function apply(lang) {
+        var dict = LANGS[lang] || null; // null = English source
+        applyOne("data-i18n", "textContent", dict);
+        applyOne("data-i18n-html", "innerHTML", dict);
+        document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
+        var btns = document.querySelectorAll(".lang-switch [data-lang]");
+        for (var i = 0; i < btns.length; i++) {
+          var on = btns[i].getAttribute("data-lang") === lang;
+          btns[i].setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        fillFresh(); // the fresh CTA's version span lives inside a translated node
+      }
+
+      // Fresh-release CTA: reveal only when the latest release is <= 7 days old.
+      // The version node is build-time content; hard-validate it before it flows
+      // into any URL so no DOM text can leak meta-characters.
+      function fillFresh() {
+        var fresh = document.querySelector("[data-fresh-cta]");
+        var rnDate = document.querySelector("[data-rn-date]");
+        var rnVer = document.querySelector("[data-rn-version]");
+        if (!fresh || !rnDate) return;
+        var rd = new Date(rnDate.textContent.trim());
+        var recent = !isNaN(rd.getTime()) && (Date.now() - rd.getTime()) <= 7 * 24 * 60 * 60 * 1000;
+        if (!recent) { fresh.hidden = true; return; }
+        var ver = rnVer ? rnVer.textContent.trim() : "";
+        if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(ver)) ver = "";
+        var vEl = fresh.querySelector("[data-fresh-version]");
+        if (vEl) vEl.textContent = ver;
+        var dl = fresh.querySelector("[data-fresh-dl]");
+        if (dl) dl.href = "https://github.com/santojon/ShelvesHub/releases/latest";
+        fresh.hidden = false;
+      }
+
+      function stored() { try { return localStorage.getItem(STORE_KEY); } catch (e) { return null; } }
+      function remember(l) { try { localStorage.setItem(STORE_KEY, l); } catch (e) {} }
+
+      var initial = normalize(stored() || (navigator.language || navigator.userLanguage));
+      apply(initial);
+
+      var switcher = document.querySelector(".lang-switch");
+      if (switcher) {
+        switcher.addEventListener("click", function (e) {
+          var b = e.target.closest ? e.target.closest("[data-lang]") : null;
+          if (!b) return;
+          var l = b.getAttribute("data-lang");
+          remember(l);
+          apply(l);
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
