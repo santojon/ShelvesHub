@@ -35,6 +35,7 @@
     "deck:deploy": "bash scripts/deck-deploy.sh",
     "deck:tunnel": "bash scripts/deck-tunnel.sh",
     "deck:logs": "bash scripts/deck-logs.sh",
+    "build:site": "node scripts/build-site.mjs",
     "deck:targets": "dotenv -e .env -- node scripts/deck-devtools.mjs targets",
     "deck:injected": "dotenv -e .env -- node scripts/deck-devtools.mjs probe",
     "deck:inject": "dotenv -e .env -- node scripts/deck-devtools.mjs inject --bundle bundle/index.js",

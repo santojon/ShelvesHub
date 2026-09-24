@@ -1,5 +1,7 @@
 # Debugging & DevTools
 
+*[Leia em português](pt-BR/debugging.md)*
+
 ShelvesHub injects the Deck Shelves bundle into Steam's CEF (Chromium
 Embedded Framework) renderer over the **Chrome DevTools Protocol (CDP)**. Because
 CEF and Chromium speak the same protocol, the same tooling works against a real

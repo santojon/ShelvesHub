@@ -1,5 +1,7 @@
 # Backend Contract — Data Backend Host
 
+*[Leia em português](pt-BR/backend-contract.md)*
+
 The ShelvesHub daemon can host a Deck Shelves **data backend** (settings
 persistence, online wishlist/prices, launcher discovery, device state) as a child
 process. This lets a sole host provide the same data RPCs the frontend bundle

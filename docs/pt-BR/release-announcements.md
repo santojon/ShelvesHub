@@ -1,23 +1,23 @@
-# Release announcements
+# Anúncios de lançamento
 
-*[Leia em português](pt-BR/release-announcements.md)*
+*[Read in English](../release-announcements.md)*
 
-Community post copy for each release — Reddit first, reusable for Discord.
-This is *not* the changelog: [CHANGELOG.md](../CHANGELOG.md) is the complete,
-per-change technical record and [RELEASE_NOTES.md](../RELEASE_NOTES.md) is the
-user-facing summary linked from the About page. This file is shorter, punchier,
-and written to be read in a feed, not a diff.
+Texto de postagem para a comunidade a cada lançamento — Reddit primeiro, reaproveitável para o Discord.
+Isto *não* é o changelog: [CHANGELOG.md](../../CHANGELOG.md) é o registro técnico
+completo, mudança a mudança, e [RELEASE_NOTES.md](../../RELEASE_NOTES.md) é o resumo
+voltado ao usuário, referenciado a partir da página Sobre. Este arquivo é mais curto, mais direto,
+e escrito para ser lido em um feed, não em um diff.
 
-## When to write one
+## Quando escrever um
 
-Draft the post under `## [Unreleased]` (below) as a release's CHANGELOG.md /
-RELEASE_NOTES.md entries firm up — the same section the version-bump workflow
-promotes to a dated entry, so it just needs to be there by the time a release
-ships. Reuse the wording — don't reinvent the voice release to release. The
-post-release workflow builds a ready-to-post Reddit link from this file and
-posts the Discord embed from the release body.
+Redija a postagem em `## [Unreleased]` (abaixo) conforme as entradas de CHANGELOG.md /
+RELEASE_NOTES.md de um lançamento vão se consolidando — a mesma seção que o fluxo de
+aumento de versão promove para uma entrada datada, então ela só precisa estar lá até o momento em que um lançamento
+sai. Reaproveite o texto — não reinvente o tom de lançamento para lançamento. O
+fluxo pós-lançamento monta um link do Reddit pronto para postar a partir deste arquivo e
+publica o embed do Discord a partir do corpo do lançamento.
 
-## Template
+## Modelo
 
 ```
 ShelvesHub vX.Y.Z is here!
@@ -47,27 +47,27 @@ improvements. ❤️
 ShelvesHub — run Deck Shelves on any Steam client.
 ```
 
-**Rules for the highlight bullets:**
-- Source them from RELEASE_NOTES.md's "Added"/"Changed" entries for the
-  release, not CHANGELOG.md — condense further, don't just re-wrap.
-- One emoji per bullet, chosen for what the line is about (not decorative).
-- Plain language over feature names.
-- Bug fixes are always one combined bullet ("a collection of fixes and polish
-  for…"), never itemized — that's what RELEASE_NOTES.md is for.
-- Keep it to what a returning user would notice in five seconds of scrolling.
-- Describe running alongside another host in neutral terms — never name a
-  specific third-party plugin host.
+**Regras para os itens de destaque:**
+- Extraia-os das entradas "Added"/"Changed" do RELEASE_NOTES.md para o
+  lançamento, não do CHANGELOG.md — condense ainda mais, não apenas reformate.
+- Um emoji por item, escolhido de acordo com o assunto da linha (não decorativo).
+- Linguagem simples em vez de nomes de recursos.
+- Correções de bugs são sempre um único item combinado ("a collection of fixes and polish
+  for…"), nunca listadas individualmente — é para isso que serve o RELEASE_NOTES.md.
+- Mantenha apenas o que um usuário recorrente notaria em cinco segundos de rolagem.
+- Descreva a coexistência com outro host em termos neutros — nunca nomeie um
+  carregador de plugins de terceiros específico.
 
-## Posts
+## Postagens
 
-Same `[Unreleased]` → `[X.Y.Z] - YYYY-MM-DD` flow as CHANGELOG.md /
-RELEASE_NOTES.md: write the draft post for the next release under
-`## [Unreleased]` as its highlights firm up, and the version-bump workflow
-promotes it to a dated `## [X.Y.Z]` entry the same way it promotes those two
-files — same `awk` extraction, same non-fatal skip when `[Unreleased]` is empty
-(the post-release job then falls back to the raw release body for that version).
-Headings use the bracketed `## [X.Y.Z]` format on purpose, to stay extractable
-by the identical pattern.
+O mesmo fluxo `[Unreleased]` → `[X.Y.Z] - YYYY-MM-DD` do CHANGELOG.md /
+RELEASE_NOTES.md: escreva o rascunho da postagem para o próximo lançamento em
+`## [Unreleased]` conforme seus destaques se consolidam, e o fluxo de aumento de versão
+o promove para uma entrada datada `## [X.Y.Z]` da mesma forma que promove os outros dois
+arquivos — mesma extração via `awk`, mesmo desvio não fatal quando `[Unreleased]` está vazio
+(o job pós-lançamento então recorre ao corpo bruto do lançamento para essa versão).
+Os títulos usam o formato `## [X.Y.Z]` entre colchetes de propósito, para permanecer
+extraíveis pelo mesmo padrão.
 
 ## [Unreleased]
 

@@ -1,5 +1,7 @@
 # Using ShelvesHub
 
+*[Leia em português](pt-BR/usage.md)*
+
 ShelvesHub runs as a background service and injects the Deck Shelves bundle into the Steam Big Picture UI. Below are platform-specific install and usage notes.
 
 ---

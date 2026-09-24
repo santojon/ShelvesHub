@@ -14,6 +14,10 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'README.md'
+      - 'RELEASE_NOTES.md'
+      - 'docs/**'
+      - 'scripts/build-site.mjs'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -36,6 +40,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build project site (release notes, feature list)
+        run: node scripts/build-site.mjs
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3

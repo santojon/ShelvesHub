@@ -1,5 +1,7 @@
 # ShelvesHub — Architecture
 
+*[Leia em português](pt-BR/architecture.md)*
+
 ShelvesHub is a small cross-platform service that injects the Deck Shelves
 bundle into the Steam Big Picture UI. It provides the runtime host APIs the
 bundle calls into, and manages the injection lifecycle across Linux/SteamOS,

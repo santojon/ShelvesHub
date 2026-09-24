@@ -1,5 +1,7 @@
 # Troubleshooting
 
+*[Leia em português](pt-BR/troubleshooting.md)*
+
 Most issues come down to a **port conflict**, **another host on the same machine**,
 or a **collapsed Steam UI**. Nearly all are fixable from the config file —
 `shelveshub.config.json`, installed next to the binary — without a rebuild.

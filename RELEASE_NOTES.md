@@ -1,5 +1,7 @@
 # Release Notes
 
+*[Leia em português](docs/pt-BR/RELEASE_NOTES.md)*
+
 Highlights for each release, written for people using ShelvesHub. The full,
 detailed list of changes lives in [CHANGELOG.md](CHANGELOG.md).
 
@@ -25,6 +27,11 @@ is pushed — the notes below are picked up and published with the release.
   Gaming Mode session, or bringing Steam back into Big Picture on macOS and Windows.
 - **Sturdier settings across versions.** Running different ShelvesHub versions on
   your machines no longer risks losing a setting the older one didn't know about.
+- **The site now shows release notes and the full feature list in Portuguese too**,
+  switching live with the existing language toggle — automatically falling back
+  to English for anything not translated yet. The README, changelog and every
+  guide page also now have a Brazilian-Portuguese version, linked from each
+  English page.
 
 ## [0.1.0] - 2026-09-16
 

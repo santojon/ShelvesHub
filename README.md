@@ -1,5 +1,7 @@
 # ShelvesHub
 
+*[Leia em português](docs/pt-BR/README.md)*
+
 <div align="center">
 <p>
   <img src="assets/logo.svg" alt="ShelvesHub" width="352">
@@ -34,6 +36,32 @@ The shared `HostApi` contract (`@deck-shelves/host`, vendored as the `host/` sub
 It gives Deck Shelves its own tab in the Steam Quick Access Menu (on by default), opening the editor directly with the plugin's icon and header; if the bundle can't load, that tab shows a recovery panel instead of an empty tab. Where another host such as a plugin loader is installed too, the two coexist: exactly one Deck Shelves tab is shown (this host's), both hosts' tabs stay usable and edit the same settings, the plugin's wide side panel opens from whichever tab is on screen, and only one host writes settings at a time.
 
 The service also **keeps itself and the bundle current**: with automatic updates on it downloads a newer Deck Shelves release and swaps it in place, and it can **update its own binary** from the latest ShelvesHub release. Update channels, a disable-until-restart switch, an editable safe subset of the configuration, and a merged host/runtime log viewer are all reachable from the tab, localized into 19 languages.
+
+---
+
+## Features
+
+- **No plugin loader required** — hosts Deck Shelves by itself by injecting its bundle into the Steam Big Picture UI over the Chrome DevTools Protocol.
+- **Coexists with another host** — if a plugin loader is also installed, the two run side by side: exactly one Deck Shelves tab shows, both hosts' tabs edit the same settings, and only one writes settings at a time.
+- **Cross-platform** — SteamOS and the Steam Deck are the primary target; also Linux, macOS and Windows, each with a one-click installer and a plain script.
+- **Universal macOS binary** — the macOS download runs natively on both Apple Silicon and Intel Macs; CI verifies the shipped binary is universal.
+- **Native Quick Access tab** — opens the Deck Shelves editor directly, with real Steam buttons and toggles, a gamepad focus ring and a theme-tinted icon; a recovery panel shows instead if the bundle can't load.
+- **Brings its own copy of Deck Shelves** — reuses a local copy, copies one from an installed loader, or downloads the newest release (`SHELVES_PRERELEASE=1` opts into pre-releases).
+- **Hosts the data backend** — supervises the Deck Shelves data backend over stdio, restarts it on crashes and surfaces its logs, so wishlist, prices, backups and friends work on a standalone install.
+- **Updates itself** — downloads and verifies a newer ShelvesHub, swaps its own binary in place, and restarts the service to finish (or asks you to restart when it can't).
+- **Keeps Deck Shelves current** — with automatic updates on, checks periodically and installs a newer release in place, then reloads, so the "update available" prompt clears on its own.
+- **Update channels** — stable and pre-release are separate for the host and for Deck Shelves; each finer switch only appears once the one above it is on.
+- **Optional boot animation** — installs a short startup animation into Steam's own startup-movie slot, with a Deck-native 1280×800 cut and a 1080p desktop cut chosen per platform; a live toggle, removed when turned off.
+- **Resilient by design** — a windows-collapse health gate never force-restarts Steam; it pauses and, on a confirmed black screen, runs a per-platform recovery (restart the Deck's Gaming Mode session, or bring Steam back into Big Picture on desktop).
+- **Version-skew safe settings** — the host's own settings store preserves keys it doesn't recognise, so running mixed versions across machines never silently drops a setting.
+- **Gamepad UI aware** — by default it hosts only while the gamepad / Big Picture UI is on screen; an experimental toggle (macOS / Windows) also injects into the plain desktop client.
+- **Restart to apply, in one click** — changing a setting that needs a restart surfaces a button that restarts the host and Steam together so the change takes effect.
+- **Editable safe configuration** — a curated subset of the operational config is editable in the tab, with a read-only status readout of the effective values.
+- **Merged log viewer** — host + runtime in one gamepad-navigable, colour-coded stream, newest first, with a refresh control; B takes you back.
+- **Disable until restart** — a troubleshooting switch stands the host down until the next service restart without uninstalling anything.
+- **One shared contract** — the `@deck-shelves/host` API defines what the host provides, so one Deck Shelves build runs under this host or under a plugin loader unchanged.
+- **Localized** — the host tab is translated into 19 languages.
+- **No-device verification** — a Docker simulation harness runs the runtime, a daemon → headless-Chromium injection smoke, and the install / uninstall lifecycle in a container.
 
 ---
 

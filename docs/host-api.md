@@ -1,5 +1,7 @@
 # HostApi — Contract Reference
 
+*[Leia em português](pt-BR/host-api.md)*
+
 Contract version: **1.2.0** (additive-only after the 1.0.0 baseline).
 
 The `HostApi` interface defines what the ShelvesHub host process provides

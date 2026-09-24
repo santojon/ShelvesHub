@@ -1,5 +1,7 @@
 # Changelog
 
+*[Leia em português](docs/pt-BR/CHANGELOG.md)*
+
 All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
@@ -38,6 +40,17 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   SteamOS restarts the Gaming Mode session, macOS/Windows bounce Steam back into
   Big Picture — instead of only logging a hint. `SHELVES_RECOVER_CMD` (or config
   `recover_cmd`) still overrides it.
+- **The site now generates its release notes and feature list from the repo's
+  own docs, in English and Portuguese.** `site/index.html`'s "What's New" list
+  and `site/features.html`'s feature list were previously hand-written HTML
+  that drifted from `RELEASE_NOTES.md`/`README.md`. A new `scripts/build-site.mjs`
+  (`pnpm run build:site`, wired into the Pages deploy) now generates both from
+  those files directly, in English and — when available — the pt-BR translation
+  under `docs/pt-BR/`, switching live with the site's existing language toggle
+  and falling back to English for anything not translated yet.
+- **README, CHANGELOG, RELEASE_NOTES and every `docs/*.md` page now have a
+  Brazilian-Portuguese translation** under `docs/pt-BR/`, cross-linked from
+  each English original.
 
 ### Changed
 - **The host's own settings store now preserves unknown keys.** If a newer
