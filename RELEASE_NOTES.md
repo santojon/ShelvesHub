@@ -32,6 +32,11 @@ is pushed — the notes below are picked up and published with the release.
   to English for anything not translated yet. The README, changelog and every
   guide page also now have a Brazilian-Portuguese version, linked from each
   English page.
+- **Runs on Linux ARM64 (aarch64) now.** There are native ARM64 downloads for
+  SteamOS and Linux, and the installer picks the right one for your device
+  automatically — the x86_64 downloads are unchanged. Self-update also stays on
+  your architecture, so an ARM64 machine never pulls an x86_64 build by mistake.
+  (Steam Frame support is still being validated on real hardware.)
 
 ## [0.1.0] - 2026-09-16
 

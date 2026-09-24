@@ -32,6 +32,12 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   ao inglês para o que ainda não foi traduzido. O README, o changelog e cada
   página de guia também têm agora uma versão em português brasileiro, com link a partir de cada
   página em inglês.
+- **Agora roda em Linux ARM64 (aarch64).** Há downloads ARM64 nativos para
+  SteamOS e Linux, e o instalador escolhe o certo para o seu dispositivo
+  automaticamente — os downloads x86_64 não mudaram. A autoatualização também
+  permanece na sua arquitetura, então uma máquina ARM64 nunca puxa uma build
+  x86_64 por engano. (O suporte ao Steam Frame ainda está sendo validado em
+  hardware real.)
 
 ## [0.1.0] - 2026-09-16
 

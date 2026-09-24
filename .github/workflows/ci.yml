@@ -215,3 +215,64 @@ jobs:
             -v "$GITHUB_WORKSPACE/.plugin-src":/deck-shelves:ro \
             -e DECK_SHELVES_ROOT=/deck-shelves \
             python:3-slim python3 /probes.py
+
+  # Prove every change compiles for Linux ARM64 (Steam Frame / ARM boxes). Cheap:
+  # a native cross-compile with the ARM64 linker — no emulation — so it gates every
+  # PR. The full emulated ARM64 runtime harness is docker-harness-arm64 below.
+  linux-arm64-check:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-arm64-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-arm64-
+
+      - name: Install ARM64 linker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: ARM64 check + release build
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          cargo check --all-targets --target aarch64-unknown-linux-gnu
+          cargo build --release --target aarch64-unknown-linux-gnu
+
+  # The full simulation harness on REAL emulated ARM64 (QEMU) — the daemon,
+  # runtime scenarios and injection smoke actually running, not just compiling.
+  # A cargo release build under emulation is slow, so this is manual-dispatch only
+  # (linux-arm64-check gates every PR); run it before promoting "Linux ARM64
+  # supported" or ahead of a release.
+  docker-harness-arm64:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Simulation harness (ARM64 container)
+        env:
+          PLATFORM: linux/arm64
+          IMAGE: shelveshub-harness-arm64
+        run: bash scripts/harness-docker.sh

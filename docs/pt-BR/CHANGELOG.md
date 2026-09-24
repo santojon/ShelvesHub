@@ -57,8 +57,24 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   plugins, o backend de dados, a animação de inicialização, prateleiras no
   desktop e resolução de problemas), cada um em inglês e português brasileiro,
   para Discussions / Discord / Reddit.
+- **Suporte a Linux ARM64 (aarch64).** O ShelvesHub agora compila e distribui
+  pacotes ARM64 nativos para SteamOS e Linux genérico
+  (`shelveshub-steamos-aarch64.tar.gz`, `shelveshub-linux-aarch64.tar.gz`) ao
+  lado dos pacotes x86_64 existentes, cujos nomes não mudaram. Os instaladores de
+  um clique e os lançadores `.desktop` detectam a CPU (`uname -m`) e baixam o
+  pacote correspondente, então o mesmo link de download funciona num Steam Deck
+  x86_64 ou num dispositivo ARM64. Cada mudança passa por um gate de compilação
+  `aarch64` no CI, e um harness completo de runtime ARM64 pode ser rodado sob
+  emulação sob demanda. (A validação no hardware do Steam Frame ainda está
+  pendente, então o próprio Frame é tratado como experimental até ser testado no
+  dispositivo.)
 
 ### Changed
+- **Autoatualização ciente da arquitetura.** A autoatualização do host agora
+  escolhe o download pela arquitetura da CPU além do SO, e verifica o tipo de
+  máquina ELF do binário baixado (`EM_X86_64` vs `EM_AARCH64`) antes de instalá-lo
+  — então uma instalação ARM64 nunca pode se substituir por um binário x86_64, ou
+  vice-versa, mesmo se um asset de release estiver rotulado errado.
 - **O próprio repositório de configurações do host agora preserva chaves desconhecidas.** Se um ShelvesHub
   mais novo grava uma configuração que uma build mais antiga não reconhece, a build mais antiga não
   mais a descarta ao ler e regravar o arquivo — então rebaixar a versão ou rodar

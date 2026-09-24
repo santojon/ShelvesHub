@@ -56,8 +56,23 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   automatic updates, coexistence with a plugin loader, the data backend, the
   boot animation, desktop shelves, and troubleshooting), each in English and
   Brazilian Portuguese, for Discussions / Discord / Reddit.
+- **Linux ARM64 (aarch64) support.** ShelvesHub now builds and ships native
+  ARM64 packages for SteamOS and generic Linux
+  (`shelveshub-steamos-aarch64.tar.gz`, `shelveshub-linux-aarch64.tar.gz`)
+  alongside the existing x86_64 packages, whose names are unchanged. The
+  one-click installers and `.desktop` launchers detect the CPU (`uname -m`) and
+  fetch the matching package, so the same download link works on an x86_64 Steam
+  Deck or an ARM64 device. Every change is compile-gated for `aarch64` in CI, and
+  a full ARM64 runtime harness can be run under emulation on demand. (Steam Frame
+  hardware validation is still pending, so the Frame itself is treated as
+  experimental until tested on-device.)
 
 ### Changed
+- **Architecture-aware self-update.** The hub's self-update now picks its
+  download by CPU architecture as well as OS, and verifies the downloaded
+  binary's ELF machine type (`EM_X86_64` vs `EM_AARCH64`) before staging it — so
+  an ARM64 install can never replace itself with an x86_64 binary, or vice-versa,
+  even if a release asset is mislabeled.
 - **The host's own settings store now preserves unknown keys.** If a newer
   ShelvesHub writes a setting an older build doesn't recognise, the older build no
   longer drops it when it reads and re-saves the file — so downgrading or running

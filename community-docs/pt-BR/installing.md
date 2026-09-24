@@ -8,6 +8,12 @@ correspondente, ambos na mesma
 Depois de instalar, **reinicie o Steam** para o ShelvesHub pegá-lo na
 inicialização.
 
+**x86_64 e ARM64 (aarch64) são ambos suportados no Linux.** O instalador detecta
+sua CPU e baixa a build correspondente automaticamente, então os passos abaixo são
+os mesmos num Steam Deck x86_64 ou num dispositivo ARM64 — você não escolhe uma
+arquitetura na mão. (O Steam Frame é ARM64; o suporte no dispositivo ainda está
+sendo validado.)
+
 ## Steam Deck / SteamOS
 
 **Um clique:** no Modo Desktop, baixe `shelveshub.desktop` e dê dois cliques.

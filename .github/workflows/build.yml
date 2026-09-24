@@ -34,6 +34,22 @@ jobs:
             oneclick_src: ""
             oneclick_name: ""
 
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary: shelveshub
+            installer_dir: installer/SteamOS
+            package: shelveshub-steamos-aarch64.tar.gz
+            oneclick_src: ""
+            oneclick_name: ""
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary: shelveshub
+            installer_dir: installer/Linux
+            package: shelveshub-linux-aarch64.tar.gz
+            oneclick_src: ""
+            oneclick_name: ""
+
           - os: macos-latest
             target: aarch64-apple-darwin
             binary: shelveshub
@@ -68,7 +84,15 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Install ARM64 cross compiler
+        if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
       - name: Build release binary
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package (Linux / macOS)
