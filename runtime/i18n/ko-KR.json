@@ -42,5 +42,10 @@
   "cfg_owner_settle_sub": "호스팅 전에 다른 호스트를 기다리는 초",
   "cfg_interval_sub": "주입 확인 사이의 초",
   "adv_disable_hub_sub": "다시 켤 때까지 주입 중지 (문제 해결)",
-  "adv_restart_apply": "다시 시작하여 적용"
+  "adv_restart_apply": "다시 시작하여 적용",
+  "cfg_mode": "Ownership mode",
+  "cfg_boot_movie": "Boot animation",
+  "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
+  "cfg_desktop_ui": "Desktop client shelves (experimental)",
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
 }

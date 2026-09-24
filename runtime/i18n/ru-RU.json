@@ -42,5 +42,10 @@
   "cfg_owner_settle_sub": "Секунды ожидания другого хоста перед размещением",
   "cfg_interval_sub": "Секунды между проверками внедрения",
   "adv_disable_hub_sub": "Остановить внедрение до повторного включения (диагностика)",
-  "adv_restart_apply": "Перезапустить для применения"
+  "adv_restart_apply": "Перезапустить для применения",
+  "cfg_mode": "Ownership mode",
+  "cfg_boot_movie": "Boot animation",
+  "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
+  "cfg_desktop_ui": "Desktop client shelves (experimental)",
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
 }

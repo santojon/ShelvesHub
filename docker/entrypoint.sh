@@ -74,9 +74,12 @@ daemon_smoke() {
   done
   if [[ -z "$up" ]]; then echo "  DevTools endpoint never came up"; kill "$bpid" 2>/dev/null; rm -rf "$prof"; return 1; fi
 
+  # SHELVES_DESKTOP_UI=1: the smoke injects into a plain headless Chromium, not
+  # the Steam gamepad / Big Picture UI, so the default gamepad-only gate would
+  # (correctly) stand down. Opt into desktop injection so the smoke can verify it.
   SHELVES_CEF_PORT="$port" SHELVES_RPC_ADDR="127.0.0.1:60123" \
     SHELVES_BUNDLE_PATH="$ROOT/examples/bundle/shelves-example.js" \
-    SHELVES_TARGET="harness" SHELVES_INTERVAL_SECS=2 \
+    SHELVES_TARGET="harness" SHELVES_INTERVAL_SECS=2 SHELVES_DESKTOP_UI=1 \
     "$daemon" >/tmp/shelveshub-daemon.log 2>&1 &
   dpid=$!
 
