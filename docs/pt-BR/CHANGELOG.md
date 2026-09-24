@@ -51,6 +51,12 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 - **README, CHANGELOG, RELEASE_NOTES e cada página `docs/*.md` agora têm uma
   tradução em português brasileiro** sob `docs/pt-BR/`, com links cruzados a partir
   de cada original em inglês.
+- **Uma base de docs da comunidade** sob `community-docs/` — guias em linguagem
+  simples, prontos para publicar (primeiros passos, instalação, o painel do
+  Acesso Rápido, atualizações automáticas, coexistência com um carregador de
+  plugins, o backend de dados, a animação de inicialização, prateleiras no
+  desktop e resolução de problemas), cada um em inglês e português brasileiro,
+  para Discussions / Discord / Reddit.
 
 ### Changed
 - **O próprio repositório de configurações do host agora preserva chaves desconhecidas.** Se um ShelvesHub

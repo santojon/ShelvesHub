@@ -51,6 +51,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - **README, CHANGELOG, RELEASE_NOTES and every `docs/*.md` page now have a
   Brazilian-Portuguese translation** under `docs/pt-BR/`, cross-linked from
   each English original.
+- **A community docs knowledge base** under `community-docs/` — plain-language,
+  ready-to-post guides (getting started, installing, the Quick Access panel,
+  automatic updates, coexistence with a plugin loader, the data backend, the
+  boot animation, desktop shelves, and troubleshooting), each in English and
+  Brazilian Portuguese, for Discussions / Discord / Reddit.
 
 ### Changed
 - **The host's own settings store now preserves unknown keys.** If a newer

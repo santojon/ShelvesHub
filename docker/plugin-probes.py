@@ -8,8 +8,13 @@ peripherals, external launchers — should get real CI coverage on THIS containe
 OS/arch (Linux, and ARM64 via the harness's `PLATFORM=linux/arm64`), not only the
 plugin repo's own x86_64 GitHub runner. The contract each probe must honour is
 **fail-soft**: it returns a value on any OS and never raises off its native one.
-This runner imports the real backend and asserts exactly that — a raised
-exception is a failure; the returned value is informational.
+This runner imports the real backend and asserts exactly that — a probe that is
+present and callable but RAISES is a failure; the returned value is informational.
+
+Cross-repo version skew is tolerated: the plugin's default branch may not yet ship
+every probe this list knows about, so a probe whose module or function is absent
+from the checkout is SKIPPED (not failed). Only a probe that IS present and raises
+when called breaks the harness. The step self-heals once the plugin ships the probe.
 
 The plugin backend is found via `DECK_SHELVES_ROOT` (default: a sibling
 `../Deck-Shelves` checkout). If it isn't present the runner exits 0 with a skip
@@ -60,18 +65,30 @@ def main() -> int:
     print(f"[plugin-probes] backend: {backend}  ({sys.platform} / {arch})")
 
     fail = 0
+    skipped = 0
     for mod_name, fn_name in PROBES:
         try:
             mod = importlib.import_module(mod_name)
-            result = getattr(mod, fn_name)()
+        except ImportError as exc:
+            print(f"  [skip] {mod_name}.{fn_name}() — not importable in this checkout ({exc})")
+            skipped += 1
+            continue
+        fn = getattr(mod, fn_name, None)
+        if not callable(fn):
+            print(f"  [skip] {mod_name}.{fn_name}() — function absent in this checkout")
+            skipped += 1
+            continue
+        try:
+            result = fn()
             preview = json.dumps(result, default=str)[:90]
             print(f"  [ok] {mod_name}.{fn_name}() -> {type(result).__name__} {preview}")
-        except Exception as exc:  # noqa: BLE001 — a raised probe IS the failure here
+        except Exception as exc:  # noqa: BLE001 — a present probe that raises IS the failure
             print(f"  [X] {mod_name}.{fn_name}() raised {type(exc).__name__}: {exc}")
             print("      (probes must be fail-soft — return on every OS, never raise)")
             fail = 1
 
-    print("[plugin-probes] " + ("all probes fail-soft OK" if not fail else "FAILURES above"))
+    tail = f" ({skipped} skipped — version skew)" if skipped else ""
+    print("[plugin-probes] " + ("all present probes fail-soft OK" if not fail else "FAILURES above") + tail)
     return fail
 
 
