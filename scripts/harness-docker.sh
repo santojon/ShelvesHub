@@ -29,9 +29,23 @@ docker build ${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} \
 # Mount the repo read-only at a work copy and keep target/ + cargo caches on named
 # volumes so rebuilds across runs are fast. The repo is mounted at /work; cargo
 # output and the git-fetched React vendor land on the cache volumes.
+# Optionally mount a Deck Shelves checkout so the harness can exercise the plugin's
+# cross-OS backend probes UNDER the host on this container's OS/arch. Looked up via
+# DECK_SHELVES_ROOT, else a sibling ../Deck-Shelves; absent → that step skips.
+PLUGIN_ARGS=()
+DS_ROOT="${DECK_SHELVES_ROOT:-$ROOT/../Deck-Shelves}"
+if [[ -d "$DS_ROOT/src/backend" ]]; then
+  DS_ROOT="$(cd "$DS_ROOT" && pwd)"
+  echo "[i] Mounting Deck Shelves backend from $DS_ROOT (plugin-under-host probes enabled)."
+  PLUGIN_ARGS=(-v "$DS_ROOT":/deck-shelves:ro -e DECK_SHELVES_ROOT=/deck-shelves)
+else
+  echo "[i] No Deck Shelves checkout ($DS_ROOT) — plugin-under-host probes will skip."
+fi
+
 echo "[i] Running the harness in a container…"
 docker run --rm ${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} \
   -v "$ROOT":/work \
   -v shelveshub-harness-target:/work/target \
   -v shelveshub-harness-cargo:/usr/local/cargo/registry \
+  ${PLUGIN_ARGS[@]+"${PLUGIN_ARGS[@]}"} \
   "$IMAGE"

@@ -27,6 +27,11 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   de Jogo do Steam Deck, ou trazendo o Steam de volta ao Big Picture no macOS e no Windows.
 - **Configurações mais robustas entre versões.** Rodar versões diferentes do ShelvesHub nas
   suas máquinas não corre mais o risco de perder uma configuração que a versão mais antiga não conhecia.
+- **O site agora mostra as notas de lançamento e a lista completa de recursos em português também**,
+  alternando ao vivo com o seletor de idioma existente — recorrendo automaticamente
+  ao inglês para o que ainda não foi traduzido. O README, o changelog e cada
+  página de guia também têm agora uma versão em português brasileiro, com link a partir de cada
+  página em inglês.
 
 ## [0.1.0] - 2026-09-16
 

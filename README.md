@@ -61,7 +61,7 @@ The service also **keeps itself and the bundle current**: with automatic updates
 - **Disable until restart** — a troubleshooting switch stands the host down until the next service restart without uninstalling anything.
 - **One shared contract** — the `@deck-shelves/host` API defines what the host provides, so one Deck Shelves build runs under this host or under a plugin loader unchanged.
 - **Localized** — the host tab is translated into 19 languages.
-- **No-device verification** — a Docker simulation harness runs the runtime, a daemon → headless-Chromium injection smoke, and the install / uninstall lifecycle in a container.
+- **No-device verification** — a Docker simulation harness runs the runtime, a daemon → headless-Chromium injection smoke, the install / uninstall lifecycle, and the Deck Shelves cross-OS backend probes under the host in a container (on Linux x86_64 and ARM64 via emulation).
 
 ---
 

@@ -61,7 +61,7 @@ O serviço também **se mantém atualizado, junto com o pacote**: com as atualiz
 - **Desativar até reiniciar** — um interruptor de solução de problemas desativa o host até o próximo reinício do serviço, sem desinstalar nada.
 - **Um contrato compartilhado** — a API `@deck-shelves/host` define o que o host fornece, então uma build do Deck Shelves roda sob este host ou sob um carregador de plugins sem alteração.
 - **Localizado** — a aba do host está traduzida em 19 idiomas.
-- **Verificação sem dispositivo** — um harness de simulação Docker roda o runtime, um smoke test de injeção daemon → Chromium headless, e o ciclo de vida de instalação/desinstalação num container.
+- **Verificação sem dispositivo** — um harness de simulação Docker roda o runtime, um smoke test de injeção daemon → Chromium headless, o ciclo de vida de instalação/desinstalação, e os probes de backend multiplataforma do Deck Shelves sob o host num container (em Linux x86_64 e ARM64 por emulação).
 
 ---
 

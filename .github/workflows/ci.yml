@@ -187,5 +187,31 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      # Check out the plugin so the harness can exercise its cross-OS backend
+      # probes UNDER the host. Non-fatal: if it can't be reached the harness's
+      # plugin step just skips and the host-only checks still run.
+      - name: Check out Deck Shelves (plugin-under-host probes)
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: santojon/Deck-Shelves
+          path: .plugin-src
+          persist-credentials: false
+          token: ${{ secrets.SUBMIT_TOKEN || github.token }}
+
       - name: Simulation harness (Linux container)
-        run: bash scripts/harness-docker.sh
+        run: DECK_SHELVES_ROOT="$GITHUB_WORKSPACE/.plugin-src" bash scripts/harness-docker.sh
+
+      # The same plugin probes on ARM64 (QEMU) — the coverage the plugin's own
+      # x86_64 pytest can't give. Probes only (no Rust build), so it stays cheap.
+      - name: Set up QEMU (arm64)
+        if: hashFiles('.plugin-src/src/backend/display_state.py') != ''
+        uses: docker/setup-qemu-action@v3
+      - name: Plugin backend probes on ARM64
+        if: hashFiles('.plugin-src/src/backend/display_state.py') != ''
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "$GITHUB_WORKSPACE/docker/plugin-probes.py":/probes.py:ro \
+            -v "$GITHUB_WORKSPACE/.plugin-src":/deck-shelves:ro \
+            -e DECK_SHELVES_ROOT=/deck-shelves \
+            python:3-slim python3 /probes.py

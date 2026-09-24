@@ -100,6 +100,21 @@ else
 fi
 fi
 
+# ── 4. Plugin backend probes (the plugin running UNDER the host) ─────────────
+# ShelvesHub hosts the plugin's Python backend, so its OS-coupled probes get real
+# coverage on this container's OS/arch (incl. ARM64) here — not only the plugin
+# repo's own x86_64 runner. Skips cleanly when the plugin isn't checked out.
+if [[ "$MODE" == "all" || "$MODE" == "plugin" ]]; then
+echo ""
+echo "[plugin] Deck Shelves backend probes under the host (cross-OS, fail-soft)…"
+if python3 docker/plugin-probes.py; then
+  echo "[ok] plugin backend probes fail-soft on $(uname -m)"
+else
+  echo "[X] plugin backend probes failed"
+  FAIL=1
+fi
+fi
+
 echo ""
 if [[ "$FAIL" -eq 0 ]]; then echo "[OK] Docker harness passed"; else echo "[X] Docker harness failed"; fi
 exit "$FAIL"
