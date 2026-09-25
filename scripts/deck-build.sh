@@ -15,8 +15,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PATH="$HOME/.cargo/bin:$PATH"
 
-# Target arch: x86_64 (Steam Deck, default) or aarch64 (Steam Frame). Set with
-# SHELVES_ARCH=aarch64 (or `pnpm build:frame`).
+# Target arch: x86_64 (Steam Deck, default) or aarch64 (ARM64 devices). Set with
+# SHELVES_ARCH=aarch64 (or `pnpm build:arm64`).
 ARCH="${SHELVES_ARCH:-x86_64}"
 case "$ARCH" in
   x86_64)         TARGET="x86_64-unknown-linux-gnu" ;;

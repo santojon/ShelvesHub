@@ -216,7 +216,7 @@ jobs:
             -e DECK_SHELVES_ROOT=/deck-shelves \
             python:3-slim python3 /probes.py
 
-  # Prove every change compiles for Linux ARM64 (Steam Frame / ARM boxes). Cheap:
+  # Prove every change compiles for Linux ARM64 (ARM devices / ARM boxes). Cheap:
   # a native cross-compile with the ARM64 linker — no emulation — so it gates every
   # PR. The full emulated ARM64 runtime harness is docker-harness-arm64 below.
   linux-arm64-check:

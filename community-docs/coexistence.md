@@ -17,6 +17,24 @@ Shelves twice, and it adds only its own management tab.
 - **The other host keeps its plugins.** ShelvesHub adds its own tab beside the
   other host without taking over its plugin list.
 
+## "I installed ShelvesHub but my Home looks exactly the same"
+
+That's expected when a plugin loader is **already** running Deck Shelves. The
+loader stays the host, so your Home keeps behaving as before — ShelvesHub does
+**not** replace or update that copy; it only adds its own tab. So:
+
+- Your existing shelves and any quirks of the Deck Shelves version the loader
+  installed are unchanged.
+- Installing ShelvesHub does **not** upgrade the Deck Shelves the loader runs —
+  update that through the loader as usual.
+- **Very old Deck Shelves versions** predate the ShelvesHub integration, so they
+  can't share their editor into the ShelvesHub tab. Update Deck Shelves in the
+  loader to a current version for the best experience.
+
+To check who's hosting and switch, open the **ShelvesHub tab** in the Quick
+Access Menu. To make ShelvesHub host Deck Shelves instead of the loader, see the
+next section — the loader stays installed for its other plugins.
+
 ## When ShelvesHub should be the host
 
 If ShelvesHub is the only thing installed, it hosts Deck Shelves itself

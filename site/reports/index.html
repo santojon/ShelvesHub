@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShelvesHub — Reports</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    .rep-wrap { max-width: var(--maxw); margin: 0 auto; padding: 32px 20px 64px; }
+    .rep-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .rep-head h1 { margin: 0; font-size: 24px; }
+    .rep-head .muted { color: var(--fg-dim); font-size: 13px; }
+    a.back { color: var(--accent); text-decoration: none; font-size: 13px; }
+    .card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--card-shadow); padding: 16px 18px; margin-top: 18px; }
+    .card .k { color: var(--fg-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    section h2 { font-size: 15px; margin: 28px 0 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { color: var(--fg-dim); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
+    td.num { font-variant-numeric: tabular-nums; }
+    .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-dim); }
+    .pill.pass { color: #15a34a; border-color: rgba(21,163,74,.4); }
+    .pill.fail { color: #ef4444; border-color: rgba(239,68,68,.4); }
+    .scope { font-size: 11px; color: var(--fg-dim); text-transform: uppercase; }
+    .note { color: var(--fg-dim); font-size: 12px; margin-top: 24px; line-height: 1.5; }
+    .empty { color: var(--fg-dim); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="rep-wrap">
+    <div class="rep-head">
+      <div>
+        <h1>ShelvesHub · Reports</h1>
+        <div class="muted"><a class="back" href="../">← ShelvesHub</a> · quality snapshots per run</div>
+      </div>
+      <div><a class="back" href="dashboard.html">Open the dashboard →</a></div>
+    </div>
+
+    <div class="card">
+      <div class="k">Latest run</div>
+      <div id="latest" class="empty" style="margin-top:8px">Loading…</div>
+    </div>
+
+    <section>
+      <h2>Recorded runs</h2>
+      <div class="card" style="padding:6px 4px">
+        <table id="runs-table"><thead><tr>
+          <th>When</th><th>Scope</th><th>Version</th><th>Status</th>
+          <th>Rust tests</th><th>JS harness</th><th>Suppressions</th>
+        </tr></thead><tbody id="runs-body"><tr><td colspan="7" class="empty" style="padding:14px 10px">Loading…</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <p class="note">
+      Snapshots are recorded by <code>scripts/ci/report.mjs</code> into
+      <code>site/reports/&lt;scope&gt;/&lt;timestamp&gt;.json</code> and aggregated into
+      <code>site/reports/runs.json</code>. The <b>Ops · Quality reports</b> workflow records a
+      <code>ci</code> snapshot on every push to main, a <code>release</code> snapshot on a
+      published release, and a weekly baseline; run <code>pnpm report</code> for a local one.
+      The <a class="back" href="dashboard.html">dashboard</a> charts these over time.
+    </p>
+  </div>
+
+  <script>
+    (function () {
+      function esc(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+      function frac(o) { return o ? (o.passed + "/" + o.total) : "—"; }
+      fetch("runs.json", { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .catch(function () { return []; })
+        .then(function (runs) {
+          runs = (runs || []).slice().sort(function (a, b) { return String(a.ts) < String(b.ts) ? 1 : -1; });
+          var latest = document.getElementById("latest");
+          var body = document.getElementById("runs-body");
+          if (!runs.length) {
+            latest.textContent = "No runs recorded yet.";
+            body.innerHTML = '<tr><td colspan="7" class="empty" style="padding:14px 10px">No runs recorded yet.</td></tr>';
+            return;
+          }
+          var top = runs[0];
+          var okClass = top.overall === "PASS" ? "pass" : "fail";
+          latest.innerHTML = '<span class="pill ' + okClass + '">' + esc(top.overall || "—") + '</span> '
+            + '<b>' + esc(top.version ? "v" + top.version : "—") + '</b> · ' + esc(top.scope || "") + ' · ' + esc(String(top.ts).slice(0, 10))
+            + ' — Rust ' + frac(top.tests) + ' · JS ' + frac(top.harness) + ' · ' + (top.suppressions ? top.suppressions.total : "—") + ' suppressions';
+          body.innerHTML = runs.map(function (r) {
+            var oc = r.overall === "PASS" ? "pass" : "fail";
+            return '<tr>'
+              + '<td>' + esc(String(r.ts).replace("_", " ")) + '</td>'
+              + '<td class="scope">' + esc(r.scope || "") + '</td>'
+              + '<td>' + esc(r.version ? "v" + r.version : "—") + '</td>'
+              + '<td><span class="pill ' + oc + '">' + esc(r.overall || "—") + '</span></td>'
+              + '<td class="num">' + frac(r.tests) + '</td>'
+              + '<td class="num">' + frac(r.harness) + '</td>'
+              + '<td class="num">' + (r.suppressions ? (+r.suppressions.total) : "—") + '</td>'
+              + '</tr>';
+          }).join("");
+        });
+    })();
+  </script>
+</body>
+</html>

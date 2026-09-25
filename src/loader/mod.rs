@@ -202,7 +202,14 @@ pub fn run(mut config: Config) {
                     "loader",
                     "Steam UI windows have collapsed. NOT calling StartRestart (it worsens this) — recover by restarting steam-launcher.service on the device.",
                 );
-                match &config.recover_cmd {
+                // Empty/whitespace `recover_cmd` = pause only (explicit opt-out),
+                // same as unset-with-no-default. A real command runs through a shell.
+                match config
+                    .recover_cmd
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|c| !c.is_empty())
+                {
                     Some(cmd) => run_recovery(cmd),
                     None => log_error(
                         "loader",
@@ -247,22 +254,15 @@ pub fn run(mut config: Config) {
         // when the gamepad UI returns.
         if !config.desktop_ui && !gamepad_active {
             if !was_desktop_idle {
-                // Standing down does NOT undo an injection already in the shared
-                // renderer (the bundle patches the library/home route, which the
-                // desktop client renders too). So on the transition, reload the
-                // renderer once to clear it — but only if we actually injected.
-                if state::is_injected() {
-                    log_info(
-                        "loader",
-                        "Desktop client on screen (not the gamepad UI) — clearing the renderer and standing down; enable desktop_ui to inject here.",
-                    );
-                    reload_renderer(&config);
-                } else {
-                    log_info(
-                        "loader",
-                        "Desktop client on screen (not the gamepad UI) — standing down; enable desktop_ui to inject here.",
-                    );
-                }
+                // Just stand down — do NOT reload the renderer. A reload bounces the
+                // whole Steam window (visible close/reopen on the desktop→BP switch),
+                // and the gamepad Home route the bundle patches isn't rendered by the
+                // desktop client anyway, so the injection is harmless there. Clearing
+                // the marker re-injects cleanly the moment the gamepad UI returns.
+                log_info(
+                    "loader",
+                    "Desktop client on screen (not the gamepad UI) — standing down; enable desktop_ui to inject here.",
+                );
             }
             was_desktop_idle = true;
             state::set_injected(false);
@@ -576,7 +576,14 @@ fn soft_reinject(config: &Config) -> bool {
         config.cef_port,
         config.target_filter.as_deref(),
     ) {
-        Ok(mut client) => match client.evaluate(&format!("delete {MARKER_GLOBAL}; true")) {
+        // Tear the CURRENT bundle instance down (run its onUnmount handlers)
+        // BEFORE clearing the marker, so the next tick's fresh bundle doesn't end
+        // up as a SECOND owner of the Home alongside a half-live old one.
+        Ok(mut client) => match client.evaluate(&format!(
+            "(function(){{ try {{ var h = window.__SHELVES_HOST__; \
+             if (h && h.lifecycle && h.lifecycle.teardown) h.lifecycle.teardown(); }} \
+             catch (e) {{}} delete {MARKER_GLOBAL}; return true; }})()"
+        )) {
             Ok(_) => {
                 state::set_injected(false);
                 true
@@ -891,8 +898,38 @@ pub(super) fn config_stamp(config: &Config) -> String {
     let obj = serde_json::json!({
         "rpcEndpoint": format!("http://{}", config.rpc_addr),
         "hostApiVersion": crate::HOST_API_VERSION,
+        "hostVersion": env!("CARGO_PKG_VERSION"),
+        "rpcToken": state::rpc_token(),
     });
     format!("window.__SHELVES_CONFIG__ = {obj};\n")
+}
+
+/// The runtime fragments concatenated AFTER the base `shelves-host.js`, in this
+/// order. They share one closure with the base (see shelves-host.js); the split
+/// only keeps each source file bounded. Order matters — `-api` uses the QAM host
+/// defined in `-qam`.
+const HOST_RUNTIME_PARTS: &[&str] = &["shelves-host-qam.js", "shelves-host-api.js"];
+
+/// Read the host runtime as ONE injectable script. The runtime source is split
+/// across `shelves-host.js` and the `HOST_RUNTIME_PARTS` siblings (so each source
+/// file stays bounded); they share one closure, so this concatenates them in
+/// order and wraps the whole in a single strict-mode IIFE — the exact form the
+/// runtime is authored for.
+pub(super) fn assemble_host_runtime(config: &Config) -> std::io::Result<String> {
+    let base = &config.host_runtime_path;
+    let mut body = fs::read_to_string(base)?;
+    if let Some(dir) = base.parent() {
+        for part in HOST_RUNTIME_PARTS {
+            let path = dir.join(part);
+            if path.exists() {
+                body.push('\n');
+                body.push_str(&fs::read_to_string(&path)?);
+            }
+        }
+    }
+    Ok(format!(
+        "(function () {{\n\"use strict\";\n{body}\n}})();\n"
+    ))
 }
 
 fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
@@ -902,7 +939,7 @@ fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
     // the trip here — doing so on every inject would wipe a legitimate trip and let
     // a crashing native path retry forever (a crash loop). The daemon health gate +
     // the runtime breaker together guard it.
-    match fs::read_to_string(&config.host_runtime_path) {
+    match assemble_host_runtime(config) {
         Ok(source) => {
             // Inline the per-locale dictionaries first so the runtime's i18n reads
             // them the moment it evaluates.

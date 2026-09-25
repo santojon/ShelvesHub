@@ -91,6 +91,16 @@
       </div>
     </section>
 
+    <section>
+      <h2>Quality trend</h2>
+      <div class="grid">
+        <div class="card"><div class="k">Rust unit tests</div><div class="chart" id="q-tests"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">JS runtime tests (harness scenarios)</div><div class="chart" id="q-harness"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Lint suppressions (lower is better)</div><div class="chart" id="q-suppressions"><div class="chart-empty">Loading…</div></div></div>
+      </div>
+      <div class="card"><div class="k">Suppressions by rule (latest)</div><div id="q-supp-rules">—</div></div>
+    </section>
+
     <p class="note">
       Usage numbers refresh weekly from <code>site/stats/*.json</code> (the
       <b>Ops · Site stats</b> workflow), which appends one dated row per run to
@@ -209,6 +219,58 @@
         var br = document.getElementById("by-release");
         if (br) br.innerHTML = releaseBars(releases);
       });
+
+      // ── Quality trend: Rust tests + lint suppressions across recorded runs ──
+      function esc(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+      function qLineChart(hostId, runs, pick, color) {
+        var host = document.getElementById(hostId);
+        if (!host) return;
+        var rows = runs.map(function (r) {
+          return { v: pick(r), label: (r.version ? "v" + r.version : "") + " · " + r.scope, date: String(r.ts).slice(0, 10) };
+        }).filter(function (x) { return x.v != null && !isNaN(x.v); });
+        if (rows.length < 2) { host.innerHTML = '<div class="chart-empty">Not enough runs yet.</div>'; return; }
+        var w = 480, h = 180, padX = 34, padTop = 16, padBot = 26;
+        var vals = rows.map(function (x) { return +x.v; });
+        var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals);
+        var span = (max - min) || 1;
+        var X = function (i) { return padX + (i / (rows.length - 1)) * (w - 2 * padX); };
+        var Y = function (v) { return h - padBot - ((v - min) / span) * (h - padTop - padBot); };
+        var pts = rows.map(function (x, i) { return X(i).toFixed(1) + "," + Y(vals[i]).toFixed(1); }).join(" ");
+        var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" style="width:100%;height:180px">';
+        svg += '<polyline fill="none" stroke="' + color + '" stroke-width="2" points="' + pts + '"/>';
+        rows.forEach(function (x, i) {
+          svg += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(vals[i]).toFixed(1) + '" r="3.5" fill="' + color + '"><title>' + esc(vals[i] + " — " + x.label + " (" + x.date + ")") + '</title></circle>';
+        });
+        svg += '<text x="4" y="' + (padTop + 4) + '" fill="#94a3b8" font-size="10">' + max + '</text>';
+        svg += '<text x="4" y="' + (h - padBot) + '" fill="#94a3b8" font-size="10">' + min + '</text>';
+        svg += '</svg>';
+        host.innerHTML = svg;
+      }
+      function qRuleBars(latest) {
+        var host = document.getElementById("q-supp-rules");
+        if (!host) return;
+        var br = (latest && latest.suppressions && latest.suppressions.byRule) || {};
+        var entries = Object.keys(br).map(function (k) { return [k, br[k]]; }).sort(function (a, b) { return b[1] - a[1]; });
+        if (!entries.length) { host.innerHTML = '<div class="chart-empty">No suppressions — all clean.</div>'; return; }
+        var max = Math.max.apply(null, entries.map(function (e) { return e[1]; })) || 1;
+        host.innerHTML = entries.map(function (e) {
+          var pct = Math.round((e[1] / max) * 100);
+          return '<div class="row"><span class="lbl"><code>' + esc(e[0]) + '</code></span><span class="s">' + (+e[1]) + '</span></div>'
+            + '<div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin:2px 0 8px"><div style="height:6px;width:' + pct + '%;background:#f59e0b;border-radius:3px"></div></div>';
+        }).join("");
+      }
+      fetch("runs.json", { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .catch(function () { return []; })
+        .then(function (runs) {
+          runs = (runs || []).slice().sort(function (a, b) { return String(a.ts) < String(b.ts) ? -1 : 1; });
+          qLineChart("q-tests", runs, function (r) { return r.tests && r.tests.passed; }, "#4ade80");
+          qLineChart("q-harness", runs, function (r) { return r.harness && r.harness.passed; }, "#38bdf8");
+          qLineChart("q-suppressions", runs, function (r) { return r.suppressions && r.suppressions.total; }, "#f59e0b");
+          qRuleBars(runs[runs.length - 1]);
+        });
     })();
   </script>
 </body>

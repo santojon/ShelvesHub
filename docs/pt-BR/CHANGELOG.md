@@ -8,6 +8,48 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+### Security
+- **O RPC de controle local agora exige um token por boot e rejeita chamadores
+  não confiáveis.** O endpoint do daemon em `127.0.0.1` antes respondia a
+  qualquer processo local ou página web (CORS aberto, sem auth), o que podia
+  disparar atualizações, configurações ou recuperação. Agora exige um bearer
+  token aleatório por boot (injetado no runtime pelo canal próprio do daemon),
+  um content-type JSON, e reflete só a origem real do renderer — nunca `*`.
+  Atualizar força um reload do renderer para o runtime pegar o token.
+- **`recover_cmd` não pode mais ser definido via RPC.** Ele roda através de um
+  shell num evento de colapso da UI, então agora é somente arquivo/env; um valor
+  vazio significa "apenas pausar" (nenhum comando é executado).
+- **Atualizações do plugin instalam só o pacote de release do Deck Shelves.** O
+  `applyUpdate` agora aceita apenas uma URL
+  `.../santojon/Deck-Shelves/releases/download/<tag>/*.iife.js` — nada de URL
+  arbitrária do GitHub, host parecido, ou com query/fragment contrabandeado —
+  já que o arquivo é injetado no Steam com acesso total.
+- **O proxy do backend Python encaminha só os métodos conhecidos da API do Deck
+  Shelves** (allowlist), não chamadas arbitrárias.
+- **Limites de requisição:** o RPC limita o corpo a 2 MiB e expira conexões
+  lentas.
+- **O serviço do Linux genérico agora roda como seu usuário, não como root.**
+  Instala como serviço systemd por usuário (como no SteamOS) sob
+  `~/.local/share/shelveshub` com hardening leve, e uma instalação antiga como
+  root em nível de sistema é migrada automaticamente na próxima instalação.
+
+### Corrigido
+- **Instalações novas não "não fazem nada" mais.** Todo instalador agora habilita
+  a porta de debug do Steam (o flag que o ShelvesHub precisa para alcançar o
+  Steam) e avisa claramente para reiniciar o Steam uma vez — antes, uma instalação
+  limpa sem carregador prévio só registrava "connection refused" para sempre, sem
+  nada na tela.
+- **Reinstalar agora tem efeito de fato.** Uma atualização no lugar reinicia o
+  serviço para que o novo binário rode imediatamente (antes deixava o antigo
+  rodando até reiniciar), e nunca há um segundo daemon disputando a porta.
+- **Uma troca a quente do plugin não deixa mais duas cópias donas da Home.** Antes
+  de recarregar um pacote atualizado, o host desmonta a instância anterior primeiro.
+- **O banner de atualização some corretamente.** Registrar a versão instalada após
+  um download encerra o "atualização disponível" infinito; e quando o próprio host
+  hospeda o Deck Shelves, o plugin deixa o banner por conta do host.
+
+## [0.2.0] - 2026-09-25
+
 ### Added
 - **macOS agora roda em Macs com Intel também.** O pacote para macOS distribui um
   **binário universal** (`arm64` + `x86_64` combinados via `lipo`), então o ShelvesHub roda nativamente tanto em
@@ -65,8 +107,8 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   pacote correspondente, então o mesmo link de download funciona num Steam Deck
   x86_64 ou num dispositivo ARM64. Cada mudança passa por um gate de compilação
   `aarch64` no CI, e um harness completo de runtime ARM64 pode ser rodado sob
-  emulação sob demanda. (A validação no hardware do Steam Frame ainda está
-  pendente, então o próprio Frame é tratado como experimental até ser testado no
+  emulação sob demanda. (A validação em hardware ARM64 real ainda está em
+  andamento, então o ARM64 é tratado como experimental até ser testado no
   dispositivo.)
 
 ### Changed

@@ -10,6 +10,8 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-25
+
 - **Agora roda em Macs com Intel também, não só em Apple Silicon.** O download para macOS é uma
   build universal, então o ShelvesHub inicia nativamente em qualquer Mac.
 - **Animação de inicialização opcional.** Ative para reproduzir uma animação curta de inicialização do Deck Shelves
@@ -36,8 +38,8 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   SteamOS e Linux, e o instalador escolhe o certo para o seu dispositivo
   automaticamente — os downloads x86_64 não mudaram. A autoatualização também
   permanece na sua arquitetura, então uma máquina ARM64 nunca puxa uma build
-  x86_64 por engano. (O suporte ao Steam Frame ainda está sendo validado em
-  hardware real.)
+  x86_64 por engano. (O suporte ainda está sendo validado em hardware ARM64
+  real.)
 
 ## [0.1.0] - 2026-09-16
 

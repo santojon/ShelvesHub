@@ -13,18 +13,27 @@
 
 (function () {
   "use strict";
-  var S = window.__HARNESS__ || {};
+  const S = window.__HARNESS__ || {};
 
   function loadRuntime() {
-    return new Promise(function (resolve, reject) {
-      var s = document.createElement("script");
-      s.src = "../../runtime/shelves-host.js";
-      s.onload = function () {
-        resolve();
-      };
-      s.onerror = function () {
-        reject(new Error("runtime/shelves-host.js failed to load"));
-      };
+    // Mirror the daemon: the runtime source is split across shelves-host.js and
+    // its part files; fetch them in order, wrap in one strict IIFE, and inject —
+    // exactly the form the daemon assembles on-device.
+    const files = [
+      "../../runtime/shelves-host.js",
+      "../../runtime/shelves-host-qam.js",
+      "../../runtime/shelves-host-api.js",
+    ];
+    return Promise.all(
+      files.map(function (f) {
+        return fetch(f).then(function (r) {
+          if (!r.ok) throw new Error(f + " failed to load (" + r.status + ")");
+          return r.text();
+        });
+      })
+    ).then(function (bodies) {
+      const s = document.createElement("script");
+      s.textContent = '(function () {\n"use strict";\n' + bodies.join("\n") + "\n})();\n";
       document.head.appendChild(s);
     });
   }
@@ -52,7 +61,7 @@
     // the order-independent __SHELVES_QAM_PENDING__ path (the runtime drains it).
     if (S.pluginPanel) window.__HARNESS_REGISTER_PLUGIN_PANEL__();
 
-    var chain;
+    let chain;
     if (S.lateMount) {
       // QAM already mounted when the runtime patches → native-arming; the
       // coexistence re-point should still land the tab on the next render.
@@ -74,9 +83,9 @@
   // For native scenarios, wait for that render before signalling ready.
   function waitForNativeRender() {
     return new Promise(function (resolve) {
-      var t0 = Date.now();
+      const t0 = Date.now();
       (function poll() {
-        var r = null;
+        let r = null;
         try { r = window.__HARNESS_REPORT__(); } catch (e) {}
         if ((r && r.nativeUi) || Date.now() - t0 > 4000) return resolve();
         setTimeout(poll, 80);

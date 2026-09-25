@@ -54,7 +54,7 @@ pub(super) fn run_preload(config: Config) {
         "loader",
         "Preload mode: host runtime runs at document-start (idle boot).",
     );
-    let runtime = match fs::read_to_string(&config.host_runtime_path) {
+    let runtime = match super::assemble_host_runtime(&config) {
         Ok(s) => s,
         Err(e) => {
             log_error(

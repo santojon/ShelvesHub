@@ -38,7 +38,7 @@ is pushed — the notes below are picked up and published with the release.
   SteamOS and Linux, and the installer picks the right one for your device
   automatically — the x86_64 downloads are unchanged. Self-update also stays on
   your architecture, so an ARM64 machine never pulls an x86_64 build by mistake.
-  (Steam Frame support is still being validated on real hardware.)
+  (Support is still being validated on real ARM64 hardware.)
 
 ## [0.1.0] - 2026-09-16
 

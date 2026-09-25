@@ -3,11 +3,16 @@ Description=ShelvesHub Service
 After=network-online.target
 
 [Service]
-ExecStart=/opt/shelveshub/shelveshub
+ExecStart=%h/.local/share/shelveshub/shelveshub
 Restart=always
 RestartSec=10
-WorkingDirectory=/opt/shelveshub
-Environment=TERM=xterm-256color
+WorkingDirectory=%h/.local/share/shelveshub
+# Runs as the current user (a user unit) — never root. Light hardening that
+# doesn't touch $HOME (the daemon writes settings, the boot movie and logs
+# under the user's home).
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

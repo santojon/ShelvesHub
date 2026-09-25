@@ -18,6 +18,26 @@ o Deck Shelves duas vezes e adiciona apenas sua própria aba de gerenciamento.
 - **O outro host mantém seus plugins.** O ShelvesHub adiciona sua própria aba ao
   lado do outro host sem assumir a lista de plugins dele.
 
+## "Instalei o ShelvesHub mas minha Home está exatamente igual"
+
+Isso é esperado quando um carregador de plugins **já** está rodando o Deck
+Shelves. O carregador continua sendo o host, então sua Home segue se comportando
+como antes — o ShelvesHub **não** substitui nem atualiza aquela cópia; ele só
+adiciona sua própria aba. Ou seja:
+
+- Suas prateleiras existentes e quaisquer peculiaridades da versão do Deck
+  Shelves que o carregador instalou ficam inalteradas.
+- Instalar o ShelvesHub **não** atualiza o Deck Shelves que o carregador roda —
+  atualize por ele, como de costume.
+- **Versões muito antigas do Deck Shelves** são anteriores à integração com o
+  ShelvesHub, então não conseguem espelhar o editor delas na aba do ShelvesHub.
+  Atualize o Deck Shelves no carregador para uma versão atual.
+
+Para ver quem está hospedando e trocar, abra a **aba do ShelvesHub** no Menu de
+Acesso Rápido. Para fazer o ShelvesHub hospedar o Deck Shelves em vez do
+carregador, veja a próxima seção — o carregador continua instalado para seus
+outros plugins.
+
 ## Quando o ShelvesHub deve ser o host
 
 Se o ShelvesHub é a única coisa instalada, ele hospeda o Deck Shelves sozinho
