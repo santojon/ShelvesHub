@@ -17,6 +17,7 @@ Target the Mac with:
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Dict
@@ -33,7 +34,10 @@ from deckprobe.screenshots.lib.capture import _capture
 from deckprobe.screenshots.lib.cdp import Session, list_targets
 from deckprobe.screenshots.lib.registry import register
 
-LOCALE = "en-US"
+# Same resolution order as Deck-Shelves' scripts/deckprobe-ext/screenshots/
+# scenarios/_locale.py: `--locale` passed to the runner (`screenshots/run.py`
+# exports it as this env var) wins, else today's exact default (en-US).
+LOCALE = os.environ.get("DECKPROBE_SCREENSHOTS_LOCALE") or "en-US"
 
 # The child selector that is only in the DOM when a given section is expanded.
 _SECTION_CHILD = {

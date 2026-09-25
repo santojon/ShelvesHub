@@ -181,10 +181,12 @@
       var imgs = document.querySelectorAll("img[data-shot]");
       for (var j = 0; j < imgs.length; j++) {
         (function (img) {
-          var name = img.getAttribute("data-shot") || "";
-          // Only our own screenshot file names — reject anything else so the
-          // attribute value can't be used to build an unexpected URL.
-          if (!/^[\w.-]+$/.test(name)) return;
+          var shot = img.getAttribute("data-shot") || "";
+          // Only our own screenshot file names — reject anything else, then
+          // URL-encode so the value can't shape an unexpected URL (and so it
+          // stays sanitized inside the onerror closure below).
+          if (!/^[\w.-]+$/.test(shot)) return;
+          var name = encodeURIComponent(shot);
           img.onerror = function () { if (img.src.indexOf(raw) !== 0) { img.onerror = null; img.src = raw + name; } };
           img.src = local + name;
         })(imgs[j]);
