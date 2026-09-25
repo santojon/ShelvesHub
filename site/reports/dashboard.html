@@ -126,8 +126,16 @@
 
       // ── Shared floating tooltip for every chart point ────────────────────
       var tip = document.getElementById("chart-tip");
-      function showTip(html, x, y) {
-        tip.innerHTML = html;
+      // Build the tooltip from text nodes (never innerHTML) so chart-point
+      // attribute values can't be reinterpreted as HTML.
+      function showTip(valText, dateText, x, y) {
+        tip.textContent = "";
+        var b = document.createElement("b");
+        b.textContent = valText;
+        tip.appendChild(b);
+        tip.appendChild(document.createTextNode(" downloads"));
+        tip.appendChild(document.createElement("br"));
+        tip.appendChild(document.createTextNode(dateText));
         tip.classList.add("show");
         var r = tip.getBoundingClientRect();
         tip.style.left = Math.max(8, Math.min(window.innerWidth - r.width - 8, x - r.width / 2)) + "px";
@@ -173,7 +181,7 @@
           var c = e.target && e.target.getAttribute && e.target.getAttribute("data-pt") !== null ? e.target : null;
           if (!c) { hideTip(); return; }
           var box = c.getBoundingClientRect();
-          showTip("<b>" + c.getAttribute("data-val") + "</b> downloads<br>" + c.getAttribute("data-date"),
+          showTip(c.getAttribute("data-val"), c.getAttribute("data-date"),
             box.left + box.width / 2, box.top);
         });
         host.addEventListener("mouseleave", hideTip);

@@ -106,6 +106,9 @@
         "footer.copy": "© 2026 ShelvesHub · Licença MIT · feito por Jonathan Santos · <a href=\"index.html\">← Voltar para o início</a>"
       };
       var EN = {};
+      // Trusted, literal English footer markup (mirrors the static footer below).
+      // Used instead of re-reading the DOM so it's never reinterpreted as HTML.
+      var EN_FOOTER = '© 2026 ShelvesHub · MIT-licensed · built by Jonathan Santos · <a href="index.html" data-i18n="nav.backHome">← Back to home</a>';
       function collect(attr) {
         var nodes = document.querySelectorAll("[" + attr + "]");
         for (var i = 0; i < nodes.length; i++) {
@@ -152,10 +155,11 @@
       }
       function apply(lang) {
         var dict = lang === "pt" ? PT : null;
-        // footer.copy carries markup in both languages → set as HTML.
+        // footer.copy carries markup (a link) → set from a trusted literal per
+        // language, never from DOM-collected text, so it isn't reinterpreted.
         applyOne("data-i18n", "textContent", dict);
         var fc = document.querySelector('[data-i18n="footer.copy"]');
-        if (fc) fc.innerHTML = (dict && dict["footer.copy"]) || EN["footer.copy"];
+        if (fc) fc.innerHTML = lang === "pt" ? PT["footer.copy"] : EN_FOOTER;
         applyLangVariants(lang);
         document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
         var btns = document.querySelectorAll(".lang-switch [data-lang]");
@@ -177,7 +181,10 @@
       var imgs = document.querySelectorAll("img[data-shot]");
       for (var j = 0; j < imgs.length; j++) {
         (function (img) {
-          var name = img.getAttribute("data-shot");
+          var name = img.getAttribute("data-shot") || "";
+          // Only our own screenshot file names — reject anything else so the
+          // attribute value can't be used to build an unexpected URL.
+          if (!/^[\w.-]+$/.test(name)) return;
           img.onerror = function () { if (img.src.indexOf(raw) !== 0) { img.onerror = null; img.src = raw + name; } };
           img.src = local + name;
         })(imgs[j]);

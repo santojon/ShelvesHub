@@ -79,3 +79,7 @@ assets/icons/icon-*.png
 
 # CI: transient Deck Shelves checkout for plugin-under-host probes
 .plugin-src/
+
+# uitests output (deckprobe/uitests/run.py's default --out) — screenshots
+# and, since the --record flag, per-test MP4s. Local-only, never committed.
+/tmp/
