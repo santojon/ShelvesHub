@@ -25,6 +25,26 @@ ShelvesHub is the independent host service for [Deck Shelves](https://github.com
 
 **Primary target:** SteamOS / Steam Deck. Also supported: Linux, macOS (Intel and Apple Silicon — the download is a universal binary), Windows.
 
+## Contents
+
+- [ShelvesHub](#shelveshub)
+  - [Contents](#contents)
+  - [How it works](#how-it-works)
+  - [Features](#features)
+  - [What it looks like](#what-it-looks-like)
+  - [Documentation](#documentation)
+  - [Installation](#installation)
+    - [SteamOS / Steam Deck (one-click)](#steamos--steam-deck-one-click)
+    - [Linux (one-click or from package)](#linux-one-click-or-from-package)
+    - [macOS](#macos)
+    - [Windows](#windows)
+  - [Uninstalling](#uninstalling)
+  - [Repository layout](#repository-layout)
+  - [Releases](#releases)
+  - [Contributing](#contributing)
+  - [Security](#security)
+  - [License](#license)
+
 ---
 
 ## How it works
@@ -193,11 +213,14 @@ Each release publishes the per-platform packages, one-click scripts, and clickab
 
 | File | Description |
 |---|---|
-| `shelveshub-steamos.tar.gz` | SteamOS package (binary + installer + bundle slot) |
-| `shelveshub-linux.tar.gz` | Linux package |
-| `shelveshub-macos.tar.gz` | macOS package |
+| `shelveshub-steamos.tar.gz` | SteamOS package, x86_64 (binary + installer + bundle slot) |
+| `shelveshub-steamos-aarch64.tar.gz` | SteamOS package, ARM64 |
+| `shelveshub-linux.tar.gz` | Linux package, x86_64 |
+| `shelveshub-linux-aarch64.tar.gz` | Linux package, ARM64 |
+| `shelveshub-macos.tar.gz` | macOS package (universal binary — Apple Silicon and Intel) |
 | `shelveshub-windows.zip` | Windows package |
-| `shelveshub.desktop` | SteamOS one-click installer |
+| `shelveshub.desktop` | SteamOS one-click installer — detects x86_64 vs. ARM64 at install time and fetches the matching package |
+| `shelveshub-linux.desktop` | Linux one-click installer — same architecture auto-detection |
 | `install-mac.command` | macOS one-click script |
 | `install-windows.bat` | Windows one-click script |
 | `Install ShelvesHub.app` (zipped) | macOS clickable installer app (with icon) |

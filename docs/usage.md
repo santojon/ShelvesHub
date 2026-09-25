@@ -17,7 +17,8 @@ ShelvesHub runs as a background service and injects the Deck Shelves bundle into
 ### From package
 
 ```bash
-# Extract shelveshub-steamos.tar.gz, then:
+# Extract shelveshub-steamos.tar.gz (x86_64) or shelveshub-steamos-aarch64.tar.gz
+# (ARM64 / Steam Frame), then:
 bash installer/install.sh
 ```
 
@@ -36,7 +37,8 @@ systemctl --user stop shelveshub
 ### From package
 
 ```bash
-# Extract shelveshub-linux.tar.gz, then:
+# Extract shelveshub-linux.tar.gz (x86_64) or shelveshub-linux-aarch64.tar.gz
+# (ARM64), then:
 sudo bash installer/install.sh
 ```
 

@@ -4,7 +4,7 @@
 
 <div align="center">
 <p>
-  <img src="assets/logo.svg" alt="ShelvesHub" width="352">
+  <img src="../../assets/logo.svg" alt="ShelvesHub" width="352">
 </p>
 
 [![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
@@ -24,6 +24,26 @@
 ShelvesHub é o serviço hospedeiro independente para o [Deck Shelves](https://github.com/santojon/Deck-Shelves). Ele injeta o pacote do Deck Shelves na interface Big Picture do Steam e fornece a API de runtime que esse pacote chama — sem precisar de nenhum carregador de plugins.
 
 **Alvo principal:** SteamOS / Steam Deck. Também suportado: Linux, macOS (Intel e Apple Silicon — o download é um binário universal), Windows.
+
+## Conteúdo
+
+- [ShelvesHub](#shelveshub)
+  - [Conteúdo](#conteúdo)
+  - [Como funciona](#como-funciona)
+  - [Funcionalidades](#funcionalidades)
+  - [Como ele se parece](#como-ele-se-parece)
+  - [Documentação](#documentação)
+  - [Instalação](#instalação)
+    - [SteamOS / Steam Deck (um clique)](#steamos--steam-deck-um-clique)
+    - [Linux (um clique ou a partir do pacote)](#linux-um-clique-ou-a-partir-do-pacote)
+    - [macOS](#macos)
+    - [Windows](#windows)
+  - [Desinstalando](#desinstalando)
+  - [Estrutura do repositório](#estrutura-do-repositório)
+  - [Lançamentos](#lançamentos)
+  - [Contribuindo](#contribuindo)
+  - [Segurança](#segurança)
+  - [Licença](#licença)
 
 ---
 
@@ -73,12 +93,12 @@ O ShelvesHub adiciona seu próprio painel de gerenciamento ao menu de Acesso Rá
 <div align="center">
 <table>
 <tr>
-<td align="center" width="50%"><img src="assets/screenshots/hub-panel.png" alt="Automatic updates for the host and Deck Shelves" width="240"><br><sub><b>Atualizações automáticas</b> — host + Deck Shelves, cada um com um canal de pré-lançamento</sub></td>
-<td align="center" width="50%"><img src="assets/screenshots/hub-troubleshooting.png" alt="Troubleshooting section" width="240"><br><sub><b>Solução de problemas</b> — veja os logs, ou desative o host até o próximo reinício</sub></td>
+<td align="center" width="50%"><img src="../../assets/screenshots/hub-panel.png" alt="Automatic updates for the host and Deck Shelves" width="240"><br><sub><b>Atualizações automáticas</b> — host + Deck Shelves, cada um com um canal de pré-lançamento</sub></td>
+<td align="center" width="50%"><img src="../../assets/screenshots/hub-troubleshooting.png" alt="Troubleshooting section" width="240"><br><sub><b>Solução de problemas</b> — veja os logs, ou desative o host até o próximo reinício</sub></td>
 </tr>
 <tr>
-<td align="center" width="50%"><img src="assets/screenshots/hub-config.png" alt="Configuration and status" width="240"><br><sub><b>Configuração + Status</b> — um subconjunto seguro e editável, e uma leitura somente para consulta</sub></td>
-<td align="center" width="50%"><img src="assets/screenshots/hub-logs.png" alt="Merged log viewer" width="240"><br><sub><b>Visualizador de logs</b> — os logs do host e do runtime em um único fluxo</sub></td>
+<td align="center" width="50%"><img src="../../assets/screenshots/hub-config.png" alt="Configuration and status" width="240"><br><sub><b>Configuração + Status</b> — um subconjunto seguro e editável, e uma leitura somente para consulta</sub></td>
+<td align="center" width="50%"><img src="../../assets/screenshots/hub-logs.png" alt="Merged log viewer" width="240"><br><sub><b>Visualizador de logs</b> — os logs do host e do runtime em um único fluxo</sub></td>
 </tr>
 </table>
 </div>
@@ -193,11 +213,14 @@ Cada lançamento publica os pacotes por plataforma, os scripts de um clique, e o
 
 | Arquivo | Descrição |
 |---|---|
-| `shelveshub-steamos.tar.gz` | Pacote para SteamOS (binário + instalador + espaço para o pacote) |
-| `shelveshub-linux.tar.gz` | Pacote para Linux |
-| `shelveshub-macos.tar.gz` | Pacote para macOS |
+| `shelveshub-steamos.tar.gz` | Pacote para SteamOS, x86_64 (binário + instalador + espaço para o pacote) |
+| `shelveshub-steamos-aarch64.tar.gz` | Pacote para SteamOS, ARM64 |
+| `shelveshub-linux.tar.gz` | Pacote para Linux, x86_64 |
+| `shelveshub-linux-aarch64.tar.gz` | Pacote para Linux, ARM64 |
+| `shelveshub-macos.tar.gz` | Pacote para macOS (binário universal — Apple Silicon e Intel) |
 | `shelveshub-windows.zip` | Pacote para Windows |
-| `shelveshub.desktop` | Instalador de um clique para SteamOS |
+| `shelveshub.desktop` | Instalador de um clique para SteamOS — detecta x86_64 vs. ARM64 na instalação e baixa o pacote correspondente |
+| `shelveshub-linux.desktop` | Instalador de um clique para Linux — mesma detecção automática de arquitetura |
 | `install-mac.command` | Script de um clique para macOS |
 | `install-windows.bat` | Script de um clique para Windows |
 | `Install ShelvesHub.app` (zipado) | Instalador clicável para macOS (com ícone) |
