@@ -1,0 +1,78 @@
+name: "Ops · Site stats"
+
+# Snapshots the hub's own public usage numbers into site/stats/*.json (shields.io
+# "endpoint" JSON), served same-origin on GitHub Pages and read by the site
+# dashboard (site/reports/dashboard.html) and the README badges. Weekly + manual.
+# Uses SUBMIT_TOKEN (a PAT with push access): the traffic API needs push access,
+# and the commit to a protected main is allowed for an admin bypass actor.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          token: ${{ secrets.SUBMIT_TOKEN || github.token }}
+
+      - name: Snapshot usage numbers
+        env:
+          GH_TOKEN: ${{ secrets.SUBMIT_TOKEN || github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p site/stats
+          endpoint() { jq -n --arg l "$1" --arg m "$2" --arg c "${3:-blue}" \
+            '{schemaVersion:1,label:$l,message:$m,color:$c}'; }
+          human() { awk -v n="$1" 'BEGIN{ if(n>=1000){printf "%.1fk", n/1000} else {print n} }'; }
+
+          DL=$(gh api "repos/$REPO/releases" --paginate --jq '[.[].assets[].download_count] | add // 0')
+          REL=$(gh api "repos/$REPO/releases/latest" --jq '.tag_name // "—"' 2>/dev/null || echo "—")
+          RELDATE=$(gh api "repos/$REPO/releases/latest" --jq '.published_at // ""' 2>/dev/null | cut -dT -f1)
+          VIEWS=$(gh api "repos/$REPO/traffic/views" --jq '.count // 0' 2>/dev/null || echo 0)
+          CLONES=$(gh api "repos/$REPO/traffic/clones" --jq '.count // 0' 2>/dev/null || echo 0)
+
+          endpoint "downloads"    "$(human "$DL")"     blue        > site/stats/downloads.json
+          endpoint "latest"       "$REL"               blue        > site/stats/release.json
+          endpoint "views (14d)"  "$(human "$VIEWS")"  blue        > site/stats/traffic.json
+          endpoint "clones (14d)" "$(human "$CLONES")" blue        > site/stats/clones.json
+          jq -n --arg dl "$DL" --arg rel "$REL" --arg d "$RELDATE" --arg v "$VIEWS" --arg c "$CLONES" \
+            '{schemaVersion:1, downloads:($dl|tonumber), release:$rel, releaseDate:$d, views14d:($v|tonumber), clones14d:($c|tonumber), updated:(now|todate)}' \
+            > site/stats/summary.json
+
+          # Phase 2 — accumulate a dated snapshot into the history (one row per
+          # day, replaced if re-run same day) and a per-release downloads
+          # breakdown, both for the dashboard trend charts.
+          mkdir -p site/reports/stats
+          HIST=site/reports/stats/history.json
+          [ -f "$HIST" ] || echo '[]' > "$HIST"
+          TODAY=$(date +%F)
+          jq --arg d "$TODAY" --argjson dl "${DL:-0}" --argjson v "${VIEWS:-0}" --argjson c "${CLONES:-0}" \
+            'map(select(.date != $d)) + [{date:$d, downloads:$dl, views14d:$v, clones14d:$c}] | sort_by(.date)' \
+            "$HIST" > "$HIST.tmp" && mv "$HIST.tmp" "$HIST"
+          gh api "repos/$REPO/releases" --paginate \
+            --jq '[.[] | {tag:.tag_name, date:((.published_at // "")|split("T")[0]), downloads:([.assets[].download_count] | add // 0)}] | sort_by(.date)' \
+            > site/stats/releases.json
+          echo "downloads=$DL release=$REL views=$VIEWS clones=$CLONES"
+
+      - name: Commit snapshot
+        env:
+          GH_TOKEN: ${{ secrets.SUBMIT_TOKEN || github.token }}
+        run: |
+          git config user.name "${{ github.repository_owner }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git add site/stats/ site/reports/stats/
+          if git diff --cached --quiet; then
+            echo "No stats change."
+            exit 0
+          fi
+          git commit -m "chore(stats): site usage snapshot"
+          git push origin HEAD:main

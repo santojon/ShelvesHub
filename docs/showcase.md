@@ -1,5 +1,7 @@
 # Showcase & screenshots
 
+*[Leia em português](pt-BR/showcase.md)*
+
 The landing page at [`site/`](../site/) shows a screenshot gallery. This page
 embeds the captured screenshots and documents how they are produced and published.
 

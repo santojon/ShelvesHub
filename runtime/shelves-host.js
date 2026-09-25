@@ -1323,6 +1323,8 @@
       logs: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>',
       auto: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
       back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+      refresh: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
+      trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>',
       // Tintable ShelvesHub mark: three books on a shelf over a hub node, single-
       // colour (currentColor). Three bigger books (vs the 4-book draft) + the hub
       // (the ShelvesHub identity), tuned to still read at 16px.
@@ -1424,6 +1426,10 @@
       }, []);
       function mergeRc(patch) { var n = {}; if (rc) for (var k in rc) n[k] = rc[k]; for (var p in patch) n[p] = patch[p]; setRc(n); }
       function applyPaused(v) { mergeRc({ paused: v }); hostRpc("setHostingPaused", v).then(function () {}, function () {}); }
+      // The boot animation is a live toggle: the daemon installs/removes the movie
+      // on the spot. The movie itself is only read by Steam on its next start, so
+      // surface the "restart to apply" banner (Steam replays the startup movie).
+      function applyBootMovie(v) { mergeRc({ boot_movie: v }); setRcDirty(true); hostRpc("setBootMovie", v).then(function () {}, function () {}); }
       function applyCfg(key, val) { mergeRc((function () { var o = {}; o[key] = val; return o; })()); setRcDirty(true); hostRpc("setRuntimeConfig", { key: key, value: val }).then(function () {}, function () {}); }
       /* Apply pending config edits: restart the daemon so it re-reads the config
          file (values are only read at startup), then restart Steam so the fresh
@@ -1439,13 +1445,15 @@
       }
       // Same pattern as the pinned "ShelvesHub" button (native DialogButton when
       // available, else the subtle inset row) — matched colour and alignment.
-      function restartBanner() {
-        const label = I18N.t("adv_restart_apply");
-        const btn = (nativeUiOn() && UI.DialogButton)
-          ? h(UI.DialogButton, { "data-fb": "apply-restart", onClick: doApplyRestart, style: { width: "100%" } },
+      // Full-width action button shared by the restart and hub-update banners,
+      // so both look and behave the same (icon + centered label; native
+      // DialogButton when available, focusable clickable fallback otherwise).
+      function bannerButton(dataFb, label, onClick) {
+        return (nativeUiOn() && UI.DialogButton)
+          ? h(UI.DialogButton, { "data-fb": dataFb, onClick: onClick, style: { width: "100%" } },
               h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } }, fbIcon("update"), h("span", null, label)))
-          : clickable(doApplyRestart, {
-              "data-fb": "apply-restart", focusClassName: "shelves-gpfocus",
+          : clickable(onClick, {
+              "data-fb": dataFb, focusClassName: "shelves-gpfocus",
               style: {
                 flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",
                 gap: "8px", width: "100%", boxSizing: "border-box", padding: "10px 14px",
@@ -1454,7 +1462,10 @@
                 fontSize: "13px", opacity: busy ? 0.6 : 1,
               },
             }, [fbIcon("update"), h("span", { key: "t" }, label)]);
-        return h("div", { key: "restart-banner", style: { padding: "10px 14px 8px" } }, btn);
+      }
+      function restartBanner() {
+        return h("div", { key: "restart-banner", style: { padding: "10px 14px 8px" } },
+          bannerButton("apply-restart", I18N.t("adv_restart_apply"), doApplyRestart));
       }
       function viewLogs() {
         setBusy("logs");
@@ -1479,11 +1490,12 @@
       // Effective config for this render (defaults while still loading).
       var uc = cfg || DEFAULT_UPD;
       var on = uc.auto_update === true;
-      // Coexisting with another loader (it owns the renderer): the hub does NOT
-      // host or update the plugin here — the loader does. So the update actions
-      // (download / self-install) and auto-update toggles are hidden and a note
-      // points at the loader. Detected from the owner global (sole = "shelveshub").
-      var coexist = (function () { try { var o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; } })();
+      /* Coexisting with another loader (it owns the renderer): the hub does NOT
+         host or update the plugin here — the loader does, so the update actions
+         and auto-update toggles are hidden and a note points at the loader.
+         COOPERATIVE (a loader present but WE forced ownership) means the hub owns
+         + manages updates → not coexist; COOP is reliable, the owner can lag. */
+      var coexist = !COOP && (function () { try { var o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; } })();
       // B (CANCEL) handling: a plain onCancel/onCancelButton is NOT enough — the
       // QAM router still navigates the tab away. We must ABSORB the button-down
       // (preventDefault + stopImmediatePropagation on the event AND its inner
@@ -1531,8 +1543,8 @@
         // finish" (a relaunching service applies it on its own, so this only ever
         // shows for a manually-run daemon).
         var label = uc.hub_update_staged === true ? "hub_update_staged" : "hub_update_restart";
-        return h("div", { key: "hubupd", "data-fb": "hub-update", style: { display: "flex", alignItems: "center", gap: "8px", background: "rgba(26,159,255,0.15)", border: "1px solid rgba(26,159,255,0.45)", borderRadius: "6px", padding: "8px 10px", margin: "0 0 10px", fontSize: "13px" } },
-          fbIcon("update"), h("span", { key: "t" }, I18N.t(label) + " (" + ver + ")"));
+        return h("div", { key: "hubupd", style: { padding: "10px 14px 8px" } },
+          bannerButton("hub-update", I18N.t(label) + " (" + ver + ")", doApplyRestart));
       }
       // The "Advanced" area: a plugin-style collapsible whose content is grouped
       // into collapsible sub-sections (Troubleshooting / Configuration / Status),
@@ -1586,12 +1598,19 @@
       // Configuration, Status. Each carries a count badge when collapsed.
       function buildSections(useNative, TF) {
         var sections = [];
-        // Updates: in coexist the loader owns the plugin — show a note, no
-        // hub-hosting toggles/actions (they'd fetch+swap a bundle the loader owns).
+        // Updates split by responsibility:
+        // - Deck Shelves bundle updates remain delegated to the loader while the
+        //   renderer is co-owned and the host does not host that bundle.
+        // - ShelvesHub self-update remains available even in coexistence, so the
+        //   daemon can update itself independently of the plugin's owner.
         var upd, updCount;
         if (coexist) {
-          upd = [h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere"))];
-          updCount = 0;
+          upd = [
+            h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere")),
+          ];
+          upd = upd.concat(updRows(["auto_update", "auto_update_hub", "hub_prerelease"]));
+          upd.push(actionRow("update", "update", "action_update_hub", "selfUpdate"));
+          updCount = upd.length;
         } else {
           upd = updRows().slice();
           upd.push(actionRow("download", "download", "action_download", "populateBundle"));
@@ -1615,22 +1634,40 @@
           // they stay hidden on a pure sole platform AND on a loader-capable one
           // whose loader is not currently running.
           var conf = [];
-          if (rc.loader_possible && otherLoaderPresent()) {
+          // Ownership knobs are meaningful only where a plugin loader can share
+          // the renderer (Linux/SteamOS). On a pure sole host they are inert, so
+          // they stay in the read-only Status readout below instead of as toggles.
+          if (rc.loader_possible) {
             conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), I18N.t("cfg_force_owner_sub"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
             conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
+          }
+          conf.push(advToggleRow("cfg-boot_movie", I18N.t("cfg_boot_movie"), I18N.t("cfg_boot_movie_sub"), rc.boot_movie === true, applyBootMovie));
+          // Experimental: inject in the plain desktop client too (default off →
+          // gamepad / Big Picture only). Only meaningful where a desktop client
+          // exists (macOS / Windows), so hide it on the Deck's Gaming Mode.
+          if (!rc.loader_possible) {
+            conf.push(advToggleRow("cfg-desktop_ui", I18N.t("cfg_desktop_ui"), I18N.t("cfg_desktop_ui_sub"), rc.desktop_ui === true, function (v) { applyCfg("desktop_ui", v); }));
           }
           conf.push(advStepRow("interval_secs", I18N.t("cfg_interval"), I18N.t("cfg_interval_sub"), rc.interval_secs));
           var confCount = conf.length;
           if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));
           sections.push(h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: confCount }, conf));
+          var ownerMode = COOP ? "cooperative" : (coexist ? "coexist" : "sole");
           var status = [
+            advRoRow("mode", I18N.t("cfg_mode"), ownerMode),
+          ];
+          // On a pure sole host the ownership toggle is hidden above; surface its
+          // current value here so the state stays visible.
+          if (!rc.loader_possible) status.push(advRoRow("force", I18N.t("cfg_force_owner"), rc.force_owner ? "on" : "off"));
+          status.push(
             advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),
             advRoRow("rpc", I18N.t("cfg_rpc"), rc.rpc_addr || ""),
             advRoRow("recover", I18N.t("cfg_recover_cmd"), rc.recover_cmd == null ? "—" : rc.recover_cmd),
             advRoRow("bundle", I18N.t("cfg_bundle"), rc.bundle_path || ""),
             advRoRow("backend", I18N.t("cfg_backend"), rc.backend ? "on" : "off"),
-            advRoRow("version", I18N.t("cfg_version"), rc.version || ""),
-          ];
+            advRoRow("boot", I18N.t("cfg_boot_movie"), rc.boot_movie ? "on" : "off"),
+            advRoRow("version", I18N.t("cfg_version"), rc.version || "")
+          );
           sections.push(h(HubCollapsible, { key: "sec-st", id: "sec-status", title: I18N.t("adv_sec_status"), count: status.length }, status));
         }
         return sections;
@@ -1674,8 +1711,11 @@
       // reads as one inset list — the boxed / native variants sat edge-to-edge and
       // looked out of place. Depth indents (per level) convey the nested hierarchy;
       // rows whose ancestor is off are not rendered. one flat list.
-      function updRows() {
-        return UPD_ROWS.filter(function (rw) { return rw.visible(); }).map(function (rw) {
+      function updRows(filterKeys) {
+        return UPD_ROWS.filter(function (rw) {
+          if (!filterKeys) return rw.visible();
+          return filterKeys.indexOf(rw.key) !== -1 && rw.visible();
+        }).map(function (rw) {
           var checked = uc[rw.key] === true;
           var rowStyle = { display: "flex", alignItems: "center", gap: "10px", width: "100%", boxSizing: "border-box", padding: "6px 16px", paddingLeft: (16 + rw.depth * 20) + "px", minHeight: "40px", border: "none", background: "transparent", color: "#fff", cursor: busy ? "default" : "pointer", fontSize: "13px" };
           return clickable(function () { if (!busy) applyPref(rw.key, !checked); }, { key: rw.key, "data-fb": "upd-" + rw.key, "data-on": checked ? "1" : "0", focusClassName: "shelves-rowfocus", style: rowStyle },
@@ -1719,19 +1759,24 @@
         };
         var rows = logs.length
           ? logs.slice().reverse().map(logRow)
-          : [h("div", { key: "empty", style: { opacity: 0.6, fontSize: "13px", padding: "8px 0" } }, I18N.t("logs_empty"))];
+          : [h("div", { key: "empty", style: { opacity: 0.6, fontSize: "13px", padding: "8px 16px" } }, I18N.t("logs_empty"))];
         // Header controls in a HORIZONTAL Focusable row (back / refresh / clear) so
         // the gamepad walks them left-to-right, not top-to-bottom.
-        var ctrlBtn = function (key, onAct, label, extraStyle) {
+        var ctrlBtn = function (key, onAct, label, extraStyle, title) {
           var base = { display: "inline-flex", alignItems: "center", justifyContent: "center", height: "32px", padding: "0 10px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", cursor: "pointer", border: "none", color: "#fff", fontSize: "12px" };
           if (extraStyle) for (var s in extraStyle) base[s] = extraStyle[s];
-          return clickable(onAct, { key: key, "data-fb": "logs-" + key, focusClassName: "shelves-gpfocus", style: base }, label);
+          var props = { key: key, "data-fb": "logs-" + key, focusClassName: "shelves-gpfocus", style: base };
+          if (title) { props.title = title; props["aria-label"] = title; }
+          return clickable(onAct, props, label);
         };
+        // Icon-only square controls (back / refresh / clear), each with an
+        // accessible label — no text captions, matching the flat icon style.
+        var iconBtnStyle = { width: "36px", padding: "0" };
         var ctrls = [
-          ctrlBtn("back", backToHub, [fbIcon("back")], { width: "36px", padding: "0" }),
+          ctrlBtn("back", backToHub, [fbIcon("back")], iconBtnStyle, I18N.t("action_back")),
           h("div", { key: "ttl", style: { fontSize: "16px", fontWeight: "700", flex: "1 1 auto" } }, I18N.t("logs_title")),
-          ctrlBtn("refresh", function () { viewLogs(); }, [I18N.t("logs_refresh")]),
-          ctrlBtn("clear", function () { clearLogs(); }, [I18N.t("logs_clear")]),
+          ctrlBtn("refresh", function () { viewLogs(); }, [fbIcon("refresh")], iconBtnStyle, I18N.t("logs_refresh")),
+          ctrlBtn("clear", function () { clearLogs(); }, [fbIcon("trash")], iconBtnStyle, I18N.t("logs_clear")),
         ];
         var header = React.createElement.apply(React, [
           focusableComp || "div",

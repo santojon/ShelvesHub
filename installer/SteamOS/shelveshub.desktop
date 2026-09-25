@@ -3,7 +3,7 @@ Type=Application
 Name=Install ShelvesHub
 GenericName=ShelvesHub Installer
 Comment=Download and install ShelvesHub for Steam Deck
-Exec=bash -c "T=/tmp/shelveshub-install && rm -rf $T && mkdir -p $T && echo 'Downloading ShelvesHub...' && curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/shelveshub-steamos.tar.gz | tar xz -C $T && (cd $T && bash installer/install.sh) && rm -rf $T; echo; echo 'Press Enter to close...'; read"
+Exec=bash -c "T=/tmp/shelveshub-install && rm -rf $T && mkdir -p $T && A=$(uname -m) && case $A in x86_64|amd64) P=shelveshub-steamos.tar.gz ;; aarch64|arm64) P=shelveshub-steamos-aarch64.tar.gz ;; *) echo Unsupported architecture: $A; echo 'Press Enter to close...'; read; exit 1 ;; esac && echo Downloading $P... && curl -fsSL https://github.com/santojon/ShelvesHub/releases/latest/download/$P | tar xz -C $T && (cd $T && bash installer/install.sh) && rm -rf $T; echo; echo 'Press Enter to close...'; read"
 Terminal=true
 Icon=system-software-install
 Categories=Utility;System;

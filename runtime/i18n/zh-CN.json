@@ -42,5 +42,10 @@
   "cfg_owner_settle_sub": "在托管前等待其他主机的秒数",
   "cfg_interval_sub": "注入检查之间的秒数",
   "adv_disable_hub_sub": "在重新启用前停止注入（用于排查）",
-  "adv_restart_apply": "重启以应用"
+  "adv_restart_apply": "重启以应用",
+  "cfg_mode": "Ownership mode",
+  "cfg_boot_movie": "Boot animation",
+  "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
+  "cfg_desktop_ui": "Desktop client shelves (experimental)",
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
 }

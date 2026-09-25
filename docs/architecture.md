@@ -1,5 +1,7 @@
 # ShelvesHub — Architecture
 
+*[Leia em português](pt-BR/architecture.md)*
+
 ShelvesHub is a small cross-platform service that injects the Deck Shelves
 bundle into the Steam Big Picture UI. It provides the runtime host APIs the
 bundle calls into, and manages the injection lifecycle across Linux/SteamOS,
@@ -220,10 +222,15 @@ as the current user so they share the Steam session.
 
 ## Pending work (ShelvesHub mode)
 
+All of the original host-API surface is implemented in
+`runtime/shelves-host.js`; this checklist is complete.
+
 - [x] Replace the `is_injected()` placeholder with a real CEF probe
 - [x] Replace the shell-call injection with the WebSocket/CDP injection
       mechanism into the Steam renderer
-- [ ] Implement `ShelvesHostApi.lifecycle.*`
-- [ ] Implement `ShelvesHostApi.routes.*` (Steam-side route registration)
-- [ ] Implement `ShelvesHostApi.notifications.*`
-- [ ] Implement `ShelvesHostApi.platform.navigateToApp`
+- [x] Implement `ShelvesHostApi.lifecycle.*` (`register` / `onMount` / `onUnmount`)
+- [x] Implement `ShelvesHostApi.routes.*` (Steam-side route registration via the
+      concrete `routerHook` — `addRoute` / `removeRoute` / `addPatch`)
+- [x] Implement `ShelvesHostApi.notifications.*` (`toast` / `send` via
+      `SteamClient.Notifications`)
+- [x] Implement `ShelvesHostApi.platform.navigateToApp` (`SteamClient.Apps.RunGame`)

@@ -71,5 +71,15 @@ releases/
 
 # ── Workflow-generated files ──────────────────────────────────────────────────
 CHANGELOG*.md
+# …but the committed Portuguese translation under docs/pt-BR/ must ship like its
+# siblings (README/RELEASE_NOTES), so the broad rule above must not swallow it.
+!docs/pt-BR/CHANGELOG.md
 releases/
 assets/icons/icon-*.png
+
+# CI: transient Deck Shelves checkout for plugin-under-host probes
+.plugin-src/
+
+# uitests output (deckprobe/uitests/run.py's default --out) — screenshots
+# and, since the --record flag, per-test MP4s. Local-only, never committed.
+/tmp/

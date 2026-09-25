@@ -35,6 +35,26 @@ jobs:
             oneclick_uninstall_src: uninstall.desktop
             oneclick_uninstall_name: uninstall-shelveshub-linux.desktop
 
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary: shelveshub
+            installer_dir: installer/SteamOS
+            package: shelveshub-steamos-aarch64.tar.gz
+            oneclick_src: ""
+            oneclick_name: ""
+            oneclick_uninstall_src: ""
+            oneclick_uninstall_name: ""
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary: shelveshub
+            installer_dir: installer/Linux
+            package: shelveshub-linux-aarch64.tar.gz
+            oneclick_src: ""
+            oneclick_name: ""
+            oneclick_uninstall_src: ""
+            oneclick_uninstall_name: ""
+
           - os: macos-latest
             target: aarch64-apple-darwin
             binary: shelveshub
@@ -83,16 +103,47 @@ jobs:
           perl -0777 -pi -e "s/^version = \"[^\"]*\"/version = \"$V\"/m" Cargo.toml
           grep '^version' Cargo.toml
 
+      - name: Install ARM64 cross compiler
+        if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
       - name: Build release binary
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --release --target ${{ matrix.target }}
+
+      # macOS ships a UNIVERSAL binary so it runs on both Apple Silicon and Intel
+      # Macs. The step above built the matrix's arm64 slice; also build the x86_64
+      # slice and `lipo` the two together in place, so the Package step below picks
+      # up the fat binary unchanged. Fails the job if the result isn't universal.
+      - name: macOS universal binary (arm64 + x86_64)
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add x86_64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          for b in shelveshub shelves-devtools; do
+            lipo -create \
+              "target/aarch64-apple-darwin/release/$b" \
+              "target/x86_64-apple-darwin/release/$b" \
+              -output "target/aarch64-apple-darwin/release/$b"
+            archs="$(lipo -archs "target/aarch64-apple-darwin/release/$b")"
+            echo "$b arches: $archs"
+            case "$archs" in
+              *x86_64*arm64* | *arm64*x86_64*) ;;
+              *) echo "::error::$b is not a universal binary ($archs)"; exit 1 ;;
+            esac
+          done
 
       - name: Package (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p dist/bundle dist/runtime dist/installer
+          mkdir -p dist/bundle dist/runtime dist/installer dist/assets/boot
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           cp target/${{ matrix.target }}/release/shelves-devtools dist/
           cp shelveshub.config.json dist/
+          cp assets/boot/deck_startup.webm assets/boot/deck_startup_1280x800.webm dist/assets/boot/
           cp -r bundle/. dist/bundle/
           cp -r runtime/. dist/runtime/
           cp -r ${{ matrix.installer_dir }}/. dist/installer/
@@ -102,10 +153,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer | Out-Null
+          New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer, dist\assets\boot | Out-Null
           Copy-Item target\${{ matrix.target }}\release\${{ matrix.binary }} dist\
           Copy-Item target\${{ matrix.target }}\release\shelves-devtools.exe dist\
           Copy-Item shelveshub.config.json dist\
+          Copy-Item assets\boot\deck_startup.webm, assets\boot\deck_startup_1280x800.webm dist\assets\boot\
           Copy-Item -Recurse bundle\* dist\bundle\
           Copy-Item -Recurse runtime\* dist\runtime\
           Copy-Item -Recurse ${{ matrix.installer_dir }}\* dist\installer\

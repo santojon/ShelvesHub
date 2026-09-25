@@ -133,6 +133,9 @@ pub fn run(mut config: Config) {
     let mut last_update_check: Option<Instant> = None;
     // Tracks the troubleshooting pause so the transition INTO paused reloads once.
     let mut was_paused = false;
+    // Tracks the experimental desktop-UI stand-down (inject only on the gamepad /
+    // Big Picture UI unless `desktop_ui` is on) so the transition logs once.
+    let mut was_desktop_idle = false;
     // Consecutive target-discovery failures, to re-probe the CEF port if Steam
     // reappears on a different debug port than we resolved at boot.
     let mut discovery_fail_streak: u32 = 0;
@@ -150,9 +153,13 @@ pub fn run(mut config: Config) {
         // renderer is a false health signal. Use the target list: a lone
         // `SharedJSContext` means the UI collapsed. Injecting into (or
         // `StartRestart`-ing) that state only makes it worse — so pause.
+        // Whether the gamepad / Big Picture UI is on screen (vs the desktop
+        // client). Defaults to true so a discovery error never blocks injection.
+        let mut gamepad_active = true;
         let collapsed = match cdp::discover_targets(&config.cef_host, config.cef_port) {
             Ok(targets) => {
                 discovery_fail_streak = 0;
+                gamepad_active = cdp::gamepad_ui_active(&targets);
                 !cdp::ui_windows_present(&targets)
             }
             // Discovery failure = renderer unreachable (Steam closed / mid-
@@ -234,6 +241,42 @@ pub fn run(mut config: Config) {
             was_paused = false;
         }
 
+        // EXPERIMENTAL desktop-UI gate: off the gamepad / Big Picture UI, stand
+        // down unless `desktop_ui` is enabled — the shelves are built for the
+        // gamepad Home and read wrong in the plain desktop client. Auto-resumes
+        // when the gamepad UI returns.
+        if !config.desktop_ui && !gamepad_active {
+            if !was_desktop_idle {
+                // Standing down does NOT undo an injection already in the shared
+                // renderer (the bundle patches the library/home route, which the
+                // desktop client renders too). So on the transition, reload the
+                // renderer once to clear it — but only if we actually injected.
+                if state::is_injected() {
+                    log_info(
+                        "loader",
+                        "Desktop client on screen (not the gamepad UI) — clearing the renderer and standing down; enable desktop_ui to inject here.",
+                    );
+                    reload_renderer(&config);
+                } else {
+                    log_info(
+                        "loader",
+                        "Desktop client on screen (not the gamepad UI) — standing down; enable desktop_ui to inject here.",
+                    );
+                }
+            }
+            was_desktop_idle = true;
+            state::set_injected(false);
+            thread::sleep(interval);
+            continue;
+        }
+        if was_desktop_idle {
+            log_info(
+                "loader",
+                "Gamepad / Big Picture UI is back — resuming injection.",
+            );
+            was_desktop_idle = false;
+        }
+
         let result = tick(&config, &mut empty_since);
         // Bundle hosted (Active) or the coexist tab is in place → idle cadence;
         // anything else means we still have work to do soon → fast cadence.
@@ -311,11 +354,15 @@ pub fn run(mut config: Config) {
             swap_pending = true;
         }
 
-        thread::sleep(if settled && !swap_pending {
-            interval
+        // A sole/owner host re-polls on a shorter idle cadence than the calm
+        // coexist one, so it notices a Steam restart within a few seconds instead
+        // of up to a full `interval`. Coexist stays calm — the loader owns it.
+        let idle = if hosting {
+            interval.min(SOLE_IDLE)
         } else {
-            fast
-        });
+            interval
+        };
+        thread::sleep(if settled && !swap_pending { idle } else { fast });
     }
 }
 
@@ -323,6 +370,11 @@ pub fn run(mut config: Config) {
 /// with auto-update on. Rare on purpose: it hits the GitHub API and, on an actual
 /// update, reloads the renderer.
 const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+/// Idle re-poll cadence for a sole/owner host (caps the configured `interval_secs`
+/// only while WE host the bundle). Short so a Steam restart is noticed within a
+/// few seconds; a coexisting host keeps the calm configured interval instead.
+const SOLE_IDLE: Duration = Duration::from_secs(5);
 
 /// When auto-update is enabled AND we host the bundle (sole/owner — never coexist,
 /// where the plugin loader owns its own copy), compare the latest release tag for
@@ -565,7 +617,18 @@ fn reload_renderer(config: &Config) {
 /// checks observe whether the UI windows come back. Deliberately fire-and-forget
 /// so a slow/hanging recovery never blocks the injection loop.
 fn run_recovery(cmd: &str) {
-    match std::process::Command::new("sh").arg("-c").arg(cmd).spawn() {
+    // Windows has no `sh`; use the platform shell so a per-OS default (and any
+    // override) runs where it is deployed.
+    let mut command = if cfg!(windows) {
+        let mut c = std::process::Command::new("cmd");
+        c.arg("/C").arg(cmd);
+        c
+    } else {
+        let mut c = std::process::Command::new("sh");
+        c.arg("-c").arg(cmd);
+        c
+    };
+    match command.spawn() {
         Ok(_) => log_info("loader", &format!("Recovery command launched: {cmd}")),
         Err(e) => log_error("loader", &format!("Recovery command failed to launch: {e}")),
     }

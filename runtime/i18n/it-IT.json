@@ -42,5 +42,10 @@
   "cfg_owner_settle_sub": "Secondi di attesa di un altro host prima dell'hosting",
   "cfg_interval_sub": "Secondi tra i controlli di iniezione",
   "adv_disable_hub_sub": "Interrompi l'iniezione fino alla riattivazione (diagnostica)",
-  "adv_restart_apply": "Riavvia per applicare"
+  "adv_restart_apply": "Riavvia per applicare",
+  "cfg_mode": "Ownership mode",
+  "cfg_boot_movie": "Boot animation",
+  "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
+  "cfg_desktop_ui": "Desktop client shelves (experimental)",
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
 }

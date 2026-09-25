@@ -24,7 +24,12 @@ use crate::logger::log_warning;
 /// enabling the master updates both targets without extra clicks. The daemon
 /// combines these with the plugin's OWN update prefs (it honours the plugin's
 /// toggles too), never overriding them.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Version-skew safety: `extra` (a `#[serde(flatten)]` catch-all) preserves any
+/// keys a NEWER ShelvesHub wrote that this build doesn't know about, so an older
+/// daemon reading then re-saving a newer config never silently drops the newer
+/// fields — the host-side analog of the plugin's preserve-unknown sanitizer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HubSettings {
     /// Master switch — whether the host keeps anything up to date on its own.
@@ -43,6 +48,10 @@ pub struct HubSettings {
     /// every tick). Not user-facing.
     #[serde(default)]
     pub bundle_tag: String,
+    /// Catch-all for keys written by a newer daemon — preserved verbatim across a
+    /// load→save so a version-skewed downgrade can't drop them. Not read directly.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Default for HubSettings {
@@ -56,6 +65,7 @@ impl Default for HubSettings {
             auto_update_plugin: true,
             plugin_prerelease: false,
             bundle_tag: String::new(),
+            extra: serde_json::Map::new(),
         }
     }
 }
@@ -163,6 +173,31 @@ mod tests {
         let path = scratch("missing");
         cleanup(&path);
         assert_eq!(load(&path), HubSettings::default());
+    }
+
+    #[test]
+    fn preserves_unknown_keys_from_a_newer_daemon() {
+        let path = scratch("unknown");
+        cleanup(&path);
+        // A newer ShelvesHub wrote a field this build doesn't know about.
+        fs::write(
+            &path,
+            r#"{"auto_update":true,"future_setting":{"nested":42},"another":"x"}"#,
+        )
+        .unwrap();
+
+        let loaded = load(&path);
+        assert!(loaded.auto_update); // known field still parses
+        assert_eq!(loaded.extra.get("future_setting").unwrap()["nested"], 42);
+        assert_eq!(loaded.extra.get("another").unwrap(), "x");
+
+        // Re-saving must NOT drop the unknown keys.
+        save(&path, &loaded).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("future_setting"), "{text}");
+        assert!(text.contains("\"another\""), "{text}");
+        assert_eq!(load(&path).extra.get("another").unwrap(), "x");
+        cleanup(&path);
     }
 
     #[test]

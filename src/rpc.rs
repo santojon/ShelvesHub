@@ -21,12 +21,13 @@ use crate::state;
 /// Operational-config keys the "advanced configuration" editor may change. The
 /// rest (host/port/paths) stay read-only — editing them can cut the panel off
 /// from the daemon. All apply on the next restart.
-const EDITABLE_CONFIG_KEYS: [&str; 6] = [
+const EDITABLE_CONFIG_KEYS: [&str; 7] = [
     "native_qam",
     "prerelease",
     "owner_settle_secs",
     "interval_secs",
     "force_owner",
+    "desktop_ui",
     "recover_cmd",
 ];
 
@@ -358,6 +359,46 @@ fn dispatch(body: &str) -> String {
             log_info("rpc", &format!("Hosting paused set to {paused}."));
             ok(format!(r#"{{"paused":{paused}}}"#))
         }
+        // Optional boot animation: a live on/off toggle (not a restart-required
+        // config value). Args: a bool (or `{ enabled }`). Turning it on installs
+        // the bundled startup movie into Steam's slot immediately; off removes it.
+        // The choice is persisted to the config file so it survives a restart.
+        Some("setBootMovie") => {
+            let enabled = parsed
+                .as_ref()
+                .and_then(|v| v.get("args"))
+                .and_then(|a| {
+                    a.as_bool()
+                        .or_else(|| a.get("enabled").and_then(Value::as_bool))
+                })
+                .unwrap_or(false);
+            let Some(source) = state::boot_movie_source() else {
+                return err("boot movie source not known");
+            };
+            match crate::bootmovie::apply(enabled, source) {
+                Ok(_) => {
+                    state::set_boot_movie_enabled(enabled);
+                    // Persist to the config file so the choice survives a restart.
+                    if let Some(path) = state::config_file_path() {
+                        let mut obj = std::fs::read_to_string(path)
+                            .ok()
+                            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                            .and_then(|v| v.as_object().cloned())
+                            .unwrap_or_default();
+                        obj.insert("boot_movie".to_string(), Value::Bool(enabled));
+                        if let Ok(out) = serde_json::to_string_pretty(&Value::Object(obj)) {
+                            let _ = std::fs::write(path, out);
+                        }
+                    }
+                    log_info("rpc", &format!("Boot movie set to {enabled}."));
+                    ok(format!(r#"{{"boot_movie":{enabled}}}"#))
+                }
+                Err(e) => {
+                    log_error("rpc", &format!("setBootMovie failed: {e}"));
+                    err(&e)
+                }
+            }
+        }
         // Advanced configuration mirror (read): the effective operational config +
         // which keys are editable + live state (paused / pending hub update).
         Some("getRuntimeConfig") => {
@@ -368,6 +409,12 @@ fn dispatch(body: &str) -> String {
                     serde_json::json!(EDITABLE_CONFIG_KEYS),
                 );
                 obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
+                // Live boot-animation state (toggled without a restart) overrides
+                // the boot snapshot so the hub screen echoes the current on/off.
+                obj.insert(
+                    "boot_movie".to_string(),
+                    Value::Bool(state::boot_movie_enabled()),
+                );
                 obj.insert(
                     "pending_hub_update".to_string(),
                     state::pending_hub_update().map_or(Value::Null, Value::String),
@@ -399,7 +446,9 @@ fn dispatch(body: &str) -> String {
                 other => return err(&format!("refused config key (not editable): {other:?}")),
             };
             let coerced = match key {
-                "native_qam" | "prerelease" | "force_owner" => value.as_bool().map(Value::Bool),
+                "native_qam" | "prerelease" | "force_owner" | "desktop_ui" => {
+                    value.as_bool().map(Value::Bool)
+                }
                 "owner_settle_secs" | "interval_secs" => value.as_u64().map(Value::from),
                 "recover_cmd" => match &value {
                     Value::Null => Some(Value::Null),

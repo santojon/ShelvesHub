@@ -221,7 +221,9 @@ fn handle_attached(
             sid,
         );
         let label = if title.is_empty() { url } else { title };
-        println!("preload: registered on \"{label}\" (session {sid})");
+        // Don't print the raw CDP session id — it adds no diagnostic value over the
+        // target label and trips cleartext-logging scanners.
+        println!("preload: registered on \"{label}\"");
     }
     // Harmless no-op unless a target happens to be waiting for a debugger.
     let _ = client.send_on_session(

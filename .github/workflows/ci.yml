@@ -187,5 +187,92 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      # Check out the plugin so the harness can exercise its cross-OS backend
+      # probes UNDER the host. Non-fatal: if it can't be reached the harness's
+      # plugin step just skips and the host-only checks still run.
+      - name: Check out Deck Shelves (plugin-under-host probes)
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: santojon/Deck-Shelves
+          path: .plugin-src
+          persist-credentials: false
+          token: ${{ secrets.SUBMIT_TOKEN || github.token }}
+
       - name: Simulation harness (Linux container)
+        run: DECK_SHELVES_ROOT="$GITHUB_WORKSPACE/.plugin-src" bash scripts/harness-docker.sh
+
+      # The same plugin probes on ARM64 (QEMU) — the coverage the plugin's own
+      # x86_64 pytest can't give. Probes only (no Rust build), so it stays cheap.
+      - name: Set up QEMU (arm64)
+        if: hashFiles('.plugin-src/src/backend/display_state.py') != ''
+        uses: docker/setup-qemu-action@v3
+      - name: Plugin backend probes on ARM64
+        if: hashFiles('.plugin-src/src/backend/display_state.py') != ''
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "$GITHUB_WORKSPACE/docker/plugin-probes.py":/probes.py:ro \
+            -v "$GITHUB_WORKSPACE/.plugin-src":/deck-shelves:ro \
+            -e DECK_SHELVES_ROOT=/deck-shelves \
+            python:3-slim python3 /probes.py
+
+  # Prove every change compiles for Linux ARM64 (Steam Frame / ARM boxes). Cheap:
+  # a native cross-compile with the ARM64 linker — no emulation — so it gates every
+  # PR. The full emulated ARM64 runtime harness is docker-harness-arm64 below.
+  linux-arm64-check:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-arm64-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-arm64-
+
+      - name: Install ARM64 linker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: ARM64 check + release build
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          cargo check --all-targets --target aarch64-unknown-linux-gnu
+          cargo build --release --target aarch64-unknown-linux-gnu
+
+  # The full simulation harness on REAL emulated ARM64 (QEMU) — the daemon,
+  # runtime scenarios and injection smoke actually running, not just compiling.
+  # A cargo release build under emulation is slow, so this is manual-dispatch only
+  # (linux-arm64-check gates every PR); run it before promoting "Linux ARM64
+  # supported" or ahead of a release.
+  docker-harness-arm64:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Simulation harness (ARM64 container)
+        env:
+          PLATFORM: linux/arm64
+          IMAGE: shelveshub-harness-arm64
         run: bash scripts/harness-docker.sh

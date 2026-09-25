@@ -141,6 +141,22 @@ pub fn ui_windows_present(targets: &[Target]) -> bool {
         .any(|t| t.kind == "page" && !t.title.to_lowercase().contains("sharedjscontext"))
 }
 
+/// Whether the Steam gamepad / Big Picture UI is the one on screen (as opposed to
+/// the plain desktop client). The gamepad UI runs its windows under a distinct
+/// browser identity — a "Big Picture" window plus `MainMenu_*` / `QuickAccess_*`
+/// popups, all served to the "Valve Steam Gamepad" user-agent — none of which the
+/// desktop client has. Used to gate injection off the desktop client by default.
+pub fn gamepad_ui_active(targets: &[Target]) -> bool {
+    targets.iter().any(|t| {
+        let title = t.title.to_lowercase();
+        let url = t.url.to_lowercase();
+        title.contains("big picture")
+            || title.starts_with("mainmenu")
+            || title.starts_with("quickaccess")
+            || url.contains("gamepad")
+    })
+}
+
 /// Minimal blocking HTTP GET for the localhost `/json` discovery endpoint.
 /// Avoids pulling in a full HTTP client just to read a JSON array over loopback.
 ///
@@ -232,6 +248,43 @@ mod tests {
         ];
         assert_eq!(find_renderer(&targets, None).unwrap().id, "2");
         assert_eq!(find_renderer(&targets, Some("other")).unwrap().id, "1");
+    }
+
+    #[test]
+    fn gamepad_ui_active_distinguishes_desktop_from_big_picture() {
+        let t = |title: &str, url: &str| Target {
+            id: "x".into(),
+            kind: "page".into(),
+            title: title.into(),
+            url: url.into(),
+            ws_url: Some("ws://h:1/a".into()),
+        };
+        // Desktop client alone → not the gamepad UI.
+        let desktop = vec![
+            t("Steam", "https://steamloopback.host/"),
+            t(
+                "SharedJSContext",
+                "https://steamloopback.host/routes/library/home",
+            ),
+        ];
+        assert!(!gamepad_ui_active(&desktop));
+        // Big Picture window (gamepad user-agent) → gamepad UI active.
+        let bp = vec![
+            t(
+                "Steam — Big Picture Mode",
+                "about:blank?browser=-1&useragent=Valve%20Steam%20Gamepad",
+            ),
+            t(
+                "SharedJSContext",
+                "https://steamloopback.host/routes/library/home",
+            ),
+        ];
+        assert!(gamepad_ui_active(&bp));
+        // QuickAccess popup also counts.
+        assert!(gamepad_ui_active(&[t(
+            "QuickAccess_uid7",
+            "about:blank?browserviewpopup=1"
+        )]));
     }
 
     #[test]

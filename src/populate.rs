@@ -407,14 +407,16 @@ fn newest_hub_release_tag(releases_json: &str) -> Option<String> {
     None
 }
 
-/// The release-package asset names for the running OS, in priority order. Each
-/// package ships the same binary for its platform (the SteamOS and desktop-Linux
-/// packages carry the byte-identical x86_64 binary and differ only in installer
-/// scripts, which self-update does not need), so any match works — the list is
-/// just so a missing preferred asset falls back to the alternate.
+/// The release-package asset names for the running OS+arch, in priority order.
+/// Packages that ship the same binary for a platform differ only in installer
+/// scripts (which self-update does not need), so any match works — the list is
+/// just so a missing preferred asset falls back to the alternate. On Linux the
+/// candidates are architecture-specific, so an ARM64 daemon never picks an
+/// x86_64 package (and vice-versa).
 fn hub_package_candidates() -> &'static [&'static str] {
     #[cfg(target_os = "macos")]
     {
+        // The macOS package is a universal binary — one asset for both arches.
         &["shelveshub-macos.tar.gz"]
     }
     #[cfg(target_os = "windows")]
@@ -423,12 +425,27 @@ fn hub_package_candidates() -> &'static [&'static str] {
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        // Prefer the SteamOS package on the Deck; either yields the same binary.
-        if is_steamos() {
-            &["shelveshub-steamos.tar.gz", "shelveshub-linux.tar.gz"]
-        } else {
-            &["shelveshub-linux.tar.gz", "shelveshub-steamos.tar.gz"]
-        }
+        linux_package_candidates(is_steamos(), std::env::consts::ARCH)
+    }
+}
+
+/// Pure Linux package selection by SteamOS-ness and CPU arch (tested without a
+/// device). Empty for an architecture we don't ship, so self-update refuses to
+/// cross architectures rather than guessing.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn linux_package_candidates(steamos: bool, arch: &str) -> &'static [&'static str] {
+    match (steamos, arch) {
+        (true, "x86_64") => &["shelveshub-steamos.tar.gz", "shelveshub-linux.tar.gz"],
+        (false, "x86_64") => &["shelveshub-linux.tar.gz", "shelveshub-steamos.tar.gz"],
+        (true, "aarch64") => &[
+            "shelveshub-steamos-aarch64.tar.gz",
+            "shelveshub-linux-aarch64.tar.gz",
+        ],
+        (false, "aarch64") => &[
+            "shelveshub-linux-aarch64.tar.gz",
+            "shelveshub-steamos-aarch64.tar.gz",
+        ],
+        _ => &[],
     }
 }
 
@@ -468,8 +485,9 @@ fn find_asset_url_by_names(release: &serde_json::Value, names: &[&str]) -> Optio
     None
 }
 
-/// Does the file head look like a native executable for the running OS? Guards
-/// against staging a truncated/HTML error page over the daemon binary (pure).
+/// Does the file head look like a native executable for the running OS — and,
+/// on Linux, for the running CPU? Guards against staging a truncated/HTML error
+/// page (any OS) or a wrong-architecture binary (Linux) over the daemon (pure).
 fn looks_like_executable(head: &[u8]) -> bool {
     if cfg!(target_os = "windows") {
         head.starts_with(b"MZ") // PE / DOS stub
@@ -485,7 +503,53 @@ fn looks_like_executable(head: &[u8]) -> bool {
                 | [0xBE, 0xBA, 0xFE, 0xCA, ..]
         )
     } else {
-        head.starts_with(&[0x7F, b'E', b'L', b'F']) // ELF
+        looks_like_native_elf(head)
+    }
+}
+
+/// On Linux: require an ELF whose machine matches the running CPU. Elsewhere
+/// (other unix; also compiled — never reached — on Windows/macOS): a plain ELF
+/// magic check. Split by target so the caller's `else` arm is `bool` everywhere.
+#[cfg(target_os = "linux")]
+fn looks_like_native_elf(head: &[u8]) -> bool {
+    looks_like_linux_executable(head, std::env::consts::ARCH)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn looks_like_native_elf(head: &[u8]) -> bool {
+    head.starts_with(&[0x7F, b'E', b'L', b'F'])
+}
+
+/// The `e_machine` field of an ELF header, honouring its endianness byte, or
+/// `None` if the head isn't a well-formed ELF with the field present.
+#[cfg(target_os = "linux")]
+fn elf_machine(head: &[u8]) -> Option<u16> {
+    if head.len() < 20 || !head.starts_with(b"\x7fELF") {
+        return None;
+    }
+    match head[5] {
+        1 => Some(u16::from_le_bytes([head[18], head[19]])), // ELFDATA2LSB
+        2 => Some(u16::from_be_bytes([head[18], head[19]])), // ELFDATA2MSB
+        _ => None,
+    }
+}
+
+/// The ELF `e_machine` value we expect for a given Rust arch string.
+#[cfg(target_os = "linux")]
+fn elf_machine_for_arch(arch: &str) -> Option<u16> {
+    match arch {
+        "x86_64" => Some(62),   // EM_X86_64
+        "aarch64" => Some(183), // EM_AARCH64
+        _ => None,
+    }
+}
+
+/// True only when the head is an ELF whose machine matches `arch` (pure).
+#[cfg(target_os = "linux")]
+fn looks_like_linux_executable(head: &[u8], arch: &str) -> bool {
+    match (elf_machine(head), elf_machine_for_arch(arch)) {
+        (Some(actual), Some(expected)) => actual == expected,
+        _ => false,
     }
 }
 
@@ -909,10 +973,66 @@ mod tests {
         assert!(looks_like_executable(b"MZ\x90\x00"));
         #[cfg(target_os = "macos")]
         assert!(looks_like_executable(&[0xCF, 0xFA, 0xED, 0xFE, 0, 0]));
-        #[cfg(all(unix, not(target_os = "macos")))]
+        #[cfg(target_os = "linux")]
+        {
+            // Linux now requires the ELF machine to match the running CPU.
+            let m = elf_machine_for_arch(std::env::consts::ARCH).unwrap();
+            assert!(looks_like_executable(&fake_elf(m)));
+            // A bare ELF magic with no e_machine no longer passes on Linux.
+            assert!(!looks_like_executable(&[0x7F, b'E', b'L', b'F', 0, 0]));
+        }
+        #[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
         assert!(looks_like_executable(&[0x7F, b'E', b'L', b'F', 0, 0]));
         assert!(!looks_like_executable(b"<!DOCTYPE html>"));
         assert!(!looks_like_executable(b""));
+    }
+
+    #[cfg(target_os = "linux")]
+    fn fake_elf(machine: u16) -> Vec<u8> {
+        let mut h = vec![0u8; 64];
+        h[0..4].copy_from_slice(b"\x7fELF");
+        h[4] = 2; // ELFCLASS64
+        h[5] = 1; // little-endian
+        let m = machine.to_le_bytes();
+        h[18] = m[0];
+        h[19] = m[1];
+        h
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn elf_architecture_is_verified() {
+        let x86 = fake_elf(62);
+        let arm = fake_elf(183);
+        assert!(looks_like_linux_executable(&x86, "x86_64"));
+        assert!(!looks_like_linux_executable(&x86, "aarch64"));
+        assert!(looks_like_linux_executable(&arm, "aarch64"));
+        assert!(!looks_like_linux_executable(&arm, "x86_64"));
+        // A big-endian header is read with the matching endianness.
+        assert!(elf_machine(b"\x7fELF").is_none());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn package_selection_is_architecture_aware() {
+        assert_eq!(
+            linux_package_candidates(true, "x86_64")[0],
+            "shelveshub-steamos.tar.gz"
+        );
+        assert_eq!(
+            linux_package_candidates(true, "aarch64")[0],
+            "shelveshub-steamos-aarch64.tar.gz"
+        );
+        assert_eq!(
+            linux_package_candidates(false, "aarch64")[0],
+            "shelveshub-linux-aarch64.tar.gz"
+        );
+        assert_eq!(
+            linux_package_candidates(false, "x86_64")[0],
+            "shelveshub-linux.tar.gz"
+        );
+        // An architecture we don't ship yields no candidates (self-update refuses).
+        assert!(linux_package_candidates(true, "riscv64").is_empty());
     }
 
     #[test]

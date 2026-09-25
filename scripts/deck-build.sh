@@ -15,7 +15,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PATH="$HOME/.cargo/bin:$PATH"
 
-TARGET="x86_64-unknown-linux-gnu"
+# Target arch: x86_64 (Steam Deck, default) or aarch64 (Steam Frame). Set with
+# SHELVES_ARCH=aarch64 (or `pnpm build:frame`).
+ARCH="${SHELVES_ARCH:-x86_64}"
+case "$ARCH" in
+  x86_64)         TARGET="x86_64-unknown-linux-gnu" ;;
+  aarch64|arm64)  TARGET="aarch64-unknown-linux-gnu" ;;
+  *) echo "error: unsupported SHELVES_ARCH: $ARCH (use x86_64 or aarch64)" >&2; exit 1 ;;
+esac
 GLIBC="${DECK_GLIBC:-2.31}"
 
 rustup target add "$TARGET" >/dev/null 2>&1 || true

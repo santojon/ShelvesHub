@@ -17,16 +17,27 @@ Target the Mac with:
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Dict
 
-from deckprobe.screenshots.lib.nav import navigate_to_ds_qam, close_qam, _qam_eval, OPEN_QAM_EXPR
+from deckprobe.screenshots.lib.nav import (
+    navigate_to_ds_qam,
+    close_qam,
+    navigate_home,
+    home_via_mainmenu,
+    _qam_eval,
+    OPEN_QAM_EXPR,
+)
 from deckprobe.screenshots.lib.capture import _capture
 from deckprobe.screenshots.lib.cdp import Session, list_targets
 from deckprobe.screenshots.lib.registry import register
 
-LOCALE = "en-US"
+# Same resolution order as Deck-Shelves' scripts/deckprobe-ext/screenshots/
+# scenarios/_locale.py: `--locale` passed to the runner (`screenshots/run.py`
+# exports it as this env var) wins, else today's exact default (en-US).
+LOCALE = os.environ.get("DECKPROBE_SCREENSHOTS_LOCALE") or "en-US"
 
 # The child selector that is only in the DOM when a given section is expanded.
 _SECTION_CHILD = {
@@ -140,6 +151,32 @@ def _shot(sjc, host, port, out_dir, want_open, name, extra=None):
     return {name: p} if p else {}
 
 
+@register("qam_tab")
+def qam_tab(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
+    """The Deck Shelves editor tab in the QAM — its options (NOT the ShelvesHub
+    panel, which `hub_panel` captures). Registered FIRST so the full flow captures
+    it while the QAM is fresh — the hub scenarios' repeated navigation degrades the
+    QAM toggle for the rest of the run. Reaches the DS editor scope via
+    `navigate_to_ds_qam` (which owns the QAM toggling — a manual close-first
+    desyncs it), just WITHOUT clicking open-hub. Uses the helpers defined further
+    down (resolved at call time)."""
+    reached = False
+    for _ in range(4):
+        if navigate_to_ds_qam(sjc, host, port):
+            reached = True
+            break
+        time.sleep(1.0)
+    if not reached:
+        close_qam(sjc)
+        return {}
+    _set_locale(sjc, host, port)
+    time.sleep(0.6)
+    out = out_dir / "qam-tab.png"
+    p = _capture_scope(host, port, out, ".deck-shelves-qam-scope", max_h=760)
+    close_qam(sjc)
+    return {"qam-tab.png": p} if p else {}
+
+
 @register("hub_panel")
 def hub_panel(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
     """ShelvesHub panel — the Updates section open (master auto-update +
@@ -170,3 +207,81 @@ def hub_logs(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
                 break
         time.sleep(0.5)
     return _shot(sjc, host, port, out_dir, {"sec-troubleshooting": True}, "hub-logs.png", extra=open_logs)
+
+
+# ── Deck Shelves views (the tab this host opens + the Home it hosts) ─────────
+def _scope_clip_expr(sel: str, max_h: int = 0) -> str:
+    # Clip from the QAM document ORIGIN (0,0) so the tab header — the "Deck
+    # Shelves" title, its icons, and the left tab-icon strip, all ABOVE the
+    # `.deck-shelves-qam-scope` element — is included, not just the options list.
+    # `max_h` (CSS px, absolute from the top) caps the height so the shot stops at
+    # the section options instead of the whole tall scrollable tab.
+    cap = ("Math.min(r.bottom, %d)" % max_h) if max_h else "r.bottom"
+    return (
+        "(function(){var p=document.querySelector(%s);if(!p)return null;"
+        "var r=p.getBoundingClientRect();if(r.width<50||r.height<50)return null;"
+        "return {x:0,y:0,width:Math.ceil(r.right)+8,height:Math.ceil(%s)+4,scale:1};})()"
+    ) % (json.dumps(sel), cap)
+
+
+def _capture_scope(host: str, port: int, out_path: Path, sel: str, max_h: int = 0):
+    """Capture a QuickAccess target, clipped to the first element matching `sel`."""
+    expr = _scope_clip_expr(sel, max_h)
+    for _ in range(5):
+        for t in [x for x in list_targets(host, port) if "quickaccess" in (x.get("title", "") or "").lower()]:
+            sess = None
+            try:
+                sess = Session.open(host, port, t)
+                clip = sess.evaluate(expr)
+                if isinstance(clip, dict):
+                    p = _capture(sess, out_path, clip=clip, from_surface=True)
+                    if p and p.exists() and p.stat().st_size > 3000:
+                        return p
+            except Exception:
+                pass
+            finally:
+                if sess is not None:
+                    try:
+                        sess.close()
+                    except Exception:
+                        pass
+        time.sleep(0.7)
+    return out_path if out_path.exists() else None
+
+
+def _capture_bigpicture(host: str, port: int, out_path: Path):
+    """Capture the full Big Picture window surface (the Home lives here)."""
+    for _ in range(5):
+        for t in list_targets(host, port):
+            title = (t.get("title", "") or "").lower()
+            url = (t.get("url", "") or "").lower()
+            if "big picture" in title or "gamepad" in url:
+                sess = None
+                try:
+                    sess = Session.open(host, port, t)
+                    p = _capture(sess, out_path, clip=None, from_surface=True)
+                    if p and p.exists() and p.stat().st_size > 5000:
+                        return p
+                except Exception:
+                    pass
+                finally:
+                    if sess is not None:
+                        try:
+                            sess.close()
+                        except Exception:
+                            pass
+        time.sleep(0.7)
+    return out_path if out_path.exists() else None
+
+
+@register("home")
+def home(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
+    """The Deck Shelves Home — the custom shelves this host injects, full-screen."""
+    _set_locale(sjc, host, port)
+    close_qam(sjc)
+    if not home_via_mainmenu(sjc, host, port):
+        navigate_home(sjc)
+    time.sleep(2.0)
+    out = out_dir / "home.png"
+    p = _capture_bigpicture(host, port, out)
+    return {"home.png": p} if p else {}

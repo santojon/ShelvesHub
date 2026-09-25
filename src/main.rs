@@ -1,6 +1,6 @@
 use shelveshub::config::{backend_install_dir, Config};
 use shelveshub::logger::{log_info, log_warning};
-use shelveshub::{backend, loader, populate, rpc, state};
+use shelveshub::{backend, bootmovie, loader, populate, rpc, state};
 
 fn main() {
     log_info("main", "ShelvesHub starting...");
@@ -60,6 +60,18 @@ fn main() {
 
     log_info("main", &format!("Config: {}", config.summary()));
 
+    // Optional: install (or remove) the startup animation in Steam's own
+    // startup-movie slot. Best-effort — a failure here never blocks the daemon.
+    // The source + current state are also published so the `setBootMovie` RPC can
+    // toggle it live (install/remove on the spot) without a restart.
+    state::set_boot_movie_source(config.boot_movie_path.clone());
+    state::set_boot_movie_enabled(config.boot_movie);
+    match bootmovie::apply(config.boot_movie, &config.boot_movie_path) {
+        Ok(Some(p)) => log_info("main", &format!("boot movie installed: {}", p.display())),
+        Ok(None) => {}
+        Err(e) => log_warning("main", &format!("boot movie skipped: {e}")),
+    }
+
     // Host the Deck Shelves Python backend (data RPC) when configured.
     backend::init(&config);
 
@@ -79,6 +91,8 @@ fn main() {
             "interval_secs": config.interval_secs,
             "owner_settle_secs": config.owner_settle_secs,
             "native_qam": config.native_qam,
+            "desktop_ui": config.desktop_ui,
+            "boot_movie": config.boot_movie,
             "prerelease": config.prerelease,
             "force_owner": config.force_owner,
             "recover_cmd": config.recover_cmd,

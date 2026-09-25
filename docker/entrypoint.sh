@@ -74,9 +74,12 @@ daemon_smoke() {
   done
   if [[ -z "$up" ]]; then echo "  DevTools endpoint never came up"; kill "$bpid" 2>/dev/null; rm -rf "$prof"; return 1; fi
 
+  # SHELVES_DESKTOP_UI=1: the smoke injects into a plain headless Chromium, not
+  # the Steam gamepad / Big Picture UI, so the default gamepad-only gate would
+  # (correctly) stand down. Opt into desktop injection so the smoke can verify it.
   SHELVES_CEF_PORT="$port" SHELVES_RPC_ADDR="127.0.0.1:60123" \
     SHELVES_BUNDLE_PATH="$ROOT/examples/bundle/shelves-example.js" \
-    SHELVES_TARGET="harness" SHELVES_INTERVAL_SECS=2 \
+    SHELVES_TARGET="harness" SHELVES_INTERVAL_SECS=2 SHELVES_DESKTOP_UI=1 \
     "$daemon" >/tmp/shelveshub-daemon.log 2>&1 &
   dpid=$!
 
@@ -93,6 +96,21 @@ if daemon_smoke; then
 else
   echo "[X] daemon injection smoke failed"
   echo "---- daemon log (tail) ----"; tail -n 20 /tmp/shelveshub-daemon.log 2>/dev/null || true
+  FAIL=1
+fi
+fi
+
+# ── 4. Plugin backend probes (the plugin running UNDER the host) ─────────────
+# ShelvesHub hosts the plugin's Python backend, so its OS-coupled probes get real
+# coverage on this container's OS/arch (incl. ARM64) here — not only the plugin
+# repo's own x86_64 runner. Skips cleanly when the plugin isn't checked out.
+if [[ "$MODE" == "all" || "$MODE" == "plugin" ]]; then
+echo ""
+echo "[plugin] Deck Shelves backend probes under the host (cross-OS, fail-soft)…"
+if python3 docker/plugin-probes.py; then
+  echo "[ok] plugin backend probes fail-soft on $(uname -m)"
+else
+  echo "[X] plugin backend probes failed"
   FAIL=1
 fi
 fi

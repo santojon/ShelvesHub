@@ -1,10 +1,82 @@
 # Changelog
 
+*[Leia em português](docs/pt-BR/CHANGELOG.md)*
+
 All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
 ## [Unreleased]
+
+### Added
+- **macOS now runs on Intel Macs too.** The macOS package ships a **universal
+  binary** (`lipo`-merged `arm64` + `x86_64`), so ShelvesHub runs natively on both
+  Apple Silicon and Intel Macs — previously the build was Apple-Silicon-only and
+  would not launch on an Intel Mac. CI verifies the shipped macOS binary is
+  universal and fails the release if it isn't.
+- **Optional boot animation.** A `boot_movie` toggle (off by default) installs a
+  short Deck Shelves startup animation into Steam's own startup-movie slot
+  (`config/uioverrides/movies/deck_startup.webm`), so the Deck UI plays it on
+  launch — it uses Steam's native startup-movie feature rather than drawing an
+  overlay. It is a live toggle: turning it on installs the movie immediately and
+  turning it off removes it. Because the movie is only read by Steam on its next
+  start, toggling it now surfaces the **Restart to apply** banner (which restarts
+  Steam so the startup movie replays). Two source cuts ship — a 1280x800 16:10 cut
+  for the Steam Deck's native panel and a 1080p 16:9 cut for desktop — and the
+  matching one is chosen per platform. Because Steam plays a different startup-movie
+  file per device, the host installs the animation (as a symlink, the way animation
+  managers do, falling back to a copy) under every name the platform might use —
+  `deck_startup.webm`, `oled_startup.webm`, `steam_os_startup.webm`,
+  `steam_os_family_startup.webm` and `bigpicture_startup.webm` on SteamOS,
+  `bigpicture_startup.webm` on desktop. Sources live under `assets/boot/`.
+- **Experimental: desktop-client shelves.** A `desktop_ui` toggle (off by default,
+  shown on macOS/Windows). By default the loader hosts the shelves only while the
+  Steam gamepad / Big Picture UI is on screen and stands down in the plain desktop
+  client (where the gamepad Home shelves read wrong and aren't reachable by
+  gamepad), clearing an existing injection on the transition. Turn it on to inject
+  in the desktop client too.
+- **Per-platform recovery command.** When the loader detects the Steam UI has
+  collapsed (a black screen), it now runs a sensible default recovery for the host —
+  SteamOS restarts the Gaming Mode session, macOS/Windows bounce Steam back into
+  Big Picture — instead of only logging a hint. `SHELVES_RECOVER_CMD` (or config
+  `recover_cmd`) still overrides it.
+- **The site now generates its release notes and feature list from the repo's
+  own docs, in English and Portuguese.** `site/index.html`'s "What's New" list
+  and `site/features.html`'s feature list were previously hand-written HTML
+  that drifted from `RELEASE_NOTES.md`/`README.md`. A new `scripts/build-site.mjs`
+  (`pnpm run build:site`, wired into the Pages deploy) now generates both from
+  those files directly, in English and — when available — the pt-BR translation
+  under `docs/pt-BR/`, switching live with the site's existing language toggle
+  and falling back to English for anything not translated yet.
+- **README, CHANGELOG, RELEASE_NOTES and every `docs/*.md` page now have a
+  Brazilian-Portuguese translation** under `docs/pt-BR/`, cross-linked from
+  each English original.
+- **A community docs knowledge base** under `community-docs/` — plain-language,
+  ready-to-post guides (getting started, installing, the Quick Access panel,
+  automatic updates, coexistence with a plugin loader, the data backend, the
+  boot animation, desktop shelves, and troubleshooting), each in English and
+  Brazilian Portuguese, for Discussions / Discord / Reddit.
+- **Linux ARM64 (aarch64) support.** ShelvesHub now builds and ships native
+  ARM64 packages for SteamOS and generic Linux
+  (`shelveshub-steamos-aarch64.tar.gz`, `shelveshub-linux-aarch64.tar.gz`)
+  alongside the existing x86_64 packages, whose names are unchanged. The
+  one-click installers and `.desktop` launchers detect the CPU (`uname -m`) and
+  fetch the matching package, so the same download link works on an x86_64 Steam
+  Deck or an ARM64 device. Every change is compile-gated for `aarch64` in CI, and
+  a full ARM64 runtime harness can be run under emulation on demand. (Steam Frame
+  hardware validation is still pending, so the Frame itself is treated as
+  experimental until tested on-device.)
+
+### Changed
+- **Architecture-aware self-update.** The hub's self-update now picks its
+  download by CPU architecture as well as OS, and verifies the downloaded
+  binary's ELF machine type (`EM_X86_64` vs `EM_AARCH64`) before staging it — so
+  an ARM64 install can never replace itself with an x86_64 binary, or vice-versa,
+  even if a release asset is mislabeled.
+- **The host's own settings store now preserves unknown keys.** If a newer
+  ShelvesHub writes a setting an older build doesn't recognise, the older build no
+  longer drops it when it reads and re-saves the file — so downgrading or running
+  mixed versions across machines can't silently lose settings (version-skew safe).
 
 ## [0.1.0] - 2026-09-16
 

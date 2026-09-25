@@ -42,5 +42,10 @@
   "cfg_owner_settle_sub": "ホストする前に他のホストを待つ秒数",
   "cfg_interval_sub": "インジェクション確認の間隔（秒）",
   "adv_disable_hub_sub": "再有効化までインジェクションを停止（トラブル対応）",
-  "adv_restart_apply": "再起動して適用"
+  "adv_restart_apply": "再起動して適用",
+  "cfg_mode": "Ownership mode",
+  "cfg_boot_movie": "Boot animation",
+  "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
+  "cfg_desktop_ui": "Desktop client shelves (experimental)",
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
 }

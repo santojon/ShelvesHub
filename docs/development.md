@@ -1,5 +1,7 @@
 # Development
 
+*[Leia em português](pt-BR/development.md)*
+
 ## Task runner (pnpm)
 
 `pnpm` is the single entry point for the whole project — it installs the

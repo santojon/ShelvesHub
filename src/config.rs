@@ -54,12 +54,18 @@ pub struct Config {
     /// runtime attempts the native Quick Access tab (guarded by a trip
     /// breaker; overlay remains the fallback). Off by default.
     pub native_qam: bool,
-    /// Optional shell command (`SHELVES_RECOVER_CMD`) run once when the loader
-    /// detects the Steam UI windows have collapsed (a black screen where only
-    /// `SharedJSContext` survives). Unset by default — the loader then only
-    /// pauses injection and logs the recovery hint. On a device this is
-    /// typically `systemctl --user restart steam-launcher.service`; from a dev
-    /// host, `scripts/recover-deck.sh`. Never `StartRestart` — it worsens this.
+    /// EXPERIMENTAL. When false (the default), the loader only injects while the
+    /// Steam gamepad / Big Picture UI is on screen; in the plain desktop client
+    /// it stands down, since the shelves are built for the gamepad Home and read
+    /// wrong there. When true (`SHELVES_DESKTOP_UI=1`), inject in the desktop
+    /// client too.
+    pub desktop_ui: bool,
+    /// Shell command run once when the loader detects the Steam UI windows have
+    /// collapsed (a black screen where only `SharedJSContext` survives). Defaults
+    /// to a per-platform command (`default_recover_cmd`) — SteamOS restarts the
+    /// Gaming Mode session, macOS/Windows bounce Steam back into Big Picture.
+    /// `SHELVES_RECOVER_CMD` (or config `recover_cmd`) overrides it with a custom
+    /// command. Never `StartRestart` — it worsens this.
     pub recover_cmd: Option<String>,
     /// When true (`SHELVES_PRELOAD=1`), register the host runtime at document-
     /// start (browser auto-attach + `Page.addScriptToEvaluateOnNewDocument`)
@@ -84,6 +90,15 @@ pub struct Config {
     /// `<settings_dir>/shelveshub.json`) — the auto-update preference and future
     /// host settings, persisted with atomic writes + a backup (see `store`).
     pub hub_config_path: PathBuf,
+    /// When true (`SHELVES_BOOT_MOVIE=1` / `boot_movie` in the config file), the
+    /// host installs its startup animation into Steam's own startup-movie slot
+    /// (`config/uioverrides/movies/deck_startup.webm`) so the Deck UI plays it on
+    /// launch; when false, it removes the file it installed. Off by default. See
+    /// `bootmovie`.
+    pub boot_movie: bool,
+    /// Source WebM copied into the startup-movie slot (`SHELVES_BOOT_MOVIE_FILE`;
+    /// default `<exe_dir>/assets/boot/deck_startup.webm`).
+    pub boot_movie_path: PathBuf,
 }
 
 impl Config {
@@ -144,6 +159,7 @@ impl Config {
                     .unwrap_or(false),
             },
             native_qam: cfg_bool(&file, "SHELVES_NATIVE_QAM", "native_qam"),
+            desktop_ui: cfg_bool(&file, "SHELVES_DESKTOP_UI", "desktop_ui"),
             recover_cmd: env::var("SHELVES_RECOVER_CMD")
                 .ok()
                 .filter(|s| !s.is_empty())
@@ -152,7 +168,8 @@ impl Config {
                         .and_then(Value::as_str)
                         .filter(|s| !s.is_empty())
                         .map(String::from)
-                }),
+                })
+                .or_else(default_recover_cmd),
             preload: env_bool("SHELVES_PRELOAD"),
             prerelease: cfg_bool(&file, "SHELVES_PRERELEASE", "prerelease"),
             // The owner-settle wait exists only to avoid racing a plugin loader's
@@ -169,6 +186,12 @@ impl Config {
                 cfg_u64(&file, "SHELVES_OWNER_SETTLE_SECS", "owner_settle_secs", 0)
             },
             hub_config_path,
+            boot_movie: cfg_bool(&file, "SHELVES_BOOT_MOVIE", "boot_movie"),
+            // Two source movies ship: a 16:10 cut matching the Steam Deck's native
+            // 1280x800 panel (primary target) and a 16:9 1080p cut for desktop
+            // displays. Default to the one matching the platform; the env override
+            // wins either way.
+            boot_movie_path: resolve_asset_path("SHELVES_BOOT_MOVIE_FILE", default_boot_movie()),
         }
     }
 
@@ -319,6 +342,37 @@ fn cfg_bool(file: &Value, env_key: &str, json_key: &str) -> bool {
         return v == "1" || v.eq_ignore_ascii_case("true");
     }
     file.get(json_key).and_then(Value::as_bool).unwrap_or(false)
+}
+
+/// Per-platform default recovery command, run once when the loader detects the
+/// Steam UI windows have collapsed (a black screen). Chosen to be the least
+/// disruptive action that restores the interface on each host; an explicit
+/// `SHELVES_RECOVER_CMD` / config `recover_cmd` overrides it with a custom command.
+fn default_recover_cmd() -> Option<String> {
+    let cmd = if cfg!(target_os = "linux") {
+        // SteamOS / Steam Deck: restart the Gaming Mode session service.
+        "systemctl --user restart steam-launcher.service"
+    } else if cfg!(target_os = "macos") {
+        // macOS (always a sole host): bounce Steam and return to Big Picture.
+        "osascript -e 'tell application \"Steam\" to quit'; sleep 5; open -a Steam; sleep 12; open \"steam://open/bigpicture\""
+    } else if cfg!(windows) {
+        // Windows (always a sole host): nudge Steam back into Big Picture.
+        "start \"\" \"steam://open/bigpicture\""
+    } else {
+        return None;
+    };
+    Some(cmd.to_string())
+}
+
+/// The startup movie to install by default. SteamOS / Steam Deck (the primary
+/// target) has a native 1280x800 16:10 panel, so it gets the matching cut;
+/// desktop platforms get the 16:9 1080p cut.
+fn default_boot_movie() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "assets/boot/deck_startup_1280x800.webm"
+    } else {
+        "assets/boot/deck_startup.webm"
+    }
 }
 
 /// Resolve an asset path: explicit env override wins, otherwise look next to the

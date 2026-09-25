@@ -1,5 +1,7 @@
 # Release Notes
 
+*[Leia em português](docs/pt-BR/RELEASE_NOTES.md)*
+
 Highlights for each release, written for people using ShelvesHub. The full,
 detailed list of changes lives in [CHANGELOG.md](CHANGELOG.md).
 
@@ -7,6 +9,34 @@ Releases are created automatically by CI when a version tag (`vMAJOR.MINOR.PATCH
 is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
+
+- **Runs on Intel Macs now, not just Apple Silicon.** The macOS download is a
+  universal build, so ShelvesHub launches natively on any Mac.
+- **Optional boot animation.** Turn it on to play a short Deck Shelves startup
+  animation when the Steam gamepad UI launches — it uses Steam's own startup-movie
+  feature. A Deck-native 1280×800 cut and a 1080p desktop cut ship, and the right
+  one is used for your device; the animation is placed under every startup-movie
+  name Steam might use so it takes effect whatever your device. Toggling it shows a
+  **Restart to apply** button (the movie is replayed when Steam restarts). Off by default.
+- **Shelves stay in the gamepad UI (experimental desktop toggle).** On macOS and
+  Windows the host now hosts your shelves only while Steam's gamepad / Big Picture
+  UI is on screen, not in the plain desktop client where they don't belong. A new
+  experimental toggle lets you opt back into the desktop client if you want it.
+- **Automatic black-screen recovery.** If the Steam interface ever collapses, the
+  host now runs a recovery step made for your system — restarting the Steam Deck's
+  Gaming Mode session, or bringing Steam back into Big Picture on macOS and Windows.
+- **Sturdier settings across versions.** Running different ShelvesHub versions on
+  your machines no longer risks losing a setting the older one didn't know about.
+- **The site now shows release notes and the full feature list in Portuguese too**,
+  switching live with the existing language toggle — automatically falling back
+  to English for anything not translated yet. The README, changelog and every
+  guide page also now have a Brazilian-Portuguese version, linked from each
+  English page.
+- **Runs on Linux ARM64 (aarch64) now.** There are native ARM64 downloads for
+  SteamOS and Linux, and the installer picks the right one for your device
+  automatically — the x86_64 downloads are unchanged. Self-update also stays on
+  your architecture, so an ARM64 machine never pulls an x86_64 build by mistake.
+  (Steam Frame support is still being validated on real hardware.)
 
 ## [0.1.0] - 2026-09-16
 

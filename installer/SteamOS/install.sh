@@ -7,9 +7,21 @@ REPO="santojon/ShelvesHub"
 INSTALL_DIR="$HOME/.local/share/shelveshub"
 SERVICE_DIR="$HOME/.config/systemd/user"
 BINARY="shelveshub"
-PACKAGE="shelveshub-steamos.tar.gz"
+
+# Pick the package for this CPU (Steam Deck is x86_64; Steam Frame is aarch64).
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64|amd64)   PACKAGE="shelveshub-steamos.tar.gz" ;;
+  aarch64|arm64)  PACKAGE="shelveshub-steamos-aarch64.tar.gz" ;;
+  *)
+    echo "[!] Unsupported architecture: $ARCH"
+    echo "    Supported Linux architectures: x86_64, aarch64"
+    exit 1
+    ;;
+esac
 
 echo "=== ShelvesHub — SteamOS Installer ==="
+echo "[i] Architecture: $ARCH"
 
 # ── Resolve download URL ───────────────────────────────────────────────────────
 if [[ -f "$BINARY" ]]; then

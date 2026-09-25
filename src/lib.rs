@@ -7,6 +7,7 @@
 //! - `shelves-devtools` — the cross-platform CDP developer tool.
 
 pub mod backend;
+pub mod bootmovie;
 pub mod cdp;
 pub mod config;
 pub mod loader;
