@@ -10,6 +10,8 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-25
+
 - **Runs on Intel Macs now, not just Apple Silicon.** The macOS download is a
   universal build, so ShelvesHub launches natively on any Mac.
 - **Optional boot animation.** Turn it on to play a short Deck Shelves startup

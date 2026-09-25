@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-25
+
 ### Added
 - **macOS now runs on Intel Macs too.** The macOS package ships a **universal
   binary** (`lipo`-merged `arm64` + `x86_64`), so ShelvesHub runs natively on both
