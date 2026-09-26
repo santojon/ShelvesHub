@@ -75,4 +75,6 @@ jobs:
             exit 0
           fi
           git commit -m "chore(stats): site usage snapshot"
-          git push origin HEAD:main
+          # Push with the token in the URL: the checkout ran with
+          # persist-credentials:false, so no auth is stored in git config.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main

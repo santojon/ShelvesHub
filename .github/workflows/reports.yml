@@ -70,6 +70,8 @@ jobs:
           node scripts/ci/report.mjs --scope "$SCOPE" --harness
 
       - name: Commit snapshot
+        env:
+          GH_TOKEN: ${{ secrets.SUBMIT_TOKEN || github.token }}
         run: |
           git config user.name "${{ github.repository_owner }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
@@ -79,4 +81,6 @@ jobs:
             exit 0
           fi
           git commit -m "chore(report): quality snapshot"
-          git push origin HEAD:main
+          # Push with the token in the URL: the checkout ran with
+          # persist-credentials:false, so no auth is stored in git config.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
