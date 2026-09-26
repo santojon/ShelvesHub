@@ -11,7 +11,7 @@ inicialização.
 **x86_64 e ARM64 (aarch64) são ambos suportados no Linux.** O instalador detecta
 sua CPU e baixa a build correspondente automaticamente, então os passos abaixo são
 os mesmos num Steam Deck x86_64 ou num dispositivo ARM64 — você não escolhe uma
-arquitetura na mão. (O Steam Frame é ARM64; o suporte no dispositivo ainda está
+arquitetura na mão. (O suporte no dispositivo em hardware ARM64 real ainda está
 sendo validado.)
 
 ## Steam Deck / SteamOS

@@ -26,15 +26,15 @@
 
 (function () {
   "use strict";
-  var React = window.React,
+  const React = window.React,
     ReactDOM = window.ReactDOM;
   if (!React || !ReactDOM) {
     console.error("[mock] React/ReactDOM missing — vendor them under vendor/");
     return;
   }
-  var h = React.createElement;
-  var S = window.__HARNESS__ || {};
-  var MEMO = Symbol.for("react.memo");
+  const h = React.createElement;
+  const S = window.__HARNESS__ || {};
+  const MEMO = Symbol.for("react.memo");
 
   // ── Hermetic RPC stub ───────────────────────────────────────────────────────
   // The runtime fetches `getRuntimeConfig` / `getConfig` / `getLogs` from the
@@ -44,8 +44,8 @@
   // hermetic (no live daemon needed, no silent dependence on one). Only the RPC
   // endpoint is intercepted; anything else falls through to the real fetch.
   (function stubRpc() {
-    var RPC_HOST = "127.0.0.1:60123"; // matches the runtime's default RPC_ENDPOINT
-    var results = {
+    const RPC_HOST = "127.0.0.1:60123"; // matches the runtime's default RPC_ENDPOINT
+    const results = {
       getRuntimeConfig: {
         loader_possible: true, native_qam: true, prerelease: false,
         interval_secs: 30, owner_settle_secs: 0, force_owner: "", recover_cmd: "",
@@ -59,13 +59,13 @@
       },
       getLogs: [],
     };
-    var realFetch = window.fetch ? window.fetch.bind(window) : null;
+    const realFetch = window.fetch ? window.fetch.bind(window) : null;
     window.fetch = function (url, opts) {
       try {
         if (typeof url === "string" && url.indexOf(RPC_HOST) >= 0) {
-          var method = "";
+          let method = "";
           try { method = JSON.parse((opts && opts.body) || "{}").method || ""; } catch (e) {}
-          var result = Object.prototype.hasOwnProperty.call(results, method) ? results[method] : true;
+          const result = Object.prototype.hasOwnProperty.call(results, method) ? results[method] : true;
           return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, result: result }); } });
         }
       } catch (e) {}
@@ -74,7 +74,7 @@
   })();
 
   // ── QuickAccessTab enum (Steam's numeric tab keys) ────────────────────────
-  var QuickAccessTab = {
+  const QuickAccessTab = {
     Notifications: 0,
     CurrentGame: 1,
     Friends: 2,
@@ -99,7 +99,7 @@
       "div",
       { className: "qam-tablist" },
       (props.tabs || []).map(function (t) {
-        var id = t.key != null ? t.key : t.tab;
+        const id = t.key != null ? t.key : t.tab;
         return h(
           "div",
           { className: "qam-tab", "data-tabkey": String(id), key: String(id) },
@@ -134,12 +134,12 @@
   // function (what the re-point rewrites to the patched wrapper) — matching
   // Steam's QAM consumer. A distinct __tick prop each render defeats the memo
   // bailout so the re-pointed type actually re-runs.
-  var bvExport = { $$typeof: MEMO, type: QuickAccessMenuBrowserView, compare: null };
-  var embExport = { $$typeof: MEMO, type: QuickAccessMenuEmbedded, compare: null };
-  var qamModule = { BrowserView: bvExport, Embedded: embExport };
+  const bvExport = { $$typeof: MEMO, type: QuickAccessMenuBrowserView, compare: null };
+  const embExport = { $$typeof: MEMO, type: QuickAccessMenuEmbedded, compare: null };
+  const qamModule = { BrowserView: bvExport, Embedded: embExport };
 
   // ── jsx-runtime shim over React.createElement ─────────────────────────────
-  var jsxRuntime = {
+  const jsxRuntime = {
     jsx: function (t, p, k) {
       p = p || {};
       if (k !== undefined) p.key = k;
@@ -153,20 +153,20 @@
     Fragment: React.Fragment,
   };
 
-  // ── Native, gamepad-focusable UI components (scenario flag `nativeUi`) ─────
-  // Shaped so the runtime's ensureUi() discovery finds them: ButtonItem and
-  // ToggleField are forwardRef-shaped (renderSrc reads `.render`) and carry the
-  // discovery marker in a comment; PanelSection/Row are plain functions (srcOf
-  // reads toString). Each renders detectable DOM (`data-native=…`) for assertions.
-  var FORWARD_REF = Symbol.for("react.forward_ref");
-  var ButtonItem = {
+  /* ── Native, gamepad-focusable UI components (scenario flag `nativeUi`) ─────
+     Shaped so the runtime's ensureUi() discovery finds them: ButtonItem and
+     ToggleField are forwardRef-shaped (renderSrc reads `.render`) and carry the
+     discovery marker in a comment; PanelSection/Row are plain functions (srcOf
+     reads toString). Each renders detectable DOM (`data-native=…`) for assertions. */
+  const FORWARD_REF = Symbol.for("react.forward_ref");
+  const ButtonItem = {
     $$typeof: FORWARD_REF,
     render: function (props) {
       /* childrenContainerWidth:"min" */
       return h("button", { className: "native-button", "data-native": "button", disabled: !!props.disabled, onClick: props.onClick }, props.children);
     },
   };
-  var ToggleField = {
+  const ToggleField = {
     $$typeof: FORWARD_REF,
     render: function (props) {
       /* ToggleField,fallback */
@@ -178,12 +178,12 @@
   };
   // DialogButton — a bare focusable button that spreads its props (like real DFL:
   // `jsx(G,{type:"button",...e,...})`), so runtime-supplied markers pass through.
-  var DialogButton = {
+  const DialogButton = {
     $$typeof: FORWARD_REF,
     render: function (props) {
       /* "DialogButton","_DialogLayout" */
-      var p = { className: "native-dialogbutton" };
-      for (var k in props) if (k !== "children") p[k] = props[k];
+      const p = { className: "native-dialogbutton" };
+      for (const k in props) if (k !== "children") p[k] = props[k];
       return h("button", p, props.children);
     },
   };
@@ -198,14 +198,14 @@
   }
   function CtxComp() { return null; }
   CtxComp.contextType = { _currentValue: {} };
-  var commonUi = { Focusable: function Focusable() {}, ToggleField: ToggleField, ButtonItem: ButtonItem, DialogButton: DialogButton, Field: function Field() {}, CtxComp: CtxComp };
-  for (var _d = 0; _d < 62; _d++) commonUi["decoy" + _d] = function () { return null; };
-  var panelModule = { PanelSection: PanelSection, PanelSectionRow: PanelSectionRow };
+  const commonUi = { Focusable: function Focusable() {}, ToggleField: ToggleField, ButtonItem: ButtonItem, DialogButton: DialogButton, Field: function Field() {}, CtxComp: CtxComp };
+  for (let _d = 0; _d < 62; _d++) commonUi["decoy" + _d] = function () { return null; };
+  const panelModule = { PanelSection: PanelSection, PanelSectionRow: PanelSectionRow };
 
   // ── Fake webpack registry ─────────────────────────────────────────────────
   // The module cache (`require.c`) the runtime walks; a few decoy modules so
   // the finders actually have to search.
-  var modules = {
+  const modules = {
     100: React,
     101: ReactDOM,
     102: jsxRuntime,
@@ -218,15 +218,15 @@
     modules[202] = commonUi;
     modules[203] = panelModule;
   }
-  var cache = {};
+  const cache = {};
   Object.keys(modules).forEach(function (id) {
     cache[id] = { exports: modules[id] };
   });
-  var require = function (id) {
+  const require = function (id) {
     return modules[id];
   };
   require.c = cache;
-  var chunk = [];
+  const chunk = [];
   chunk.push = function (item) {
     // webpack push protocol: [ [chunkIds], moreModules, runtimeFn ]
     if (item && typeof item[2] === "function") {
@@ -250,13 +250,13 @@
     };
   }
 
-  // ── Render control ────────────────────────────────────────────────────────
-  // `createRoot` (like Steam) so the container carries the `__reactContainer$…`
-  // fiber key the runtime's getReactRoot expects; `flushSync` keeps it fully
-  // synchronous, so assertions read a settled DOM with no concurrent-scheduling
-  // races and the re-point re-render lands before we report.
+  /* ── Render control ────────────────────────────────────────────────────────
+     `createRoot` (like Steam) so the container carries the `__reactContainer$…`
+     fiber key the runtime's getReactRoot expects; `flushSync` keeps it fully
+     synchronous, so assertions read a settled DOM with no concurrent-scheduling
+     races and the re-point re-render lands before we report. */
   function ensureRoot() {
-    var el = document.getElementById("root");
+    let el = document.getElementById("root");
     if (!el) {
       el = document.createElement("div");
       el.id = "root";
@@ -264,11 +264,11 @@
     }
     return el;
   }
-  var root = null;
-  var renderTick = 0;
+  let root = null;
+  let renderTick = 0;
   function render() {
     renderTick++;
-    var el = ensureRoot();
+    const el = ensureRoot();
     if (!root) root = ReactDOM.createRoot(el);
     ReactDOM.flushSync(function () {
       root.render(h(bvExport, { visible: true, __tick: renderTick }));
@@ -284,14 +284,14 @@
   // Mirrors what Deck Shelves does under a loader: register into __SHELVES_QAM__
   // if present, else queue in __SHELVES_QAM_PENDING__ (order-independent).
   window.__HARNESS_REGISTER_PLUGIN_PANEL__ = function () {
-    var spec = {
+    const spec = {
       id: "deck-shelves",
       title: "Deck Shelves",
       content: function () {
         return h("div", { className: "ds-editor" }, "DECK SHELVES EDITOR (mirrored)");
       },
     };
-    var q = window.__SHELVES_QAM__;
+    const q = window.__SHELVES_QAM__;
     if (q && typeof q.registerPanel === "function") {
       q.registerPanel(spec);
     } else {
@@ -303,21 +303,21 @@
   // ── Report surface for assertions ─────────────────────────────────────────
   window.__HARNESS_REPORT__ = function () {
     function tabKeys() {
-      var out = [];
+      const out = [];
       document.querySelectorAll(".qam-tab").forEach(function (n) {
         out.push(n.getAttribute("data-tabkey"));
       });
       return out;
     }
     function shelvesTabText() {
-      var found = "";
+      let found = "";
       document.querySelectorAll(".qam-tab").forEach(function (n) {
-        var k = n.getAttribute("data-tabkey");
+        const k = n.getAttribute("data-tabkey");
         if (k === "900") found = n.textContent || "";
       });
       return found;
     }
-    var q = window.__SHELVES_QAM__;
+    const q = window.__SHELVES_QAM__;
     return {
       hostInstalled: !!window.__SHELVES_HOST__,
       owner: String(window.__DECK_SHELVES_OWNER__ || ""),
@@ -332,12 +332,12 @@
       log: (window.__SHELVES_LOG__ || []).slice(-16),
       errors: (window.__HARNESS_ERRORS__ || []).slice(-6),
       fallbackUi: (function () {
-        var panel = document.querySelector("[data-fb-panel]");
+        const panel = document.querySelector("[data-fb-panel]");
         if (!panel) return null;
-        var sections = [].map.call(panel.querySelectorAll('[data-fb^="sec-"]'), function (n) {
+        const sections = [].map.call(panel.querySelectorAll('[data-fb^="sec-"]'), function (n) {
           return (n.getAttribute("data-fb") || "").replace(/^sec-/, "");
         });
-        var has = function (id) { return !!panel.querySelector('[data-fb="' + id + '"]'); };
+        const has = function (id) { return !!panel.querySelector('[data-fb="' + id + '"]'); };
         return {
           panel: true,
           sections: sections,

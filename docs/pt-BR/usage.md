@@ -16,7 +16,7 @@ O ShelvesHub roda como um serviço em segundo plano e injeta o pacote do Deck Sh
 
 ```bash
 # Extract shelveshub-steamos.tar.gz (x86_64) or shelveshub-steamos-aarch64.tar.gz
-# (ARM64 / Steam Frame), then:
+# (ARM64), then:
 bash installer/install.sh
 ```
 

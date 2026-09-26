@@ -11,6 +11,14 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::time::Duration;
+
+/// Reject bodies larger than this (a settings document is a few KiB) — bounds the
+/// per-connection allocation so a bogus Content-Length can't exhaust memory.
+const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+/// Per-connection read timeout: a slow/stalled client (slowloris) is dropped
+/// instead of holding a thread forever.
+const READ_TIMEOUT: Duration = Duration::from_secs(15);
 
 use serde_json::Value;
 
@@ -20,15 +28,56 @@ use crate::state;
 
 /// Operational-config keys the "advanced configuration" editor may change. The
 /// rest (host/port/paths) stay read-only — editing them can cut the panel off
-/// from the daemon. All apply on the next restart.
-const EDITABLE_CONFIG_KEYS: [&str; 7] = [
+/// from the daemon. All apply on the next restart. `recover_cmd` is deliberately
+/// NOT here: it runs through a shell on a UI-collapse event, so letting the RPC
+/// (reachable by any local caller) set it would be arbitrary code execution — it
+/// is file/env only.
+const EDITABLE_CONFIG_KEYS: [&str; 6] = [
     "native_qam",
     "prerelease",
     "owner_settle_secs",
     "interval_secs",
     "force_owner",
     "desktop_ui",
-    "recover_cmd",
+];
+
+/// The ONLY method names proxied to the Python backend — the Deck Shelves plugin's
+/// public API. The runner resolves any public attribute by name, so without this
+/// the proxy would be a generic gateway to arbitrary Python calls; anything not
+/// here answers "unknown method". (Path-safety of the file methods is jailed on
+/// the plugin side; this bounds the callable surface to the real API.)
+const BACKEND_METHODS: [&str; 31] = [
+    "clear_backups",
+    "create_backup",
+    "delete_backup",
+    "download_release",
+    "export_backup",
+    "export_settings",
+    "get_audio_state",
+    "get_bluetooth_state",
+    "get_css_loader_themes",
+    "get_display_state",
+    "get_hardware_info",
+    "get_host_os",
+    "get_library_locations",
+    "get_perf_snapshot",
+    "get_settings",
+    "get_tabmaster_tabs",
+    "get_user_desktop",
+    "get_user_home",
+    "get_user_pictures",
+    "get_wishlist",
+    "import_backup",
+    "import_settings",
+    "list_available_launchers",
+    "list_backups",
+    "list_launcher_games",
+    "read_image_b64",
+    "read_json_file",
+    "reset_settings",
+    "restore_backup",
+    "set_settings",
+    "write_json_file",
 ];
 
 pub fn serve(addr: &str) {
@@ -38,7 +87,17 @@ pub fn serve(addr: &str) {
             l
         }
         Err(e) => {
-            log_error("rpc", &format!("Failed to bind {addr}: {e}"));
+            // A dead RPC means the runtime can't save settings — a silent
+            // data-loss risk. Make it loud and actionable rather than a lone line.
+            log_error(
+                "rpc",
+                &format!(
+                    "Failed to bind the control endpoint {addr}: {e}. Another process (a \
+                     second ShelvesHub, or something else) holds the port, so settings CANNOT \
+                     be saved. Stop the other process, or set `rpc_port` in shelveshub.config.json \
+                     to a free port, then restart the service."
+                ),
+            );
             return;
         }
     };
@@ -60,19 +119,75 @@ fn handle_connection(mut stream: TcpStream) {
         .peer_addr()
         .map(|a| a.to_string())
         .unwrap_or_default();
+    // Slowloris guard: drop a client that stalls mid-request.
+    let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
 
     let request = match read_request(&stream) {
         Ok(req) => req,
         Err(e) => {
             log_warning("rpc", &format!("Bad request from {peer}: {e}"));
-            let _ = write_response(&mut stream, 400, r#"{"ok":false,"error":"bad request"}"#);
+            let _ = write_response(
+                &mut stream,
+                400,
+                r#"{"ok":false,"error":"bad request"}"#,
+                None,
+            );
             return;
         }
     };
 
-    // CORS preflight from the renderer.
+    // CORS: reflect a real Origin only — never `*`. The per-boot token is the
+    // actual gate; reflecting the origin just lets the legitimate runtime read
+    // the response from whichever Steam document it runs in.
+    let origin = request.origin.as_deref();
+
+    // CORS preflight from the renderer — grant the headers the real call needs.
     if request.method == "OPTIONS" {
-        let _ = write_response(&mut stream, 204, "");
+        let _ = write_response(&mut stream, 204, "", origin);
+        return;
+    }
+
+    if request.too_large {
+        let _ = write_response(
+            &mut stream,
+            413,
+            r#"{"ok":false,"error":"request too large"}"#,
+            origin,
+        );
+        return;
+    }
+
+    // Require a JSON content-type. A cross-origin "simple request" (text/plain or
+    // a form) can't set this without a CORS preflight, so this blocks a malicious
+    // page from triggering side effects fire-and-forget.
+    let is_json = request
+        .content_type
+        .as_deref()
+        .is_some_and(|c| c.to_ascii_lowercase().starts_with("application/json"));
+    if !is_json {
+        let _ = write_response(
+            &mut stream,
+            415,
+            r#"{"ok":false,"error":"Content-Type: application/json required"}"#,
+            origin,
+        );
+        return;
+    }
+
+    // Require the per-boot bearer token (only the daemon can stamp it into the
+    // runtime over CDP). No token / wrong token → 401, before any dispatch.
+    let authorized = request
+        .authorization
+        .as_deref()
+        .and_then(|a| a.strip_prefix("Bearer "))
+        .is_some_and(|t| constant_time_eq(t.as_bytes(), state::rpc_token().as_bytes()));
+    if !authorized {
+        let _ = write_response(
+            &mut stream,
+            401,
+            r#"{"ok":false,"error":"unauthorized"}"#,
+            origin,
+        );
         return;
     }
 
@@ -81,17 +196,35 @@ fn handle_connection(mut stream: TcpStream) {
         "rpc",
         &format!("{peer} -> {}", truncate_for_log(&request.body)),
     );
-    if let Err(e) = write_response(&mut stream, 200, &response_body) {
+    if let Err(e) = write_response(&mut stream, 200, &response_body, origin) {
         log_warning("rpc", &format!("Write error to {peer}: {e}"));
     }
+}
+
+/// Length-independent byte compare, so token validation doesn't leak length or
+/// prefix via timing.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 struct HttpRequest {
     method: String,
     body: String,
+    origin: Option<String>,
+    authorization: Option<String>,
+    content_type: Option<String>,
+    /// Content-Length exceeded `MAX_BODY_BYTES` — the body was not read.
+    too_large: bool,
 }
 
-/// Read request line + headers, then exactly `Content-Length` body bytes.
+/// Read request line + headers, then exactly `Content-Length` body bytes (capped).
 fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
     let mut reader = BufReader::new(stream);
 
@@ -104,6 +237,9 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
         .to_string();
 
     let mut content_length = 0usize;
+    let mut origin = None;
+    let mut authorization = None;
+    let mut content_type = None;
     loop {
         let mut line = String::new();
         let n = reader.read_line(&mut line)?;
@@ -111,10 +247,29 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
             break;
         }
         if let Some((name, value)) = line.split_once(':') {
-            if name.trim().eq_ignore_ascii_case("content-length") {
-                content_length = value.trim().parse().unwrap_or(0);
+            let name = name.trim();
+            let value = value.trim().to_string();
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.parse().unwrap_or(0);
+            } else if name.eq_ignore_ascii_case("origin") {
+                origin = Some(value);
+            } else if name.eq_ignore_ascii_case("authorization") {
+                authorization = Some(value);
+            } else if name.eq_ignore_ascii_case("content-type") {
+                content_type = Some(value);
             }
         }
+    }
+
+    if content_length > MAX_BODY_BYTES {
+        return Ok(HttpRequest {
+            method,
+            body: String::new(),
+            origin,
+            authorization,
+            content_type,
+            too_large: true,
+        });
     }
 
     let mut body = vec![0u8; content_length];
@@ -125,6 +280,10 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
     Ok(HttpRequest {
         method,
         body: String::from_utf8_lossy(&body).into_owned(),
+        origin,
+        authorization,
+        content_type,
+        too_large: false,
     })
 }
 
@@ -141,6 +300,23 @@ fn truncate_for_log(body: &str) -> String {
         .map(|(i, c)| i + c.len_utf8())
         .unwrap_or(0);
     format!("{}… ({} bytes)", &body[..cut], body.len())
+}
+
+/// Record the newest release tag as the installed `bundle_tag` after a download,
+/// so the "update available" check resolves. Without this a manual/host-driven
+/// update re-downloads every cycle and the plugin's update banner never clears.
+fn record_bundle_tag(prerelease: bool) {
+    let Some(tag) = crate::populate::latest_release_tag(prerelease) else {
+        return;
+    };
+    let Some(cfg_path) = crate::state::hub_config_path() else {
+        return;
+    };
+    let mut s = crate::store::load(cfg_path);
+    if s.bundle_tag != tag {
+        s.bundle_tag = tag;
+        let _ = crate::store::save(cfg_path, &s);
+    }
 }
 
 fn dispatch(body: &str) -> String {
@@ -181,6 +357,7 @@ fn dispatch(body: &str) -> String {
             Some((path, prerelease)) => {
                 match crate::populate::update_from_release(path, *prerelease) {
                     Ok(url) => {
+                        record_bundle_tag(*prerelease);
                         log_info("rpc", &format!("Bundle re-downloaded: {url}"));
                         ok(serde_json::Value::String(url).to_string())
                     }
@@ -201,6 +378,7 @@ fn dispatch(body: &str) -> String {
                     .and_then(Value::as_str);
                 match crate::populate::apply_update(path, asset_url, *prerelease) {
                     Ok(url) => {
+                        record_bundle_tag(*prerelease);
                         log_info("rpc", &format!("Applied plugin update: {url}"));
                         ok(r#"{"applied":true}"#.to_string())
                     }
@@ -578,8 +756,9 @@ fn dispatch(body: &str) -> String {
             }
             ok(format!(r#"{{"restarting":{restarting}}}"#))
         }
-        // Anything else is a data method owned by the hosted Python backend.
-        Some(other) if backend::enabled() => {
+        // A data method owned by the hosted Python backend — only if it's in the
+        // known API allowlist (else it falls through to "unknown method" below).
+        Some(other) if backend::enabled() && BACKEND_METHODS.contains(&other) => {
             let args = parsed
                 .as_ref()
                 .and_then(|v| v.get("args").cloned())
@@ -603,20 +782,33 @@ fn err(message: &str) -> String {
     format!(r#"{{"ok":false,"error":"{escaped}"}}"#)
 }
 
-fn write_response(stream: &mut TcpStream, status: u16, body: &str) -> std::io::Result<()> {
+fn write_response(
+    stream: &mut TcpStream,
+    status: u16,
+    body: &str,
+    origin: Option<&str>,
+) -> std::io::Result<()> {
     let reason = match status {
         200 => "OK",
         204 => "No Content",
         400 => "Bad Request",
+        401 => "Unauthorized",
+        413 => "Payload Too Large",
+        415 => "Unsupported Media Type",
         _ => "OK",
+    };
+    // Reflect a real Origin (never `*`); omit ACAO entirely when there is none.
+    let cors_origin = match origin {
+        Some(o) => format!("Access-Control-Allow-Origin: {o}\r\nVary: Origin\r\n"),
+        None => String::new(),
     };
     let response = format!(
         "HTTP/1.1 {status} {reason}\r\n\
          Content-Type: application/json\r\n\
          Content-Length: {len}\r\n\
-         Access-Control-Allow-Origin: *\r\n\
+         {cors_origin}\
          Access-Control-Allow-Methods: POST, OPTIONS\r\n\
-         Access-Control-Allow-Headers: Content-Type\r\n\
+         Access-Control-Allow-Headers: Content-Type, Authorization\r\n\
          Connection: close\r\n\
          \r\n\
          {body}",
@@ -629,6 +821,31 @@ fn write_response(stream: &mut TcpStream, status: u16, body: &str) -> std::io::R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn constant_time_eq_matches_only_equal() {
+        assert!(constant_time_eq(b"abc", b"abc"));
+        assert!(constant_time_eq(b"", b""));
+        assert!(!constant_time_eq(b"abc", b"abd"));
+        assert!(!constant_time_eq(b"abc", b"ab"));
+        assert!(!constant_time_eq(b"", b"x"));
+    }
+
+    #[test]
+    fn recover_cmd_is_not_rpc_editable() {
+        // recover_cmd runs through a shell — it must never be settable over RPC.
+        assert!(!EDITABLE_CONFIG_KEYS.contains(&"recover_cmd"));
+    }
+
+    #[test]
+    fn backend_proxy_allowlist_bounds_the_surface() {
+        // Real API methods pass; arbitrary Python attributes do not.
+        assert!(BACKEND_METHODS.contains(&"get_settings"));
+        assert!(BACKEND_METHODS.contains(&"write_json_file"));
+        assert!(!BACKEND_METHODS.contains(&"os.system"));
+        assert!(!BACKEND_METHODS.contains(&"__import__"));
+        assert!(!BACKEND_METHODS.contains(&"eval"));
+    }
 
     #[test]
     fn dispatches_ping() {

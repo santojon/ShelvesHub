@@ -83,3 +83,6 @@ assets/icons/icon-*.png
 # uitests output (deckprobe/uitests/run.py's default --out) — screenshots
 # and, since the --record flag, per-test MP4s. Local-only, never committed.
 /tmp/
+
+# Per-dev quality report runs (CI commits ci/ and release/ only)
+site/reports/local/

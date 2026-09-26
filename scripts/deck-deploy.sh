@@ -51,7 +51,9 @@ BIN="target/$TARGET/release/shelveshub"
 echo "[i] Deploying to $DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR ..."
 "${SSH[@]}" "mkdir -p '$REMOTE_HOME_DIR/bundle' '$REMOTE_HOME_DIR/runtime/backend' '$REMOTE_HOME_DIR/assets/boot' '/home/$DECK_USER/.config/systemd/user'"
 rsync -az -e "$RSH" "$BIN" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/shelveshub"
-rsync -az -e "$RSH" runtime/shelves-host.js "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/shelves-host.js"
+# The runtime is split across shelves-host.js + its fragments (assembled into one
+# IIFE by the loader). Sync ALL of them, or coexistence has no QAM tab.
+rsync -az -e "$RSH" runtime/shelves-host*.js "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/"
 rsync -az -e "$RSH" runtime/i18n/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/i18n/"
 rsync -az -e "$RSH" runtime/backend/ "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/runtime/backend/"
 rsync -az -e "$RSH" "$BUNDLE" "$DECK_USER@$DECK_HOST:$REMOTE_HOME_DIR/bundle/index.js"

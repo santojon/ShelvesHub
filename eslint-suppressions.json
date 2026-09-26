@@ -2,45 +2,40 @@
   "examples/harness/orchestrate.js": {
     "ds-local/comment-length": {
       "count": 1
-    },
-    "no-var": {
-      "count": 5
     }
   },
   "examples/harness/steam-mock.js": {
     "ds-local/comment-length": {
-      "count": 5
-    },
-    "no-var": {
-      "count": 41
+      "count": 3
     }
   },
   "examples/harness/steam-stubs.js": {
     "ds-local/comment-length": {
       "count": 1
-    },
-    "no-var": {
+    }
+  },
+  "runtime/shelves-host-api.js": {
+    "complexity": {
       "count": 4
+    },
+    "ds-local/comment-length": {
+      "count": 4
+    }
+  },
+  "runtime/shelves-host-qam.js": {
+    "complexity": {
+      "count": 8
+    },
+    "ds-local/comment-length": {
+      "count": 18
     }
   },
   "runtime/shelves-host.js": {
     "complexity": {
-      "count": 28
+      "count": 15
     },
     "ds-local/comment-length": {
-      "count": 83
-    },
-    "eqeqeq": {
-      "count": 1
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "no-cond-assign": {
-      "count": 4
-    },
-    "no-var": {
-      "count": 392
+      "count": 18
     }
   },
   "scripts/deck-devtools.mjs": {
@@ -55,7 +50,7 @@
   },
   "scripts/local-run.mjs": {
     "ds-local/comment-length": {
-      "count": 3
+      "count": 2
     }
   },
   "scripts/setup.mjs": {

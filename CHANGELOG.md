@@ -8,6 +8,48 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Security
+- **The local control RPC now requires a per-boot token and rejects untrusted
+  callers.** The daemon's endpoint on `127.0.0.1` previously answered any local
+  process or web page (open CORS, no auth), which could drive updates, settings
+  or recovery. It now requires a random per-boot bearer token (stamped into the
+  runtime over the daemon's own channel), a JSON content type, and reflects only
+  the real renderer origin — never `*`. Upgrading forces one renderer reload so
+  the runtime picks up the token.
+- **`recover_cmd` can no longer be set over RPC.** It runs through a shell on a
+  UI-collapse event, so it is now file/env-only; an empty value means "pause
+  only" (no command run).
+- **Plugin updates install only the Deck Shelves release bundle.** `applyUpdate`
+  now accepts only a `.../santojon/Deck-Shelves/releases/download/<tag>/*.iife.js`
+  URL — no arbitrary GitHub, look-alike host, or query/fragment-smuggled URL —
+  since the file is injected into Steam with full access.
+- **The Python-backend proxy forwards only the known Deck Shelves API methods**
+  (allowlist), not arbitrary calls.
+- **Request limits:** the RPC caps the request body at 2 MiB and times out slow
+  connections.
+- **The generic Linux service now runs as your user, not root.** It installs as a
+  per-user systemd service (like SteamOS) under `~/.local/share/shelveshub` with
+  light hardening, and an older system-wide root install is migrated automatically
+  on the next install.
+
+### Fixed
+- **No longer hosts on the plain desktop client.** On desktop platforms the Big
+  Picture window stays alive in the background after you return to the desktop,
+  which made the host keep injecting there even with desktop hosting off. It now
+  checks whether Big Picture is actually on screen and stands down when it isn't.
+- **Fresh installs no longer "do nothing".** Every installer now enables Steam's
+  debug port (the flag ShelvesHub needs to reach Steam) and clearly tells you to
+  restart Steam once — previously a clean install with no prior loader just logged
+  "connection refused" forever with nothing on screen.
+- **Reinstalling actually takes effect now.** An upgrade-in-place restarts the
+  service so the new binary runs immediately (it used to leave the old one
+  running until a reboot), and there's never a second daemon fighting for the port.
+- **A plugin hot-swap no longer leaves two copies owning the Home.** Before
+  re-loading an updated bundle, the host tears the previous instance down first.
+- **The update banner clears correctly.** Recording the installed version after a
+  download stops the endless "update available"; and when the host itself is the
+  one hosting Deck Shelves, the plugin defers its own banner to the host.
+
 ## [0.2.0] - 2026-09-25
 
 ### Added
@@ -65,8 +107,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   one-click installers and `.desktop` launchers detect the CPU (`uname -m`) and
   fetch the matching package, so the same download link works on an x86_64 Steam
   Deck or an ARM64 device. Every change is compile-gated for `aarch64` in CI, and
-  a full ARM64 runtime harness can be run under emulation on demand. (Steam Frame
-  hardware validation is still pending, so the Frame itself is treated as
+  a full ARM64 runtime harness can be run under emulation on demand. (Validation
+  on real ARM64 hardware is still in progress, so ARM64 is treated as
   experimental until tested on-device.)
 
 ### Changed

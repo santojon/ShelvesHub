@@ -18,6 +18,9 @@ static BUNDLE_READY: AtomicBool = AtomicBool::new(false);
 static INJECTED_AT_MS: AtomicU64 = AtomicU64::new(0);
 static POPULATE: OnceLock<(PathBuf, bool)> = OnceLock::new();
 static HUB_CONFIG: OnceLock<PathBuf> = OnceLock::new();
+/// Per-boot RPC bearer token: generated once, stamped into the runtime over CDP
+/// (the daemon's private channel) and required on every RPC call.
+static RPC_TOKEN: OnceLock<String> = OnceLock::new();
 /// Effective operational config snapshot (from `Config::summary`-style fields) +
 /// the file it maps to, for the "advanced configuration" mirror. Set once at boot.
 static RUNTIME_CONFIG: OnceLock<serde_json::Value> = OnceLock::new();
@@ -162,6 +165,25 @@ pub fn hub_config_path() -> Option<&'static PathBuf> {
     HUB_CONFIG.get()
 }
 
+/// The per-boot RPC token, generating it (256 bits of OS randomness, hex) on
+/// first read. One value per process lifetime.
+pub fn rpc_token() -> &'static str {
+    RPC_TOKEN.get_or_init(|| {
+        let mut buf = [0u8; 32];
+        if getrandom::getrandom(&mut buf).is_err() {
+            // Last-resort entropy — never expected on the supported OSes, but the
+            // token must not be empty (an empty token would disable auth).
+            let n = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            buf[..16].copy_from_slice(&n.to_le_bytes());
+            buf[16..].copy_from_slice(&(std::process::id() as u128).to_le_bytes());
+        }
+        buf.iter().map(|b| format!("{b:02x}")).collect()
+    })
+}
+
 /// Record the effective operational-config snapshot + the config file it maps to
 /// (for the advanced-configuration mirror). Set once at startup.
 pub fn set_runtime_config(config_file: Option<PathBuf>, snapshot: serde_json::Value) {
@@ -210,4 +232,17 @@ pub fn recent_logs(n: usize) -> Vec<String> {
             ring.iter().skip(start).cloned().collect()
         })
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rpc_token_is_nonempty_and_stable() {
+        let a = rpc_token();
+        assert_eq!(a.len(), 64, "256-bit token, hex-encoded");
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(a, rpc_token(), "same token for the process lifetime");
+    }
 }

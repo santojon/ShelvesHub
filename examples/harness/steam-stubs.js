@@ -17,8 +17,8 @@
 (function () {
   "use strict";
 
-  var RPC_ENDPOINT = "http://127.0.0.1:60123";
-  var HOST_API_VERSION = "1.0.0";
+  const RPC_ENDPOINT = "http://127.0.0.1:60123";
+  const HOST_API_VERSION = "1.0.0";
 
   // ── Minimal SteamClient stub ────────────────────────────────────────────
   window.SteamClient = window.SteamClient || {
@@ -35,8 +35,8 @@
   };
 
   // ── Local ShelvesHostApi stand-in ───────────────────────────────────────
-  var mountHandlers = [];
-  var unmountHandlers = [];
+  const mountHandlers = [];
+  const unmountHandlers = [];
 
   window.__SHELVES_HOST__ = {
     version: HOST_API_VERSION,

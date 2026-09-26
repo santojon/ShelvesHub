@@ -68,7 +68,8 @@ check "service file placed"             test -f "$SERVICE_DIR/shelveshub.service
 check "uninstaller kept alongside"      test -x "$INSTALL_DIR/uninstall.sh"
 check "runtime copied"                  test -f "$INSTALL_DIR/runtime/shelves-host.js"
 check "daemon-reload issued"            grep -q "daemon-reload" "$SCLOG"
-check "service enabled + started"       grep -q "enable --now shelveshub.service" "$SCLOG"
+check "service enabled (persists)"      grep -qE "enable( --now)? shelveshub.service" "$SCLOG"
+check "service (re)started"             grep -qE "(restart|start|enable --now) shelveshub.service" "$SCLOG"
 
 # Seed shared settings to prove a plain uninstall preserves them.
 mkdir -p "$SETTINGS_DIR"; echo '{"kept":true}' > "$SETTINGS_DIR/settings.json"

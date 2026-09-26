@@ -1,0 +1,82 @@
+name: "Ops · Quality reports"
+
+# Records a quality snapshot (Rust tests, clippy, the eslint suppression
+# baseline, runtime code-lines) into site/reports/<scope>/<ts>.json and rebuilds
+# the aggregate site/reports/runs.json the dashboard reads. Commits the snapshot
+# back to main with SUBMIT_TOKEN (a PAT with push access), like Ops · Site stats.
+#
+# Scope: `release` for a published release, `ci` otherwise. The push trigger
+# ignores site/reports/** so its own commit doesn't loop.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'site/reports/**'
+  release:
+    types: [published]
+  schedule:
+    - cron: '0 7 * * 1'  # Every Monday at 07:00 UTC — a recent weekly baseline
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reports
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version') && !startsWith(github.event.head_commit.message, 'chore(report)')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+          token: ${{ secrets.SUBMIT_TOKEN || github.token }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # A Chromium-family browser lets the report include the JS runtime harness
+      # scenarios (the hub's JS test suite) alongside the Rust unit tests.
+      - name: Set up Chrome (for the JS harness)
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Generate quality report
+        env:
+          BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+          HARNESS_NO_SANDBOX: '1'
+        run: |
+          SCOPE=ci
+          [ "${{ github.event_name }}" = "release" ] && SCOPE=release
+          node scripts/ci/report.mjs --scope "$SCOPE" --harness
+
+      - name: Commit snapshot
+        run: |
+          git config user.name "${{ github.repository_owner }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git add site/reports/
+          if git diff --cached --quiet; then
+            echo "No report change."
+            exit 0
+          fi
+          git commit -m "chore(report): quality snapshot"
+          git push origin HEAD:main

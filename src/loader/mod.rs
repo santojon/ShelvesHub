@@ -160,6 +160,17 @@ pub fn run(mut config: Config) {
             Ok(targets) => {
                 discovery_fail_streak = 0;
                 gamepad_active = cdp::gamepad_ui_active(&targets);
+                // The Big Picture window lingers as a target (titled "Big
+                // Picture", hidden) after returning to the desktop client, so the
+                // target list alone reports it active. When we'd otherwise inject
+                // with desktop_ui off, confirm it's really on screen.
+                if gamepad_active && !config.desktop_ui {
+                    gamepad_active = gamepad_ui_visible(
+                        &config.cef_host,
+                        config.cef_port,
+                        config.target_filter.as_deref(),
+                    );
+                }
                 !cdp::ui_windows_present(&targets)
             }
             // Discovery failure = renderer unreachable (Steam closed / mid-
@@ -202,7 +213,14 @@ pub fn run(mut config: Config) {
                     "loader",
                     "Steam UI windows have collapsed. NOT calling StartRestart (it worsens this) — recover by restarting steam-launcher.service on the device.",
                 );
-                match &config.recover_cmd {
+                // Empty/whitespace `recover_cmd` = pause only (explicit opt-out),
+                // same as unset-with-no-default. A real command runs through a shell.
+                match config
+                    .recover_cmd
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|c| !c.is_empty())
+                {
                     Some(cmd) => run_recovery(cmd),
                     None => log_error(
                         "loader",
@@ -247,26 +265,22 @@ pub fn run(mut config: Config) {
         // when the gamepad UI returns.
         if !config.desktop_ui && !gamepad_active {
             if !was_desktop_idle {
-                // Standing down does NOT undo an injection already in the shared
-                // renderer (the bundle patches the library/home route, which the
-                // desktop client renders too). So on the transition, reload the
-                // renderer once to clear it — but only if we actually injected.
-                if state::is_injected() {
-                    log_info(
-                        "loader",
-                        "Desktop client on screen (not the gamepad UI) — clearing the renderer and standing down; enable desktop_ui to inject here.",
-                    );
-                    reload_renderer(&config);
-                } else {
-                    log_info(
-                        "loader",
-                        "Desktop client on screen (not the gamepad UI) — standing down; enable desktop_ui to inject here.",
-                    );
-                }
+                // Just stand down — do NOT reload the renderer. A reload bounces the
+                // whole Steam window (visible close/reopen on the desktop→BP switch),
+                // and the gamepad Home route the bundle patches isn't rendered by the
+                // desktop client anyway, so the injection is harmless there. Clearing
+                // the marker re-injects cleanly the moment the gamepad UI returns.
+                log_info(
+                    "loader",
+                    "Desktop client on screen (not the gamepad UI) — standing down; enable desktop_ui to inject here.",
+                );
             }
             was_desktop_idle = true;
             state::set_injected(false);
-            thread::sleep(interval);
+            // Poll at the FAST cadence while stood down, so returning to Big
+            // Picture is noticed (and re-injected) within a couple of seconds
+            // instead of up to a full idle interval.
+            thread::sleep(fast);
             continue;
         }
         if was_desktop_idle {
@@ -576,7 +590,14 @@ fn soft_reinject(config: &Config) -> bool {
         config.cef_port,
         config.target_filter.as_deref(),
     ) {
-        Ok(mut client) => match client.evaluate(&format!("delete {MARKER_GLOBAL}; true")) {
+        // Tear the CURRENT bundle instance down (run its onUnmount handlers)
+        // BEFORE clearing the marker, so the next tick's fresh bundle doesn't end
+        // up as a SECOND owner of the Home alongside a half-live old one.
+        Ok(mut client) => match client.evaluate(&format!(
+            "(function(){{ try {{ var h = window.__SHELVES_HOST__; \
+             if (h && h.lifecycle && h.lifecycle.teardown) h.lifecycle.teardown(); }} \
+             catch (e) {{}} delete {MARKER_GLOBAL}; return true; }})()"
+        )) {
             Ok(_) => {
                 state::set_injected(false);
                 true
@@ -794,6 +815,27 @@ fn is_foreign_owner(owner: &str) -> bool {
     !owner.is_empty() && owner != OWNER_KIND
 }
 
+/// True when a gamepad / Big Picture window is actually on screen — not just
+/// present as a lingering hidden target. On desktop platforms the Big Picture
+/// window stays a CDP target after the user returns to the desktop client
+/// (hidden, still titled "Big Picture"), so the target list reports it active.
+/// Reading `document.hidden` across the Steam UI windows is the reliable signal.
+/// Returns true on any connect/eval error so a probe failure never blocks
+/// injection (matching the target-list heuristic's fail-open default).
+fn gamepad_ui_visible(host: &str, port: u16, filter: Option<&str>) -> bool {
+    let Ok(mut client) = CdpClient::connect_renderer(host, port, filter) else {
+        return true;
+    };
+    let expr = "(function(){try{var w=window.SteamUIStore&&window.SteamUIStore.WindowStore;\
+        var a=w&&w.SteamUIWindows;if(!Array.isArray(a))return true;\
+        for(var i=0;i<a.length;i++){try{if(a[i].BrowserWindow.document.hidden===false)return true;}catch(e){}}\
+        return false;}catch(e){return true;}})()";
+    match client.evaluate(expr) {
+        Ok(v) => v.as_bool().unwrap_or(true),
+        Err(_) => true,
+    }
+}
+
 /// True when our coexistence runtime has already added its tab. In coexistence the
 /// runtime sets `window.__SHELVES_QAM__` but never the bundle marker
 /// (`probe_injected`), so this is the distinct "tab already delivered" probe.
@@ -891,8 +933,38 @@ pub(super) fn config_stamp(config: &Config) -> String {
     let obj = serde_json::json!({
         "rpcEndpoint": format!("http://{}", config.rpc_addr),
         "hostApiVersion": crate::HOST_API_VERSION,
+        "hostVersion": env!("CARGO_PKG_VERSION"),
+        "rpcToken": state::rpc_token(),
     });
     format!("window.__SHELVES_CONFIG__ = {obj};\n")
+}
+
+/// The runtime fragments concatenated AFTER the base `shelves-host.js`, in this
+/// order. They share one closure with the base (see shelves-host.js); the split
+/// only keeps each source file bounded. Order matters — `-api` uses the QAM host
+/// defined in `-qam`.
+const HOST_RUNTIME_PARTS: &[&str] = &["shelves-host-qam.js", "shelves-host-api.js"];
+
+/// Read the host runtime as ONE injectable script. The runtime source is split
+/// across `shelves-host.js` and the `HOST_RUNTIME_PARTS` siblings (so each source
+/// file stays bounded); they share one closure, so this concatenates them in
+/// order and wraps the whole in a single strict-mode IIFE — the exact form the
+/// runtime is authored for.
+pub(super) fn assemble_host_runtime(config: &Config) -> std::io::Result<String> {
+    let base = &config.host_runtime_path;
+    let mut body = fs::read_to_string(base)?;
+    if let Some(dir) = base.parent() {
+        for part in HOST_RUNTIME_PARTS {
+            let path = dir.join(part);
+            if path.exists() {
+                body.push('\n');
+                body.push_str(&fs::read_to_string(&path)?);
+            }
+        }
+    }
+    Ok(format!(
+        "(function () {{\n\"use strict\";\n{body}\n}})();\n"
+    ))
 }
 
 fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
@@ -902,7 +974,7 @@ fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
     // the trip here — doing so on every inject would wipe a legitimate trip and let
     // a crashing native path retry forever (a crash loop). The daemon health gate +
     // the runtime breaker together guard it.
-    match fs::read_to_string(&config.host_runtime_path) {
+    match assemble_host_runtime(config) {
         Ok(source) => {
             // Inline the per-locale dictionaries first so the runtime's i18n reads
             // them the moment it evaluates.

@@ -49,6 +49,9 @@ chmod +x "$INSTALL_DIR/$BINARY"
 [[ -f "$EXTRACTED_DIR/shelveshub.config.json" && ! -f "$INSTALL_DIR/shelveshub.config.json" ]] && cp "$EXTRACTED_DIR/shelveshub.config.json" "$INSTALL_DIR/"
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 [[ -d "$EXTRACTED_DIR/backend" ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
+# Boot-animation source cuts — the daemon reads them from <install>/assets/boot
+# when the boot_movie toggle installs the movie into Steam's own startup slots.
+[[ -d "$EXTRACTED_DIR/assets" ]] && mkdir -p "$INSTALL_DIR/assets" && cp -r "$EXTRACTED_DIR/assets/." "$INSTALL_DIR/assets/"
 # Keep the uninstaller alongside the install so it's available later.
 [[ -f "$EXTRACTED_DIR/installer/uninstall_mac.sh" ]] && cp "$EXTRACTED_DIR/installer/uninstall_mac.sh" "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall_mac.sh"
 
@@ -56,9 +59,34 @@ chmod +x "$INSTALL_DIR/$BINARY"
 # user, so it lives under $HOME — never root-owned /usr/local).
 sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$EXTRACTED_DIR/installer/com.shelveshub.plist" > "$PLIST_DEST"
 chmod 644 "$PLIST_DEST"
+# Reinstall-safe (upgrade in place): `launchctl load` is a no-op when the agent
+# is already loaded, which would leave the OLD daemon running with the previous
+# binary. Unload first, load fresh, then kickstart so the new binary is the one
+# running immediately — no reboot/re-login needed.
+launchctl unload "$PLIST_DEST" 2>/dev/null || true
 launchctl load "$PLIST_DEST"
+launchctl kickstart -k "gui/$(id -u)/com.shelveshub" 2>/dev/null || true
+
+# ShelvesHub reaches Steam over its CEF debug port, which Steam only opens when
+# this flag file exists. Create it so a fresh install works (needs a Steam
+# restart to take effect).
+CEF_FLAG_CREATED=0
+STEAM_SUPPORT="$HOME/Library/Application Support/Steam"
+if [[ -d "$STEAM_SUPPORT" ]]; then
+  touch "$STEAM_SUPPORT/.cef-enable-remote-debugging" 2>/dev/null && CEF_FLAG_CREATED=1
+fi
 
 echo ""
 echo "[OK] ShelvesHub installed and running."
 echo "     Install path : $INSTALL_DIR"
 echo "     Service      : launchctl list | grep shelves"
+echo ""
+echo "── What to do next ──────────────────────────────────────────"
+if [[ "$CEF_FLAG_CREATED" == "1" ]]; then
+echo "  0. RESTART STEAM once so it opens the debug port ShelvesHub needs"
+echo "     (quit Steam fully, then reopen). Without this, nothing appears."
+fi
+echo "  Open Steam Big Picture, then the Quick Access Menu, and find"
+echo "  the ShelvesHub tab. If a plugin loader is already hosting Deck"
+echo "  Shelves, ShelvesHub coexists (adds only its tab) and won't"
+echo "  replace it — the Home looks unchanged."

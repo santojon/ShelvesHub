@@ -130,13 +130,16 @@
         (function () {
           var local = "../assets/screenshots/";
           var raw = "https://raw.githubusercontent.com/santojon/ShelvesHub/main/assets/screenshots/";
+          /* [file, English caption, i18n key]. The caption node carries the key
+             so the page's language switcher translates it like the static text;
+             the PT strings live in the dictionary further down. */
           var shots = [
-            ["hub-panel.png", "The ShelvesHub panel — automatic updates for the host and Deck Shelves, with pre-release channels"],
-            ["hub-troubleshooting.png", "Troubleshooting — view the logs or disable the host until the next restart"],
-            ["hub-config.png", "Editable, safe configuration plus a read-only status readout"],
-            ["hub-logs.png", "The merged host + runtime log viewer, right in the tab"],
-            ["home.png", "Your Deck Shelves Home, hosted by ShelvesHub"],
-            ["qam-tab.png", "The native Quick Access tab"]
+            ["hub-panel.png", "The ShelvesHub panel — automatic updates for the host and Deck Shelves, with pre-release channels", "shots.cap.panel"],
+            ["hub-troubleshooting.png", "Troubleshooting — view the logs or disable the host until the next restart", "shots.cap.trouble"],
+            ["hub-config.png", "Editable, safe configuration plus a read-only status readout", "shots.cap.config"],
+            ["hub-logs.png", "The merged host + runtime log viewer, right in the tab", "shots.cap.logs"],
+            ["home.png", "Your Deck Shelves Home, hosted by ShelvesHub", "shots.cap.home"],
+            ["qam-tab.png", "The native Quick Access tab", "shots.cap.tab"]
           ];
           var g = document.getElementById("gallery"), shown = 0;
           // Lightbox: click any screenshot to see it full-size.
@@ -153,7 +156,12 @@
               var fig = document.createElement("div"); fig.className = "shot"; fig.setAttribute("role", "button"); fig.tabIndex = 0;
               var i = document.createElement("img"); i.src = img.src; i.alt = s[1]; i.loading = "lazy";
               var c = document.createElement("div"); c.className = "cap"; c.textContent = s[1];
+              if (s[2]) c.setAttribute("data-i18n", s[2]);
               fig.appendChild(i); fig.appendChild(c); g.appendChild(fig);
+              // Captions mount asynchronously (after each image loads), so the
+              // page's initial translation pass has already run — translate this
+              // freshly added node into the current language now.
+              if (window.__shelvesReapplyI18n) window.__shelvesReapplyI18n();
               fig.addEventListener("click", function () { openLb(img.src, s[1]); });
               fig.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLb(img.src, s[1]); } });
             };
@@ -178,10 +186,10 @@
       <div class="rel-head">
         <span class="ver-chip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-6.2-6.2a2 2 0 0 1-.6-1.4V5a2 2 0 0 1 2-2h5a2 2 0 0 1 1.4.6l6.4 6.4a2 2 0 0 1 0 2.8z"/><path d="M7.5 7.5h.01"/></svg>
-          <span data-rn-version>v0.1.0</span>
+          <span data-rn-version>v0.2.0</span>
         </span>
         <h2 data-i18n="releases.h2">What's New</h2>
-        <p class="date"><span data-i18n="releases.latest">Latest release</span> · <span data-rn-date>September 16, 2026</span></p>
+        <p class="date"><span data-i18n="releases.latest">Latest release</span> · <span data-rn-date>September 25, 2026</span></p>
         <div class="rel-links">
           <a class="btn" href="https://github.com/santojon/ShelvesHub/blob/main/RELEASE_NOTES.md"><span data-i18n="releases.notes">Release notes</span></a>
           <a class="btn" href="https://github.com/santojon/ShelvesHub/releases"><span data-i18n="releases.older">Older releases</span></a>
@@ -189,36 +197,36 @@
       </div>
       <ul class="rn-list" data-rn-list>
           <li data-lang-variant="en">
-            <b>Shelf actions work in the game menu on the Steam Beta</b>
-            <p>When ShelvesHub is hosting on its own, the "add to shelf / highlight / hide" items now appear in a game's context menu on the Steam Beta client, just as they do elsewhere.</p>
+            <b>Runs on Intel Macs now, not just Apple Silicon</b>
+            <p>The macOS download is a universal build, so ShelvesHub launches natively on any Mac.</p>
           </li>
           <li data-lang-variant="en">
-            <b>Clearer settings</b>
-            <p>Each Configuration field now has a short description under it, in your language, and the number steppers move sideways with the gamepad (between − and +) instead of vertically.</p>
+            <b>Optional boot animation</b>
+            <p>Turn it on to play a short Deck Shelves startup animation when the Steam gamepad UI launches — it uses Steam's own startup-movie feature.</p>
           </li>
           <li data-lang-variant="en">
-            <b>A native tab that looks the part</b>
-            <p>The host's Quick Access tab now renders real Steam buttons and toggles — with a gamepad focus ring and a ShelvesHub icon that tints to your theme — so it feels like the rest of the interface.</p>
+            <b>Shelves stay in the gamepad UI (experimental desktop toggle)</b>
+            <p>On macOS and Windows the host now hosts your shelves only while Steam's gamepad / Big Picture UI is on screen, not in the plain desktop client where they don't belong.</p>
           </li>
           <li data-lang-variant="en">
-            <b>Click to install</b>
-            <p>Double-click installers for macOS and Windows, each with the ShelvesHub icon, alongside the one-click scripts for SteamOS, Linux, macOS and Windows.</p>
+            <b>Automatic black-screen recovery</b>
+            <p>If the Steam interface ever collapses, the host now runs a recovery step made for your system — restarting the Steam Deck's Gaming Mode session, or bringing Steam back into Big Picture on macOS and Windows.</p>
           </li>
           <li data-lang-variant="pt">
-            <b>As ações de prateleira funcionam no menu do jogo no Steam Beta</b>
-            <p>Quando o ShelvesHub está hospedando por conta própria, os itens "adicionar à prateleira / destacar / ocultar" agora aparecem no menu de contexto de um jogo no cliente Steam Beta, assim como em qualquer…</p>
+            <b>Agora roda em Macs com Intel também, não só em Apple Silicon</b>
+            <p>O download para macOS é uma build universal, então o ShelvesHub inicia nativamente em qualquer Mac.</p>
           </li>
           <li data-lang-variant="pt">
-            <b>Configurações mais claras</b>
-            <p>Cada campo de Configuração agora tem uma pequena descrição abaixo dele, no seu idioma, e os controles numéricos de incremento se movem lateralmente com o gamepad (entre − e +) em vez de na vertical.</p>
+            <b>Animação de inicialização opcional</b>
+            <p>Ative para reproduzir uma animação curta de inicialização do Deck Shelves quando a interface do Steam com gamepad for iniciada — usa o próprio recurso de vídeo de inicialização do Steam.</p>
           </li>
           <li data-lang-variant="pt">
-            <b>Uma aba nativa que combina com o resto</b>
-            <p>A aba de Acesso Rápido do host agora renderiza botões e interruptores de verdade do Steam — com um anel de foco de gamepad e um ícone do ShelvesHub que se ajusta ao seu tema — então ela parece parte do…</p>
+            <b>As prateleiras ficam na interface com gamepad (interruptor experimental para desktop)</b>
+            <p>No macOS e no Windows, o host agora hospeda suas prateleiras apenas enquanto a interface com gamepad / Big Picture do Steam está em tela, e não no cliente desktop comum, onde elas não fazem sentido.</p>
           </li>
           <li data-lang-variant="pt">
-            <b>Clique para instalar</b>
-            <p>Instaladores de duplo clique para macOS e Windows, cada um com o ícone do ShelvesHub, além dos scripts de um clique para SteamOS, Linux, macOS e Windows.</p>
+            <b>Recuperação automática de tela preta</b>
+            <p>Se a interface do Steam alguma vez colapsar, o host agora executa um passo de recuperação feito para o seu sistema — reiniciando a sessão do Modo de Jogo do Steam Deck, ou trazendo o Steam de volta ao Big…</p>
           </li>
       </ul>
     </div>
@@ -345,6 +353,12 @@
         "install.step3": "Abra o Steam Big Picture — a sua tela Inicial do Deck Shelves aparece. Para remover depois, rode o script <code>uninstall</code> correspondente.",
         "shots.h2": "Capturas de tela",
         "shots.lead": "Uma olhada no que faz do ShelvesHub mais que um carregador — o painel de gerenciamento dele no menu Quick Access do Steam: atualizações automáticas do host e do Deck Shelves, solução de problemas, configuração editável e um visualizador de logs unificado. Capturado de uma sessão real do Steam Big Picture.",
+        "shots.cap.panel": "O painel do ShelvesHub — atualizações automáticas do host e do Deck Shelves, com canais de pré-lançamento",
+        "shots.cap.trouble": "Solução de problemas — veja os logs ou desligue o host até o próximo reinício",
+        "shots.cap.config": "Configuração editável e segura, além de um status somente leitura",
+        "shots.cap.logs": "O visualizador de logs unificado (host + runtime), direto na aba",
+        "shots.cap.home": "Sua tela Inicial do Deck Shelves, hospedada pelo ShelvesHub",
+        "shots.cap.tab": "A aba nativa do Quick Access",
         "releases.h2": "Novidades",
         "releases.latest": "Último lançamento",
         "releases.notes": "Notas de versão",
@@ -384,7 +398,18 @@
         "footer.copy": "© 2026 ShelvesHub · Licença MIT · feito por Jonathan Santos"
       };
 
-      var LANGS = { en: null, pt: PT };
+      // The screenshot captions are built by JS after this script captures the
+      // page's English, so they aren't in the DOM-read EN map. Give English its
+      // own dict for those keys (every other key still falls back to the page).
+      var EN_CAPS = {
+        "shots.cap.panel": "The ShelvesHub panel — automatic updates for the host and Deck Shelves, with pre-release channels",
+        "shots.cap.trouble": "Troubleshooting — view the logs or disable the host until the next restart",
+        "shots.cap.config": "Editable, safe configuration plus a read-only status readout",
+        "shots.cap.logs": "The merged host + runtime log viewer, right in the tab",
+        "shots.cap.home": "Your Deck Shelves Home, hosted by ShelvesHub",
+        "shots.cap.tab": "The native Quick Access tab"
+      };
+      var LANGS = { en: EN_CAPS, pt: PT };
       // Capture the English source once, straight from the page.
       var EN = {};
       function collect(attr) {
@@ -475,6 +500,10 @@
 
       var initial = normalize(stored() || (navigator.language || navigator.userLanguage));
       apply(initial);
+
+      // Let async-mounted content (the screenshot captions) re-translate itself
+      // into the current language after this initial pass has run.
+      window.__shelvesReapplyI18n = function () { apply(normalize(document.documentElement.lang)); };
 
       var switcher = document.querySelector(".lang-switch");
       if (switcher) {

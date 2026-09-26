@@ -98,9 +98,11 @@ export default [
     rules,
   },
   {
-    // The injected runtime: a browser-context script (IIFE), not a module.
+    // The injected runtime: a browser-context script, not a module. shelves-host.js
+    // and its shelves-host.part*.js siblings are function-body fragments the loader
+    // concatenates into one IIFE, so top-level `return` is legal (allowReturnOutsideFunction).
     files: ['runtime/**/*.js', 'examples/harness/*.js'],
-    languageOptions: { ecmaVersion: 'latest', sourceType: 'script', globals: { window: 'readonly', document: 'readonly', globalThis: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', setInterval: 'readonly', clearInterval: 'readonly', console: 'readonly', localStorage: 'readonly', requestAnimationFrame: 'readonly' } },
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'script', parserOptions: { ecmaFeatures: { globalReturn: true } }, globals: { window: 'readonly', document: 'readonly', globalThis: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', setInterval: 'readonly', clearInterval: 'readonly', console: 'readonly', localStorage: 'readonly', requestAnimationFrame: 'readonly' } },
     plugins,
     linterOptions,
     rules,

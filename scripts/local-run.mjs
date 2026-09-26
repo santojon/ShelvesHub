@@ -126,10 +126,10 @@ const env = {
   SHELVES_CEF_PORT: process.env.SHELVES_CEF_PORT || "8080",
   SHELVES_HOST_RUNTIME_PATH: process.env.SHELVES_HOST_RUNTIME_PATH || join(ROOT, "runtime", "shelves-host.js"),
   SHELVES_BUNDLE_PATH: MANAGED,
-  // force_owner / native_qam / owner_settle come from the seeded config FILE
-  // (see seedConfig) so the hub's config editor can change them persistently —
-  // env vars would override the file every boot. A caller can still force any
-  // of them by exporting the env var before running this script.
+  /* force_owner / native_qam / owner_settle come from the seeded config FILE
+     (see seedConfig) so the hub's config editor can change them persistently —
+     env vars would override the file every boot. A caller can still force any
+     of them by exporting the env var before running this script. */
   ...(process.env.SHELVES_FORCE_OWNER ? { SHELVES_FORCE_OWNER: process.env.SHELVES_FORCE_OWNER } : {}),
   ...(process.env.SHELVES_NATIVE_QAM ? { SHELVES_NATIVE_QAM: process.env.SHELVES_NATIVE_QAM } : {}),
   ...(process.env.SHELVES_OWNER_SETTLE_SECS ? { SHELVES_OWNER_SETTLE_SECS: process.env.SHELVES_OWNER_SETTLE_SECS } : {}),

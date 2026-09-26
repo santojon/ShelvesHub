@@ -43,6 +43,21 @@ const RELEASES_LATEST_URL: &str =
 /// when the pre-release channel is enabled (the plugin's beta channel equivalent).
 const RELEASES_ALL_URL: &str = "https://api.github.com/repos/santojon/Deck-Shelves/releases";
 
+/// The only host+path a self-installed bundle may come from: a Deck Shelves
+/// release download. The asset is injected into Steam's renderer, so nothing but
+/// this repo's own releases is trusted.
+const TRUSTED_BUNDLE_PREFIX: &str = "https://github.com/santojon/Deck-Shelves/releases/download/";
+
+/// True only for `https://github.com/santojon/Deck-Shelves/releases/download/<tag>/<name>.iife.js`
+/// with no query/fragment (which could smuggle a different effective URL).
+fn is_trusted_bundle_url(u: &str) -> bool {
+    u.starts_with(TRUSTED_BUNDLE_PREFIX)
+        && u.ends_with(".iife.js")
+        && !u.contains('?')
+        && !u.contains('#')
+        && !u.contains("..")
+}
+
 /// ShelvesHub's OWN release endpoints (the hub self-update check reads these to
 /// tell whether the running daemon is behind the newest hub release).
 const HUB_RELEASES_LATEST_URL: &str =
@@ -843,17 +858,15 @@ pub fn apply_update(
     let resolved;
     let url = match asset_url {
         None => return update_from_release(dest, prerelease),
-        Some(u) if !u.starts_with("https://github.com/") => {
-            return Err(format!("refused update asset (not a GitHub url): {u}"));
-        }
-        Some(u) if u.ends_with(".iife.js") || u.ends_with(".js") => u,
+        // Only a Deck Shelves release-download IIFE is accepted — never an
+        // arbitrary GitHub (or look-alike) URL, since the file is injected into
+        // Steam's SharedJSContext with full `SteamClient.*` access.
+        Some(u) if is_trusted_bundle_url(u) => u,
         // The plugin hands us the release `.zip` (right for a manual download, wrong
-        // for self-install). Don't refuse: resolve the SAME release's `*.iife.js`
-        // asset (the release publishes both), falling back to the newest release's
-        // IIFE. This is why self-install opened GitHub instead of updating in place.
-        // Only `.zip` triggers this recovery — any other non-JS GitHub asset (an
-        // `.exe`, etc.) is still refused outright.
-        Some(u) if u.ends_with(".zip") => {
+        // for self-install). Resolve the SAME release's `*.iife.js` (both are
+        // published), falling back to the newest release's IIFE — and re-check the
+        // resolved URL is a trusted Deck Shelves IIFE before downloading it.
+        Some(u) if u.starts_with(TRUSTED_BUNDLE_PREFIX) && u.ends_with(".zip") => {
             resolved = resolve_iife_for_asset_url(u)
                 .or_else(|| {
                     if prerelease {
@@ -862,13 +875,16 @@ pub fn apply_update(
                         curl_text(RELEASES_LATEST_URL).ok().and_then(|j| find_iife_asset_url(&j))
                     }
                 })
+                .filter(|r| is_trusted_bundle_url(r))
                 .ok_or_else(|| {
-                    format!("no `*.iife.js` asset resolvable for release asset {u} (publish it in the release)")
+                    format!("no trusted `*.iife.js` asset resolvable for release asset {u} (publish it in the release)")
                 })?;
             &resolved
         }
         Some(u) => {
-            return Err(format!("refused update asset (not a GitHub .js url): {u}"));
+            return Err(format!(
+                "refused update asset (not a Deck Shelves release IIFE): {u}"
+            ));
         }
     };
     let tmp = dest.with_file_name(".bundle.update.tmp");
@@ -887,6 +903,36 @@ pub fn apply_update(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trusted_bundle_url_gate() {
+        let good =
+            "https://github.com/santojon/Deck-Shelves/releases/download/v3.3.1/index.iife.js";
+        assert!(is_trusted_bundle_url(good));
+        // Wrong owner / repo / host.
+        assert!(!is_trusted_bundle_url(
+            "https://github.com/evil/Deck-Shelves/releases/download/v1/index.iife.js"
+        ));
+        assert!(!is_trusted_bundle_url(
+            "https://github.com/santojon/Other/releases/download/v1/index.iife.js"
+        ));
+        assert!(!is_trusted_bundle_url(
+            "https://github.com.evil.com/santojon/Deck-Shelves/releases/download/v1/index.iife.js"
+        ));
+        // Not an IIFE bundle.
+        assert!(!is_trusted_bundle_url(
+            "https://github.com/santojon/Deck-Shelves/releases/download/v1/mal.exe"
+        ));
+        assert!(!is_trusted_bundle_url(
+            "https://github.com/santojon/Deck-Shelves/releases/download/v1/index.js"
+        ));
+        // Query / fragment / traversal smuggling.
+        assert!(!is_trusted_bundle_url(&format!("{good}?x=1")));
+        assert!(!is_trusted_bundle_url(&format!("{good}#x")));
+        assert!(!is_trusted_bundle_url(
+            "https://github.com/santojon/Deck-Shelves/releases/download/../evil/index.iife.js"
+        ));
+    }
 
     #[test]
     fn finds_iife_asset_url() {

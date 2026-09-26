@@ -1,0 +1,31 @@
+{
+  "ts": "2026-09-16_00-00-00",
+  "scope": "release",
+  "version": "0.1.0",
+  "overall": "PASS",
+  "reconstructed": true,
+  "tests": {
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0,
+    "total": 39
+  },
+  "clippy": {
+    "warnings": 0,
+    "errors": 0,
+    "clean": true
+  },
+  "harness": null,
+  "suppressions": {
+    "total": 573,
+    "byRule": {
+      "no-var": 442,
+      "ds-local/comment-length": 97,
+      "complexity": 28,
+      "no-cond-assign": 4,
+      "eqeqeq": 1,
+      "max-lines": 1
+    }
+  },
+  "runtimeCodeLines": 1983
+}

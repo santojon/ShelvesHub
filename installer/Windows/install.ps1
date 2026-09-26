@@ -50,16 +50,48 @@ if ((Test-Path "$extractedDir\shelveshub.config.json") -and -not (Test-Path "$in
 if (Test-Path "$extractedDir\backend") {
   Copy-Item -Recurse -Path "$extractedDir\backend" -Destination $installPath -Force
 }
+# Boot-animation source cuts — read from <install>\assets\boot by the boot_movie toggle.
+if (Test-Path "$extractedDir\assets") {
+  Copy-Item -Recurse -Path "$extractedDir\assets" -Destination $installPath -Force
+}
 
 $action   = New-ScheduledTaskAction -Execute "$installPath\$binary"
 $trigger  = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+# Reinstall-safe (upgrade in place): stop a running task instance and kill any
+# lingering daemon so the freshly-copied binary is the ONLY one running — else two
+# daemons fight over the RPC port after an upgrade and the new binary never takes.
+Stop-ScheduledTask -TaskName "ShelvesHub" -ErrorAction SilentlyContinue
+Get-Process -Name "shelveshub" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
 Start-ScheduledTask -TaskName "ShelvesHub"
 
 if (Test-Path $tmpDir -ErrorAction SilentlyContinue) { Remove-Item -Recurse -Force $tmpDir }
+
+# ShelvesHub reaches Steam over its CEF debug port, which Steam only opens when
+# this flag file exists in its install dir — otherwise a fresh install just logs
+# "connection refused" and nothing appears. Create it (needs a Steam restart).
+$cefCreated = $false
+try {
+  $steamPath = (Get-ItemProperty -Path "HKCU:\Software\Valve\Steam" -Name SteamPath -ErrorAction SilentlyContinue).SteamPath
+  if ($steamPath -and (Test-Path $steamPath)) {
+    New-Item -ItemType File -Path (Join-Path $steamPath ".cef-enable-remote-debugging") -Force -ErrorAction SilentlyContinue | Out-Null
+    $cefCreated = $true
+  }
+} catch {}
 
 Write-Output ""
 Write-Output "[OK] ShelvesHub installed and running."
 Write-Output "     Install path : $installPath"
 Write-Output "     Service      : Get-ScheduledTask -TaskName ShelvesHub"
+Write-Output ""
+Write-Output "-- What to do next ------------------------------------------"
+if ($cefCreated) {
+  Write-Output "  0. RESTART STEAM once so it opens the debug port ShelvesHub"
+  Write-Output "     needs. Without this restart, nothing appears."
+}
+Write-Output "  Open Steam Big Picture, then the Quick Access Menu, and find"
+Write-Output "  the ShelvesHub tab. If a plugin loader is already hosting Deck"
+Write-Output "  Shelves, ShelvesHub coexists (adds only its tab) and won't"
+Write-Output "  replace it."
