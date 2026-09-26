@@ -34,6 +34,8 @@
     "local:console": "dotenv -e .env -- node scripts/local-devtools.mjs console",
     "local:eval": "dotenv -e .env -- node scripts/local-devtools.mjs eval",
     "deck:deploy": "bash scripts/deck-deploy.sh",
+    "deck:deploy:hard": "bash scripts/deck-deploy-hard.sh",
+    "mac:deploy:hard": "bash scripts/mac-deploy-hard.sh",
     "deck:tunnel": "bash scripts/deck-tunnel.sh",
     "deck:logs": "bash scripts/deck-logs.sh",
     "build:site": "node scripts/build-site.mjs",

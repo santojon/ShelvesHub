@@ -49,6 +49,9 @@ chmod +x "$INSTALL_DIR/$BINARY"
 [[ -f "$EXTRACTED_DIR/shelveshub.config.json" && ! -f "$INSTALL_DIR/shelveshub.config.json" ]] && cp "$EXTRACTED_DIR/shelveshub.config.json" "$INSTALL_DIR/"
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 [[ -d "$EXTRACTED_DIR/backend" ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
+# Boot-animation source cuts — the daemon reads them from <install>/assets/boot
+# when the boot_movie toggle installs the movie into Steam's own startup slots.
+[[ -d "$EXTRACTED_DIR/assets" ]] && mkdir -p "$INSTALL_DIR/assets" && cp -r "$EXTRACTED_DIR/assets/." "$INSTALL_DIR/assets/"
 # Keep the uninstaller alongside the install so it's available later.
 [[ -f "$EXTRACTED_DIR/installer/uninstall_mac.sh" ]] && cp "$EXTRACTED_DIR/installer/uninstall_mac.sh" "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall_mac.sh"
 

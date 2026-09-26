@@ -34,6 +34,8 @@ chmod +x "$INSTALL_DIR/$BINARY"
 [[ -f shelveshub.config.json && ! -f "$INSTALL_DIR/shelveshub.config.json" ]] && cp shelveshub.config.json "$INSTALL_DIR/"
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 [[ -d backend ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r backend/. "$INSTALL_DIR/backend/"
+# Boot-animation source cuts — read from <install>/assets/boot by the boot_movie toggle.
+[[ -d assets ]] && mkdir -p "$INSTALL_DIR/assets" && cp -r assets/. "$INSTALL_DIR/assets/"
 # Keep the uninstaller alongside the install so it's available later.
 [[ -f installer/uninstall.sh ]] && cp installer/uninstall.sh "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall.sh"
 

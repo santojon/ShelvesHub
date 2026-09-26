@@ -34,6 +34,11 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   root em nível de sistema é migrada automaticamente na próxima instalação.
 
 ### Corrigido
+- **Não hospeda mais no cliente desktop comum.** Em plataformas desktop, a janela
+  do Modo Big Picture continua viva em segundo plano depois que você volta para o
+  desktop, o que fazia o host continuar injetando ali mesmo com a hospedagem no
+  desktop desligada. Agora ele verifica se o Big Picture está de fato na tela e
+  se recolhe quando não está.
 - **Instalações novas não "não fazem nada" mais.** Todo instalador agora habilita
   a porta de debug do Steam (o flag que o ShelvesHub precisa para alcançar o
   Steam) e avisa claramente para reiniciar o Steam uma vez — antes, uma instalação

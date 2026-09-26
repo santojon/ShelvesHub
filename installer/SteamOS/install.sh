@@ -78,6 +78,12 @@ if [[ -d "$EXTRACTED_DIR/backend" ]]; then
   mkdir -p "$INSTALL_DIR/backend"
   cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
 fi
+# Boot-animation source cuts — the daemon reads them from <install>/assets/boot
+# when the boot_movie toggle installs the movie into Steam's own startup slots.
+if [[ -d "$EXTRACTED_DIR/assets" ]]; then
+  mkdir -p "$INSTALL_DIR/assets"
+  cp -r "$EXTRACTED_DIR/assets/." "$INSTALL_DIR/assets/"
+fi
 # Keep the uninstaller alongside the install so it's available later.
 [[ -f "$EXTRACTED_DIR/installer/uninstall.sh" ]] && cp "$EXTRACTED_DIR/installer/uninstall.sh" "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall.sh"
 

@@ -50,6 +50,10 @@ if ((Test-Path "$extractedDir\shelveshub.config.json") -and -not (Test-Path "$in
 if (Test-Path "$extractedDir\backend") {
   Copy-Item -Recurse -Path "$extractedDir\backend" -Destination $installPath -Force
 }
+# Boot-animation source cuts — read from <install>\assets\boot by the boot_movie toggle.
+if (Test-Path "$extractedDir\assets") {
+  Copy-Item -Recurse -Path "$extractedDir\assets" -Destination $installPath -Force
+}
 
 $action   = New-ScheduledTaskAction -Execute "$installPath\$binary"
 $trigger  = New-ScheduledTaskTrigger -AtStartup

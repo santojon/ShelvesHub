@@ -33,6 +33,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   on the next install.
 
 ### Fixed
+- **No longer hosts on the plain desktop client.** On desktop platforms the Big
+  Picture window stays alive in the background after you return to the desktop,
+  which made the host keep injecting there even with desktop hosting off. It now
+  checks whether Big Picture is actually on screen and stands down when it isn't.
 - **Fresh installs no longer "do nothing".** Every installer now enables Steam's
   debug port (the flag ShelvesHub needs to reach Steam) and clearly tells you to
   restart Steam once — previously a clean install with no prior loader just logged

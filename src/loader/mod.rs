@@ -160,6 +160,17 @@ pub fn run(mut config: Config) {
             Ok(targets) => {
                 discovery_fail_streak = 0;
                 gamepad_active = cdp::gamepad_ui_active(&targets);
+                // The Big Picture window lingers as a target (titled "Big
+                // Picture", hidden) after returning to the desktop client, so the
+                // target list alone reports it active. When we'd otherwise inject
+                // with desktop_ui off, confirm it's really on screen.
+                if gamepad_active && !config.desktop_ui {
+                    gamepad_active = gamepad_ui_visible(
+                        &config.cef_host,
+                        config.cef_port,
+                        config.target_filter.as_deref(),
+                    );
+                }
                 !cdp::ui_windows_present(&targets)
             }
             // Discovery failure = renderer unreachable (Steam closed / mid-
@@ -266,7 +277,10 @@ pub fn run(mut config: Config) {
             }
             was_desktop_idle = true;
             state::set_injected(false);
-            thread::sleep(interval);
+            // Poll at the FAST cadence while stood down, so returning to Big
+            // Picture is noticed (and re-injected) within a couple of seconds
+            // instead of up to a full idle interval.
+            thread::sleep(fast);
             continue;
         }
         if was_desktop_idle {
@@ -799,6 +813,27 @@ fn stamp_force_owner(client: &mut CdpClient) {
 /// A foreign owner: the renderer is claimed by someone other than us.
 fn is_foreign_owner(owner: &str) -> bool {
     !owner.is_empty() && owner != OWNER_KIND
+}
+
+/// True when a gamepad / Big Picture window is actually on screen — not just
+/// present as a lingering hidden target. On desktop platforms the Big Picture
+/// window stays a CDP target after the user returns to the desktop client
+/// (hidden, still titled "Big Picture"), so the target list reports it active.
+/// Reading `document.hidden` across the Steam UI windows is the reliable signal.
+/// Returns true on any connect/eval error so a probe failure never blocks
+/// injection (matching the target-list heuristic's fail-open default).
+fn gamepad_ui_visible(host: &str, port: u16, filter: Option<&str>) -> bool {
+    let Ok(mut client) = CdpClient::connect_renderer(host, port, filter) else {
+        return true;
+    };
+    let expr = "(function(){try{var w=window.SteamUIStore&&window.SteamUIStore.WindowStore;\
+        var a=w&&w.SteamUIWindows;if(!Array.isArray(a))return true;\
+        for(var i=0;i<a.length;i++){try{if(a[i].BrowserWindow.document.hidden===false)return true;}catch(e){}}\
+        return false;}catch(e){return true;}})()";
+    match client.evaluate(expr) {
+        Ok(v) => v.as_bool().unwrap_or(true),
+        Err(_) => true,
+    }
 }
 
 /// True when our coexistence runtime has already added its tab. In coexistence the
