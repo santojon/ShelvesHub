@@ -10,6 +10,8 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-26
+
 - **Tighter security for the local control channel.** The background service's
   local endpoint now requires a private per-session key and only accepts requests
   from Steam itself — other local programs and web pages can no longer drive

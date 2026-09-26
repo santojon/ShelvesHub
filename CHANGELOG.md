@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-26
+
 ### Security
 - **The local control RPC now requires a per-boot token and rejects untrusted
   callers.** The daemon's endpoint on `127.0.0.1` previously answered any local
