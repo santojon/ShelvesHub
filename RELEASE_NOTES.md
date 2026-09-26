@@ -10,6 +10,27 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **Tighter security for the local control channel.** The background service's
+  local endpoint now requires a private per-session key and only accepts requests
+  from Steam itself — other local programs and web pages can no longer drive
+  updates, settings or recovery through it. Upgrading applies this automatically
+  (Steam reloads once so it takes effect).
+- **Safer updates and backend calls.** A plugin update now installs only the
+  official Deck Shelves release file — never an arbitrary link — and the data
+  backend answers only the calls it is meant to.
+- **The Linux service now runs as your user, not root.** It installs as a regular
+  per-user background service, with your settings in the right place; an older
+  root install is migrated automatically on upgrade.
+- **No longer shows up on the plain desktop client.** With desktop hosting off,
+  the host now correctly stands down when you leave Big Picture for the desktop,
+  instead of staying active in the background there.
+- **Fresh installs and reinstalls just work.** A first install enables Steam's
+  debug port and tells you to restart Steam once; reinstalling or upgrading
+  restarts the service so the new version runs immediately, with no leftover
+  second copy fighting for the connection.
+- **The update banner clears correctly** after an update completes, and a plugin
+  hot-swap no longer leaves two copies of it running at once.
+
 ## [0.2.0] - 2026-09-25
 
 - **Runs on Intel Macs now, not just Apple Silicon.** The macOS download is a

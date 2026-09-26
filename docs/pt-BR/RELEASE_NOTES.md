@@ -10,6 +10,28 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **Segurança reforçada no canal de controle local.** O endpoint local do serviço
+  em segundo plano agora exige uma chave privada por sessão e só aceita requisições
+  do próprio Steam — outros programas locais e páginas web não conseguem mais
+  disparar atualizações, configurações ou recuperação por ele. A atualização aplica
+  isso automaticamente (o Steam recarrega uma vez para ter efeito).
+- **Atualizações e chamadas de backend mais seguras.** Uma atualização do plugin
+  agora instala apenas o arquivo oficial de lançamento do Deck Shelves — nunca um
+  link arbitrário — e o backend de dados responde só às chamadas previstas.
+- **O serviço no Linux agora roda como o seu usuário, não como root.** Ele é
+  instalado como um serviço em segundo plano por usuário, com suas configurações no
+  lugar certo; uma instalação antiga como root é migrada automaticamente na
+  atualização.
+- **Não aparece mais no cliente desktop comum.** Com a hospedagem no desktop
+  desligada, o host agora se recolhe corretamente quando você sai do Big Picture
+  para o desktop, em vez de continuar ativo em segundo plano ali.
+- **Instalações novas e reinstalações simplesmente funcionam.** A primeira
+  instalação habilita a porta de debug do Steam e avisa para reiniciar o Steam uma
+  vez; reinstalar ou atualizar reinicia o serviço para que a nova versão rode na
+  hora, sem uma segunda cópia sobrando disputando a conexão.
+- **O aviso de atualização some corretamente** depois que a atualização termina, e
+  uma troca a quente do plugin não deixa mais duas cópias dele rodando ao mesmo tempo.
+
 ## [0.2.0] - 2026-09-25
 
 - **Agora roda em Macs com Intel também, não só em Apple Silicon.** O download para macOS é uma
