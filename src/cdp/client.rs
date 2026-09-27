@@ -3,7 +3,6 @@
 //! polling. Target discovery and the shared types live in the parent module.
 
 use std::net::TcpStream;
-use std::time::Duration;
 
 use serde_json::{json, Value};
 use tungstenite::client::IntoClientRequest;
@@ -11,7 +10,7 @@ use tungstenite::{Message, WebSocket};
 
 use super::{discover_targets, find_renderer, CdpError, Result};
 
-const WS_TIMEOUT: Duration = Duration::from_secs(10);
+use crate::constants::timers::WS_TIMEOUT;
 
 /// A live CDP session over a single WebSocket connection.
 pub struct CdpClient {
@@ -192,19 +191,5 @@ fn parse_ws_authority(ws_url: &str) -> Result<(String, u16)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_ws_authority() {
-        assert_eq!(
-            parse_ws_authority("ws://127.0.0.1:8080/devtools/page/AB").unwrap(),
-            ("127.0.0.1".to_string(), 8080)
-        );
-    }
-
-    #[test]
-    fn rejects_non_ws_url() {
-        assert!(parse_ws_authority("http://x").is_err());
-    }
-}
+#[path = "client_tests.rs"]
+mod tests;

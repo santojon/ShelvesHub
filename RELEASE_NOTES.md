@@ -10,6 +10,13 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **Notifications now show up when running without a plugin loader.** ShelvesHub's
+  own toasts — update available, suggestions, settings recovery — appear on screen
+  in standalone mode instead of silently doing nothing.
+- **The host finishes its own update on restart.** It now downloads and stages a
+  newer ShelvesHub (binary and runtime together) before prompting, so restarting
+  actually applies it — and it checks even alongside a plugin loader.
+
 ## [0.3.0] - 2026-09-26
 
 - **Tighter security for the local control channel.** The background service's

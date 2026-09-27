@@ -8,6 +8,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Fixed
+- **Notifications now appear in standalone (no-loader) mode.** When ShelvesHub
+  hosts Deck Shelves on its own, its toasts (update available, suggestions,
+  settings recovery, and so on) silently did nothing, because this Steam build
+  has no notification-display API. The host now renders them itself as a small
+  on-screen toast. Under a plugin loader nothing changes — the loader still shows
+  them.
+- **The hub now applies its own update on restart.** It detected a newer release
+  and showed "restart to apply", but nothing was staged, so restarting kept the
+  old version. It now downloads and stages the new binary **and** its runtime
+  before the notice, so a restart finishes the update — and it checks even while
+  coexisting with a plugin loader.
+
 ## [0.3.0] - 2026-09-26
 
 ### Security

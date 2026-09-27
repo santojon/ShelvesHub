@@ -22,31 +22,20 @@ use std::process::Command;
 
 use crate::logger::{log_error, log_info};
 
-/// A file below this size is treated as absent/placeholder rather than a real
-/// bundle. The shipped placeholder is ~68 bytes; a real Deck Shelves IIFE is
-/// multiple megabytes, so any small file (placeholder or a truncated download)
-/// falls through to the next source.
-const REAL_BUNDLE_MIN_BYTES: u64 = 4096;
+// Bundle-size floor and the pinned release/API URLs live in the central
+// `constants` module (imported below); the loader-relative paths stay here as
+// they are specific to this module's source-resolution logic.
+use crate::constants::defaults::REAL_BUNDLE_MIN_BYTES;
+use crate::constants::urls::{
+    HUB_RELEASES_ALL_URL, HUB_RELEASES_LATEST_URL, RELEASES_ALL_URL, RELEASES_LATEST_URL,
+    TRUSTED_BUNDLE_PREFIX,
+};
 
 /// A plugin loader's install path of the injectable artifact, relative to `$HOME`.
 /// (Note: a loader *release* `.zip` currently excludes the IIFE — only a dev deploy
 /// that copies the whole `dist/` has it — so step 3 is the reliable path for end
 /// users once the plugin publishes the IIFE as a release asset.)
 const LOADER_IIFE_REL: &str = "homebrew/plugins/deck-shelves/dist/index.iife.js";
-
-/// GitHub API for the newest stable Deck Shelves release. Unauthenticated (60
-/// req/h) — fine for an occasional populate.
-const RELEASES_LATEST_URL: &str =
-    "https://api.github.com/repos/santojon/Deck-Shelves/releases/latest";
-
-/// GitHub API listing all releases, newest first, INCLUDING pre-releases — used
-/// when the pre-release channel is enabled (the plugin's beta channel equivalent).
-const RELEASES_ALL_URL: &str = "https://api.github.com/repos/santojon/Deck-Shelves/releases";
-
-/// The only host+path a self-installed bundle may come from: a Deck Shelves
-/// release download. The asset is injected into Steam's renderer, so nothing but
-/// this repo's own releases is trusted.
-const TRUSTED_BUNDLE_PREFIX: &str = "https://github.com/santojon/Deck-Shelves/releases/download/";
 
 /// True only for `https://github.com/santojon/Deck-Shelves/releases/download/<tag>/<name>.iife.js`
 /// with no query/fragment (which could smuggle a different effective URL).
@@ -57,12 +46,6 @@ fn is_trusted_bundle_url(u: &str) -> bool {
         && !u.contains('#')
         && !u.contains("..")
 }
-
-/// ShelvesHub's OWN release endpoints (the hub self-update check reads these to
-/// tell whether the running daemon is behind the newest hub release).
-const HUB_RELEASES_LATEST_URL: &str =
-    "https://api.github.com/repos/santojon/ShelvesHub/releases/latest";
-const HUB_RELEASES_ALL_URL: &str = "https://api.github.com/repos/santojon/ShelvesHub/releases";
 
 /// Ensure `dest` holds a real Deck Shelves bundle, obtaining it if needed.
 /// `prerelease` widens the download step to pre-release releases. Returns a short
@@ -752,13 +735,30 @@ pub fn apply_hub_update(prerelease: bool) -> Result<String, String> {
         ));
     }
 
+    // Refresh the injected runtime (and boot assets) from the SAME package before
+    // swapping the binary: a new binary and the old runtime can be incompatible
+    // (e.g. the new binary requires the per-boot RPC token the old runtime never
+    // sends), so they must move together. Copy these FIRST — if it fails the
+    // binary is left untouched, keeping the current consistent set. The managed
+    // bundle is owned separately (fetched from Deck Shelves) and is not touched.
+    if let Some(install_dir) = exe.parent() {
+        for sub in ["runtime", "assets"] {
+            let from = work.join(sub);
+            if from.is_dir() {
+                if let Err(e) = copy_dir_recursive(&from, &install_dir.join(sub)) {
+                    return cleanup(Err(format!("refresh {sub}: {e}")));
+                }
+            }
+        }
+    }
+
     if let Err(e) = stage_binary_swap(&new_bin, &exe) {
         return cleanup(Err(e));
     }
     log_info(
         "populate",
         &format!(
-            "Hub update {tag} staged over {} (restart to apply).",
+            "Hub update {tag} staged over {} (runtime refreshed; restart to apply).",
             exe.display()
         ),
     );
@@ -901,300 +901,5 @@ pub fn apply_update(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn trusted_bundle_url_gate() {
-        let good =
-            "https://github.com/santojon/Deck-Shelves/releases/download/v3.3.1/index.iife.js";
-        assert!(is_trusted_bundle_url(good));
-        // Wrong owner / repo / host.
-        assert!(!is_trusted_bundle_url(
-            "https://github.com/evil/Deck-Shelves/releases/download/v1/index.iife.js"
-        ));
-        assert!(!is_trusted_bundle_url(
-            "https://github.com/santojon/Other/releases/download/v1/index.iife.js"
-        ));
-        assert!(!is_trusted_bundle_url(
-            "https://github.com.evil.com/santojon/Deck-Shelves/releases/download/v1/index.iife.js"
-        ));
-        // Not an IIFE bundle.
-        assert!(!is_trusted_bundle_url(
-            "https://github.com/santojon/Deck-Shelves/releases/download/v1/mal.exe"
-        ));
-        assert!(!is_trusted_bundle_url(
-            "https://github.com/santojon/Deck-Shelves/releases/download/v1/index.js"
-        ));
-        // Query / fragment / traversal smuggling.
-        assert!(!is_trusted_bundle_url(&format!("{good}?x=1")));
-        assert!(!is_trusted_bundle_url(&format!("{good}#x")));
-        assert!(!is_trusted_bundle_url(
-            "https://github.com/santojon/Deck-Shelves/releases/download/../evil/index.iife.js"
-        ));
-    }
-
-    #[test]
-    fn finds_iife_asset_url() {
-        let json = r#"{"assets":[
-            {"name":"deck-shelves-v1.zip","browser_download_url":"https://x/zip"},
-            {"name":"index.iife.js","browser_download_url":"https://x/index.iife.js"}
-        ]}"#;
-        assert_eq!(
-            find_iife_asset_url(json).as_deref(),
-            Some("https://x/index.iife.js")
-        );
-    }
-
-    #[test]
-    fn hub_update_finds_platform_package_in_priority_order() {
-        let release: serde_json::Value = serde_json::from_str(
-            r#"{"assets":[
-                {"name":"shelveshub-linux.tar.gz","browser_download_url":"https://x/linux"},
-                {"name":"shelveshub-steamos.tar.gz","browser_download_url":"https://x/steamos"},
-                {"name":"shelveshub-macos.tar.gz","browser_download_url":"https://x/mac"}
-            ]}"#,
-        )
-        .unwrap();
-        // First name in the list wins; a missing preferred name falls back.
-        assert_eq!(
-            find_asset_url_by_names(
-                &release,
-                &["shelveshub-steamos.tar.gz", "shelveshub-linux.tar.gz"]
-            )
-            .as_deref(),
-            Some("https://x/steamos")
-        );
-        assert_eq!(
-            find_asset_url_by_names(
-                &release,
-                &["shelveshub-windows.zip", "shelveshub-macos.tar.gz"]
-            )
-            .as_deref(),
-            Some("https://x/mac")
-        );
-        assert!(find_asset_url_by_names(&release, &["shelveshub-windows.zip"]).is_none());
-        // The running OS always has at least one candidate name.
-        assert!(!hub_package_candidates().is_empty());
-    }
-
-    #[test]
-    fn stage_binary_swap_replaces_the_target_in_place() {
-        let dir = std::env::temp_dir().join(format!("shelveshub-swaptest-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let exe = dir.join(if cfg!(windows) {
-            "shelveshub.exe"
-        } else {
-            "shelveshub"
-        });
-        let new_bin = dir.join("downloaded");
-        fs::write(&exe, b"OLD-BINARY-CONTENTS").unwrap();
-        fs::write(&new_bin, b"NEW-BINARY-CONTENTS-1234567890").unwrap();
-
-        stage_binary_swap(&new_bin, &exe).unwrap();
-
-        // The target path now carries the new contents.
-        assert_eq!(fs::read(&exe).unwrap(), b"NEW-BINARY-CONTENTS-1234567890");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            assert_eq!(
-                fs::metadata(&exe).unwrap().permissions().mode() & 0o111,
-                0o111
-            );
-        }
-        #[cfg(windows)]
-        {
-            // The running binary was moved aside for cleanup on next start.
-            assert!(exe.with_extension("old").exists());
-        }
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn executable_magic_recognized_for_this_os() {
-        // The right magic for the compile target passes; obvious non-executables fail.
-        #[cfg(target_os = "windows")]
-        assert!(looks_like_executable(b"MZ\x90\x00"));
-        #[cfg(target_os = "macos")]
-        assert!(looks_like_executable(&[0xCF, 0xFA, 0xED, 0xFE, 0, 0]));
-        #[cfg(target_os = "linux")]
-        {
-            // Linux now requires the ELF machine to match the running CPU.
-            let m = elf_machine_for_arch(std::env::consts::ARCH).unwrap();
-            assert!(looks_like_executable(&fake_elf(m)));
-            // A bare ELF magic with no e_machine no longer passes on Linux.
-            assert!(!looks_like_executable(&[0x7F, b'E', b'L', b'F', 0, 0]));
-        }
-        #[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
-        assert!(looks_like_executable(&[0x7F, b'E', b'L', b'F', 0, 0]));
-        assert!(!looks_like_executable(b"<!DOCTYPE html>"));
-        assert!(!looks_like_executable(b""));
-    }
-
-    #[cfg(target_os = "linux")]
-    fn fake_elf(machine: u16) -> Vec<u8> {
-        let mut h = vec![0u8; 64];
-        h[0..4].copy_from_slice(b"\x7fELF");
-        h[4] = 2; // ELFCLASS64
-        h[5] = 1; // little-endian
-        let m = machine.to_le_bytes();
-        h[18] = m[0];
-        h[19] = m[1];
-        h
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn elf_architecture_is_verified() {
-        let x86 = fake_elf(62);
-        let arm = fake_elf(183);
-        assert!(looks_like_linux_executable(&x86, "x86_64"));
-        assert!(!looks_like_linux_executable(&x86, "aarch64"));
-        assert!(looks_like_linux_executable(&arm, "aarch64"));
-        assert!(!looks_like_linux_executable(&arm, "x86_64"));
-        // A big-endian header is read with the matching endianness.
-        assert!(elf_machine(b"\x7fELF").is_none());
-    }
-
-    #[cfg(all(unix, not(target_os = "macos")))]
-    #[test]
-    fn package_selection_is_architecture_aware() {
-        assert_eq!(
-            linux_package_candidates(true, "x86_64")[0],
-            "shelveshub-steamos.tar.gz"
-        );
-        assert_eq!(
-            linux_package_candidates(true, "aarch64")[0],
-            "shelveshub-steamos-aarch64.tar.gz"
-        );
-        assert_eq!(
-            linux_package_candidates(false, "aarch64")[0],
-            "shelveshub-linux-aarch64.tar.gz"
-        );
-        assert_eq!(
-            linux_package_candidates(false, "x86_64")[0],
-            "shelveshub-linux.tar.gz"
-        );
-        // An architecture we don't ship yields no candidates (self-update refuses).
-        assert!(linux_package_candidates(true, "riscv64").is_empty());
-    }
-
-    #[test]
-    fn finds_backend_archive_asset() {
-        let json = r#"{"assets":[
-            {"name":"index.iife.js","browser_download_url":"https://x/index.iife.js"},
-            {"name":"deck-shelves-backend.tar.gz","browser_download_url":"https://x/backend.tgz"}
-        ]}"#;
-        assert_eq!(
-            find_backend_asset_url(json).as_deref(),
-            Some("https://x/backend.tgz")
-        );
-        // No backend archive → None (data RPC stays disabled, core still works).
-        let none = r#"{"assets":[{"name":"index.iife.js","browser_download_url":"https://x/i"}]}"#;
-        assert!(find_backend_asset_url(none).is_none());
-    }
-
-    #[test]
-    fn finds_newest_backend_archive_across_releases() {
-        let json = r#"[
-            {"assets":[{"name":"index.iife.js","browser_download_url":"https://x/i"}]},
-            {"assets":[{"name":"deck-shelves-backend.tgz","browser_download_url":"https://x/b.tgz"}]}
-        ]"#;
-        assert_eq!(
-            find_newest_backend_in_releases(json).as_deref(),
-            Some("https://x/b.tgz")
-        );
-    }
-
-    #[test]
-    fn maps_release_download_url_to_tags_api() {
-        assert_eq!(
-            release_tags_api_url(
-                "https://github.com/santojon/Deck-Shelves/releases/download/v3.2.2-beta.1/deck-shelves-v3.2.2-beta.1.zip"
-            )
-            .as_deref(),
-            Some("https://api.github.com/repos/santojon/Deck-Shelves/releases/tags/v3.2.2-beta.1")
-        );
-        // Not a release-download URL → None (no recovery attempted).
-        assert!(release_tags_api_url("https://github.com/santojon/Deck-Shelves").is_none());
-        assert!(release_tags_api_url("https://example.com/x.zip").is_none());
-    }
-
-    #[test]
-    fn no_iife_asset_returns_none() {
-        let json =
-            r#"{"assets":[{"name":"deck-shelves.zip","browser_download_url":"https://x/zip"}]}"#;
-        assert!(find_iife_asset_url(json).is_none());
-    }
-
-    #[test]
-    fn apply_update_refuses_untrusted_or_nonjs_urls() {
-        let dest = std::env::temp_dir().join("shelveshub-apply-update-test.js");
-        // Not GitHub-hosted.
-        let e = apply_update(&dest, Some("https://evil.example.com/x.iife.js"), false).unwrap_err();
-        assert!(e.contains("refused"), "{e}");
-        // GitHub but not a JS bundle.
-        let e2 = apply_update(
-            &dest,
-            Some("https://github.com/santojon/Deck-Shelves/releases/download/v1/mal.exe"),
-            false,
-        )
-        .unwrap_err();
-        assert!(e2.contains("refused"), "{e2}");
-    }
-
-    #[test]
-    fn newest_non_draft_iife_wins_including_prerelease() {
-        // Releases newest-first: the draft is skipped, then the newest non-draft
-        // with an iife asset wins — a pre-release counts under the beta channel.
-        let json = r#"[
-            {"draft":true,"prerelease":false,"assets":[{"name":"index.iife.js","browser_download_url":"https://x/draft.iife.js"}]},
-            {"draft":false,"prerelease":true,"assets":[{"name":"index.iife.js","browser_download_url":"https://x/beta.iife.js"}]},
-            {"draft":false,"prerelease":false,"assets":[{"name":"index.iife.js","browser_download_url":"https://x/stable.iife.js"}]}
-        ]"#;
-        assert_eq!(
-            find_newest_iife_in_releases(json).as_deref(),
-            Some("https://x/beta.iife.js")
-        );
-    }
-
-    #[test]
-    fn newest_release_tag_matches_the_newest_iife_release() {
-        // The tag used by the auto-update check must come from the SAME release
-        // download would pick: the draft is skipped, then the newest non-draft
-        // with an iife asset. Its tag is what gets recorded/compared.
-        let json = r#"[
-            {"draft":true,"tag_name":"v9.9.9","assets":[{"name":"index.iife.js","browser_download_url":"https://x/draft.iife.js"}]},
-            {"draft":false,"tag_name":"v3.3.0-beta.1","assets":[{"name":"index.iife.js","browser_download_url":"https://x/beta.iife.js"}]},
-            {"draft":false,"tag_name":"v3.2.1","assets":[{"name":"index.iife.js","browser_download_url":"https://x/stable.iife.js"}]}
-        ]"#;
-        assert_eq!(
-            newest_release_tag_in_releases(json).as_deref(),
-            Some("v3.3.0-beta.1")
-        );
-    }
-
-    #[test]
-    fn release_tag_reads_tag_name_and_rejects_empty() {
-        let with_tag: serde_json::Value = serde_json::from_str(r#"{"tag_name":"v3.2.1"}"#).unwrap();
-        assert_eq!(release_tag(&with_tag).as_deref(), Some("v3.2.1"));
-        let empty: serde_json::Value = serde_json::from_str(r#"{"tag_name":""}"#).unwrap();
-        assert!(release_tag(&empty).is_none());
-        let missing: serde_json::Value = serde_json::from_str(r#"{}"#).unwrap();
-        assert!(release_tag(&missing).is_none());
-    }
-
-    #[test]
-    fn placeholder_is_not_a_real_bundle() {
-        let dir = std::env::temp_dir().join("shelveshub-populate-test");
-        let _ = fs::create_dir_all(&dir);
-        let p = dir.join("placeholder.js");
-        fs::write(&p, b"// placeholder\n").unwrap();
-        assert!(!is_real_bundle(&p));
-        fs::write(&p, vec![b'x'; 8192]).unwrap();
-        assert!(is_real_bundle(&p));
-        let _ = fs::remove_file(&p);
-    }
-}
+#[path = "populate_tests.rs"]
+mod tests;

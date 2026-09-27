@@ -3,6 +3,80 @@
 // closure; see shelves-host.js); not a standalone module.
 
 
+  /* Self-rendered toast for sole-host mode: this Steam build exposes no
+     SteamClient.Notifications.DisplayNotification, so the plugin's toasts (routed
+     here in sole mode) would silently drop. Render a small self-removing overlay
+     into the Big Picture window instead — no persistent timer, no scan. */
+  function bpWindowInstance() {
+    const ws = window.SteamUIStore && window.SteamUIStore.WindowStore;
+    if (!ws) return null;
+    if (ws.GamepadUIMainWindowInstance) return ws.GamepadUIMainWindowInstance;
+    return Array.isArray(ws.SteamUIWindows) ? ws.SteamUIWindows[0] : null;
+  }
+  function hostToastDoc() {
+    try {
+      const inst = bpWindowInstance();
+      const d = inst && inst.BrowserWindow && inst.BrowserWindow.document;
+      if (d && d.body) return d;
+    } catch (e) {}
+    return (typeof document !== "undefined" && document.body) ? document : null;
+  }
+  const TOAST_ICON =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
+    '<rect x="3.8" y="7.5" width="3.9" height="11.5" rx="0.8"/>' +
+    '<rect x="8.7" y="5" width="3.9" height="14" rx="0.8"/>' +
+    '<rect x="14" y="8" width="3.9" height="11" rx="0.8" transform="rotate(-13 15.95 19)"/>' +
+    '<rect x="2.4" y="19" width="19.2" height="2.5" rx="0.9"/></svg>';
+  function toastTextCol(doc, title, body) {
+    const col = doc.createElement("div");
+    col.style.cssText = "min-width:0;flex:1 1 auto;";
+    if (title) {
+      const t = doc.createElement("div");
+      t.textContent = title;
+      t.style.cssText = "font-weight:700;font-size:14px;margin-bottom:2px;";
+      col.appendChild(t);
+    }
+    if (body) {
+      const b = doc.createElement("div");
+      b.textContent = body;
+      b.style.cssText = "font-size:13px;line-height:1.35;color:#b8c2cc;word-break:break-word;";
+      col.appendChild(b);
+    }
+    return col;
+  }
+  // Steam/loader-style toast: top-right card (icon + text) that slides in and
+  // auto-dismisses, matching what a plugin loader renders — the reachable parity,
+  // since this Steam build has no native notification API to post into.
+  function showHostToast(title, body, durationMs) {
+    const doc = hostToastDoc();
+    if (!doc) return false;
+    let holder = doc.getElementById("shelveshub-toasts");
+    if (!holder) {
+      holder = doc.createElement("div");
+      holder.id = "shelveshub-toasts";
+      doc.body.appendChild(holder);
+    }
+    // Set every time (idempotent) so an in-place runtime swap re-styles a holder
+    // a previous version created.
+    holder.style.cssText = "position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:10px;pointer-events:none;font-family:'Motiva Sans','Segoe UI',sans-serif;";
+    const card = doc.createElement("div");
+    card.style.cssText = "display:flex;align-items:flex-start;gap:12px;min-width:300px;max-width:min(400px,60vw);background:rgba(23,29,37,.97);color:#e6edf3;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.55);backdrop-filter:blur(8px);opacity:0;transform:translateX(24px);transition:opacity .22s ease,transform .22s ease;";
+    const ic = doc.createElement("div");
+    ic.innerHTML = TOAST_ICON;
+    ic.style.cssText = "flex:0 0 auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:linear-gradient(135deg,#1a9fff,#0a63b8);color:#fff;padding:6px;box-sizing:border-box;";
+    card.appendChild(ic);
+    card.appendChild(toastTextCol(doc, title, body));
+    holder.appendChild(card);
+    const win = doc.defaultView || window;
+    win.requestAnimationFrame(function () { card.style.opacity = "1"; card.style.transform = "translateX(0)"; });
+    const ms = (typeof durationMs === "number" && durationMs > 0) ? durationMs : 5000;
+    win.setTimeout(function () {
+      card.style.opacity = "0"; card.style.transform = "translateX(24px)";
+      win.setTimeout(function () { try { card.remove(); } catch (e) {} }, 250);
+    }, ms);
+    return true;
+  }
+
   // ── HostApi assembly ──────────────────────────────────────────────────────
   const mountHandlers = [], unmountHandlers = [];
   const host = {
@@ -73,8 +147,10 @@
     },
     notifications: {
       toast: function (opts) { opts = opts || {}; this.send(opts.title || "", opts.body || "", opts.durationMs); },
-      send: function (title, body) {
-        try { if (window.SteamClient && window.SteamClient.Notifications) { window.SteamClient.Notifications.DisplayNotification(title, body); return; } } catch (e) {}
+      send: function (title, body, durationMs) {
+        const N = window.SteamClient && window.SteamClient.Notifications;
+        try { if (N && typeof N.DisplayNotification === "function") { N.DisplayNotification(title, body); return; } } catch (e) {}
+        try { if (showHostToast(title, body, durationMs)) return; } catch (e) {}
         log("notify:", title, "-", body);
       },
     },

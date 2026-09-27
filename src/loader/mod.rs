@@ -67,10 +67,8 @@ enum Tick {
     Settling(u64),
 }
 
-/// Consecutive collapsed-UI observations before the loader halts injection and
-/// (optionally) fires recovery. One interval of grace avoids reacting to the
-/// brief windowless moment during a normal Steam restart.
-const COLLAPSE_HALT_THRESHOLD: u32 = 2;
+use crate::constants::defaults::COLLAPSE_HALT_THRESHOLD;
+use crate::constants::timers::{FAST_POLL, SOLE_IDLE, UPDATE_CHECK_INTERVAL};
 
 pub fn run(mut config: Config) {
     // Obtain the bundle before anything else: the sole-host case (no loader, no
@@ -122,7 +120,7 @@ pub fn run(mut config: Config) {
     // a full `interval` (up to 30s) before hosting, the visible cold-start lag.
     // Once active (or coexisting), back off to the idle `interval` to keep CPU low.
     // `interval` is already >= 1s, so `fast` is too — never a spin.
-    let fast = Duration::from_secs(2).min(interval);
+    let fast = FAST_POLL.min(interval);
     let mut consecutive_collapse: u32 = 0;
     // Tracks how long the renderer has been unclaimed, for the owner-settle guard
     // (`owner_settle_secs`): hold off owner-mode hosting until either a claim
@@ -343,12 +341,13 @@ pub fn run(mut config: Config) {
             }
         }
 
-        // When we host the bundle, periodically check for a newer Deck Shelves
-        // release and apply it (if auto-update is enabled) so the plugin stays
-        // current and its update banner clears. Throttled + best-effort.
-        if hosting && last_update_check.is_none_or(|t| t.elapsed() >= UPDATE_CHECK_INTERVAL) {
+        // Periodically check for updates (throttled, best-effort) whenever the
+        // daemon is settled — Active OR coexisting. The hub keeps its OWN binary
+        // current in either mode; the plugin-bundle update is gated on `hosting`
+        // inside (in coexist the loader owns the bundle).
+        if settled && last_update_check.is_none_or(|t| t.elapsed() >= UPDATE_CHECK_INTERVAL) {
             last_update_check = Some(Instant::now());
-            auto_update_check(&config);
+            auto_update_check(&config, hosting);
         }
 
         // Hot-swap watch: if the bundle on disk changed since the last tick — an
@@ -380,31 +379,23 @@ pub fn run(mut config: Config) {
     }
 }
 
-/// How often the daemon checks for a newer Deck Shelves release while hosting
-/// with auto-update on. Rare on purpose: it hits the GitHub API and, on an actual
-/// update, reloads the renderer.
-const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
-
-/// Idle re-poll cadence for a sole/owner host (caps the configured `interval_secs`
-/// only while WE host the bundle). Short so a Steam restart is noticed within a
-/// few seconds; a coexisting host keeps the calm configured interval instead.
-const SOLE_IDLE: Duration = Duration::from_secs(5);
-
-/// When auto-update is enabled AND we host the bundle (sole/owner — never coexist,
-/// where the plugin loader owns its own copy), compare the latest release tag for
-/// the plugin channel to the tag we last installed; on a change, download the new
-/// bundle, record the tag, and reload the renderer so the plugin reboots on it
-/// (which clears its "update available" banner). Best-effort: any network/parse
+/// Periodic auto-update. The plugin-bundle update runs only when we `hosting` the
+/// bundle (sole/owner — never coexist, where the loader owns its own copy): it
+/// compares the latest release tag for the plugin channel to the tag we last
+/// installed and, on a change, downloads the new bundle, records the tag, and
+/// reloads the renderer so the plugin reboots on it (clearing its "update
+/// available" banner). The hub self-update runs in either mode, so the daemon's
+/// own binary stays current even while coexisting. Best-effort: any network/parse
 /// miss is a silent no-op until the next check, and a working bundle is never
 /// replaced unless a genuinely different release tag is published.
-fn auto_update_check(config: &Config) {
+fn auto_update_check(config: &Config, hosting: bool) {
     let mut settings = crate::store::load(&config.hub_config_path);
     if !settings.auto_update {
         state::set_pending_hub_update(None); // master off — clear any stale notice
         return;
     }
     // ── Plugin bundle: download + swap + reload on a newer release. ──
-    if settings.auto_update_plugin {
+    if hosting && settings.auto_update_plugin {
         if let Some(latest) = populate::latest_release_tag(config.prerelease) {
             // Apply when we don't yet know what's installed (seed the tag) OR the
             // latest on the channel is strictly newer by SEMVER — never a downgrade
@@ -445,38 +436,58 @@ fn auto_update_check(config: &Config) {
             }
         }
     }
-    // ── Hub itself: detect a newer release and record a "restart to update"
-    //    notice. The in-place binary swap is scaffolded (populate::apply_hub_update)
-    //    but not yet wired, so we notify rather than self-replace. ──
+    // ── Hub itself: detect a newer release, stage its binary over ours in place
+    //    (populate::apply_hub_update), and record a "restart to finish" notice —
+    //    the staged binary launches on the next restart. ──
     if settings.auto_update_hub {
         check_hub_update(settings.hub_prerelease);
     } else {
         state::set_pending_hub_update(None);
+        state::set_hub_update_staged(false);
     }
 }
 
-/// Hub self-update (scaffold): detect a newer ShelvesHub release for the channel
-/// and record it (`state::set_pending_hub_update`) so the hub screen shows a
-/// "restart to update" notice. The actual in-place binary swap lives in
-/// `populate::apply_hub_update` (not yet implemented). Logs only when the pending
-/// version changes, so the periodic re-check never spams the log.
+/// Hub self-update: detect a newer ShelvesHub release for the channel and stage
+/// its binary over the running one via `populate::apply_hub_update` (an in-place
+/// file swap that takes effect on the next restart). Records the version so the
+/// hub screen shows a "restart to finish" notice. Staging runs ONCE per version
+/// (guarded by the staged flag) so the periodic re-check never re-downloads.
 fn check_hub_update(prerelease: bool) {
     let Some(latest) = populate::latest_hub_release_tag(prerelease) else {
         return; // network/parse miss — leave any existing notice as-is
     };
     let current = env!("CARGO_PKG_VERSION");
-    if version_is_newer(&latest, current) {
-        if state::pending_hub_update().as_deref() != Some(latest.as_str()) {
+    if !version_is_newer(&latest, current) {
+        state::set_pending_hub_update(None);
+        state::set_hub_update_staged(false);
+        return;
+    }
+    // Already downloaded this version over the running binary — nothing to do
+    // until the user restarts (which launches the staged binary).
+    if state::hub_update_staged() && state::pending_hub_update().as_deref() == Some(latest.as_str())
+    {
+        return;
+    }
+    match populate::apply_hub_update(prerelease) {
+        Ok(tag) => {
             log_info(
                 "update",
-                &format!(
-                    "ShelvesHub {latest} available (running {current}) — restart to apply; in-place self-update pending."
-                ),
+                &format!("ShelvesHub {tag} downloaded (running {current}) — restart to finish."),
             );
+            state::set_pending_hub_update(Some(tag));
+            state::set_hub_update_staged(true);
         }
-        state::set_pending_hub_update(Some(latest));
-    } else {
-        state::set_pending_hub_update(None);
+        Err(e) => {
+            // Keep the notice so the update is still visible; retry next check.
+            if state::pending_hub_update().as_deref() != Some(latest.as_str()) {
+                log_warning(
+                    "update",
+                    &format!("ShelvesHub {latest} available but download/stage failed: {e}"),
+                );
+            }
+            state::set_pending_hub_update(Some(latest));
+            state::set_hub_update_staged(false);
+        }
     }
 }
 
@@ -1035,66 +1046,5 @@ pub fn inject_bundle(client: &mut CdpClient, source: &str, version: &str) -> cdp
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn injects_when_unclaimed_or_own() {
-        assert!(may_inject("", false));
-        assert!(may_inject(OWNER_KIND, false));
-    }
-
-    #[test]
-    fn port_candidates_probe_configured_first_then_alternates_deduped() {
-        // Configured is always tried first; the known alternates follow, and the
-        // configured port is never listed twice.
-        assert_eq!(port_candidates(8080), vec![8080, 8081]);
-        assert_eq!(port_candidates(8081), vec![8081, 8080]);
-        assert_eq!(port_candidates(9999), vec![9999, 8080, 8081]);
-    }
-
-    #[test]
-    fn version_is_newer_uses_semver_precedence() {
-        // Core comparison.
-        assert!(version_is_newer("v0.2.0", "0.1.0"));
-        assert!(version_is_newer("0.1.1", "0.1.0"));
-        assert!(!version_is_newer("v0.1.0", "0.1.0")); // equal → not newer
-        assert!(!version_is_newer("v0.0.1", "0.1.0")); // older → not newer
-                                                       // Pre-release precedence: a stable outranks its own pre-release.
-        assert!(version_is_newer("3.3.0", "3.3.0-beta.2")); // stable > beta of same core
-        assert!(!version_is_newer("3.3.0-beta.2", "3.3.0")); // beta of same core is NOT newer
-        assert!(version_is_newer("3.3.0-beta.2", "3.3.0-beta.1")); // beta.2 > beta.1
-                                                                   // A higher core wins regardless of suffix (channel gates whether it's seen).
-        assert!(version_is_newer("3.3.0-beta.2", "3.0.0"));
-        // Unparseable never prompts.
-        assert!(!version_is_newer("not-a-version", "0.1.0"));
-        assert!(!version_is_newer("v0.2.0", "garbage"));
-    }
-
-    #[test]
-    fn stands_down_for_foreign_owner() {
-        assert!(!may_inject("other-host", false));
-    }
-
-    #[test]
-    fn force_overrides_foreign_owner() {
-        assert!(may_inject("other-host", true));
-    }
-
-    #[test]
-    fn settle_disabled_by_default() {
-        // `owner_settle_secs == 0` (the default) never settles — a sole host boots
-        // immediately.
-        assert!(!keep_settling(0, 0));
-        assert!(!keep_settling(0, 100));
-    }
-
-    #[test]
-    fn settle_waits_until_window_elapses() {
-        // Enabled: settle while unclaimed, up to the window; then host as sole host.
-        assert!(keep_settling(25, 0));
-        assert!(keep_settling(25, 24));
-        assert!(!keep_settling(25, 25));
-        assert!(!keep_settling(25, 30));
-    }
-}
+#[path = "mod_tests.rs"]
+mod tests;

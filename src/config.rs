@@ -8,15 +8,11 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-/// Default Chrome DevTools Protocol host. Steam exposes CEF remote debugging
-/// on localhost when `.cef-enable-remote-debugging` is present.
-pub const DEFAULT_CEF_HOST: &str = "127.0.0.1";
-/// Steam's CEF remote-debugging port. Used by both the loader and devtools.
-pub const DEFAULT_CEF_PORT: u16 = 8080;
-/// Default host the RPC server binds to (loopback — the bundle is same-machine).
-pub const DEFAULT_RPC_HOST: &str = "127.0.0.1";
-/// Default TCP port for the host RPC server consumed by the bundle.
-pub const DEFAULT_RPC_PORT: u16 = 60123;
+// Defaults live in the central `constants` module; re-exported here so existing
+// `config::DEFAULT_*` references (loader, devtools) keep resolving unchanged.
+pub use crate::constants::defaults::{
+    DEFAULT_CEF_HOST, DEFAULT_CEF_PORT, DEFAULT_RPC_HOST, DEFAULT_RPC_PORT,
+};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -396,27 +392,5 @@ fn resolve_asset_path(env_key: &str, relative: &str) -> PathBuf {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn config_file_overrides_default() {
-        // A key not present in the environment, so the file value is used.
-        const UNSET: &str = "SHELVES_UNSET_TEST_KEY_XYZ";
-        let file = serde_json::json!({
-            "rpc_host": "0.0.0.0",
-            "rpc_port": 60124,
-            "owner_settle_secs": 25,
-            "native_qam": true
-        });
-        assert_eq!(cfg_string(&file, UNSET, "rpc_host", "127.0.0.1"), "0.0.0.0");
-        assert_eq!(cfg_u16(&file, UNSET, "rpc_port", 60123), 60124);
-        assert_eq!(cfg_u64(&file, UNSET, "owner_settle_secs", 0), 25);
-        assert!(cfg_bool(&file, UNSET, "native_qam"));
-        // Missing key → built-in default.
-        assert_eq!(cfg_u16(&file, UNSET, "absent", 8080), 8080);
-        assert!(!cfg_bool(&file, UNSET, "absent"));
-        // Empty / null file → default.
-        assert_eq!(cfg_u16(&Value::Null, UNSET, "rpc_port", 60123), 60123);
-    }
-}
+#[path = "config_tests.rs"]
+mod tests;

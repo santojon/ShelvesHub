@@ -21,18 +21,14 @@ use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{mpsc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use serde_json::{json, Value};
 
 use crate::config::Config;
 use crate::logger::{log_error, log_info, log_warning};
 
-/// How long a single backend call may take before the child is presumed hung.
-/// Generous because some methods do network work (wishlist, release download).
-const CALL_TIMEOUT: Duration = Duration::from_secs(75);
-/// Minimum time between spawn attempts, so a broken backend cannot crash-loop.
-const RESPAWN_COOLDOWN: Duration = Duration::from_secs(10);
+use crate::constants::timers::{CALL_TIMEOUT, RESPAWN_COOLDOWN};
 
 struct BackendSettings {
     python: String,
@@ -264,31 +260,5 @@ fn spawn(settings: &BackendSettings) -> std::io::Result<Handle> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn accepts_plain_method_names() {
-        assert!(valid_method_name("get_settings"));
-        assert!(valid_method_name("listBackups2"));
-    }
-
-    #[test]
-    fn rejects_private_and_malformed_names() {
-        assert!(!valid_method_name(""));
-        assert!(!valid_method_name("_main"));
-        assert!(!valid_method_name("_unload"));
-        assert!(!valid_method_name("9lives"));
-        assert!(!valid_method_name("a.b"));
-        assert!(!valid_method_name("a b"));
-        assert!(!valid_method_name(&"x".repeat(65)));
-    }
-
-    #[test]
-    fn call_without_configuration_fails_cleanly() {
-        // SETTINGS is never initialised in unit tests, so any call must
-        // report the backend as unavailable rather than panic.
-        let result = call("get_settings", &Value::Null);
-        assert_eq!(result.unwrap_err(), "backend is not running");
-    }
-}
+#[path = "backend_tests.rs"]
+mod tests;

@@ -8,6 +8,21 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+### Corrigido
+- **As notificações agora aparecem no modo standalone (sem carregador).** Quando
+  o ShelvesHub hospeda o Deck Shelves sozinho, os avisos dele (atualização
+  disponível, sugestões, recuperação de configurações etc.) não faziam nada
+  silenciosamente, porque esta build do Steam não tem API de exibição de
+  notificação. O host agora os renderiza sozinho como um pequeno toast na tela.
+  Sob um carregador de plugins nada muda — ele continua exibindo.
+- **O hub agora aplica a própria atualização ao reiniciar.** Ele detectava uma
+  versão mais nova e mostrava "reinicie para aplicar", mas nada era preparado,
+  então reiniciar mantinha a versão antiga. Agora ele baixa e prepara o novo
+  binário **e** o runtime antes do aviso, então reiniciar conclui a atualização —
+  e ele verifica até enquanto coexiste com um carregador de plugins.
+
+## [0.3.0] - 2026-09-26
+
 ### Security
 - **O RPC de controle local agora exige um token por boot e rejeita chamadores
   não confiáveis.** O endpoint do daemon em `127.0.0.1` antes respondia a
