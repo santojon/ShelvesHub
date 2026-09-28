@@ -1,5 +1,5 @@
 // Unit tests for the `rpc` module, extracted from rpc.rs and attached
-// via `#[cfg(test)] #[path = "rpc_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "tests/rpc_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;

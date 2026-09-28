@@ -3,12 +3,8 @@ setlocal
 echo === ShelvesHub - Windows Installer ===
 echo.
 
-net session >nul 2>&1
-if %errorLevel% neq 0 (
-    echo Requesting administrator access...
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    exit /b
-)
+REM Per-user install — do NOT elevate: the daemon must run as you (writes under
+REM %%LOCALAPPDATA%%, self-updates, reaches your Steam).
 
 set "URL=https://github.com/santojon/ShelvesHub/releases/latest/download/shelveshub-windows.zip"
 set "T=%TEMP%\shelveshub-install"

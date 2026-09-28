@@ -814,5 +814,5 @@ fn write_response(
 }
 
 #[cfg(test)]
-#[path = "rpc_tests.rs"]
+#[path = "tests/rpc_tests.rs"]
 mod tests;

@@ -1,5 +1,5 @@
 // Unit tests for the `mod` module, extracted from mod.rs and attached
-// via `#[cfg(test)] #[path = "mod_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "../tests/cdp_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;

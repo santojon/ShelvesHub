@@ -140,5 +140,5 @@ fn atomic_write(path: &Path, contents: &str) -> io::Result<()> {
 }
 
 #[cfg(test)]
-#[path = "store_tests.rs"]
+#[path = "tests/store_tests.rs"]
 mod tests;

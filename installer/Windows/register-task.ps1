@@ -7,10 +7,13 @@ $ErrorActionPreference = "Stop"
 $binary = Join-Path $InstallPath "shelveshub.exe"
 if (-not (Test-Path $binary)) { Write-Error "shelveshub.exe not found at $InstallPath"; exit 1 }
 
-$action   = New-ScheduledTaskAction -Execute $binary
-$trigger  = New-ScheduledTaskTrigger -AtStartup
-$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+# Per-user task: runs as YOU at logon (interactive, no elevation) so the daemon
+# can write under the install dir, self-update, and reach your Steam.
+$action    = New-ScheduledTaskAction -Execute $binary
+$trigger   = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings  = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
 Start-ScheduledTask -TaskName "ShelvesHub"
 
 Write-Output "[OK] ShelvesHub scheduled task registered and started ($InstallPath)."

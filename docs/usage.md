@@ -82,7 +82,7 @@ launchctl list | grep shelves
 
 1. Download `install-windows.bat` from the latest release.
 2. Double-click it and accept the UAC prompt (admin required).
-3. The installer downloads the package, copies to `C:\Program Files\ShelvesHub`, and registers a Task Scheduler entry that starts the loader at boot.
+3. The installer downloads the package, copies to `%LOCALAPPDATA%\ShelvesHub` (per-user, no admin needed), and registers a per-user Task Scheduler entry that starts it at logon.
 
 ### From package
 

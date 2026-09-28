@@ -1,5 +1,5 @@
 // Unit tests for the `bootmovie` module, extracted from bootmovie.rs and attached
-// via `#[cfg(test)] #[path = "bootmovie_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "tests/bootmovie_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;

@@ -1,11 +1,10 @@
 # Uninstaller for the Windows .zip package path (the NSIS .exe has its own,
-# reachable from Add/Remove Programs).
+# reachable from Add/Remove Programs). Per-user — no admin needed.
 # Usage (from extracted package): .\installer\uninstall.ps1 [-Purge]
-#Requires -RunAsAdministrator
 param([switch]$Purge)
 $ErrorActionPreference = "Stop"
 
-$installPath  = "C:\Program Files\ShelvesHub"
+$installPath  = Join-Path $env:LOCALAPPDATA "ShelvesHub"
 $settingsPath = Join-Path $env:APPDATA "deck-shelves"   # shared Deck Shelves settings
 
 Write-Output "=== ShelvesHub - Windows Uninstaller ==="

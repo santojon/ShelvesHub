@@ -12,8 +12,10 @@ Unicode true
 
 Name "${APPNAME}"
 OutFile "shelveshub-setup.exe"
-RequestExecutionLevel admin
-InstallDir "$PROGRAMFILES64\${APPNAME}"
+; Per-user install (no admin): the daemon must run as the user to write its
+; bundle/backend/config, self-update, and reach the user's Steam.
+RequestExecutionLevel user
+InstallDir "$LOCALAPPDATA\${APPNAME}"
 ShowInstDetails show
 ShowUnInstDetails show
 
@@ -46,11 +48,13 @@ Section "Install"
     DetailPrint "Warning: service registration returned $0 (see log)."
   ${EndIf}
 
+  ; Per-user uninstall entry (HKCU — no admin; shows under Add/Remove Programs
+  ; for this user).
   WriteUninstaller "$INSTDIR\uninstall.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayIcon" "$INSTDIR\shelveshub.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "${APPNAME}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayIcon" "$INSTDIR\shelveshub.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "${APPNAME}"
 SectionEnd
 
 Section "Uninstall"
@@ -65,5 +69,5 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\backend"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
-  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
 SectionEnd

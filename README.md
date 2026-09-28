@@ -142,7 +142,7 @@ Download **`Install ShelvesHub.app`** (a clickable installer app carrying the Sh
 
 ### Windows
 
-Download **`shelveshub-setup.exe`** (a setup program carrying the ShelvesHub icon) from the latest release and run it, accepting the UAC prompt. A plain `install-windows.bat` script is also published.
+Download **`shelveshub-setup.exe`** (a setup program carrying the ShelvesHub icon) from the latest release and run it — it installs **per-user** (under `%LOCALAPPDATA%`, no administrator rights). A plain `install-windows.bat` script is also published.
 
 ---
 

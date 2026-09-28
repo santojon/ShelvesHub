@@ -1,5 +1,5 @@
 // Unit tests for the `populate` module, extracted from populate.rs and attached
-// via `#[cfg(test)] #[path = "populate_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "tests/populate_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;
@@ -155,6 +155,51 @@ fn elf_architecture_is_verified() {
     assert!(!looks_like_linux_executable(&arm, "x86_64"));
     // A big-endian header is read with the matching endianness.
     assert!(elf_machine(b"\x7fELF").is_none());
+}
+
+fn fake_pe(machine: u16) -> Vec<u8> {
+    let mut h = vec![0u8; 0x48];
+    h[0..2].copy_from_slice(b"MZ");
+    h[0x3C..0x40].copy_from_slice(&0x40u32.to_le_bytes()); // e_lfanew → 0x40
+    h[0x40..0x44].copy_from_slice(b"PE\0\0");
+    h[0x44..0x46].copy_from_slice(&machine.to_le_bytes());
+    h
+}
+
+#[test]
+fn pe_architecture_is_verified() {
+    let x64 = fake_pe(0x8664);
+    let arm = fake_pe(0xAA64);
+    assert!(looks_like_windows_executable(&x64, "x86_64"));
+    assert!(!looks_like_windows_executable(&x64, "aarch64"));
+    assert!(looks_like_windows_executable(&arm, "aarch64"));
+    assert!(!looks_like_windows_executable(&arm, "x86_64"));
+    // A bare DOS stub (no PE header) and non-PE bytes are rejected.
+    assert!(!looks_like_windows_executable(b"MZ", "x86_64"));
+    assert!(pe_machine(b"not-an-exe").is_none());
+}
+
+#[test]
+fn embedded_minisign_key_parses() {
+    // The baked-in public key must be a valid minisign key (empty = signature
+    // verification disabled, which is allowed until the key is configured).
+    let key = crate::constants::MINISIGN_PUBLIC_KEY;
+    if !key.is_empty() {
+        assert!(minisign_verify::PublicKey::from_base64(key).is_ok());
+    }
+}
+
+#[test]
+fn sha256_matches_known_vector() {
+    // NIST test vector: SHA-256("abc").
+    assert_eq!(
+        sha256_hex_bytes(b"abc"),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+    assert_eq!(
+        sha256_hex_bytes(b""),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    );
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]

@@ -8,7 +8,34 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+### Segurança
+- **A autoatualização agora é verificada antes de substituir qualquer coisa.** O
+  daemon confere o `SHA256SUMS` do lançamento — assinado com minisign por uma chave
+  pública embutida no daemon — e o SHA-256 do arquivo baixado contra ele; uma
+  assinatura ou hash inválidos abortam a atualização. Os downloads agora são
+  extraídos em um diretório de trabalho privado (0700), e um arquivo com caminho
+  absoluto, travessia `..` ou membro symlink/dispositivo é recusado. (A verificação
+  de assinatura passa a valer quando a chave de assinatura for configurada; até lá,
+  o hash ainda é conferido.)
+- **Os instaladores verificam o checksum do download.** Os instaladores de SteamOS,
+  macOS e Windows conferem o pacote baixado contra o `SHA256SUMS` do lançamento
+  antes de instalar, então um download corrompido ou truncado é detectado.
+
+### Alterado
+- **No Windows a instalação agora é por usuário — sem direitos de administrador.**
+  O ShelvesHub instala em `%LOCALAPPDATA%\ShelvesHub` e roda como você no login,
+  então consegue gerenciar o próprio bundle/backend/config, se autoatualizar e
+  alcançar o seu Steam. Antes ia para `Program Files` com uma tarefa de sistema
+  que muitas vezes não conseguia escrever ali.
+
 ### Corrigido
+- **A autoatualização no Windows agora verifica a arquitetura de CPU do download.**
+  Uma checagem de máquina PE (x64 vs ARM64) espelha a checagem de ELF já existente
+  no Linux, então um binário de arquitetura errada é rejeitado antes de substituir
+  o que está rodando.
+- **A versão de compatibilidade não pode mais divergir silenciosamente.** Um build
+  de release agora falha se o contrato compartilhado do Deck Shelves estiver
+  ausente, em vez de cair silenciosamente para um número de versão antigo.
 - **As notificações agora aparecem no modo standalone (sem carregador).** Quando
   o ShelvesHub hospeda o Deck Shelves sozinho, os avisos dele (atualização
   disponível, sugestões, recuperação de configurações etc.) não faziam nada

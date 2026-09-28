@@ -235,5 +235,5 @@ pub fn recent_logs(n: usize) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "state_tests.rs"]
+#[path = "tests/state_tests.rs"]
 mod tests;

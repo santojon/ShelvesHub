@@ -80,7 +80,7 @@ launchctl list | grep shelves
 
 1. Baixe `install-windows.bat` da última versão.
 2. Dê duplo clique nele e aceite o prompt do UAC (requer administrador).
-3. O instalador baixa o pacote, copia para `C:\Program Files\ShelvesHub` e registra uma entrada no Agendador de Tarefas que inicia o carregador na inicialização do sistema.
+3. O instalador baixa o pacote, copia para `%LOCALAPPDATA%\ShelvesHub` (por usuário, sem precisar de admin) e registra uma entrada por usuário no Agendador de Tarefas que o inicia no login.
 
 ### A partir do pacote
 

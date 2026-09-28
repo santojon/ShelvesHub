@@ -260,5 +260,5 @@ fn spawn(settings: &BackendSettings) -> std::io::Result<Handle> {
 }
 
 #[cfg(test)]
-#[path = "backend_tests.rs"]
+#[path = "tests/backend_tests.rs"]
 mod tests;

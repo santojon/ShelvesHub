@@ -1,13 +1,14 @@
-# One-click installer for Windows
+# One-click installer for Windows — installs PER USER (no admin needed): the
+# daemon must run as you so it can write the bundle/backend/config and self-update,
+# and reach your Steam. Everything lives under %LOCALAPPDATA%.
 # Usage (online): irm https://github.com/santojon/ShelvesHub/releases/latest/download/install-windows.ps1 | iex
 # Usage (from extracted package): .\installer\install.ps1
-#Requires -RunAsAdministrator
 
 $ErrorActionPreference = "Stop"
 $repo        = "santojon/ShelvesHub"
 $binary      = "shelveshub.exe"
 $package     = "shelveshub-windows.zip"
-$installPath = "C:\Program Files\ShelvesHub"
+$installPath = Join-Path $env:LOCALAPPDATA "ShelvesHub"
 
 Write-Output "=== ShelvesHub — Windows Installer ==="
 
@@ -29,6 +30,20 @@ if (Test-Path $binary) {
 
   Write-Output "[i] Downloading $package..."
   Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "$tmpDir\$package" -UseBasicParsing
+
+  # Integrity: verify the download against the release's SHA256SUMS when present.
+  $sums = $release.assets | Where-Object { $_.name -eq "SHA256SUMS" }
+  if ($sums) {
+    Invoke-WebRequest -Uri $sums.browser_download_url -OutFile "$tmpDir\SHA256SUMS" -UseBasicParsing
+    $expected = (Get-Content "$tmpDir\SHA256SUMS" | Where-Object { $_ -match "\s\*?$([regex]::Escape($package))$" } | ForEach-Object { ($_ -split '\s+')[0] })
+    $actual = (Get-FileHash "$tmpDir\$package" -Algorithm SHA256).Hash.ToLower()
+    if ($expected -and ($expected.ToLower() -ne $actual)) {
+      Write-Error "[!] Checksum mismatch for $package - aborting (expected $expected, got $actual)."
+      exit 1
+    }
+    if ($expected) { Write-Output "[i] Checksum verified." }
+  }
+
   Expand-Archive -Path "$tmpDir\$package" -DestinationPath $tmpDir -Force
   $extractedDir = $tmpDir
 }
@@ -55,10 +70,14 @@ if (Test-Path "$extractedDir\assets") {
   Copy-Item -Recurse -Path "$extractedDir\assets" -Destination $installPath -Force
 }
 
-$action   = New-ScheduledTaskAction -Execute "$installPath\$binary"
-$trigger  = New-ScheduledTaskTrigger -AtStartup
-$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+# Per-user task: runs as YOU at logon (interactive, no elevation) so it can write
+# under %LOCALAPPDATA%, self-update, and reach your Steam. Registering a task for
+# the current user needs no admin rights.
+$action    = New-ScheduledTaskAction -Execute "$installPath\$binary"
+$trigger   = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings  = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
 # Reinstall-safe (upgrade in place): stop a running task instance and kill any
 # lingering daemon so the freshly-copied binary is the ONLY one running — else two
 # daemons fight over the RPC port after an upgrade and the new binary never takes.

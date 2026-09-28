@@ -224,5 +224,5 @@ fn http_get(host: &str, port: u16, path: &str) -> Result<String> {
 }
 
 #[cfg(test)]
-#[path = "mod_tests.rs"]
+#[path = "../tests/cdp_tests.rs"]
 mod tests;

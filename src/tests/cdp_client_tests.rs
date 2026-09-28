@@ -1,5 +1,5 @@
 // Unit tests for the `client` module, extracted from client.rs and attached
-// via `#[cfg(test)] #[path = "client_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "../tests/cdp_client_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;

@@ -1,5 +1,5 @@
 // Unit tests for the `backend` module, extracted from backend.rs and attached
-// via `#[cfg(test)] #[path = "backend_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "tests/backend_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;

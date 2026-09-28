@@ -191,5 +191,5 @@ fn parse_ws_authority(ws_url: &str) -> Result<(String, u16)> {
 }
 
 #[cfg(test)]
-#[path = "client_tests.rs"]
+#[path = "../tests/cdp_client_tests.rs"]
 mod tests;

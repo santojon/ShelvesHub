@@ -18,10 +18,9 @@ if [[ -f "$BINARY" ]]; then
   EXTRACTED_DIR="."
 else
   echo "[i] Fetching latest release from GitHub..."
-  DOWNLOAD_URL=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep '"browser_download_url"' \
-    | grep "$PACKAGE" \
-    | cut -d'"' -f4)
+  API_JSON=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest")
+  DOWNLOAD_URL=$(echo "$API_JSON" | grep '"browser_download_url"' | grep "$PACKAGE" | cut -d'"' -f4)
+  SUMS_URL=$(echo "$API_JSON" | grep '"browser_download_url"' | grep 'SHA256SUMS"' | cut -d'"' -f4)
 
   if [[ -z "$DOWNLOAD_URL" ]]; then
     echo "[!] Could not find $PACKAGE in the latest release."
@@ -34,6 +33,19 @@ else
 
   echo "[i] Downloading $PACKAGE..."
   curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"
+
+  # Integrity: verify the download against the release's SHA256SUMS when present.
+  if [[ -n "$SUMS_URL" ]]; then
+    curl -sL "$SUMS_URL" -o "$TMPDIR/SHA256SUMS"
+    EXPECTED=$(grep " $PACKAGE\$" "$TMPDIR/SHA256SUMS" | awk '{print $1}')
+    ACTUAL=$(shasum -a 256 "$TMPDIR/$PACKAGE" | awk '{print $1}')
+    if [[ -n "$EXPECTED" && "$EXPECTED" != "$ACTUAL" ]]; then
+      echo "[!] Checksum mismatch for $PACKAGE — aborting (expected $EXPECTED, got $ACTUAL)."
+      exit 1
+    fi
+    [[ -n "$EXPECTED" ]] && echo "[i] Checksum verified."
+  fi
+
   tar -xzf "$TMPDIR/$PACKAGE" -C "$TMPDIR"
   EXTRACTED_DIR="$TMPDIR"
 fi

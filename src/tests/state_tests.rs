@@ -1,5 +1,5 @@
 // Unit tests for the `state` module, extracted from state.rs and attached
-// via `#[cfg(test)] #[path = "state_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "tests/state_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;

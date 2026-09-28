@@ -20,7 +20,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::logger::{log_error, log_info};
+use crate::logger::{log_error, log_info, log_warning};
 
 // Bundle-size floor and the pinned release/API URLs live in the central
 // `constants` module (imported below); the loader-relative paths stay here as
@@ -30,6 +30,7 @@ use crate::constants::urls::{
     HUB_RELEASES_ALL_URL, HUB_RELEASES_LATEST_URL, RELEASES_ALL_URL, RELEASES_LATEST_URL,
     TRUSTED_BUNDLE_PREFIX,
 };
+use crate::constants::MINISIGN_PUBLIC_KEY;
 
 /// A plugin loader's install path of the injectable artifact, relative to `$HOME`.
 /// (Note: a loader *release* `.zip` currently excludes the IIFE — only a dev deploy
@@ -262,18 +263,9 @@ fn extract_tgz_url(url: &str, dest: &Path) -> Result<(), String> {
     fs::create_dir_all(dest).map_err(|e| format!("create {}: {e}", dest.display()))?;
     let tmp = dest.join(".backend-download.tar.gz");
     curl_download(url, &tmp)?;
-    let status = Command::new("tar")
-        .arg("-xzf")
-        .arg(&tmp)
-        .arg("-C")
-        .arg(dest)
-        .status()
-        .map_err(|e| format!("tar (is it installed?): {e}"))?;
+    let result = extract_archive(&tmp, dest); // vets members before extracting
     let _ = fs::remove_file(&tmp);
-    if !status.success() {
-        return Err(format!("tar exit {:?} extracting {url}", status.code()));
-    }
-    Ok(())
+    result
 }
 
 /// A file that exists and is larger than a placeholder.
@@ -488,7 +480,7 @@ fn find_asset_url_by_names(release: &serde_json::Value, names: &[&str]) -> Optio
 /// page (any OS) or a wrong-architecture binary (Linux) over the daemon (pure).
 fn looks_like_executable(head: &[u8]) -> bool {
     if cfg!(target_os = "windows") {
-        head.starts_with(b"MZ") // PE / DOS stub
+        looks_like_native_pe(head)
     } else if cfg!(target_os = "macos") {
         // Mach-O (either endianness) or a fat/universal binary.
         matches!(
@@ -551,6 +543,53 @@ fn looks_like_linux_executable(head: &[u8], arch: &str) -> bool {
     }
 }
 
+/// On Windows: require a PE whose machine matches the running CPU. Elsewhere
+/// (compiled — never reached — via the `cfg!` in `looks_like_executable`): a plain
+/// `MZ` check, so the caller's branch is `bool` on every target.
+#[cfg(target_os = "windows")]
+fn looks_like_native_pe(head: &[u8]) -> bool {
+    looks_like_windows_executable(head, std::env::consts::ARCH)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn looks_like_native_pe(head: &[u8]) -> bool {
+    head.starts_with(b"MZ")
+}
+
+/// The COFF `Machine` field of a PE image, reached via the `e_lfanew` offset at
+/// 0x3C, or `None` if the head isn't a well-formed PE with the field present.
+/// (Available on Windows and in test builds so the check is covered on CI.)
+#[cfg(any(target_os = "windows", test))]
+fn pe_machine(head: &[u8]) -> Option<u16> {
+    if !head.starts_with(b"MZ") || head.len() < 0x40 {
+        return None;
+    }
+    let pe = u32::from_le_bytes([head[0x3C], head[0x3D], head[0x3E], head[0x3F]]) as usize;
+    if pe.checked_add(6).is_none_or(|end| head.len() < end) || &head[pe..pe + 4] != b"PE\0\0" {
+        return None;
+    }
+    Some(u16::from_le_bytes([head[pe + 4], head[pe + 5]]))
+}
+
+/// The PE `Machine` value we expect for a given Rust arch string.
+#[cfg(any(target_os = "windows", test))]
+fn pe_machine_for_arch(arch: &str) -> Option<u16> {
+    match arch {
+        "x86_64" => Some(0x8664),  // IMAGE_FILE_MACHINE_AMD64
+        "aarch64" => Some(0xAA64), // IMAGE_FILE_MACHINE_ARM64
+        _ => None,
+    }
+}
+
+/// True only when the head is a PE whose machine matches `arch` (pure).
+#[cfg(any(target_os = "windows", test))]
+fn looks_like_windows_executable(head: &[u8], arch: &str) -> bool {
+    match (pe_machine(head), pe_machine_for_arch(arch)) {
+        (Some(actual), Some(expected)) => actual == expected,
+        _ => false,
+    }
+}
+
 /// The newest ShelvesHub release object for the channel (whole JSON, so the tag
 /// AND the asset list are available). `prerelease` widens to the beta channel.
 fn latest_hub_release(prerelease: bool) -> Result<serde_json::Value, String> {
@@ -570,16 +609,59 @@ fn latest_hub_release(prerelease: bool) -> Result<serde_json::Value, String> {
     }
 }
 
+/// One `tar` listing (stdout) or an error. Used to vet an archive before extract.
+fn tar_list(archive: &Path, flag: &str) -> Result<String, String> {
+    let out = Command::new("tar")
+        .arg(flag)
+        .arg(archive)
+        .output()
+        .map_err(|e| format!("tar (is it installed?): {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "tar {flag} failed for {} (exit {:?})",
+            archive.display(),
+            out.status.code()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Reject an archive that carries an absolute path, a `..` traversal, or a
+/// non-regular member (symlink / hardlink / device) BEFORE extracting it. Our own
+/// release archives contain only plain files and dirs, so any of these is a
+/// tampering/path-escape signal — refuse rather than write outside `dest`.
+fn validate_archive_members(archive: &Path, gz: bool) -> Result<(), String> {
+    // Verbose listing: the first char of each line is the member type
+    // ('-' file, 'd' dir). Anything else (l/h/b/c/p/s) is rejected.
+    for line in tar_list(archive, if gz { "-tvzf" } else { "-tvf" })?.lines() {
+        match line.trim_start().chars().next() {
+            None | Some('-') | Some('d') => {}
+            Some(_) => {
+                return Err(format!(
+                    "archive has a non-regular member (symlink/hardlink/device): {}",
+                    line.trim()
+                ))
+            }
+        }
+    }
+    for n in tar_list(archive, if gz { "-tzf" } else { "-tf" })?.lines() {
+        let n = n.trim();
+        if n.starts_with('/') || n.starts_with('\\') || n.split(['/', '\\']).any(|c| c == "..") {
+            return Err(format!("archive has an unsafe path: {n}"));
+        }
+    }
+    Ok(())
+}
+
 /// Extract `archive` into `dest` via `tar` (GNU tar for `.tar.gz`; bsdtar, present
-/// on Windows 10+, transparently handles the `.zip` used there).
+/// on Windows 10+, transparently handles the `.zip` used there). Members are vetted
+/// first (see `validate_archive_members`).
 fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
     fs::create_dir_all(dest).map_err(|e| format!("create {}: {e}", dest.display()))?;
     let name = archive.to_string_lossy().to_lowercase();
-    let flag = if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
-        "-xzf"
-    } else {
-        "-xf"
-    };
+    let gz = name.ends_with(".tar.gz") || name.ends_with(".tgz");
+    validate_archive_members(archive, gz)?;
+    let flag = if gz { "-xzf" } else { "-xf" };
     let status = Command::new("tar")
         .arg(flag)
         .arg(archive)
@@ -687,6 +769,100 @@ pub fn under_relaunching_service() -> bool {
     }
 }
 
+/// Lowercase hex SHA-256 of a byte slice.
+fn sha256_hex_bytes(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// Lowercase hex SHA-256 of a file.
+fn sha256_hex(path: &Path) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    Ok(sha256_hex_bytes(&bytes))
+}
+
+/// Verify a downloaded release archive against the release's signed `SHA256SUMS`:
+/// (1) minisign-verify `SHA256SUMS` with the baked-in public key, then (2) match
+/// the archive's SHA-256 to its line. A release without those assets, or an unset
+/// public key, degrades to a warning (self-update still gated by magic/arch), but
+/// a PRESENT-and-WRONG signature or hash aborts the update.
+fn verify_release_archive(
+    release: &serde_json::Value,
+    asset_name: &str,
+    archive: &Path,
+) -> Result<(), String> {
+    let Some(sums_url) = find_asset_url_by_names(release, &["SHA256SUMS"]) else {
+        log_warning(
+            "populate",
+            "release has no SHA256SUMS — skipping hash/signature check (archive magic/arch still verified).",
+        );
+        return Ok(());
+    };
+    let sums = curl_text(&sums_url)?;
+    // Signature: enforced only when BOTH the signature asset and an embedded
+    // public key are present; otherwise warn and fall through to the hash check.
+    match find_asset_url_by_names(release, &["SHA256SUMS.minisig"]) {
+        Some(sig_url) if !MINISIGN_PUBLIC_KEY.is_empty() => {
+            let sig_text = curl_text(&sig_url)?;
+            let pk = minisign_verify::PublicKey::from_base64(MINISIGN_PUBLIC_KEY)
+                .map_err(|e| format!("embedded minisign public key is invalid: {e}"))?;
+            let sig = minisign_verify::Signature::decode(&sig_text)
+                .map_err(|e| format!("SHA256SUMS.minisig is malformed: {e}"))?;
+            pk.verify(sums.as_bytes(), &sig, false)
+                .map_err(|_| "SHA256SUMS signature does not verify — refusing update".to_string())?;
+        }
+        _ => log_warning(
+            "populate",
+            "update signature unavailable (no .minisig or no embedded key) — verifying the SHA-256 only.",
+        ),
+    }
+    let want = sums
+        .lines()
+        .find_map(|line| {
+            let mut it = line.split_whitespace();
+            let hash = it.next()?;
+            let name = it.next()?.trim_start_matches('*'); // "*" = binary mode marker
+            (name.rsplit('/').next() == Some(asset_name)).then(|| hash.to_ascii_lowercase())
+        })
+        .ok_or_else(|| format!("{asset_name} is not listed in SHA256SUMS"))?;
+    let got = sha256_hex(archive)?;
+    if got != want {
+        return Err(format!(
+            "SHA256 mismatch for {asset_name}: expected {want}, got {got} — refusing update"
+        ));
+    }
+    Ok(())
+}
+
+/// A fresh, unpredictably-named work dir under the temp dir — 0700 on unix
+/// (created atomically at that mode) so another local user can neither pre-create
+/// nor read a self-update's download/extract before the verified swap.
+fn create_secure_work_dir() -> Result<PathBuf, String> {
+    let mut rnd = [0u8; 12];
+    getrandom::getrandom(&mut rnd).map_err(|e| format!("work dir randomness: {e}"))?;
+    let suffix: String = rnd.iter().map(|b| format!("{b:02x}")).collect();
+    let dir = std::env::temp_dir().join(format!("shelveshub-update-{suffix}"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&dir)
+            .map_err(|e| format!("create work dir: {e}"))?;
+    }
+    #[cfg(not(unix))]
+    {
+        fs::create_dir(&dir).map_err(|e| format!("create work dir: {e}"))?;
+    }
+    Ok(dir)
+}
+
 /// Apply the hub's OWN update: download the newest release package for this OS,
 /// verify the binary inside it, and stage it over the running executable (see
 /// `stage_binary_swap`). Returns the release tag that was staged on success. The
@@ -705,19 +881,24 @@ pub fn apply_hub_update(prerelease: bool) -> Result<String, String> {
         )
     })?;
 
-    // Work in a unique temp dir so a partial download/extract never touches the
-    // install directory until the verified swap.
-    let work = std::env::temp_dir().join(format!("shelveshub-update-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&work);
-    fs::create_dir_all(&work).map_err(|e| format!("create work dir: {e}"))?;
+    // Work in a fresh, unpredictably-named, 0700 temp dir so a partial
+    // download/extract never touches the install dir until the verified swap, and
+    // no other local user can pre-create or read it.
+    let work = create_secure_work_dir()?;
 
     let cleanup = |r: Result<String, String>| {
         let _ = fs::remove_dir_all(&work);
         r
     };
 
-    let archive = work.join(url.rsplit('/').next().unwrap_or("package"));
+    let asset_name = url.rsplit('/').next().unwrap_or("package");
+    let archive = work.join(asset_name);
     if let Err(e) = curl_download(&url, &archive) {
+        return cleanup(Err(e));
+    }
+    // Supply-chain gate: verify the archive against the release's minisign-signed
+    // SHA256SUMS before we extract or swap anything.
+    if let Err(e) = verify_release_archive(&release, asset_name, &archive) {
         return cleanup(Err(e));
     }
     if let Err(e) = extract_archive(&archive, &work) {
@@ -901,5 +1082,5 @@ pub fn apply_update(
 }
 
 #[cfg(test)]
-#[path = "populate_tests.rs"]
+#[path = "tests/populate_tests.rs"]
 mod tests;

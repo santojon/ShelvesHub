@@ -392,5 +392,5 @@ fn resolve_asset_path(env_key: &str, relative: &str) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "config_tests.rs"]
+#[path = "tests/config_tests.rs"]
 mod tests;

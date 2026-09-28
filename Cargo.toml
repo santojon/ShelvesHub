@@ -33,6 +33,10 @@ serde_json = "1"
 # (localhost / SSH-tunnelled), so TLS backends are intentionally disabled.
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 clap = { version = "4", features = ["derive", "env"] }
+# Supply-chain verification of self-update downloads: SHA-256 of the archive +
+# minisign signature check of the release's SHA256SUMS (public key baked in below).
+sha2 = "0.10"
+minisign-verify = "0.2"
 
 # Lints, enforced the same way in CI (`cargo clippy -- -D warnings`) and locally.
 # Kept adequate — not maximally pedantic — for a small, dependency-light daemon.

@@ -1,5 +1,5 @@
 // Unit tests for the `config` module, extracted from config.rs and attached
-// via `#[cfg(test)] #[path = "config_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "tests/config_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;

@@ -1,5 +1,5 @@
 // Unit tests for the `store` module, extracted from store.rs and attached
-// via `#[cfg(test)] #[path = "store_tests.rs"] mod tests;` — `super::*`
+// via `#[cfg(test)] #[path = "tests/store_tests.rs"] mod tests;` — `super::*`
 // still reaches the module's private items.
 
 use super::*;

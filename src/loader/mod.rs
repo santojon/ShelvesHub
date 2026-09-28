@@ -1046,5 +1046,5 @@ pub fn inject_bundle(client: &mut CdpClient, source: &str, version: &str) -> cdp
 }
 
 #[cfg(test)]
-#[path = "mod_tests.rs"]
+#[path = "../tests/loader_tests.rs"]
 mod tests;

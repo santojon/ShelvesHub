@@ -163,5 +163,5 @@ pub fn apply(enabled: bool, source: &Path) -> Result<Option<PathBuf>, String> {
 }
 
 #[cfg(test)]
-#[path = "bootmovie_tests.rs"]
+#[path = "tests/bootmovie_tests.rs"]
 mod tests;

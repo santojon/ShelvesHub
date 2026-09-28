@@ -8,7 +8,31 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Security
+- **Self-update is now verified before it replaces anything.** The daemon checks
+  the release's `SHA256SUMS` — minisign-signed with a public key baked into the
+  daemon — and the downloaded archive's SHA-256 against it; a bad signature or
+  hash aborts the update. Downloads now extract into a private (0700) work dir,
+  and an archive with an absolute path, `..` traversal, or a symlink/device member
+  is refused. (Signature enforcement turns on once the signing key is configured;
+  until then the hash is still checked.)
+- **Installers verify the download's checksum.** The SteamOS, macOS and Windows
+  installers check the downloaded package against the release's `SHA256SUMS` before
+  installing, so a corrupted or truncated download is caught.
+
+### Changed
+- **Windows now installs per-user — no administrator rights.** ShelvesHub installs
+  under `%LOCALAPPDATA%\ShelvesHub` and runs as you at logon, so it can manage its
+  own bundle/backend/config, self-update, and reach your Steam. Previously it went
+  to `Program Files` with a system task that often couldn't write there.
+
 ### Fixed
+- **Windows self-update now verifies the download's CPU architecture.** A PE
+  machine check (x64 vs ARM64) mirrors the existing Linux ELF check, so a
+  wrong-architecture binary is rejected before it replaces the running one.
+- **The compatibility version can no longer silently drift.** A release build now
+  fails if the shared Deck Shelves contract is missing, instead of quietly falling
+  back to an old version number.
 - **Notifications now appear in standalone (no-loader) mode.** When ShelvesHub
   hosts Deck Shelves on its own, its toasts (update available, suggestions,
   settings recovery, and so on) silently did nothing, because this Steam build

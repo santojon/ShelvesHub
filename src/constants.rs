@@ -6,6 +6,13 @@
 //! (`rpc`), and the injected runtime's JS global names and fragment list
 //! (`loader`). Those live with the code that defines their meaning.
 
+/// The project's minisign PUBLIC key — the base64 `RW…` string from `minisign -G`.
+/// Baked in to verify the signature on a release's `SHA256SUMS` before a
+/// self-update. Empty disables the signature check (the archive hash is still
+/// enforced). The matching private key lives ONLY as the `MINISIGN_SECRET_KEY` CI
+/// secret that signs releases.
+pub const MINISIGN_PUBLIC_KEY: &str = "RWR29S0QSUI6lkXlUP5VeSb8xF5ctRJ1scno8I9Cbm/7RlRqm9ZgkV5n";
+
 /// Timers and intervals. Every duration the daemon waits on is defined here.
 pub mod timers {
     use std::time::Duration;

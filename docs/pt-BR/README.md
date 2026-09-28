@@ -142,7 +142,7 @@ Baixe o **`Install ShelvesHub.app`** (um aplicativo instalador clicável com o �
 
 ### Windows
 
-Baixe o **`shelveshub-setup.exe`** (um instalador com o ícone do ShelvesHub) do último lançamento e execute-o, aceitando o prompt do UAC. Um script simples `install-windows.bat` também é publicado.
+Baixe o **`shelveshub-setup.exe`** (um instalador com o ícone do ShelvesHub) do último lançamento e execute-o — ele instala **por usuário** (em `%LOCALAPPDATA%`, sem direitos de administrador). Um script simples `install-windows.bat` também é publicado.
 
 ---
 
