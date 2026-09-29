@@ -8,6 +8,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- **The installer can set your key options up front.** Choose cooperative hosting
+  (`force_owner`), the Quick Access tab, desktop-client injection, and automatic
+  updates + pre-release channels at install time — a prompt when you run the
+  installer in a terminal, or `SHELVES_*` environment variables for a
+  `curl | bash` install. They're seeded once and stay editable in the ShelvesHub
+  tab. (Windows: available in the script/zip installer; the setup .exe keeps its
+  defaults for now.)
+
 ### Security
 - **Self-update is now verified before it replaces anything.** The daemon checks
   the release's `SHA256SUMS` — minisign-signed with a public key baked into the
@@ -21,12 +30,33 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   installing, so a corrupted or truncated download is caught.
 
 ### Changed
+- **The installer app icon no longer appears on a plain white square.** The macOS
+  and Windows installer icons now carry the site's dark background (with its blue
+  glow); the transparent tab/favicon icons are unchanged.
+- **Installing migrates an old root/system install to the per-user layout — without
+  losing data.** On every platform, a prior root-level (or Windows Program Files /
+  admin) install and its service are removed and replaced by the current per-user
+  install. Your `shelveshub.config.json` is carried over, and if the old install kept
+  your Deck Shelves settings under root, they're rescued to your account (only when
+  you don't already have your own — never overwritten). Your settings live in a
+  separate directory, so they're never touched otherwise.
 - **Windows now installs per-user — no administrator rights.** ShelvesHub installs
   under `%LOCALAPPDATA%\ShelvesHub` and runs as you at logon, so it can manage its
   own bundle/backend/config, self-update, and reach your Steam. Previously it went
   to `Program Files` with a system task that often couldn't write there.
+- **The shared host contract is now `1.3.0`.** The `HostApi` version reported to the
+  bundle moves to `1.3.0`, documenting the route-patch surface (`routes.addPatch` /
+  `removePatch` and the `RoutePatch` shape) alongside the host handshake and
+  lifecycle teardown added earlier. Additive and backward-compatible — a bundle built
+  against `1.2.0` runs unchanged.
 
 ### Fixed
+- **Plugin updates no longer go silent under a plugin loader.** When ShelvesHub was
+  forced to host over a loader (cooperative mode), Deck Shelves hid its own "update
+  available" banner expecting the host to install it — but the host can't replace a
+  loader-injected copy, so nothing updated. The host now reports it can self-install
+  a plugin update only when it actually injects the bundle (standalone), so under any
+  loader the plugin keeps showing its own update banner.
 - **Windows self-update now verifies the download's CPU architecture.** A PE
   machine check (x64 vs ARM64) mirrors the existing Linux ELF check, so a
   wrong-architecture binary is rejected before it replaces the running one.

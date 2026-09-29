@@ -8,6 +8,15 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+### Adicionado
+- **O instalador pode definir suas opções principais logo de cara.** Escolha
+  hospedagem cooperativa (`force_owner`), a aba do Quick Access, injeção no cliente
+  desktop e atualizações automáticas + canais de pré-lançamento na hora da
+  instalação — um prompt quando você roda o instalador num terminal, ou variáveis
+  de ambiente `SHELVES_*` para instalar via `curl | bash`. São semeadas uma vez e
+  continuam editáveis na aba do ShelvesHub. (Windows: disponível no instalador via
+  script/zip; o setup .exe mantém os padrões por enquanto.)
+
 ### Segurança
 - **A autoatualização agora é verificada antes de substituir qualquer coisa.** O
   daemon confere o `SHA256SUMS` do lançamento — assinado com minisign por uma chave
@@ -22,13 +31,35 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   antes de instalar, então um download corrompido ou truncado é detectado.
 
 ### Alterado
+- **O ícone do instalador não aparece mais sobre um quadrado branco.** Os ícones dos
+  instaladores de macOS e Windows agora usam o fundo escuro do site (com o brilho
+  azul); os ícones transparentes da aba/favicon seguem iguais.
+- **A instalação migra um install antigo root/sistema para o layout por usuário — sem
+  perder dados.** Em todas as plataformas, um install anterior de nível root (ou no
+  Program Files / admin do Windows) e o serviço dele são removidos e substituídos pelo
+  install atual por usuário. Seu `shelveshub.config.json` é levado junto, e se o install
+  antigo guardava suas configurações do Deck Shelves sob o root, elas são resgatadas para
+  a sua conta (só quando você ainda não tem as suas — nunca sobrescreve). Suas
+  configurações ficam num diretório separado, então não são tocadas em nenhum outro caso.
 - **No Windows a instalação agora é por usuário — sem direitos de administrador.**
   O ShelvesHub instala em `%LOCALAPPDATA%\ShelvesHub` e roda como você no login,
   então consegue gerenciar o próprio bundle/backend/config, se autoatualizar e
   alcançar o seu Steam. Antes ia para `Program Files` com uma tarefa de sistema
   que muitas vezes não conseguia escrever ali.
+- **O contrato compartilhado do host agora é `1.3.0`.** A versão do `HostApi`
+  reportada ao bundle passa a `1.3.0`, documentando a superfície de patch de rotas
+  (`routes.addPatch` / `removePatch` e o formato `RoutePatch`) junto do handshake do
+  host e do teardown de ciclo de vida adicionados antes. Aditivo e retrocompatível —
+  um bundle compilado contra `1.2.0` roda sem alterações.
 
 ### Corrigido
+- **Atualizações do plugin não somem mais quando há um carregador de plugins.** Quando
+  o ShelvesHub era forçado a hospedar por cima de um carregador (modo cooperativo), o
+  Deck Shelves escondia o próprio aviso de "atualização disponível" esperando que o host
+  instalasse — mas o host não consegue substituir uma cópia injetada pelo carregador,
+  então nada atualizava. Agora o host só se declara capaz de instalar uma atualização do
+  plugin quando de fato injeta o bundle (modo standalone); sob qualquer carregador, o
+  plugin continua mostrando o próprio aviso de atualização.
 - **A autoatualização no Windows agora verifica a arquitetura de CPU do download.**
   Uma checagem de máquina PE (x64 vs ARM64) espelha a checagem de ELF já existente
   no Linux, então um binário de arquitetura errada é rejeitado antes de substituir

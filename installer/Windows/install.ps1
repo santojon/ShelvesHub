@@ -12,6 +12,31 @@ $installPath = Join-Path $env:LOCALAPPDATA "ShelvesHub"
 
 Write-Output "=== ShelvesHub — Windows Installer ==="
 
+# ── Migrate any older Program Files (admin) install to the current per-user one ──
+# Your Deck Shelves settings live in %APPDATA%\deck-shelves (separate), so this never
+# loses data. Rescues the old config + settings (only when yours don't exist yet),
+# then removes the old install/registry entry (which may need admin — warns if not).
+$oldInstall  = Join-Path $env:ProgramFiles "ShelvesHub"
+$userSettings = Join-Path $env:APPDATA "deck-shelves"
+if (Test-Path $oldInstall) {
+  Write-Output "[i] Migrating an old Program Files (admin) install to per-user..."
+  New-Item -Path $installPath -ItemType Directory -Force | Out-Null
+  $oldCfg = Join-Path $oldInstall "shelveshub.config.json"
+  if ((Test-Path $oldCfg) -and -not (Test-Path (Join-Path $installPath "shelveshub.config.json"))) {
+    Copy-Item $oldCfg $installPath -Force -ErrorAction SilentlyContinue
+  }
+  $sysSettings = "C:\Windows\System32\config\systemprofile\AppData\Roaming\deck-shelves"
+  if ((Test-Path $sysSettings) -and -not (Test-Path $userSettings)) {
+    Copy-Item $sysSettings $userSettings -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $userSettings) { Write-Output "[i] Rescued your Deck Shelves settings from the old system install." }
+  }
+  Remove-Item -Recurse -Force $oldInstall -ErrorAction SilentlyContinue
+  Remove-Item "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ShelvesHub" -Recurse -Force -ErrorAction SilentlyContinue
+  if (Test-Path $oldInstall) {
+    Write-Warning "[!] Could not remove $oldInstall (needs admin). Delete it manually or run this installer once elevated; your data and the new per-user install are unaffected."
+  }
+}
+
 if (Test-Path $binary) {
   Write-Output "[i] Binary found locally, skipping download."
   $extractedDir = "."
@@ -58,8 +83,56 @@ if (Test-Path "$extractedDir\runtime") {
   Copy-Item -Recurse -Path "$extractedDir\runtime" -Destination $installPath -Force
 }
 # Config file: install it, but never overwrite one the user has already edited.
+$configWasFresh = $false
 if ((Test-Path "$extractedDir\shelveshub.config.json") -and -not (Test-Path "$installPath\shelveshub.config.json")) {
   Copy-Item "$extractedDir\shelveshub.config.json" $installPath
+  $configWasFresh = $true
+}
+
+# ── Optional setup choices ─────────────────────────────────────────────────────
+# Read from the environment and, when run interactively, ask. Applied only on a
+# FIRST install; everything stays editable later in the ShelvesHub tab.
+function Ask($val, $q, $default) {
+  if ($val -match '^(1|y|yes|true|on)$') { return $true }
+  if ($val -match '^(0|n|no|false|off)$') { return $false }
+  if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+    $hint = if ($default) { "[Y/n]" } else { "[y/N]" }
+    $r = Read-Host "  $q $hint"
+    if ([string]::IsNullOrWhiteSpace($r)) { return $default }
+    return ($r -match '^[Yy]')
+  }
+  return $default
+}
+$cfgPath = Join-Path $installPath "shelveshub.config.json"
+if ($configWasFresh) {
+  Write-Output "-- Optional setup (Enter for the default) --"
+  $force = Ask $env:SHELVES_FORCE_OWNER "Host Deck Shelves even if a plugin loader is present (cooperative)?" $false
+  $nqam  = Ask $env:SHELVES_NATIVE_QAM  "Add ShelvesHub's own Quick Access tab?" $true
+  $desk  = Ask $env:SHELVES_DESKTOP_UI  "Also inject into the plain desktop client (experimental)?" $false
+  $c = Get-Content $cfgPath -Raw
+  if ($force)     { $c = $c -replace '"force_owner": false', '"force_owner": true' }
+  if (-not $nqam) { $c = $c -replace '"native_qam": true',   '"native_qam": false' }
+  if ($desk)      { $c = $c -replace '"desktop_ui": false',  '"desktop_ui": true' }
+  Set-Content -Path $cfgPath -Value $c -NoNewline
+}
+$prefsPath = Join-Path $userSettings "shelveshub.json"
+if (-not (Test-Path $prefsPath)) {
+  $auto = Ask $env:SHELVES_AUTO_UPDATE "Enable automatic updates?" $true
+  if ($auto) {
+    $ahub  = Ask $env:SHELVES_AUTO_UPDATE_HUB    "  Auto-update ShelvesHub itself?" $true
+    $aplug = Ask $env:SHELVES_AUTO_UPDATE_PLUGIN "  Auto-update Deck Shelves?" $true
+    $hpre  = Ask $env:SHELVES_HUB_PRERELEASE     "  Include ShelvesHub pre-releases?" $false
+    $ppre  = Ask $env:SHELVES_PLUGIN_PRERELEASE  "  Include Deck Shelves pre-releases?" $false
+  } else { $ahub = $true; $aplug = $true; $hpre = $false; $ppre = $false }
+  New-Item -ItemType Directory -Path $userSettings -Force | Out-Null
+  $prefs = [ordered]@{
+    auto_update        = $auto
+    auto_update_hub    = $ahub
+    auto_update_plugin = $aplug
+    hub_prerelease     = $hpre
+    plugin_prerelease  = $ppre
+  }
+  Set-Content -Path $prefsPath -Value ($prefs | ConvertTo-Json)
 }
 # Optional data-backend payload: auto-detected by the service at <install>\backend.
 if (Test-Path "$extractedDir\backend") {

@@ -13,6 +13,30 @@ PACKAGE="shelveshub-macos.tar.gz"
 
 echo "=== ShelvesHub — macOS Installer ==="
 
+# ── Migrate any older system (root) install to the current per-user standard ────
+# Removes an old root LaunchDaemon + old /usr/local install and drops root. Your
+# Deck Shelves settings live in a separate dir, so this never loses data — and old
+# root-owned settings are rescued to yours only when yours don't exist yet.
+SETTINGS_DIR="$HOME/Library/Application Support/deck-shelves"
+set +e # migration is best-effort — a sudo hiccup must never abort the install
+if [[ -f /Library/LaunchDaemons/com.shelveshub.plist || -d /usr/local/shelveshub ]]; then
+  echo "[i] Migrating an old system (root) install to the per-user agent…"
+  sudo launchctl bootout system /Library/LaunchDaemons/com.shelveshub.plist 2>/dev/null \
+    || sudo launchctl unload /Library/LaunchDaemons/com.shelveshub.plist 2>/dev/null
+  sudo rm -f /Library/LaunchDaemons/com.shelveshub.plist
+  if [[ -f /usr/local/shelveshub/shelveshub.config.json && ! -f "$INSTALL_DIR/shelveshub.config.json" ]]; then
+    mkdir -p "$INSTALL_DIR"
+    sudo cp /usr/local/shelveshub/shelveshub.config.json "$INSTALL_DIR/" && sudo chown "$USER" "$INSTALL_DIR/shelveshub.config.json"
+  fi
+  if [[ ! -d "$SETTINGS_DIR" && -d "/var/root/Library/Application Support/deck-shelves" ]]; then
+    mkdir -p "$(dirname "$SETTINGS_DIR")"
+    sudo cp -r "/var/root/Library/Application Support/deck-shelves" "$SETTINGS_DIR" && sudo chown -R "$USER" "$SETTINGS_DIR"
+    echo "[i] Rescued your Deck Shelves settings from the old root install."
+  fi
+  sudo rm -rf /usr/local/shelveshub
+fi
+set -e
+
 if [[ -f "$BINARY" ]]; then
   echo "[i] Binary found locally, skipping download."
   EXTRACTED_DIR="."
@@ -58,7 +82,58 @@ chmod +x "$INSTALL_DIR/$BINARY"
 [[ -d "$EXTRACTED_DIR/bundle" ]] && mkdir -p "$INSTALL_DIR/bundle" && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
 [[ -d "$EXTRACTED_DIR/runtime" ]] && mkdir -p "$INSTALL_DIR/runtime" && cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
 # Config file: install it, but never overwrite one the user has already edited.
-[[ -f "$EXTRACTED_DIR/shelveshub.config.json" && ! -f "$INSTALL_DIR/shelveshub.config.json" ]] && cp "$EXTRACTED_DIR/shelveshub.config.json" "$INSTALL_DIR/"
+CONFIG_WAS_FRESH=0
+if [[ -f "$EXTRACTED_DIR/shelveshub.config.json" && ! -f "$INSTALL_DIR/shelveshub.config.json" ]]; then
+  cp "$EXTRACTED_DIR/shelveshub.config.json" "$INSTALL_DIR/"; CONFIG_WAS_FRESH=1
+fi
+
+# ── Optional setup choices ─────────────────────────────────────────────────────
+# Read from the environment (works with `curl | bash`) and, on a terminal, ask.
+# Applied only on a FIRST install; everything stays editable in the ShelvesHub tab.
+CONFIG_JSON="$INSTALL_DIR/shelveshub.config.json"
+PREFS_JSON="$SETTINGS_DIR/shelveshub.json"
+ask() {
+  local v="$1" q="$2" d="$3" reply
+  case "$v" in 1|y|Y|yes|true|on) echo 1; return;; 0|n|N|no|false|off) echo 0; return;; esac
+  if [[ -t 0 ]]; then
+    local hint="[y/N]"; [[ "$d" == y ]] && hint="[Y/n]"
+    read -r -p "  $q $hint " reply </dev/tty || reply=""
+    reply="${reply:-$d}"; [[ "$reply" =~ ^[Yy] ]] && echo 1 || echo 0
+  else
+    [[ "$d" == y ]] && echo 1 || echo 0
+  fi
+}
+b() { [[ "$1" == 1 ]] && echo true || echo false; }
+if [[ "$CONFIG_WAS_FRESH" == 1 ]]; then
+  [[ -t 0 ]] && { echo ""; echo "── Optional setup (press Enter for the default) ──"; }
+  FORCE=$(ask "${SHELVES_FORCE_OWNER:-}" "Host Deck Shelves even if a plugin loader is present (cooperative)?" n)
+  NQAM=$(ask  "${SHELVES_NATIVE_QAM:-}"  "Add ShelvesHub's own Quick Access tab?" y)
+  DESK=$(ask  "${SHELVES_DESKTOP_UI:-}"  "Also inject into the plain desktop client (experimental)?" n)
+  [[ "$FORCE" == 1 ]] && sed -i '' 's/"force_owner": false/"force_owner": true/' "$CONFIG_JSON"
+  [[ "$NQAM"  == 0 ]] && sed -i '' 's/"native_qam": true/"native_qam": false/'   "$CONFIG_JSON"
+  [[ "$DESK"  == 1 ]] && sed -i '' 's/"desktop_ui": false/"desktop_ui": true/'   "$CONFIG_JSON"
+fi
+if [[ ! -f "$PREFS_JSON" ]]; then
+  AUTO=$(ask "${SHELVES_AUTO_UPDATE:-}" "Enable automatic updates?" y)
+  if [[ "$AUTO" == 1 ]]; then
+    AHUB=$(ask  "${SHELVES_AUTO_UPDATE_HUB:-}"    "  Auto-update ShelvesHub itself?" y)
+    APLUG=$(ask "${SHELVES_AUTO_UPDATE_PLUGIN:-}" "  Auto-update Deck Shelves?" y)
+    HPRE=$(ask  "${SHELVES_HUB_PRERELEASE:-}"     "  Include ShelvesHub pre-releases?" n)
+    PPRE=$(ask  "${SHELVES_PLUGIN_PRERELEASE:-}"  "  Include Deck Shelves pre-releases?" n)
+  else
+    AHUB=1; APLUG=1; HPRE=0; PPRE=0
+  fi
+  mkdir -p "$SETTINGS_DIR"
+  cat > "$PREFS_JSON" <<EOF
+{
+  "auto_update": $(b "$AUTO"),
+  "auto_update_hub": $(b "$AHUB"),
+  "auto_update_plugin": $(b "$APLUG"),
+  "hub_prerelease": $(b "$HPRE"),
+  "plugin_prerelease": $(b "$PPRE")
+}
+EOF
+fi
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 [[ -d "$EXTRACTED_DIR/backend" ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
 # Boot-animation source cuts — the daemon reads them from <install>/assets/boot

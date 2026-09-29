@@ -2,7 +2,7 @@
 
 *[Read in English](../host-api.md)*
 
-Versão do contrato: **1.2.0** (apenas aditivo desde a linha de base 1.0.0).
+Versão do contrato: **1.3.0** (apenas aditivo desde a linha de base 1.0.0).
 
 A interface `HostApi` define o que o processo host do ShelvesHub fornece
 ao pacote do Deck Shelves. O pacote recebe esse objeto como
@@ -26,6 +26,7 @@ seu pacote para consumir esse contrato.
 | `register` | `() => void` | Chamado uma vez na montagem do pacote |
 | `onMount` | `(handler: () => void) => void` | Disparado quando o pacote monta |
 | `onUnmount` | `(handler: () => void) => void` | Disparado no desmonte |
+| `teardown?` | `() => number` | Opcional (1.3.0). Roda cada handler de `onUnmount` uma vez e os limpa antes de uma troca a quente; retorna a contagem |
 
 ### `rpc: RpcApi`
 
@@ -47,8 +48,14 @@ seu pacote para consumir esse contrato.
 
 | Método | Assinatura | Notas |
 |---|---|---|
+| `register` | `(path, component) => Disposable` | Registra uma rota em tela cheia; retorna um disposer |
 | `addRoute` | `(path, component) => void` | Registra uma rota em tela cheia no Steam |
 | `removeRoute` | `(path) => void` | Remove uma rota registrada |
+| `addPatch?` | `(path, patch: RoutePatch) => RoutePatch` | Opcional (1.3.0). Aplica patch numa rota existente no lugar (ex.: envolver a Home para injetar prateleiras); retorna o mesmo `patch` |
+| `removePatch?` | `(path, patch) => RoutePatch` | Opcional (1.3.0). Remove um patch adicionado com `addPatch` |
+
+Um `RoutePatch` é `(props) => { children? } | void` — recebe uma cópia rasa das
+props da rota e retorna uma sobreposição parcial (hoje só `children` é aplicado).
 
 ### `notifications?: NotificationsApi`
 

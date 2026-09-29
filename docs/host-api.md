@@ -2,7 +2,7 @@
 
 *[Leia em português](pt-BR/host-api.md)*
 
-Contract version: **1.2.0** (additive-only after the 1.0.0 baseline).
+Contract version: **1.3.0** (additive-only after the 1.0.0 baseline).
 
 The `HostApi` interface defines what the ShelvesHub host process provides
 to the Deck Shelves bundle. The bundle receives this object as
@@ -26,6 +26,7 @@ its bundle to consume this contract.
 | `register` | `() => void` | Call once at bundle mount |
 | `onMount` | `(handler: () => void) => void` | Fires when the bundle mounts |
 | `onUnmount` | `(handler: () => void) => void` | Fires on teardown |
+| `teardown?` | `() => number` | Optional (1.3.0). Runs every `onUnmount` handler once and clears them before a hot-swap; returns the count |
 
 ### `rpc: RpcApi`
 
@@ -47,8 +48,14 @@ its bundle to consume this contract.
 
 | Method | Signature | Notes |
 |---|---|---|
+| `register` | `(path, component) => Disposable` | Register a fullscreen route; returns a disposer |
 | `addRoute` | `(path, component) => void` | Register a fullscreen route in Steam |
 | `removeRoute` | `(path) => void` | Remove a registered route |
+| `addPatch?` | `(path, patch: RoutePatch) => RoutePatch` | Optional (1.3.0). Patch an existing route in place (e.g. wrap the Home to inject shelves); returns the same `patch` |
+| `removePatch?` | `(path, patch) => RoutePatch` | Optional (1.3.0). Remove a patch added with `addPatch` |
+
+A `RoutePatch` is `(props) => { children? } | void` — it receives a shallow copy of
+the route's props and returns a partial override (today only `children` is honored).
 
 ### `notifications?: NotificationsApi`
 

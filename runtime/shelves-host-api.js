@@ -91,7 +91,7 @@
         hostApiVersion: HOST_API_VERSION,
         capabilities: {
           teardown: true,
-          selfUpdate: !COEXIST || COOP,
+          selfUpdate: !COEXIST, // can install a PLUGIN update in place (see updates.canSelfInstall)
           nativeQam: nativeUiOn(),
           coexist: !!COEXIST,
         },
@@ -167,10 +167,12 @@
        "Download"). applyUpdate reloads once the swap succeeds, so the daemon re-injects
        the new bundle and the plugin re-boots on it. */
     updates: {
-      // True only when THIS host owns the bundle (sole, or coop/forced) — then the
-      // hub manages plugin updates and the plugin can hide its own update banner.
-      // In plain coexistence the loader owns updates, so the plugin keeps it.
-      canSelfInstall: function () { return !COEXIST || COOP; },
+      // True only when THIS host INJECTS the bundle (sole / true owner) — then a
+      // hub-driven swap actually takes effect and the plugin can hide its banner.
+      // Under ANY loader (plain coexist OR cooperative/force) the loader still
+      // injects its own copy, so the hub can't replace it: report false so the
+      // plugin keeps its own update banner instead of silently deferring to us.
+      canSelfInstall: function () { return !COEXIST; },
       applyUpdate: function (release) {
         return fetch(RPC_ENDPOINT, { method: "POST", headers: rpcHeaders(), body: JSON.stringify({ method: "applyUpdate", args: release == null ? null : release }) })
           .then(function (res) { if (!res.ok) throw new Error("applyUpdate HTTP " + res.status); return res.json(); })

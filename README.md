@@ -144,6 +144,29 @@ Download **`Install ShelvesHub.app`** (a clickable installer app carrying the Sh
 
 Download **`shelveshub-setup.exe`** (a setup program carrying the ShelvesHub icon) from the latest release and run it — it installs **per-user** (under `%LOCALAPPDATA%`, no administrator rights). A plain `install-windows.bat` script is also published.
 
+### Setup options
+
+On a **first** install the script installers ask a few optional questions (in a terminal), or take them from the environment for a `curl | bash` install — nothing is asked when piped. Each is seeded once and stays editable later in the ShelvesHub tab, so you can also just accept the defaults.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `SHELVES_FORCE_OWNER` | off | Host Deck Shelves even when a plugin loader is present (cooperative mode). |
+| `SHELVES_NATIVE_QAM` | on | Add ShelvesHub's own Quick Access tab. |
+| `SHELVES_DESKTOP_UI` | off | Also inject into the plain desktop client (experimental). |
+| `SHELVES_AUTO_UPDATE` | off | Master switch for automatic updates. |
+| `SHELVES_AUTO_UPDATE_HUB` | on | Auto-update ShelvesHub itself (when the master is on). |
+| `SHELVES_AUTO_UPDATE_PLUGIN` | on | Auto-update Deck Shelves (when the master is on). |
+| `SHELVES_HUB_PRERELEASE` | off | Include ShelvesHub pre-releases. |
+| `SHELVES_PLUGIN_PRERELEASE` | off | Include Deck Shelves pre-releases. |
+
+Each accepts `1`/`y`/`true`/`on` or `0`/`n`/`false`/`off`. Example (SteamOS/Linux/macOS):
+
+```sh
+SHELVES_AUTO_UPDATE=1 SHELVES_FORCE_OWNER=1 bash <(curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/install-steamos.sh)
+```
+
+The Windows `setup.exe` keeps the defaults for now; use the script/zip installer (or the ShelvesHub tab) to change them.
+
 ---
 
 ## Uninstalling

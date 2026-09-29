@@ -28,6 +28,9 @@
   "// force_owner": "Claim renderer ownership even when another host is present, so the plugin selects ShelvesHub. Use only when you deliberately prefer ShelvesHub over another installed loader.",
   "force_owner": false,
 
+  "// desktop_ui": "Experimental: also inject while the plain desktop Steam client is on screen (not just the gamepad / Big Picture UI). false = host only in Big Picture. Can also be set per-service via SHELVES_DESKTOP_UI=1.",
+  "desktop_ui": false,
+
   "// recover_cmd": "Shell command run ONCE if the daemon detects the Steam UI collapsed (a black screen where only SharedJSContext survives). Typically 'systemctl --user restart steam-launcher.service' on a Steam Deck. Empty = only pause injection and log the hint.",
   "recover_cmd": "",
 
