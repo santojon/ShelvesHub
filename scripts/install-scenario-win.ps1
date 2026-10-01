@@ -21,6 +21,10 @@ function Check($label, [bool]$ok) {
 # finds the local binary and skips the download) and runs the script. Register-
 # ScheduledTask records to $env:SHTASK_LOG so we can assert it was attempted.
 function Run-Pkg($scriptName, $argLine, $outFile) {
+  # The child shell may write to stderr (benign). Under the script's Stop
+  # preference PowerShell escalates native-command stderr to a terminating error,
+  # so relax it to Continue for just this invocation (function-scoped).
+  $ErrorActionPreference = 'Continue'
   $wrapper = Join-Path $env:TEMP ("wrap-" + [guid]::NewGuid() + ".ps1")
   @"
 function New-ScheduledTaskAction {}
