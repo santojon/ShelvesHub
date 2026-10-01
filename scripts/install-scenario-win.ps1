@@ -58,7 +58,7 @@ Write-Output "== Windows install / uninstall lifecycle =="
 cargo build --release --quiet
 if ($LASTEXITCODE -ne 0) { Write-Error "build failed"; exit 1 }
 
-# ── Assemble a release-style package (mirrors release.yml's dist layout) ──────
+# -- Assemble a release-style package (mirrors release.yml's dist layout) ------
 $PKG = Join-Path ([System.IO.Path]::GetTempPath()) ("shpkg-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Force -Path "$PKG\installer","$PKG\bundle","$PKG\runtime" | Out-Null
 Copy-Item target\release\shelveshub.exe "$PKG\" -Force
@@ -68,7 +68,7 @@ Copy-Item shelveshub.config.json "$PKG\" -Force -ErrorAction SilentlyContinue
 Copy-Item bundle\* "$PKG\bundle\" -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item runtime\* "$PKG\runtime\" -Recurse -Force -ErrorAction SilentlyContinue
 
-# ── Redirect the per-user profile + Program Files to temp sandboxes ───────────
+# -- Redirect the per-user profile + Program Files to temp sandboxes -----------
 $SAND = Join-Path ([System.IO.Path]::GetTempPath()) ("shsand-" + [guid]::NewGuid())
 $env:LOCALAPPDATA = Join-Path $SAND "Local"
 $env:APPDATA      = Join-Path $SAND "Roaming"
@@ -80,7 +80,7 @@ $settingsDir = Join-Path $env:APPDATA "deck-shelves"
 $prefsPath   = Join-Path $settingsDir "shelveshub.json"
 $cfgPath     = Join-Path $installPath "shelveshub.config.json"
 
-# ── [1] Install (fresh) with the SHELVES_* options exercised ──────────────────
+# -- [1] Install (fresh) with the SHELVES_* options exercised ------------------
 Write-Output "[1] install.ps1 (fresh, with options)"
 $env:SHELVES_FORCE_OWNER = "1"; $env:SHELVES_NATIVE_QAM = "0"; $env:SHELVES_DESKTOP_UI = "1"
 $env:SHELVES_AUTO_UPDATE = "1"; $env:SHELVES_PLUGIN_PRERELEASE = "1"
@@ -102,7 +102,7 @@ Check "desktop_ui flipped on"       ($cfg -match '"desktop_ui":\s*true')
 Check "prefs seeded"                (Test-Path $prefsPath)
 Check "plugin_prerelease seeded"    ((Test-Path $prefsPath) -and ((Get-Content $prefsPath -Raw) -match '"plugin_prerelease":\s*true'))
 
-# ── [2] Re-install says it kept the existing setup ────────────────────────────
+# -- [2] Re-install says it kept the existing setup ----------------------------
 Write-Output "[2] install.ps1 (re-install keeps setup)"
 Run-Pkg "install.ps1" "" "$env:TEMP\win-reinstall.out"
 Check "re-install reports kept setup" ([bool](Select-String -Path "$env:TEMP\win-reinstall.out" -Pattern "Existing setup kept" -Quiet))
@@ -110,20 +110,20 @@ Check "re-install reports kept setup" ([bool](Select-String -Path "$env:TEMP\win
 # Seed shared settings to prove a plain uninstall preserves them.
 "{}" | Out-File -FilePath (Join-Path $settingsDir "settings.json") -Encoding ascii
 
-# ── [3] Uninstall (keep settings) ─────────────────────────────────────────────
+# -- [3] Uninstall (keep settings) ---------------------------------------------
 Write-Output "[3] uninstall.ps1 (keep settings)"
 Run-Pkg "uninstall.ps1" "" "$env:TEMP\win-uninstall.out"
 Check "install dir removed"         (-not (Test-Path $installPath))
 Check "shared settings PRESERVED"   (Test-Path (Join-Path $settingsDir "settings.json"))
 
-# ── [3b] Reinstall, then uninstall -Purge → settings removed ──────────────────
+# -- [3b] Reinstall, then uninstall -Purge -> settings removed ------------------
 Write-Output "[3b] uninstall.ps1 -Purge (remove settings)"
 Run-Pkg "install.ps1" "" "$env:TEMP\win-reinstall2.out"
 Run-Pkg "uninstall.ps1" "-Purge" "$env:TEMP\win-purge.out"
 Check "install dir removed (purge)"     (-not (Test-Path $installPath))
 Check "shared settings REMOVED (purge)" (-not (Test-Path $settingsDir))
 
-# ── [4] Migration: an old Program Files install is removed + config carried ───
+# -- [4] Migration: an old Program Files install is removed + config carried ---
 Write-Output "[4] migration from Program Files"
 $oldInstall = Join-Path $env:ProgramFiles "ShelvesHub"
 New-Item -ItemType Directory -Force -Path $oldInstall | Out-Null

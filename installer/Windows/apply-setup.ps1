@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = "SilentlyContinue"
 function B($v) { return ($v -match '^(1|y|yes|true|on)$') }
 
-# Config flips — only when the installer wrote a fresh config (never clobber edits).
+# Config flips - only when the installer wrote a fresh config (never clobber edits).
 $cfgPath = Join-Path $InstallPath "shelveshub.config.json"
 if ((B $ConfigWasFresh) -and (Test-Path $cfgPath)) {
   $c = Get-Content $cfgPath -Raw
@@ -26,7 +26,7 @@ if ((B $ConfigWasFresh) -and (Test-Path $cfgPath)) {
   Set-Content -Path $cfgPath -Value $c -NoNewline
 }
 
-# Prefs — seed once (first install only). Match install.ps1: when auto-update is
+# Prefs - seed once (first install only). Match install.ps1: when auto-update is
 # off, the per-target flags fall back to their defaults.
 $userSettings = Join-Path $env:APPDATA "deck-shelves"
 $prefsPath = Join-Path $userSettings "shelveshub.json"

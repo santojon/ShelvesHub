@@ -1,4 +1,4 @@
-# One-click installer for Windows — installs PER USER (no admin needed): the
+# One-click installer for Windows - installs PER USER (no admin needed): the
 # daemon must run as you so it can write the bundle/backend/config and self-update,
 # and reach your Steam. Everything lives under %LOCALAPPDATA%.
 # Usage (online): irm https://github.com/santojon/ShelvesHub/releases/latest/download/install-windows.ps1 | iex
@@ -25,9 +25,9 @@ trap {
   break
 }
 
-Write-Output "=== ShelvesHub — Windows Installer ==="
+Write-Output "=== ShelvesHub - Windows Installer ==="
 
-# ── Migrate any older Program Files (admin) install to the current per-user one ──
+# -- Migrate any older Program Files (admin) install to the current per-user one --
 # Shared with the setup.exe via migrate.ps1 (single source of truth). Settings live
 # in %APPDATA%\deck-shelves (separate), so this never loses data.
 $userSettings = Join-Path $env:APPDATA "deck-shelves"
@@ -86,7 +86,7 @@ if ((Test-Path "$extractedDir\shelveshub.config.json") -and -not (Test-Path "$in
   $configWasFresh = $true
 }
 
-# ── Optional setup choices ─────────────────────────────────────────────────────
+# -- Optional setup choices -----------------------------------------------------
 # Read from the environment and, when run interactively, ask. Applied only on a
 # FIRST install; everything stays editable later in the ShelvesHub tab.
 function Ask($val, $q, $default) {
@@ -116,7 +116,7 @@ $prefsPath = Join-Path $userSettings "shelveshub.json"
 # Re-install: options are set on the FIRST install and never silently reconfigured
 # (an upgrade must not clobber your choices). Say so, so a re-run doesn't look idle.
 if (-not $configWasFresh -and (Test-Path $prefsPath)) {
-  Write-Output "[i] Existing setup kept — ShelvesHub is already configured on this machine."
+  Write-Output "[i] Existing setup kept - ShelvesHub is already configured on this machine."
   Write-Output "    Change any option anytime in the ShelvesHub tab (Quick Access Menu)."
 }
 if (-not (Test-Path $prefsPath)) {
@@ -141,7 +141,7 @@ if (-not (Test-Path $prefsPath)) {
 if (Test-Path "$extractedDir\backend") {
   Copy-Item -Recurse -Path "$extractedDir\backend" -Destination $installPath -Force
 }
-# Boot-animation source cuts — read from <install>\assets\boot by the boot_movie toggle.
+# Boot-animation source cuts - read from <install>\assets\boot by the boot_movie toggle.
 if (Test-Path "$extractedDir\assets") {
   Copy-Item -Recurse -Path "$extractedDir\assets" -Destination $installPath -Force
 }
@@ -155,7 +155,7 @@ $settings  = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
 # Reinstall-safe (upgrade in place): stop a running task instance and kill any
-# lingering daemon so the freshly-copied binary is the ONLY one running — else two
+# lingering daemon so the freshly-copied binary is the ONLY one running - else two
 # daemons fight over the RPC port after an upgrade and the new binary never takes.
 Stop-ScheduledTask -TaskName "ShelvesHub" -ErrorAction SilentlyContinue
 Get-Process -Name "shelveshub" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -165,7 +165,7 @@ Start-ScheduledTask -TaskName "ShelvesHub"
 if (Test-Path $tmpDir -ErrorAction SilentlyContinue) { Remove-Item -Recurse -Force $tmpDir }
 
 # ShelvesHub reaches Steam over its CEF debug port, which Steam only opens when
-# this flag file exists in its install dir — otherwise a fresh install just logs
+# this flag file exists in its install dir - otherwise a fresh install just logs
 # "connection refused" and nothing appears. Create it (needs a Steam restart).
 $cefCreated = $false
 try {

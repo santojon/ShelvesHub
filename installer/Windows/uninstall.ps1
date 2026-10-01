@@ -1,5 +1,5 @@
 # Uninstaller for the Windows .zip package path (the NSIS .exe has its own,
-# reachable from Add/Remove Programs). Per-user — no admin needed.
+# reachable from Add/Remove Programs). Per-user - no admin needed.
 # Usage (from extracted package): .\installer\uninstall.ps1 [-Purge]
 param([switch]$Purge)
 $ErrorActionPreference = "Stop"
