@@ -10,6 +10,7 @@ pub mod backend;
 pub mod bootmovie;
 pub mod cdp;
 pub mod config;
+pub mod constants;
 pub mod loader;
 pub mod logger;
 pub mod populate;

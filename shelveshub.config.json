@@ -1,7 +1,7 @@
 {
   "//": "ShelvesHub configuration. Precedence per setting: environment variable > this file > built-in default. Remove a key to use its default. Keys starting with // are comments (ignored by the parser — JSON has no real comments). Installed next to the binary; the daemon also honours SHELVES_CONFIG_FILE. See docs/troubleshooting.md.",
 
-  "// rpc_host": "Host the local RPC server binds to — the injected bundle talks to it on the same machine. Loopback by default; rarely changed.",
+  "// rpc_host": "Host the local RPC server binds to — the injected bundle talks to it on the same machine. KEEP this at 127.0.0.1 (loopback): the endpoint is token-gated but meant for this machine only; a routable address exposes it to the local network (the daemon logs a warning if you do).",
   "rpc_host": "127.0.0.1",
 
   "// rpc_port": "Port for the local RPC server. Change this if another program already uses 60123 (you'll see a bind error in the log).",
@@ -28,7 +28,10 @@
   "// force_owner": "Claim renderer ownership even when another host is present, so the plugin selects ShelvesHub. Use only when you deliberately prefer ShelvesHub over another installed loader.",
   "force_owner": false,
 
-  "// recover_cmd": "Shell command run ONCE if the daemon detects the Steam UI collapsed (a black screen where only SharedJSContext survives). Typically 'systemctl --user restart steam-launcher.service' on a Steam Deck. Empty = only pause injection and log the hint.",
+  "// desktop_ui": "Experimental: also inject while the plain desktop Steam client is on screen (not just the gamepad / Big Picture UI). false = host only in Big Picture. Can also be set per-service via SHELVES_DESKTOP_UI=1.",
+  "desktop_ui": false,
+
+  "// recover_cmd": "Shell command run ONCE if the daemon detects the Steam UI collapsed (a black screen where only SharedJSContext survives). Empty or absent = the per-platform OFFICIAL recovery (on a Steam Deck, 'systemctl --user restart steam-launcher.service'). Set a custom command to override it, or 'off' to disable auto-recovery (pause injection and log the hint only).",
   "recover_cmd": "",
 
   "// target": "Case-insensitive substring to force which renderer target is used. Empty = auto-detect the Steam shared JS context / Big Picture window (leave empty unless debugging).",

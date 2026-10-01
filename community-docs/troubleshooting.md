@@ -55,12 +55,18 @@ Full details in [coexistence.md](coexistence.md).
 
 If the Steam UI ever collapses, ShelvesHub **pauses injection** — it never
 force-restarts Steam, which only makes it worse — and, on a confirmed black
-screen, runs a recovery step for your platform (restarting the Deck's Game Mode
-session, or bringing Steam back into Big Picture on desktop). You can override
-the recovery command:
+screen, runs the **official recovery** for your platform by default (restarting the
+Deck's Game Mode session, or bringing Steam back into Big Picture on desktop) — no
+setup needed. You can override it with a custom command:
 
 ```json
 { "recover_cmd": "systemctl --user restart steam-launcher.service" }
+```
+
+…or disable auto-recovery (pause only) with `off`:
+
+```json
+{ "recover_cmd": "off" }
 ```
 
 ## Turn the host off without uninstalling

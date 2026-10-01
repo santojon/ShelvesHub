@@ -8,15 +8,11 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-/// Default Chrome DevTools Protocol host. Steam exposes CEF remote debugging
-/// on localhost when `.cef-enable-remote-debugging` is present.
-pub const DEFAULT_CEF_HOST: &str = "127.0.0.1";
-/// Steam's CEF remote-debugging port. Used by both the loader and devtools.
-pub const DEFAULT_CEF_PORT: u16 = 8080;
-/// Default host the RPC server binds to (loopback — the bundle is same-machine).
-pub const DEFAULT_RPC_HOST: &str = "127.0.0.1";
-/// Default TCP port for the host RPC server consumed by the bundle.
-pub const DEFAULT_RPC_PORT: u16 = 60123;
+// Defaults live in the central `constants` module; re-exported here so existing
+// `config::DEFAULT_*` references (loader, devtools) keep resolving unchanged.
+pub use crate::constants::defaults::{
+    DEFAULT_CEF_HOST, DEFAULT_CEF_PORT, DEFAULT_RPC_HOST, DEFAULT_RPC_PORT,
+};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -61,11 +57,12 @@ pub struct Config {
     /// client too.
     pub desktop_ui: bool,
     /// Shell command run once when the loader detects the Steam UI windows have
-    /// collapsed (a black screen where only `SharedJSContext` survives). Defaults
-    /// to a per-platform command (`default_recover_cmd`) — SteamOS restarts the
-    /// Gaming Mode session, macOS/Windows bounce Steam back into Big Picture.
-    /// `SHELVES_RECOVER_CMD` (or config `recover_cmd`) overrides it with a custom
-    /// command. Never `StartRestart` — it worsens this.
+    /// collapsed (a black screen where only `SharedJSContext` survives). By default
+    /// (unset or empty) this is the per-platform official recovery
+    /// (`default_recover_cmd`) — SteamOS restarts the Gaming Mode session,
+    /// macOS/Windows bounce Steam back into Big Picture. `SHELVES_RECOVER_CMD` (or
+    /// config `recover_cmd`) overrides it with a custom command, or `"off"` to
+    /// disable auto-recovery (pause only). Never `StartRestart` — it worsens this.
     pub recover_cmd: Option<String>,
     /// When true (`SHELVES_PRELOAD=1`), register the host runtime at document-
     /// start (browser auto-attach + `Page.addScriptToEvaluateOnNewDocument`)
@@ -160,16 +157,11 @@ impl Config {
             },
             native_qam: cfg_bool(&file, "SHELVES_NATIVE_QAM", "native_qam"),
             desktop_ui: cfg_bool(&file, "SHELVES_DESKTOP_UI", "desktop_ui"),
-            recover_cmd: env::var("SHELVES_RECOVER_CMD")
-                .ok()
-                .filter(|s| !s.is_empty())
-                .or_else(|| {
-                    file.get("recover_cmd")
-                        .and_then(Value::as_str)
-                        .filter(|s| !s.is_empty())
-                        .map(String::from)
-                })
-                .or_else(default_recover_cmd),
+            recover_cmd: resolve_recover_cmd(env::var("SHELVES_RECOVER_CMD").ok().or_else(|| {
+                file.get("recover_cmd")
+                    .and_then(Value::as_str)
+                    .map(String::from)
+            })),
             preload: env_bool("SHELVES_PRELOAD"),
             prerelease: cfg_bool(&file, "SHELVES_PRERELEASE", "prerelease"),
             // The owner-settle wait exists only to avoid racing a plugin loader's
@@ -344,17 +336,33 @@ fn cfg_bool(file: &Value, env_key: &str, json_key: &str) -> bool {
     file.get(json_key).and_then(Value::as_bool).unwrap_or(false)
 }
 
-/// Per-platform default recovery command, run once when the loader detects the
-/// Steam UI windows have collapsed (a black screen). Chosen to be the least
-/// disruptive action that restores the interface on each host; an explicit
-/// `SHELVES_RECOVER_CMD` / config `recover_cmd` overrides it with a custom command.
+/// Map a raw `recover_cmd` override (env over file) to the effective command:
+///   `"off"` (any case, trimmed) → `None` (explicit opt-out: pause only);
+///   a non-empty value → that custom command;
+///   empty or absent → the per-platform official recovery (the default).
+fn resolve_recover_cmd(raw: Option<String>) -> Option<String> {
+    match raw.as_deref().map(str::trim) {
+        Some(v) if v.eq_ignore_ascii_case("off") => None,
+        Some(v) if !v.is_empty() => Some(v.to_string()),
+        _ => default_recover_cmd(),
+    }
+}
+
+/// Per-platform default recovery command — the DEFAULT when `recover_cmd` is unset
+/// or empty — run once when the loader detects the Steam UI windows have collapsed
+/// (a black screen). Chosen to be the least disruptive action that restores the
+/// interface on each host; a custom `SHELVES_RECOVER_CMD` / config `recover_cmd`
+/// replaces it, and the literal `"off"` disables auto-recovery (pause only).
 fn default_recover_cmd() -> Option<String> {
     let cmd = if cfg!(target_os = "linux") {
         // SteamOS / Steam Deck: restart the Gaming Mode session service.
         "systemctl --user restart steam-launcher.service"
     } else if cfg!(target_os = "macos") {
         // macOS (always a sole host): bounce Steam and return to Big Picture.
-        "osascript -e 'tell application \"Steam\" to quit'; sleep 5; open -a Steam; sleep 12; open \"steam://open/bigpicture\""
+        // Ask Steam to quit, force-kill if it's wedged (the usual state on a
+        // collapse), then reopen via the URL — which relaunches Steam into Big
+        // Picture. Mirrors scripts/mac-deploy-hard.sh.
+        "osascript -e 'quit app \"Steam\"' 2>/dev/null; sleep 5; pkill -x steam_osx 2>/dev/null; sleep 2; open \"steam://open/bigpicture\""
     } else if cfg!(windows) {
         // Windows (always a sole host): nudge Steam back into Big Picture.
         "start \"\" \"steam://open/bigpicture\""
@@ -396,27 +404,5 @@ fn resolve_asset_path(env_key: &str, relative: &str) -> PathBuf {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn config_file_overrides_default() {
-        // A key not present in the environment, so the file value is used.
-        const UNSET: &str = "SHELVES_UNSET_TEST_KEY_XYZ";
-        let file = serde_json::json!({
-            "rpc_host": "0.0.0.0",
-            "rpc_port": 60124,
-            "owner_settle_secs": 25,
-            "native_qam": true
-        });
-        assert_eq!(cfg_string(&file, UNSET, "rpc_host", "127.0.0.1"), "0.0.0.0");
-        assert_eq!(cfg_u16(&file, UNSET, "rpc_port", 60123), 60124);
-        assert_eq!(cfg_u64(&file, UNSET, "owner_settle_secs", 0), 25);
-        assert!(cfg_bool(&file, UNSET, "native_qam"));
-        // Missing key → built-in default.
-        assert_eq!(cfg_u16(&file, UNSET, "absent", 8080), 8080);
-        assert!(!cfg_bool(&file, UNSET, "absent"));
-        // Empty / null file → default.
-        assert_eq!(cfg_u16(&Value::Null, UNSET, "rpc_port", 60123), 60123);
-    }
-}
+#[path = "tests/config_tests.rs"]
+mod tests;

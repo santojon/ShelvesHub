@@ -79,6 +79,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive # @deck-shelves/host contract → HOST_API_VERSION (build.rs)
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -226,6 +228,8 @@ jobs:
           New-Item -ItemType Directory -Force nsis\payload | Out-Null
           Copy-Item dist\* nsis\payload\ -Recurse -Force
           Copy-Item installer\Windows\register-task.ps1 nsis\payload\ -Force
+          Copy-Item installer\Windows\apply-setup.ps1 nsis\payload\ -Force
+          Copy-Item installer\Windows\migrate.ps1 nsis\payload\ -Force
           Copy-Item installer\Windows\shelveshub.nsi nsis\ -Force
           Copy-Item assets\icons\icon.ico nsis\icon.ico -Force
           & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" nsis\shelveshub.nsi
@@ -290,6 +294,36 @@ jobs:
         with:
           path: artifacts/
 
+      - name: Checksums + minisign signature
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd artifacts
+          # SHA256SUMS over every release file, listed by basename (the asset name
+          # the daemon verifies against). Excludes the sums/sig files themselves.
+          : > SHA256SUMS
+          find . -type f ! -name 'SHA256SUMS' ! -name 'SHA256SUMS.minisig' -print0 \
+            | while IFS= read -r -d '' f; do
+                printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$(basename "$f")" >> SHA256SUMS
+              done
+          sort -k2 -o SHA256SUMS SHA256SUMS
+          echo "== SHA256SUMS =="; cat SHA256SUMS
+          # Sign with minisign when the CI secret is configured; otherwise publish
+          # the sums unsigned (the daemon then verifies the hash but logs that the
+          # signature was unavailable). Set MINISIGN_SECRET_KEY + MINISIGN_PASSWORD
+          # (from `minisign -G`) to enable tamper-proof signature verification.
+          if [ -n "${MINISIGN_SECRET_KEY:-}" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+            printf '%s\n' "$MINISIGN_SECRET_KEY" > mkey
+            printf '%s\n' "${MINISIGN_PASSWORD:-}" | minisign -S -s mkey -m SHA256SUMS -x SHA256SUMS.minisig
+            rm -f mkey
+            echo "SHA256SUMS signed with minisign."
+          else
+            echo "MINISIGN_SECRET_KEY not set — publishing SHA256SUMS without a signature."
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -303,4 +337,7 @@ jobs:
           body: ${{ steps.notes.outputs.body }}
           generate_release_notes: ${{ steps.notes.outputs.body == '' }}
           prerelease: ${{ steps.tag.outputs.prerelease }}
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*
+            artifacts/SHA256SUMS
+            artifacts/SHA256SUMS.minisig

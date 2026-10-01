@@ -55,9 +55,27 @@ SERVICE_DIR="$FAKEHOME/.config/systemd/user"
 SETTINGS_DIR="$FAKEHOME/.local/share/deck-shelves"
 
 run_installer() { # run <script> [args...] from the package dir
+  # A plain container runs as root; this laydown test only proves the SCRIPTS
+  # place/remove the right files, so bypass the per-user root guard here (the
+  # guard itself is checked separately in [0] below).
   local script="$1"; shift
-  ( cd "$PKG" && HOME="$FAKEHOME" PATH="$STUB:$PATH" SCLOG_TARGET="$SCLOG" bash "$script" "$@" )
+  ( cd "$PKG" && HOME="$FAKEHOME" PATH="$STUB:$PATH" SCLOG_TARGET="$SCLOG" \
+      SHELVES_ALLOW_ROOT=1 bash "$script" "$@" )
 }
+
+# ── Root guard (only meaningful when we are actually root, e.g. in CI) ────────
+# The installer must REFUSE to run as root WITHOUT the override, so a user who
+# `sudo`s it gets an explanation instead of a root-owned install.
+if [[ "$(id -u)" -eq 0 ]]; then
+  echo "[0] install.sh refuses root (no override)"
+  if ( cd "$PKG" && HOME="$FAKEHOME" PATH="$STUB:$PATH" bash installer/install.sh \
+        >/tmp/root.out 2>&1 ); then
+    echo "  [X]  install.sh should have refused to run as root"; FAILS=$((FAILS + 1))
+  else
+    check "refuses root with an explanation" grep -q "Don't run this as root" /tmp/root.out
+    check "left no install dir behind"        test ! -e "$INSTALL_DIR"
+  fi
+fi
 
 # ── Install ───────────────────────────────────────────────────────────────────
 echo "[1] install.sh"

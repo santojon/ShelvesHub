@@ -64,7 +64,7 @@ O serviço também **se mantém atualizado, junto com o pacote**: com as atualiz
 - **Não precisa de carregador de plugins** — hospeda o Deck Shelves sozinho injetando seu pacote na interface Big Picture do Steam via Chrome DevTools Protocol.
 - **Coexiste com outro host** — se um carregador de plugins também estiver instalado, os dois rodam lado a lado: exatamente uma aba do Deck Shelves aparece, as abas de ambos os hosts editam as mesmas configurações, e só um grava as configurações por vez.
 - **Multiplataforma** — SteamOS e Steam Deck são o alvo principal; também roda em Linux, macOS e Windows, cada um com um instalador de um clique e um script simples.
-- **Linux ARM64** — pacotes `aarch64` nativos para SteamOS e Linux, com instalador e autoatualização cientes da arquitetura (verificam o tipo de máquina ELF do binário, então nunca cruzam arquiteturas); o mesmo link de download resolve para a build certa conforme o dispositivo. A validação em hardware ARM64 real está em andamento.
+- **Linux ARM64** — pacotes `aarch64` nativos para SteamOS e Linux, com instalador e autoatualização cientes da arquitetura (verificam o tipo de máquina ELF do binário, então nunca cruzam arquiteturas); o mesmo link de download resolve para a build certa conforme o dispositivo. A validação em hardware ARM64 real está em andamento, então ARM64 é **experimental** por ora. A build ARM64 segue a mesma baseline de glibc da build x86_64, então uma distro muito antiga ou só-musl pode precisar de um glibc mais novo. ARM de 32 bits (`armv7`) está fora de escopo — não há cliente Steam para ele.
 - **Binário universal para macOS** — o download para macOS roda nativamente em Apple Silicon e Intel; o CI verifica que o binário distribuído é universal.
 - **Aba nativa no Quick Access** — abre o editor do Deck Shelves diretamente, com botões e alternâncias reais do Steam, um anel de foco de controle e um ícone com a cor do tema; um painel de recuperação aparece em vez disso se o pacote não conseguir carregar.
 - **Traz sua própria cópia do Deck Shelves** — reaproveita uma cópia local, copia de um carregador instalado, ou baixa a versão mais recente (`SHELVES_PRERELEASE=1` habilita pré-lançamentos).
@@ -126,15 +126,15 @@ Baixe `shelveshub.desktop` do [último lançamento](https://github.com/santojon/
 
 ### Linux (um clique ou a partir do pacote)
 
-Um clique: baixe `shelveshub-linux.desktop` do [último lançamento](https://github.com/santojon/ShelvesHub/releases/latest), abra-o, e siga a instrução no terminal (ele baixa e instala, pedindo sudo).
+Um clique: baixe `shelveshub-linux.desktop` do [último lançamento](https://github.com/santojon/ShelvesHub/releases/latest), abra-o, e siga a instrução no terminal. Sem sudo (ele pode pedir uma vez só se encontrar e precisar remover uma instalação anterior em nível de sistema).
 
-A partir do pacote: baixe `shelveshub-linux.tar.gz`, extraia, e execute:
+A partir do pacote: baixe `shelveshub-linux.tar.gz`, extraia, e execute (como seu usuário normal, **não** com sudo):
 
 ```bash
-sudo bash installer/install.sh
+bash installer/install.sh
 ```
 
-Gerencia um `shelveshub.service` de nível de sistema via systemd.
+Instala em `~/.local/share/shelveshub` e registra um `shelveshub.service` de nível de usuário (`systemctl --user`).
 
 ### macOS
 
@@ -142,7 +142,30 @@ Baixe o **`Install ShelvesHub.app`** (um aplicativo instalador clicável com o �
 
 ### Windows
 
-Baixe o **`shelveshub-setup.exe`** (um instalador com o ícone do ShelvesHub) do último lançamento e execute-o, aceitando o prompt do UAC. Um script simples `install-windows.bat` também é publicado.
+Baixe o **`shelveshub-setup.exe`** (um instalador com o ícone do ShelvesHub) do último lançamento e execute-o — ele instala **por usuário** (em `%LOCALAPPDATA%`, sem direitos de administrador). Um script simples `install-windows.bat` também é publicado.
+
+### Opções de instalação
+
+Na **primeira** instalação os instaladores por script fazem algumas perguntas opcionais (num terminal), ou as pegam do ambiente para uma instalação via `curl | bash` — nada é perguntado quando redirecionado por pipe. Cada uma é semeada uma vez e continua editável depois na aba do ShelvesHub, então você também pode só aceitar os padrões.
+
+| Variável | Padrão | O que faz |
+|---|---|---|
+| `SHELVES_FORCE_OWNER` | off | Hospeda o Deck Shelves mesmo com um carregador de plugins presente (modo cooperativo). |
+| `SHELVES_NATIVE_QAM` | on | Adiciona a aba própria do ShelvesHub no Quick Access. |
+| `SHELVES_DESKTOP_UI` | off | Também injeta no cliente desktop comum (experimental). |
+| `SHELVES_AUTO_UPDATE` | off | Interruptor mestre das atualizações automáticas. |
+| `SHELVES_AUTO_UPDATE_HUB` | on | Autoatualiza o próprio ShelvesHub (quando o mestre está ligado). |
+| `SHELVES_AUTO_UPDATE_PLUGIN` | on | Autoatualiza o Deck Shelves (quando o mestre está ligado). |
+| `SHELVES_HUB_PRERELEASE` | off | Inclui pré-lançamentos do ShelvesHub. |
+| `SHELVES_PLUGIN_PRERELEASE` | off | Inclui pré-lançamentos do Deck Shelves. |
+
+Cada uma aceita `1`/`y`/`true`/`on` ou `0`/`n`/`false`/`off`. Exemplo (SteamOS/Linux/macOS):
+
+```sh
+SHELVES_AUTO_UPDATE=1 SHELVES_FORCE_OWNER=1 bash <(curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/install-steamos.sh)
+```
+
+No Windows, o `setup.exe` mostra uma página "Setup options" com checkboxes para as mesmas escolhas; o instalador via script/zip pergunta ou lê as variáveis `SHELVES_*`. Qualquer uma também pode ser alterada depois na aba do ShelvesHub.
 
 ---
 
@@ -153,7 +176,7 @@ Cada desinstalador para e remove o serviço em segundo plano e o diretório de i
 | Plataforma | Um clique | Ou manualmente |
 |---|---|---|
 | SteamOS / Steam Deck | `uninstall-shelveshub.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (cópia instalada), ou `bash uninstall.sh` a partir do pacote extraído |
-| Linux | `uninstall-shelveshub-linux.desktop` | `sudo bash /opt/shelveshub/uninstall.sh` (ou `sudo bash uninstall.sh` a partir do pacote) |
+| Linux | `uninstall-shelveshub-linux.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (cópia instalada), ou `bash uninstall.sh` a partir do pacote extraído |
 | macOS | `uninstall-mac.command` | `bash ~/.local/share/shelveshub/uninstall_mac.sh` — adicione `--purge` para também remover as configurações e a flag de depuração remota do Steam |
 | Windows | `uninstall-windows.bat`, ou **Configurações → Aplicativos** | execute `uninstall.exe` na pasta de instalação, ou `installer\uninstall.ps1` a partir do pacote |
 

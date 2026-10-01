@@ -38,17 +38,17 @@ systemctl --user stop shelveshub
 
 ```bash
 # Extract shelveshub-linux.tar.gz (x86_64) or shelveshub-linux-aarch64.tar.gz
-# (ARM64), then:
-sudo bash installer/install.sh
+# (ARM64), then (as your normal user, NOT with sudo):
+bash installer/install.sh
 ```
 
-Installs to `/opt/shelveshub` and registers a system-level `shelveshub.service`.
+Installs to `~/.local/share/shelveshub` and registers a user-level `shelveshub.service`.
 
 **Service commands:**
 
 ```bash
-systemctl status shelveshub
-sudo systemctl restart shelveshub
+systemctl --user status shelveshub
+systemctl --user restart shelveshub
 ```
 
 ---
@@ -82,7 +82,7 @@ launchctl list | grep shelves
 
 1. Download `install-windows.bat` from the latest release.
 2. Double-click it and accept the UAC prompt (admin required).
-3. The installer downloads the package, copies to `C:\Program Files\ShelvesHub`, and registers a Task Scheduler entry that starts the loader at boot.
+3. The installer downloads the package, copies to `%LOCALAPPDATA%\ShelvesHub` (per-user, no admin needed), and registers a per-user Task Scheduler entry that starts it at logon.
 
 ### From package
 

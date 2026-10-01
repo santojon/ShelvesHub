@@ -34,12 +34,12 @@ systemctl --user restart shelveshub
 ## Linux
 
 **Pelo pacote:** extraia `shelveshub-linux.tar.gz` e rode
-`sudo bash installer/install.sh`. Instala em `/opt/shelveshub` como serviço em
-nível de sistema.
+`bash installer/install.sh` (como seu usuário normal, **não** com sudo). Instala em
+`~/.local/share/shelveshub` como serviço em nível de usuário.
 
 ```bash
-systemctl status shelveshub
-sudo systemctl restart shelveshub
+systemctl --user status shelveshub
+systemctl --user restart shelveshub
 ```
 
 ## macOS

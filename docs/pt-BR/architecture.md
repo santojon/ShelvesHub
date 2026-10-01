@@ -176,7 +176,7 @@ O runtime de host injetado é `runtime/shelves-host.js` — um script autocontid
 o loader avalia no renderizador. Ele instala `window.__SHELVES_HOST__` (o
 `HostApi` concreto) e a aba nativa de Acesso Rápido, e delega o RPC ao
 servidor Rust. O contrato que ele implementa é o pacote compartilhado `@deck-shelves/host`
-(`HOST_API_VERSION = "1.2.0"`, apenas aditivo após a linha de base 1.0); seu código-fonte
+(`HOST_API_VERSION = "1.3.0"`, apenas aditivo após a linha de base 1.0); seu código-fonte
 tipado é incluído como o submódulo `host/` (`host/src/contract/`).
 
 Veja [docs/host-api.md](./host-api.md) para a referência completa do contrato.

@@ -11,14 +11,9 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::time::Duration;
 
-/// Reject bodies larger than this (a settings document is a few KiB) — bounds the
-/// per-connection allocation so a bogus Content-Length can't exhaust memory.
-const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
-/// Per-connection read timeout: a slow/stalled client (slowloris) is dropped
-/// instead of holding a thread forever.
-const READ_TIMEOUT: Duration = Duration::from_secs(15);
+use crate::constants::defaults::MAX_BODY_BYTES;
+use crate::constants::timers::READ_TIMEOUT;
 
 use serde_json::Value;
 
@@ -84,6 +79,21 @@ pub fn serve(addr: &str) {
     let listener = match TcpListener::bind(addr) {
         Ok(l) => {
             log_info("rpc", &format!("Listening on {addr}"));
+            // The control endpoint is token-gated, but it is meant for loopback
+            // only. Surface a non-loopback bind loudly — someone set rpc_host to a
+            // routable address, exposing the endpoint to the local network.
+            let loopback = addr.starts_with("127.")
+                || addr.starts_with("localhost")
+                || addr.starts_with("[::1]");
+            if !loopback {
+                log_warning(
+                    "rpc",
+                    &format!(
+                        "Control endpoint bound to a NON-loopback address ({addr}) — it is reachable \
+                         from the local network. Keep rpc_host at 127.0.0.1 unless you intend this."
+                    ),
+                );
+            }
             l
         }
         Err(e) => {
@@ -346,10 +356,14 @@ fn dispatch(body: &str) -> String {
             ok("true".to_string())
         }
         // Health of the hosted Python backend (loader-local, not proxied).
+        // `python_available` surfaces a missing interpreter (e.g. a minimal ARM
+        // distro without python3) in diagnostics before the first data call fails.
         Some("getBackendStatus") => ok(format!(
-            r#"{{"configured":{},"running":{}}}"#,
+            r#"{{"configured":{},"running":{},"python":{},"python_available":{}}}"#,
             backend::enabled(),
-            backend::is_running()
+            backend::is_running(),
+            serde_json::Value::String(backend::python_bin().to_string()),
+            backend::python_available()
         )),
         // Manual bundle re-download (the fallback panel's "download" action):
         // fetch the newest release into the bundle path; the loop re-injects it.
@@ -819,82 +833,5 @@ fn write_response(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn constant_time_eq_matches_only_equal() {
-        assert!(constant_time_eq(b"abc", b"abc"));
-        assert!(constant_time_eq(b"", b""));
-        assert!(!constant_time_eq(b"abc", b"abd"));
-        assert!(!constant_time_eq(b"abc", b"ab"));
-        assert!(!constant_time_eq(b"", b"x"));
-    }
-
-    #[test]
-    fn recover_cmd_is_not_rpc_editable() {
-        // recover_cmd runs through a shell — it must never be settable over RPC.
-        assert!(!EDITABLE_CONFIG_KEYS.contains(&"recover_cmd"));
-    }
-
-    #[test]
-    fn backend_proxy_allowlist_bounds_the_surface() {
-        // Real API methods pass; arbitrary Python attributes do not.
-        assert!(BACKEND_METHODS.contains(&"get_settings"));
-        assert!(BACKEND_METHODS.contains(&"write_json_file"));
-        assert!(!BACKEND_METHODS.contains(&"os.system"));
-        assert!(!BACKEND_METHODS.contains(&"__import__"));
-        assert!(!BACKEND_METHODS.contains(&"eval"));
-    }
-
-    #[test]
-    fn dispatches_ping() {
-        assert_eq!(
-            dispatch(r#"{"method":"ping"}"#),
-            r#"{"ok":true,"result":"pong"}"#
-        );
-    }
-
-    #[test]
-    fn dispatches_is_injected() {
-        state::set_injected(false);
-        assert_eq!(
-            dispatch(r#"{"method":"isInjected"}"#),
-            r#"{"ok":true,"result":false}"#
-        );
-    }
-
-    #[test]
-    fn dispatches_host_api_version() {
-        assert_eq!(
-            dispatch(r#"{"method":"getHostApiVersion"}"#),
-            format!(r#"{{"ok":true,"result":"{}"}}"#, crate::HOST_API_VERSION)
-        );
-    }
-
-    #[test]
-    fn dispatches_bundle_ready() {
-        state::set_bundle_ready(false);
-        assert_eq!(
-            dispatch(r#"{"method":"bundleReady"}"#),
-            r#"{"ok":true,"result":true}"#
-        );
-        assert!(state::is_bundle_ready());
-    }
-
-    #[test]
-    fn rejects_unknown_method() {
-        assert_eq!(
-            dispatch(r#"{"method":"nope"}"#),
-            r#"{"ok":false,"error":"unknown method: nope"}"#
-        );
-    }
-
-    #[test]
-    fn rejects_garbage() {
-        assert_eq!(
-            dispatch("not json"),
-            r#"{"ok":false,"error":"missing or invalid method"}"#
-        );
-    }
-}
+#[path = "tests/rpc_tests.rs"]
+mod tests;

@@ -10,6 +10,20 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **Notifications now show up when running without a plugin loader.** ShelvesHub's
+  own toasts — update available, suggestions, settings recovery — appear on screen
+  in standalone mode instead of silently doing nothing.
+- **The host finishes its own update on restart.** It now downloads and stages a
+  newer ShelvesHub (binary and runtime together) before prompting, so restarting
+  actually applies it — and it checks even alongside a plugin loader.
+- **Windows installs per-user now — no administrator rights.** ShelvesHub installs
+  under your own profile and runs as you at logon, so it can update itself and
+  reach Steam without admin. Its self-update also checks the download's CPU
+  architecture on Windows now, like it already did on Linux.
+- **Updates and installs are verified.** The self-update checks a signature and
+  checksum before applying, and the installers verify the downloaded package — so
+  a corrupted or tampered download is refused instead of installed.
+
 ## [0.3.0] - 2026-09-26
 
 - **Tighter security for the local control channel.** The background service's

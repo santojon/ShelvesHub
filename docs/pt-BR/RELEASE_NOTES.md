@@ -10,6 +10,23 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **As notificações agora aparecem quando rodando sem um carregador de plugins.**
+  Os avisos do próprio ShelvesHub — atualização disponível, sugestões, recuperação
+  de configurações — aparecem na tela no modo standalone em vez de não fazer nada
+  silenciosamente.
+- **O host conclui a própria atualização ao reiniciar.** Ele agora baixa e prepara
+  um ShelvesHub mais novo (binário e runtime juntos) antes de avisar, então
+  reiniciar de fato aplica — e ele verifica até ao lado de um carregador de plugins.
+- **No Windows a instalação agora é por usuário — sem direitos de administrador.**
+  O ShelvesHub instala no seu próprio perfil e roda como você no login, então
+  consegue se autoatualizar e alcançar o Steam sem admin. A autoatualização também
+  verifica a arquitetura de CPU do download no Windows agora, como já fazia no Linux.
+- **Atualizações e instalações são verificadas.** A autoatualização confere uma
+  assinatura e um checksum antes de aplicar, e os instaladores verificam o pacote
+  baixado — então um download corrompido ou adulterado é recusado em vez de instalado.
+
+## [0.3.0] - 2026-09-26
+
 - **Segurança reforçada no canal de controle local.** O endpoint local do serviço
   em segundo plano agora exige uma chave privada por sessão e só aceita requisições
   do próprio Steam — outros programas locais e páginas web não conseguem mais

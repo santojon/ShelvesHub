@@ -70,6 +70,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive # @deck-shelves/host contract → HOST_API_VERSION (build.rs)
 
       - uses: dtolnay/rust-toolchain@stable
         with:

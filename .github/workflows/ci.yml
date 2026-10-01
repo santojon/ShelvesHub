@@ -18,6 +18,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
     steps:
       - uses: actions/checkout@v4
@@ -50,12 +51,20 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-  # Windows is compile-validated (check + clippy) but not unit-tested here — the
-  # daemon builds on Windows (see build.yml) and Windows releases ship without a
-  # dedicated hardware test for now; a real Windows install test is tracked
-  # separately.
+      # Installer lifecycle on macOS (laydown, options, root-guard, settings
+      # keep/purge, install.log) — the native counterpart to the Linux
+      # docker-harness install-scenario. launchctl is stubbed; no Steam needed.
+      - name: Installer lifecycle (macOS)
+        if: runner.os == 'macOS'
+        run: bash scripts/install-scenario-mac.sh
+
+  # Windows is compile-validated (check + clippy) and the installer's file
+  # lifecycle is exercised natively (laydown, options, Program Files migration,
+  # settings keep/purge, install.log) under a redirected per-user profile. What
+  # still needs real hardware is the end-to-end inject into a running Steam.
   windows-check:
     runs-on: windows-latest
+    timeout-minutes: 30
     if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +90,12 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+
+      # Installer lifecycle on Windows (laydown, options, migration from Program
+      # Files, settings keep/purge, install.log) under a redirected per-user
+      # profile. The scheduled task is registered for real and cleaned up; no Steam.
+      - name: Installer lifecycle (Windows)
+        run: powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-scenario-win.ps1
 
   # Dependency vulnerability audit. Non-blocking history: keep it green by
   # bumping advised crates; a real advisory should fail the build.
@@ -221,6 +236,9 @@ jobs:
   # PR. The full emulated ARM64 runtime harness is docker-harness-arm64 below.
   linux-arm64-check:
     runs-on: ubuntu-latest
+    # Whole-job cap: a wedged apt/network step fails fast instead of burning the
+    # 6h GitHub default (this job normally finishes in ~8 min).
+    timeout-minutes: 25
     if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
     steps:
       - uses: actions/checkout@v4
@@ -241,10 +259,22 @@ jobs:
           key: ${{ runner.os }}-cargo-arm64-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-arm64-
 
+      # apt on the hosted runner can wedge waiting for the dpkg lock held by the
+      # runner's own unattended-upgrades, or on a slow mirror. Bound the step, wait
+      # for the lock, and retry a few times instead of hanging the whole job.
       - name: Install ARM64 linker
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo systemctl stop unattended-upgrades 2>/dev/null || true
+          for i in 1 2 3 4 5; do
+            sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu && break
+            echo "apt attempt $i failed; waiting for any dpkg lock…"
+            sudo fuser -k /var/lib/dpkg/lock-frontend 2>/dev/null || true
+            sleep 15
+          done
+          command -v aarch64-linux-gnu-gcc >/dev/null || { echo "::error::aarch64 linker install failed"; exit 1; }
 
       - name: ARM64 check + release build
         env:

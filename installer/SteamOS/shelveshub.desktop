@@ -3,7 +3,7 @@ Type=Application
 Name=Install ShelvesHub
 GenericName=ShelvesHub Installer
 Comment=Download and install ShelvesHub for Steam Deck
-Exec=bash -c "T=/tmp/shelveshub-install && rm -rf $T && mkdir -p $T && A=$(uname -m) && case $A in x86_64|amd64) P=shelveshub-steamos.tar.gz ;; aarch64|arm64) P=shelveshub-steamos-aarch64.tar.gz ;; *) echo Unsupported architecture: $A; echo 'Press Enter to close...'; read; exit 1 ;; esac && echo Downloading $P... && curl -fsSL https://github.com/santojon/ShelvesHub/releases/latest/download/$P | tar xz -C $T && (cd $T && bash installer/install.sh) && rm -rf $T; echo; echo 'Press Enter to close...'; read"
+Exec=bash -c "T=/tmp/shelveshub-install && rm -rf $T && mkdir -p $T && A=$(uname -m) && case $A in x86_64|amd64) P=shelveshub-steamos.tar.gz ;; aarch64|arm64) P=shelveshub-steamos-aarch64.tar.gz ;; *) echo Unsupported architecture: $A; echo 'Press Enter to close...'; read </dev/tty || sleep 10; exit 1 ;; esac && U=https://github.com/santojon/ShelvesHub/releases/latest/download && echo Downloading $P... && curl -fsSL $U/$P -o $T/$P && { if curl -fsSL $U/SHA256SUMS -o $T/SHA256SUMS 2>/dev/null; then echo Verifying checksum... && (cd $T && sha256sum -c --ignore-missing SHA256SUMS) || { echo 'Checksum FAILED - aborting.'; exit 1; }; else echo No SHA256SUMS in release - skipping checksum.; fi; } && tar xzf $T/$P -C $T && (cd $T && bash installer/install.sh) && rm -rf $T; echo; echo 'Press Enter to close (log: ~/.local/share/shelveshub/install.log)...'; read </dev/tty || sleep 10"
 Terminal=true
 Icon=system-software-install
 Categories=Utility;System;

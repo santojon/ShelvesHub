@@ -8,6 +8,95 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- **The installer can set your key options up front.** Choose cooperative hosting
+  (`force_owner`), the Quick Access tab, desktop-client injection, and automatic
+  updates + pre-release channels at install time — a prompt when you run the
+  installer in a terminal, or `SHELVES_*` environment variables for a
+  `curl | bash` install. They're seeded once and stay editable in the ShelvesHub
+  tab. On Windows every path offers them: the `setup.exe` shows a "Setup options"
+  page of checkboxes, and the script/zip installer prompts or reads `SHELVES_*`.
+
+### Security
+- **Self-update is now verified before it replaces anything.** The daemon checks
+  the release's `SHA256SUMS` — minisign-signed with a public key baked into the
+  daemon — and the downloaded archive's SHA-256 against it; a bad signature or
+  hash aborts the update. Downloads now extract into a private (0700) work dir,
+  and an archive with an absolute path, `..` traversal, or a symlink/device member
+  is refused. With the signing key baked in, an update whose release is **missing**
+  `SHA256SUMS` or its signature is now refused (fail-closed), not just one that
+  fails to verify; the `SHELVES_ALLOW_UNSIGNED_UPDATE=1` escape hatch is dev-only.
+- **Installers verify the download's checksum.** The SteamOS, Linux, macOS and
+  Windows installers — including the one-click SteamOS/Linux desktop launchers —
+  check the downloaded package against the release's `SHA256SUMS` before installing,
+  so a corrupted or tampered download is caught (a mismatch aborts; a release without
+  `SHA256SUMS` still installs).
+- **The Linux/SteamOS installer refuses to run as root.** It installs per-user and
+  must run as you to reach your Steam, so running it with `sudo` now stops with an
+  explanation instead of creating a root-owned install (override for system images:
+  `SHELVES_ALLOW_ROOT=1`).
+
+### Changed
+- **Black-screen recovery has a clear default and opt-out.** On a confirmed Steam UI
+  collapse the host runs the per-platform official recovery by default (empty or unset
+  `recover_cmd`) — restarting the Deck's Gaming Mode session, or bringing Steam back
+  into Big Picture on desktop — with no setup. Set `recover_cmd` to a custom command to
+  override it, or to `off` to disable auto-recovery (pause only). The docs and config
+  comment that previously said "empty = pause only" were wrong and are corrected.
+- **The installer app icon no longer appears on a plain white square.** The macOS
+  and Windows installer icons now carry the site's dark background (with its blue
+  glow); the transparent tab/favicon icons are unchanged.
+- **Installing migrates an old root/system install to the per-user layout — without
+  losing data.** On every platform, a prior root-level (or Windows Program Files /
+  admin) install and its service are removed and replaced by the current per-user
+  install. Your `shelveshub.config.json` is carried over, and if the old install kept
+  your Deck Shelves settings under root, they're rescued to your account (only when
+  you don't already have your own — never overwritten). Your settings live in a
+  separate directory, so they're never touched otherwise. On Windows this runs from
+  both the `setup.exe` and the script/zip installer (shared migration step).
+- **Windows now installs per-user — no administrator rights.** ShelvesHub installs
+  under `%LOCALAPPDATA%\ShelvesHub` and runs as you at logon, so it can manage its
+  own bundle/backend/config, self-update, and reach your Steam. Previously it went
+  to `Program Files` with a system task that often couldn't write there.
+- **The shared host contract is now `1.3.0`.** The `HostApi` version reported to the
+  bundle moves to `1.3.0`, documenting the route-patch surface (`routes.addPatch` /
+  `removePatch` and the `RoutePatch` shape) alongside the host handshake and
+  lifecycle teardown added earlier. Additive and backward-compatible — a bundle built
+  against `1.2.0` runs unchanged.
+- **Backend status now reports the Python interpreter.** `getBackendStatus` includes the
+  interpreter name and whether it's actually runnable, so a device missing `python3` (some
+  minimal ARM setups) shows up in diagnostics instead of only failing at the first data call.
+
+### Fixed
+- **A failed install no longer disappears without a trace.** The Linux, SteamOS,
+  macOS **and Windows** installers now write the whole run to a log next to the install
+  (`install.log`) and print a clear failure line, and the desktop launcher's pause reads
+  from the terminal (with a short fallback wait) so the window doesn't vanish instantly on
+  a console-first device — you can see, or afterwards read, why an install stopped.
+- **Plugin updates no longer go silent under a plugin loader.** When ShelvesHub was
+  forced to host over a loader (cooperative mode), Deck Shelves hid its own "update
+  available" banner expecting the host to install it — but the host can't replace a
+  loader-injected copy, so nothing updated. The host now reports it can self-install
+  a plugin update only when it actually injects the bundle (standalone), so under any
+  loader the plugin keeps showing its own update banner.
+- **Windows self-update now verifies the download's CPU architecture.** A PE
+  machine check (x64 vs ARM64) mirrors the existing Linux ELF check, so a
+  wrong-architecture binary is rejected before it replaces the running one.
+- **The compatibility version can no longer silently drift.** A release build now
+  fails if the shared Deck Shelves contract is missing, instead of quietly falling
+  back to an old version number.
+- **Notifications now appear in standalone (no-loader) mode.** When ShelvesHub
+  hosts Deck Shelves on its own, its toasts (update available, suggestions,
+  settings recovery, and so on) silently did nothing, because this Steam build
+  has no notification-display API. The host now renders them itself as a small
+  on-screen toast. Under a plugin loader nothing changes — the loader still shows
+  them.
+- **The hub now applies its own update on restart.** It detected a newer release
+  and showed "restart to apply", but nothing was staged, so restarting kept the
+  old version. It now downloads and stages the new binary **and** its runtime
+  before the notice, so a restart finishes the update — and it checks even while
+  coexisting with a plugin loader.
+
 ## [0.3.0] - 2026-09-26
 
 ### Security

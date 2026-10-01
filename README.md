@@ -64,7 +64,7 @@ The service also **keeps itself and the bundle current**: with automatic updates
 - **No plugin loader required** — hosts Deck Shelves by itself by injecting its bundle into the Steam Big Picture UI over the Chrome DevTools Protocol.
 - **Coexists with another host** — if a plugin loader is also installed, the two run side by side: exactly one Deck Shelves tab shows, both hosts' tabs edit the same settings, and only one writes settings at a time.
 - **Cross-platform** — SteamOS and the Steam Deck are the primary target; also Linux, macOS and Windows, each with a one-click installer and a plain script.
-- **Linux ARM64** — native `aarch64` packages for SteamOS and Linux, with an architecture-aware installer and self-update (it verifies the binary's ELF machine type, so it never crosses architectures); the same download link resolves to the right build per device. Validation on real ARM64 hardware is in progress.
+- **Linux ARM64** — native `aarch64` packages for SteamOS and Linux, with an architecture-aware installer and self-update (it verifies the binary's ELF machine type, so it never crosses architectures); the same download link resolves to the right build per device. Validation on real ARM64 hardware is in progress, so ARM64 is **experimental** for now. The ARM64 build follows the same glibc baseline as the x86_64 build, so a very old or musl-only distro may need a newer glibc. 32-bit ARM (`armv7`) is out of scope — there is no Steam client for it.
 - **Universal macOS binary** — the macOS download runs natively on both Apple Silicon and Intel Macs; CI verifies the shipped binary is universal.
 - **Native Quick Access tab** — opens the Deck Shelves editor directly, with real Steam buttons and toggles, a gamepad focus ring and a theme-tinted icon; a recovery panel shows instead if the bundle can't load.
 - **Brings its own copy of Deck Shelves** — reuses a local copy, copies one from an installed loader, or downloads the newest release (`SHELVES_PRERELEASE=1` opts into pre-releases).
@@ -126,15 +126,15 @@ Download `shelveshub.desktop` from the [latest release](https://github.com/santo
 
 ### Linux (one-click or from package)
 
-One-click: download `shelveshub-linux.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest), open it, and follow the terminal prompt (it downloads and installs, prompting for sudo).
+One-click: download `shelveshub-linux.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest), open it, and follow the terminal prompt. No sudo required (it may ask once only if it finds and needs to remove a prior system-wide install).
 
-From the package instead: download `shelveshub-linux.tar.gz`, extract, and run:
+From the package instead: download `shelveshub-linux.tar.gz`, extract, and run (as your normal user, **not** with sudo):
 
 ```bash
-sudo bash installer/install.sh
+bash installer/install.sh
 ```
 
-Manages a system-level `shelveshub.service` via systemd.
+Installs to `~/.local/share/shelveshub` and registers a user-level `shelveshub.service` (`systemctl --user`).
 
 ### macOS
 
@@ -142,7 +142,30 @@ Download **`Install ShelvesHub.app`** (a clickable installer app carrying the Sh
 
 ### Windows
 
-Download **`shelveshub-setup.exe`** (a setup program carrying the ShelvesHub icon) from the latest release and run it, accepting the UAC prompt. A plain `install-windows.bat` script is also published.
+Download **`shelveshub-setup.exe`** (a setup program carrying the ShelvesHub icon) from the latest release and run it — it installs **per-user** (under `%LOCALAPPDATA%`, no administrator rights). A plain `install-windows.bat` script is also published.
+
+### Setup options
+
+On a **first** install the script installers ask a few optional questions (in a terminal), or take them from the environment for a `curl | bash` install — nothing is asked when piped. Each is seeded once and stays editable later in the ShelvesHub tab, so you can also just accept the defaults.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `SHELVES_FORCE_OWNER` | off | Host Deck Shelves even when a plugin loader is present (cooperative mode). |
+| `SHELVES_NATIVE_QAM` | on | Add ShelvesHub's own Quick Access tab. |
+| `SHELVES_DESKTOP_UI` | off | Also inject into the plain desktop client (experimental). |
+| `SHELVES_AUTO_UPDATE` | off | Master switch for automatic updates. |
+| `SHELVES_AUTO_UPDATE_HUB` | on | Auto-update ShelvesHub itself (when the master is on). |
+| `SHELVES_AUTO_UPDATE_PLUGIN` | on | Auto-update Deck Shelves (when the master is on). |
+| `SHELVES_HUB_PRERELEASE` | off | Include ShelvesHub pre-releases. |
+| `SHELVES_PLUGIN_PRERELEASE` | off | Include Deck Shelves pre-releases. |
+
+Each accepts `1`/`y`/`true`/`on` or `0`/`n`/`false`/`off`. Example (SteamOS/Linux/macOS):
+
+```sh
+SHELVES_AUTO_UPDATE=1 SHELVES_FORCE_OWNER=1 bash <(curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/install-steamos.sh)
+```
+
+On Windows, the `setup.exe` shows a "Setup options" page of checkboxes for the same choices; the script/zip installer prompts or reads the `SHELVES_*` variables. Any of them can also be changed later in the ShelvesHub tab.
 
 ---
 
@@ -153,7 +176,7 @@ Each uninstaller stops and removes the background service and the install direct
 | Platform | One-click | Or by hand |
 |---|---|---|
 | SteamOS / Steam Deck | `uninstall-shelveshub.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (installed copy), or `bash uninstall.sh` from the extracted package |
-| Linux | `uninstall-shelveshub-linux.desktop` | `sudo bash /opt/shelveshub/uninstall.sh` (or `sudo bash uninstall.sh` from the package) |
+| Linux | `uninstall-shelveshub-linux.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (installed copy), or `bash uninstall.sh` from the extracted package |
 | macOS | `uninstall-mac.command` | `bash ~/.local/share/shelveshub/uninstall_mac.sh` — add `--purge` to also remove settings and Steam's CEF debug flag |
 | Windows | `uninstall-windows.bat`, or **Settings → Apps** | run `uninstall.exe` in the install folder, or `installer\uninstall.ps1` from the package |
 

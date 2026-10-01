@@ -3,12 +3,7 @@ setlocal
 echo === ShelvesHub - Windows Uninstaller ===
 echo.
 
-net session >nul 2>&1
-if %errorLevel% neq 0 (
-    echo Requesting administrator access...
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    exit /b
-)
+REM Per-user — no elevation needed.
 
 set "URL=https://github.com/santojon/ShelvesHub/releases/latest/download/shelveshub-windows.zip"
 set "T=%TEMP%\shelveshub-uninstall"

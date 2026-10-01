@@ -8,6 +8,106 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+### Adicionado
+- **O instalador pode definir suas opções principais logo de cara.** Escolha
+  hospedagem cooperativa (`force_owner`), a aba do Quick Access, injeção no cliente
+  desktop e atualizações automáticas + canais de pré-lançamento na hora da
+  instalação — um prompt quando você roda o instalador num terminal, ou variáveis
+  de ambiente `SHELVES_*` para instalar via `curl | bash`. São semeadas uma vez e
+  continuam editáveis na aba do ShelvesHub. No Windows todos os caminhos oferecem
+  isso: o `setup.exe` mostra uma página "Setup options" com checkboxes, e o
+  instalador via script/zip pergunta ou lê `SHELVES_*`.
+
+### Segurança
+- **A autoatualização agora é verificada antes de substituir qualquer coisa.** O
+  daemon confere o `SHA256SUMS` do lançamento — assinado com minisign por uma chave
+  pública embutida no daemon — e o SHA-256 do arquivo baixado contra ele; uma
+  assinatura ou hash inválidos abortam a atualização. Os downloads agora são
+  extraídos em um diretório de trabalho privado (0700), e um arquivo com caminho
+  absoluto, travessia `..` ou membro symlink/dispositivo é recusado. Com a chave de
+  assinatura embarcada, uma atualização cujo lançamento **não tenha** `SHA256SUMS` ou
+  a assinatura é agora recusada (fail-closed), não só a que falha na verificação; o
+  escape `SHELVES_ALLOW_UNSIGNED_UPDATE=1` é apenas para desenvolvimento.
+- **Os instaladores verificam o checksum do download.** Os instaladores de SteamOS,
+  Linux, macOS e Windows — inclusive os lançadores de um clique (`.desktop`) de
+  SteamOS/Linux — conferem o pacote baixado contra o `SHA256SUMS` do lançamento antes
+  de instalar, então um download corrompido ou adulterado é detectado (um mismatch
+  aborta; um lançamento sem `SHA256SUMS` ainda instala).
+- **O instalador de Linux/SteamOS recusa rodar como root.** Ele instala por usuário e
+  precisa rodar como você para alcançar o seu Steam, então rodá-lo com `sudo` agora
+  para com uma explicação em vez de criar uma instalação de root (override para
+  imagens de sistema: `SHELVES_ALLOW_ROOT=1`).
+
+### Alterado
+- **A recuperação de tela preta tem um default claro e um opt-out.** Numa colapso
+  confirmado da interface do Steam, o host roda por padrão a recuperação oficial da
+  plataforma (`recover_cmd` vazio ou ausente) — reiniciando a sessão do Modo de Jogo do
+  Deck, ou trazendo o Steam de volta ao Big Picture no desktop — sem configurar nada.
+  Defina `recover_cmd` com um comando personalizado para sobrescrever, ou `off` para
+  desligar a auto-recuperação (só pausar). As docs e o comentário do config que diziam
+  "vazio = só pausar" estavam errados e foram corrigidos.
+- **O ícone do instalador não aparece mais sobre um quadrado branco.** Os ícones dos
+  instaladores de macOS e Windows agora usam o fundo escuro do site (com o brilho
+  azul); os ícones transparentes da aba/favicon seguem iguais.
+- **A instalação migra um install antigo root/sistema para o layout por usuário — sem
+  perder dados.** Em todas as plataformas, um install anterior de nível root (ou no
+  Program Files / admin do Windows) e o serviço dele são removidos e substituídos pelo
+  install atual por usuário. Seu `shelveshub.config.json` é levado junto, e se o install
+  antigo guardava suas configurações do Deck Shelves sob o root, elas são resgatadas para
+  a sua conta (só quando você ainda não tem as suas — nunca sobrescreve). Suas
+  configurações ficam num diretório separado, então não são tocadas em nenhum outro caso.
+  No Windows isso roda tanto pelo `setup.exe` quanto pelo instalador via script/zip (passo
+  de migração compartilhado).
+- **No Windows a instalação agora é por usuário — sem direitos de administrador.**
+  O ShelvesHub instala em `%LOCALAPPDATA%\ShelvesHub` e roda como você no login,
+  então consegue gerenciar o próprio bundle/backend/config, se autoatualizar e
+  alcançar o seu Steam. Antes ia para `Program Files` com uma tarefa de sistema
+  que muitas vezes não conseguia escrever ali.
+- **O contrato compartilhado do host agora é `1.3.0`.** A versão do `HostApi`
+  reportada ao bundle passa a `1.3.0`, documentando a superfície de patch de rotas
+  (`routes.addPatch` / `removePatch` e o formato `RoutePatch`) junto do handshake do
+  host e do teardown de ciclo de vida adicionados antes. Aditivo e retrocompatível —
+  um bundle compilado contra `1.2.0` roda sem alterações.
+- **O status do backend agora reporta o interpretador Python.** O `getBackendStatus`
+  inclui o nome do interpretador e se ele realmente roda, então um aparelho sem `python3`
+  (alguns setups ARM mínimos) aparece no diagnóstico em vez de só falhar na primeira
+  chamada de dados.
+
+### Corrigido
+- **Uma instalação que falha não some mais sem deixar rastro.** Os instaladores de
+  Linux, SteamOS, macOS **e Windows** agora gravam a execução inteira num log ao lado
+  do install (`install.log`) e imprimem uma linha clara de falha, e a
+  pausa do lançador lê do terminal (com uma espera curta de fallback) para a janela
+  não sumir na hora num aparelho console-first — dá para ver, ou ler depois, por que
+  a instalação parou.
+- **Atualizações do plugin não somem mais quando há um carregador de plugins.** Quando
+  o ShelvesHub era forçado a hospedar por cima de um carregador (modo cooperativo), o
+  Deck Shelves escondia o próprio aviso de "atualização disponível" esperando que o host
+  instalasse — mas o host não consegue substituir uma cópia injetada pelo carregador,
+  então nada atualizava. Agora o host só se declara capaz de instalar uma atualização do
+  plugin quando de fato injeta o bundle (modo standalone); sob qualquer carregador, o
+  plugin continua mostrando o próprio aviso de atualização.
+- **A autoatualização no Windows agora verifica a arquitetura de CPU do download.**
+  Uma checagem de máquina PE (x64 vs ARM64) espelha a checagem de ELF já existente
+  no Linux, então um binário de arquitetura errada é rejeitado antes de substituir
+  o que está rodando.
+- **A versão de compatibilidade não pode mais divergir silenciosamente.** Um build
+  de release agora falha se o contrato compartilhado do Deck Shelves estiver
+  ausente, em vez de cair silenciosamente para um número de versão antigo.
+- **As notificações agora aparecem no modo standalone (sem carregador).** Quando
+  o ShelvesHub hospeda o Deck Shelves sozinho, os avisos dele (atualização
+  disponível, sugestões, recuperação de configurações etc.) não faziam nada
+  silenciosamente, porque esta build do Steam não tem API de exibição de
+  notificação. O host agora os renderiza sozinho como um pequeno toast na tela.
+  Sob um carregador de plugins nada muda — ele continua exibindo.
+- **O hub agora aplica a própria atualização ao reiniciar.** Ele detectava uma
+  versão mais nova e mostrava "reinicie para aplicar", mas nada era preparado,
+  então reiniciar mantinha a versão antiga. Agora ele baixa e prepara o novo
+  binário **e** o runtime antes do aviso, então reiniciar conclui a atualização —
+  e ele verifica até enquanto coexiste com um carregador de plugins.
+
+## [0.3.0] - 2026-09-26
+
 ### Security
 - **O RPC de controle local agora exige um token por boot e rejeita chamadores
   não confiáveis.** O endpoint do daemon em `127.0.0.1` antes respondia a

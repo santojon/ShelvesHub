@@ -1,0 +1,87 @@
+name: "Release · Pre-release"
+
+# Cut an alpha/beta/rc pre-release from the current branch HEAD with one manual
+# run - no version committed to the repo, just a lightweight tag at HEAD.
+#
+# Flow: pick a `bump` (what the eventual STABLE release will be) + a `channel`.
+# We compute the would-be stable version (the "fake bump", e.g. minor of 0.3.0 =
+# 0.4.0), append `-<channel>.<N>` (N = next sequential for that base+channel),
+# and push the tag. The tag push triggers Release (release.yml), which - because
+# the tag contains a `-` - builds every platform package and publishes a GitHub
+# *pre-release*. The repo's version files stay untouched; release.yml syncs
+# Cargo.toml to the tag in the runner, so the built binary reports the pre-release
+# version.
+#
+# Hub users opt in via the ShelvesHub tab -> automatic updates -> "Include
+# ShelvesHub pre-releases" (hub_prerelease), which makes the self-update check
+# surface pre-releases.
+#
+# NOTE: pushing the tag needs SUBMIT_TOKEN (a PAT) so the push triggers Release -
+# a tag pushed with the default GITHUB_TOKEN does not start other workflows.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Bump the eventual stable release will use (drives the fake-bumped base)'
+        type: choice
+        required: true
+        default: patch
+        options: [patch, minor, major]
+      channel:
+        description: 'Pre-release channel'
+        type: choice
+        required: true
+        default: beta
+        options: [alpha, beta, rc]
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # SUBMIT_TOKEN (PAT) so the tag push below triggers release.yml; the
+          # default token would tag but never start the Release build.
+          token: ${{ secrets.SUBMIT_TOKEN || github.token }}
+          persist-credentials: true
+
+      - name: Compute pre-release version (fake bump + sequential suffix)
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CURRENT=$(jq -r .version package.json)
+          BUMP="${{ inputs.bump }}"
+          CHANNEL="${{ inputs.channel }}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT%%-*}"
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+          BASE="${MAJOR}.${MINOR}.${PATCH}"
+          # N = next sequential pre-release for this exact base+channel.
+          EXISTING=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name | startswith(\"v${BASE}-${CHANNEL}.\"))] | length")
+          N=$((EXISTING + 1))
+          TAG="v${BASE}-${CHANNEL}.${N}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Pre-release: $CURRENT -> ${BASE}-${CHANNEL}.${N}  (fake $BUMP bump, never committed)"
+
+      - name: Tag HEAD and push (triggers Release -> pre-release build)
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG already exists - re-run picks the next N, so this means a race; retry."
+            exit 1
+          fi
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+          echo "Pushed $TAG at $GITHUB_SHA - Release will build the packages and publish the pre-release."

@@ -21,18 +21,14 @@ use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{mpsc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use serde_json::{json, Value};
 
 use crate::config::Config;
 use crate::logger::{log_error, log_info, log_warning};
 
-/// How long a single backend call may take before the child is presumed hung.
-/// Generous because some methods do network work (wishlist, release download).
-const CALL_TIMEOUT: Duration = Duration::from_secs(75);
-/// Minimum time between spawn attempts, so a broken backend cannot crash-loop.
-const RESPAWN_COOLDOWN: Duration = Duration::from_secs(10);
+use crate::constants::timers::{CALL_TIMEOUT, RESPAWN_COOLDOWN};
 
 struct BackendSettings {
     python: String,
@@ -59,6 +55,13 @@ static STATE: Mutex<State> = Mutex::new(State {
     last_spawn: None,
 });
 
+/// Lock `STATE`, tolerating a poisoned mutex: if a prior holder panicked, recover
+/// the guard instead of propagating the panic — a transient backend hiccup must
+/// not permanently wedge every later data call on the RPC threads.
+fn lock_state() -> std::sync::MutexGuard<'static, State> {
+    STATE.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
 /// Configure backend hosting and eagerly spawn the child. No-op when
 /// `SHELVES_BACKEND_DIR` is unset (backend hosting disabled).
 pub fn init(config: &Config) {
@@ -75,7 +78,7 @@ pub fn init(config: &Config) {
     if SETTINGS.set(settings).is_err() {
         return; // already initialised
     }
-    let mut state = STATE.lock().unwrap();
+    let mut state = lock_state();
     ensure_running(&mut state);
 }
 
@@ -86,11 +89,37 @@ pub fn enabled() -> bool {
 
 /// Whether the backend child process is currently alive.
 pub fn is_running() -> bool {
-    let mut state = STATE.lock().unwrap();
+    let mut state = lock_state();
     match state.handle.as_mut() {
         Some(h) => h.child.try_wait().ok().flatten().is_none(),
         None => false,
     }
+}
+
+static PYTHON_OK: OnceLock<bool> = OnceLock::new();
+
+/// The interpreter the backend runs with: the configured one, or the platform
+/// default when hosting isn't configured. Surfaced for diagnostics.
+pub fn python_bin() -> &'static str {
+    SETTINGS
+        .get()
+        .map(|s| s.python.as_str())
+        .unwrap_or(if cfg!(windows) { "python" } else { "python3" })
+}
+
+/// Whether that interpreter is actually runnable — probed once and cached, so a
+/// status poll never respawns it. Answers ARM-10: a minimal ARM distro without
+/// `python3` shows up in diagnostics instead of only failing at the first call.
+pub fn python_available() -> bool {
+    *PYTHON_OK.get_or_init(|| {
+        Command::new(python_bin())
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    })
 }
 
 /// Only plain public identifiers may cross into Python: no leading
@@ -112,7 +141,7 @@ pub fn call(method: &str, args: &Value) -> Result<Value, String> {
     if !valid_method_name(method) {
         return Err(format!("invalid method name: {method}"));
     }
-    let mut state = STATE.lock().unwrap();
+    let mut state = lock_state();
     if !ensure_running(&mut state) {
         return Err("backend is not running".to_string());
     }
@@ -264,31 +293,5 @@ fn spawn(settings: &BackendSettings) -> std::io::Result<Handle> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn accepts_plain_method_names() {
-        assert!(valid_method_name("get_settings"));
-        assert!(valid_method_name("listBackups2"));
-    }
-
-    #[test]
-    fn rejects_private_and_malformed_names() {
-        assert!(!valid_method_name(""));
-        assert!(!valid_method_name("_main"));
-        assert!(!valid_method_name("_unload"));
-        assert!(!valid_method_name("9lives"));
-        assert!(!valid_method_name("a.b"));
-        assert!(!valid_method_name("a b"));
-        assert!(!valid_method_name(&"x".repeat(65)));
-    }
-
-    #[test]
-    fn call_without_configuration_fails_cleanly() {
-        // SETTINGS is never initialised in unit tests, so any call must
-        // report the backend as unavailable rather than panic.
-        let result = call("get_settings", &Value::Null);
-        assert_eq!(result.unwrap_err(), "backend is not running");
-    }
-}
+#[path = "tests/backend_tests.rs"]
+mod tests;

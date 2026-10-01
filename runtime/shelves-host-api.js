@@ -3,6 +3,80 @@
 // closure; see shelves-host.js); not a standalone module.
 
 
+  /* Self-rendered toast for sole-host mode: this Steam build exposes no
+     SteamClient.Notifications.DisplayNotification, so the plugin's toasts (routed
+     here in sole mode) would silently drop. Render a small self-removing overlay
+     into the Big Picture window instead — no persistent timer, no scan. */
+  function bpWindowInstance() {
+    const ws = window.SteamUIStore && window.SteamUIStore.WindowStore;
+    if (!ws) return null;
+    if (ws.GamepadUIMainWindowInstance) return ws.GamepadUIMainWindowInstance;
+    return Array.isArray(ws.SteamUIWindows) ? ws.SteamUIWindows[0] : null;
+  }
+  function hostToastDoc() {
+    try {
+      const inst = bpWindowInstance();
+      const d = inst && inst.BrowserWindow && inst.BrowserWindow.document;
+      if (d && d.body) return d;
+    } catch (e) {}
+    return (typeof document !== "undefined" && document.body) ? document : null;
+  }
+  const TOAST_ICON =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
+    '<rect x="3.8" y="7.5" width="3.9" height="11.5" rx="0.8"/>' +
+    '<rect x="8.7" y="5" width="3.9" height="14" rx="0.8"/>' +
+    '<rect x="14" y="8" width="3.9" height="11" rx="0.8" transform="rotate(-13 15.95 19)"/>' +
+    '<rect x="2.4" y="19" width="19.2" height="2.5" rx="0.9"/></svg>';
+  function toastTextCol(doc, title, body) {
+    const col = doc.createElement("div");
+    col.style.cssText = "min-width:0;flex:1 1 auto;";
+    if (title) {
+      const t = doc.createElement("div");
+      t.textContent = title;
+      t.style.cssText = "font-weight:700;font-size:14px;margin-bottom:2px;";
+      col.appendChild(t);
+    }
+    if (body) {
+      const b = doc.createElement("div");
+      b.textContent = body;
+      b.style.cssText = "font-size:13px;line-height:1.35;color:#b8c2cc;word-break:break-word;";
+      col.appendChild(b);
+    }
+    return col;
+  }
+  // Steam/loader-style toast: top-right card (icon + text) that slides in and
+  // auto-dismisses, matching what a plugin loader renders — the reachable parity,
+  // since this Steam build has no native notification API to post into.
+  function showHostToast(title, body, durationMs) {
+    const doc = hostToastDoc();
+    if (!doc) return false;
+    let holder = doc.getElementById("shelveshub-toasts");
+    if (!holder) {
+      holder = doc.createElement("div");
+      holder.id = "shelveshub-toasts";
+      doc.body.appendChild(holder);
+    }
+    // Set every time (idempotent) so an in-place runtime swap re-styles a holder
+    // a previous version created.
+    holder.style.cssText = "position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:10px;pointer-events:none;font-family:'Motiva Sans','Segoe UI',sans-serif;";
+    const card = doc.createElement("div");
+    card.style.cssText = "display:flex;align-items:flex-start;gap:12px;min-width:300px;max-width:min(400px,60vw);background:rgba(23,29,37,.97);color:#e6edf3;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.55);backdrop-filter:blur(8px);opacity:0;transform:translateX(24px);transition:opacity .22s ease,transform .22s ease;";
+    const ic = doc.createElement("div");
+    ic.innerHTML = TOAST_ICON;
+    ic.style.cssText = "flex:0 0 auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:linear-gradient(135deg,#1a9fff,#0a63b8);color:#fff;padding:6px;box-sizing:border-box;";
+    card.appendChild(ic);
+    card.appendChild(toastTextCol(doc, title, body));
+    holder.appendChild(card);
+    const win = doc.defaultView || window;
+    win.requestAnimationFrame(function () { card.style.opacity = "1"; card.style.transform = "translateX(0)"; });
+    const ms = (typeof durationMs === "number" && durationMs > 0) ? durationMs : 5000;
+    win.setTimeout(function () {
+      card.style.opacity = "0"; card.style.transform = "translateX(24px)";
+      win.setTimeout(function () { try { card.remove(); } catch (e) {} }, 250);
+    }, ms);
+    return true;
+  }
+
   // ── HostApi assembly ──────────────────────────────────────────────────────
   const mountHandlers = [], unmountHandlers = [];
   const host = {
@@ -17,7 +91,7 @@
         hostApiVersion: HOST_API_VERSION,
         capabilities: {
           teardown: true,
-          selfUpdate: !COEXIST || COOP,
+          selfUpdate: !COEXIST, // can install a PLUGIN update in place (see updates.canSelfInstall)
           nativeQam: nativeUiOn(),
           coexist: !!COEXIST,
         },
@@ -73,8 +147,10 @@
     },
     notifications: {
       toast: function (opts) { opts = opts || {}; this.send(opts.title || "", opts.body || "", opts.durationMs); },
-      send: function (title, body) {
-        try { if (window.SteamClient && window.SteamClient.Notifications) { window.SteamClient.Notifications.DisplayNotification(title, body); return; } } catch (e) {}
+      send: function (title, body, durationMs) {
+        const N = window.SteamClient && window.SteamClient.Notifications;
+        try { if (N && typeof N.DisplayNotification === "function") { N.DisplayNotification(title, body); return; } } catch (e) {}
+        try { if (showHostToast(title, body, durationMs)) return; } catch (e) {}
         log("notify:", title, "-", body);
       },
     },
@@ -91,10 +167,12 @@
        "Download"). applyUpdate reloads once the swap succeeds, so the daemon re-injects
        the new bundle and the plugin re-boots on it. */
     updates: {
-      // True only when THIS host owns the bundle (sole, or coop/forced) — then the
-      // hub manages plugin updates and the plugin can hide its own update banner.
-      // In plain coexistence the loader owns updates, so the plugin keeps it.
-      canSelfInstall: function () { return !COEXIST || COOP; },
+      // True only when THIS host INJECTS the bundle (sole / true owner) — then a
+      // hub-driven swap actually takes effect and the plugin can hide its banner.
+      // Under ANY loader (plain coexist OR cooperative/force) the loader still
+      // injects its own copy, so the hub can't replace it: report false so the
+      // plugin keeps its own update banner instead of silently deferring to us.
+      canSelfInstall: function () { return !COEXIST; },
       applyUpdate: function (release) {
         return fetch(RPC_ENDPOINT, { method: "POST", headers: rpcHeaders(), body: JSON.stringify({ method: "applyUpdate", args: release == null ? null : release }) })
           .then(function (res) { if (!res.ok) throw new Error("applyUpdate HTTP " + res.status); return res.json(); })
@@ -393,9 +471,19 @@
     } catch (e) {}
   }
   let _navPruneTimer = null;
+  function stopNavPrune() {
+    if (_navPruneTimer) { clearInterval(_navPruneTimer); _navPruneTimer = null; }
+  }
   function startNavPrune() {
     if (_navPruneTimer) return;
-    _navPruneTimer = setInterval(pruneHiddenNavNodes, 500);
+    // Pause the work while the document is hidden (game in front / UI off) so the
+    // poll costs nothing when it can't matter; register a stop path so a hot-swap
+    // teardown clears it instead of leaking a timer per re-eval.
+    _navPruneTimer = setInterval(function () {
+      try { if (document.hidden) return; } catch (e) {}
+      pruneHiddenNavNodes();
+    }, 500);
+    unmountHandlers.push(stopNavPrune);
   }
 
   /* (A) Host API — installed only when we are NOT coexisting with another

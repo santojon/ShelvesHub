@@ -26,7 +26,7 @@ static RPC_TOKEN: OnceLock<String> = OnceLock::new();
 static RUNTIME_CONFIG: OnceLock<serde_json::Value> = OnceLock::new();
 static CONFIG_FILE_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOG_RING: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
-const LOG_RING_CAP: usize = 300;
+use crate::constants::defaults::LOG_RING_CAP;
 /// The version tag of a newer ShelvesHub release detected while hosting with
 /// hub auto-update on, when the daemon cannot yet replace its own running binary
 /// in place. Surfaced via `getConfig` so the hub screen can show a "restart to
@@ -235,14 +235,5 @@ pub fn recent_logs(n: usize) -> Vec<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rpc_token_is_nonempty_and_stable() {
-        let a = rpc_token();
-        assert_eq!(a.len(), 64, "256-bit token, hex-encoded");
-        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_eq!(a, rpc_token(), "same token for the process lifetime");
-    }
-}
+#[path = "tests/state_tests.rs"]
+mod tests;
