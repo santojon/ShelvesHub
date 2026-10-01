@@ -341,10 +341,14 @@ fn dispatch(body: &str) -> String {
             ok("true".to_string())
         }
         // Health of the hosted Python backend (loader-local, not proxied).
+        // `python_available` surfaces a missing interpreter (e.g. a minimal ARM
+        // distro without python3) in diagnostics before the first data call fails.
         Some("getBackendStatus") => ok(format!(
-            r#"{{"configured":{},"running":{}}}"#,
+            r#"{{"configured":{},"running":{},"python":{},"python_available":{}}}"#,
             backend::enabled(),
-            backend::is_running()
+            backend::is_running(),
+            serde_json::Value::String(backend::python_bin().to_string()),
+            backend::python_available()
         )),
         // Manual bundle re-download (the fallback panel's "download" action):
         // fetch the newest release into the bundle path; the loop re-injects it.

@@ -31,7 +31,7 @@
   "// desktop_ui": "Experimental: also inject while the plain desktop Steam client is on screen (not just the gamepad / Big Picture UI). false = host only in Big Picture. Can also be set per-service via SHELVES_DESKTOP_UI=1.",
   "desktop_ui": false,
 
-  "// recover_cmd": "Shell command run ONCE if the daemon detects the Steam UI collapsed (a black screen where only SharedJSContext survives). Typically 'systemctl --user restart steam-launcher.service' on a Steam Deck. Empty = only pause injection and log the hint.",
+  "// recover_cmd": "Shell command run ONCE if the daemon detects the Steam UI collapsed (a black screen where only SharedJSContext survives). Empty or absent = the per-platform OFFICIAL recovery (on a Steam Deck, 'systemctl --user restart steam-launcher.service'). Set a custom command to override it, or 'off' to disable auto-recovery (pause injection and log the hint only).",
   "recover_cmd": "",
 
   "// target": "Case-insensitive substring to force which renderer target is used. Empty = auto-detect the Steam shared JS context / Big Picture window (leave empty unless debugging).",

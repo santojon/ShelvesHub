@@ -24,3 +24,23 @@ fn config_file_overrides_default() {
     // Empty / null file → default.
     assert_eq!(cfg_u16(&Value::Null, UNSET, "rpc_port", 60123), 60123);
 }
+
+#[test]
+fn recover_cmd_resolution() {
+    // "off" (any case, trimmed) disables auto-recovery → pause only.
+    assert_eq!(resolve_recover_cmd(Some("off".to_string())), None);
+    assert_eq!(resolve_recover_cmd(Some("OFF".to_string())), None);
+    assert_eq!(resolve_recover_cmd(Some("  Off ".to_string())), None);
+    // A custom command passes through (trimmed).
+    assert_eq!(
+        resolve_recover_cmd(Some("  my-recover ".to_string())),
+        Some("my-recover".to_string())
+    );
+    // Empty or absent → the per-platform official default (non-None on all targets).
+    assert_eq!(
+        resolve_recover_cmd(Some(String::new())),
+        default_recover_cmd()
+    );
+    assert_eq!(resolve_recover_cmd(None), default_recover_cmd());
+    assert!(resolve_recover_cmd(None).is_some());
+}

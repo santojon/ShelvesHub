@@ -68,11 +68,21 @@ never loads the plugin twice and adds only its own tab. Two knobs:
 ## Black screen / collapsed Steam UI
 
 If the Steam UI ever collapses, the daemon **pauses injection** (it never
-force-restarts Steam — that makes it worse) and logs a recovery hint. To recover
-automatically, set the command for your platform — for example on a Steam Deck:
+force-restarts Steam — that makes it worse) and, by default, runs the
+**per-platform official recovery** once (on a Steam Deck, restarting the Gaming
+Mode session; on macOS/Windows, bringing Steam back into Big Picture). You don't
+need to configure anything.
+
+To run a **custom** command instead, set `recover_cmd` (or `SHELVES_RECOVER_CMD`):
 
 ```json
 { "recover_cmd": "systemctl --user restart steam-launcher.service" }
+```
+
+To **disable** auto-recovery (pause only, and just log the hint), set it to `off`:
+
+```json
+{ "recover_cmd": "off" }
 ```
 
 ## The native tab

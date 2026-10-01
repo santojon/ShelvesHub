@@ -14,8 +14,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   updates + pre-release channels at install time — a prompt when you run the
   installer in a terminal, or `SHELVES_*` environment variables for a
   `curl | bash` install. They're seeded once and stay editable in the ShelvesHub
-  tab. (Windows: available in the script/zip installer; the setup .exe keeps its
-  defaults for now.)
+  tab. On Windows every path offers them: the `setup.exe` shows a "Setup options"
+  page of checkboxes, and the script/zip installer prompts or reads `SHELVES_*`.
 
 ### Security
 - **Self-update is now verified before it replaces anything.** The daemon checks
@@ -23,13 +23,26 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   daemon — and the downloaded archive's SHA-256 against it; a bad signature or
   hash aborts the update. Downloads now extract into a private (0700) work dir,
   and an archive with an absolute path, `..` traversal, or a symlink/device member
-  is refused. (Signature enforcement turns on once the signing key is configured;
-  until then the hash is still checked.)
-- **Installers verify the download's checksum.** The SteamOS, macOS and Windows
-  installers check the downloaded package against the release's `SHA256SUMS` before
-  installing, so a corrupted or truncated download is caught.
+  is refused. With the signing key baked in, an update whose release is **missing**
+  `SHA256SUMS` or its signature is now refused (fail-closed), not just one that
+  fails to verify; the `SHELVES_ALLOW_UNSIGNED_UPDATE=1` escape hatch is dev-only.
+- **Installers verify the download's checksum.** The SteamOS, Linux, macOS and
+  Windows installers — including the one-click SteamOS/Linux desktop launchers —
+  check the downloaded package against the release's `SHA256SUMS` before installing,
+  so a corrupted or tampered download is caught (a mismatch aborts; a release without
+  `SHA256SUMS` still installs).
+- **The Linux/SteamOS installer refuses to run as root.** It installs per-user and
+  must run as you to reach your Steam, so running it with `sudo` now stops with an
+  explanation instead of creating a root-owned install (override for system images:
+  `SHELVES_ALLOW_ROOT=1`).
 
 ### Changed
+- **Black-screen recovery has a clear default and opt-out.** On a confirmed Steam UI
+  collapse the host runs the per-platform official recovery by default (empty or unset
+  `recover_cmd`) — restarting the Deck's Gaming Mode session, or bringing Steam back
+  into Big Picture on desktop — with no setup. Set `recover_cmd` to a custom command to
+  override it, or to `off` to disable auto-recovery (pause only). The docs and config
+  comment that previously said "empty = pause only" were wrong and are corrected.
 - **The installer app icon no longer appears on a plain white square.** The macOS
   and Windows installer icons now carry the site's dark background (with its blue
   glow); the transparent tab/favicon icons are unchanged.
@@ -49,8 +62,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   `removePatch` and the `RoutePatch` shape) alongside the host handshake and
   lifecycle teardown added earlier. Additive and backward-compatible — a bundle built
   against `1.2.0` runs unchanged.
+- **Backend status now reports the Python interpreter.** `getBackendStatus` includes the
+  interpreter name and whether it's actually runnable, so a device missing `python3` (some
+  minimal ARM setups) shows up in diagnostics instead of only failing at the first data call.
 
 ### Fixed
+- **A failed install no longer disappears without a trace.** The Linux, SteamOS and
+  macOS installers now write the whole run to `~/.local/share/shelveshub/install.log`
+  and print a clear failure line, and the desktop launcher's pause reads from the
+  terminal (with a short fallback wait) so the window doesn't vanish instantly on a
+  console-first device — you can see, or afterwards read, why an install stopped.
 - **Plugin updates no longer go silent under a plugin loader.** When ShelvesHub was
   forced to host over a loader (cooperative mode), Deck Shelves hid its own "update
   available" banner expecting the host to install it — but the host can't replace a

@@ -89,6 +89,32 @@ pub fn is_running() -> bool {
     }
 }
 
+static PYTHON_OK: OnceLock<bool> = OnceLock::new();
+
+/// The interpreter the backend runs with: the configured one, or the platform
+/// default when hosting isn't configured. Surfaced for diagnostics.
+pub fn python_bin() -> &'static str {
+    SETTINGS
+        .get()
+        .map(|s| s.python.as_str())
+        .unwrap_or(if cfg!(windows) { "python" } else { "python3" })
+}
+
+/// Whether that interpreter is actually runnable — probed once and cached, so a
+/// status poll never respawns it. Answers ARM-10: a minimal ARM distro without
+/// `python3` shows up in diagnostics instead of only failing at the first call.
+pub fn python_available() -> bool {
+    *PYTHON_OK.get_or_init(|| {
+        Command::new(python_bin())
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    })
+}
+
 /// Only plain public identifiers may cross into Python: no leading
 /// underscore (lifecycle/private methods), no exotic characters.
 pub fn valid_method_name(name: &str) -> bool {

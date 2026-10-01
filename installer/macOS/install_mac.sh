@@ -4,12 +4,30 @@
 # Usage (from extracted package): bash installer/install_mac.sh
 set -e
 
+# Per-user by design: refuse root so we never create a root-owned install and a
+# LaunchAgent that can't reach your Steam. Override only for automation:
+# SHELVES_ALLOW_ROOT=1.
+if [[ "${EUID:-$(id -u)}" -eq 0 && "${SHELVES_ALLOW_ROOT:-}" != "1" ]]; then
+  echo "[!] Don't run this with sudo. ShelvesHub installs per-user"
+  echo "    (~/.local/share/shelveshub) and runs as you so it can reach your Steam."
+  echo "    Re-run it as your normal user, without sudo."
+  exit 1
+fi
+
 REPO="santojon/ShelvesHub"
 INSTALL_DIR="$HOME/.local/share/shelveshub"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 PLIST_DEST="$LAUNCH_AGENTS_DIR/com.shelveshub.plist"
 BINARY="shelveshub"
 PACKAGE="shelveshub-macos.tar.gz"
+
+# Capture the run to a log next to the install so a failure is diagnosable even
+# when the terminal closes instantly. Fail-soft. See SteamOS install.sh.
+LOGFILE="$INSTALL_DIR/install.log"
+if mkdir -p "$INSTALL_DIR" 2>/dev/null && exec > >(tee "$LOGFILE") 2>&1; then
+  echo "[i] Full log: $LOGFILE"
+fi
+trap 'rc=$?; [[ $rc -ne 0 ]] && { echo; echo "[!] Install failed (exit $rc). Full log: $LOGFILE"; }' EXIT
 
 echo "=== ShelvesHub — macOS Installer ==="
 
@@ -53,7 +71,7 @@ else
   fi
 
   TMPDIR=$(mktemp -d)
-  trap 'rm -rf "$TMPDIR"' EXIT
+  trap 'rc=$?; rm -rf "$TMPDIR"; [[ $rc -ne 0 ]] && { echo; echo "[!] Install failed (exit $rc). Full log: $LOGFILE"; }' EXIT
 
   echo "[i] Downloading $PACKAGE..."
   curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"

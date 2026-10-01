@@ -56,13 +56,19 @@ Detalhes completos em [coexistence.md](coexistence.md).
 ## Tela preta / interface do Steam colapsada
 
 Se a interface do Steam colapsar, o ShelvesHub **pausa a injeção** — ele nunca
-força o reinício do Steam, o que só piora — e, numa tela preta confirmada, roda
-um passo de recuperação para a sua plataforma (reiniciando a sessão do Modo de
-Jogo do Deck, ou trazendo o Steam de volta ao Big Picture no desktop). Você pode
-sobrescrever o comando de recuperação:
+força o reinício do Steam, o que só piora — e, numa tela preta confirmada, roda por
+padrão a **recuperação oficial** da sua plataforma (reiniciando a sessão do Modo de
+Jogo do Deck, ou trazendo o Steam de volta ao Big Picture no desktop) — sem precisar
+configurar nada. Você pode sobrescrever com um comando personalizado:
 
 ```json
 { "recover_cmd": "systemctl --user restart steam-launcher.service" }
+```
+
+…ou desligar a auto-recuperação (só pausar) com `off`:
+
+```json
+{ "recover_cmd": "off" }
 ```
 
 ## Desligar o host sem desinstalar

@@ -57,11 +57,12 @@ pub struct Config {
     /// client too.
     pub desktop_ui: bool,
     /// Shell command run once when the loader detects the Steam UI windows have
-    /// collapsed (a black screen where only `SharedJSContext` survives). Defaults
-    /// to a per-platform command (`default_recover_cmd`) — SteamOS restarts the
-    /// Gaming Mode session, macOS/Windows bounce Steam back into Big Picture.
-    /// `SHELVES_RECOVER_CMD` (or config `recover_cmd`) overrides it with a custom
-    /// command. Never `StartRestart` — it worsens this.
+    /// collapsed (a black screen where only `SharedJSContext` survives). By default
+    /// (unset or empty) this is the per-platform official recovery
+    /// (`default_recover_cmd`) — SteamOS restarts the Gaming Mode session,
+    /// macOS/Windows bounce Steam back into Big Picture. `SHELVES_RECOVER_CMD` (or
+    /// config `recover_cmd`) overrides it with a custom command, or `"off"` to
+    /// disable auto-recovery (pause only). Never `StartRestart` — it worsens this.
     pub recover_cmd: Option<String>,
     /// When true (`SHELVES_PRELOAD=1`), register the host runtime at document-
     /// start (browser auto-attach + `Page.addScriptToEvaluateOnNewDocument`)
@@ -156,16 +157,11 @@ impl Config {
             },
             native_qam: cfg_bool(&file, "SHELVES_NATIVE_QAM", "native_qam"),
             desktop_ui: cfg_bool(&file, "SHELVES_DESKTOP_UI", "desktop_ui"),
-            recover_cmd: env::var("SHELVES_RECOVER_CMD")
-                .ok()
-                .filter(|s| !s.is_empty())
-                .or_else(|| {
-                    file.get("recover_cmd")
-                        .and_then(Value::as_str)
-                        .filter(|s| !s.is_empty())
-                        .map(String::from)
-                })
-                .or_else(default_recover_cmd),
+            recover_cmd: resolve_recover_cmd(env::var("SHELVES_RECOVER_CMD").ok().or_else(|| {
+                file.get("recover_cmd")
+                    .and_then(Value::as_str)
+                    .map(String::from)
+            })),
             preload: env_bool("SHELVES_PRELOAD"),
             prerelease: cfg_bool(&file, "SHELVES_PRERELEASE", "prerelease"),
             // The owner-settle wait exists only to avoid racing a plugin loader's
@@ -340,10 +336,23 @@ fn cfg_bool(file: &Value, env_key: &str, json_key: &str) -> bool {
     file.get(json_key).and_then(Value::as_bool).unwrap_or(false)
 }
 
-/// Per-platform default recovery command, run once when the loader detects the
-/// Steam UI windows have collapsed (a black screen). Chosen to be the least
-/// disruptive action that restores the interface on each host; an explicit
-/// `SHELVES_RECOVER_CMD` / config `recover_cmd` overrides it with a custom command.
+/// Map a raw `recover_cmd` override (env over file) to the effective command:
+///   `"off"` (any case, trimmed) → `None` (explicit opt-out: pause only);
+///   a non-empty value → that custom command;
+///   empty or absent → the per-platform official recovery (the default).
+fn resolve_recover_cmd(raw: Option<String>) -> Option<String> {
+    match raw.as_deref().map(str::trim) {
+        Some(v) if v.eq_ignore_ascii_case("off") => None,
+        Some(v) if !v.is_empty() => Some(v.to_string()),
+        _ => default_recover_cmd(),
+    }
+}
+
+/// Per-platform default recovery command — the DEFAULT when `recover_cmd` is unset
+/// or empty — run once when the loader detects the Steam UI windows have collapsed
+/// (a black screen). Chosen to be the least disruptive action that restores the
+/// interface on each host; a custom `SHELVES_RECOVER_CMD` / config `recover_cmd`
+/// replaces it, and the literal `"off"` disables auto-recovery (pause only).
 fn default_recover_cmd() -> Option<String> {
     let cmd = if cfg!(target_os = "linux") {
         // SteamOS / Steam Deck: restart the Gaming Mode session service.

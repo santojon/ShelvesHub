@@ -787,17 +787,36 @@ fn sha256_hex(path: &Path) -> Result<String, String> {
     Ok(sha256_hex_bytes(&bytes))
 }
 
+/// Whether a missing `SHA256SUMS`/`SHA256SUMS.minisig` must ABORT the update
+/// (fail-closed) rather than degrade to a hash-only or magic/arch-only check.
+/// Enforced whenever a public key is baked in; the only escape hatch is the
+/// explicit `SHELVES_ALLOW_UNSIGNED_UPDATE=1` (dev/testing), never a silent path.
+fn signatures_required() -> bool {
+    !MINISIGN_PUBLIC_KEY.is_empty()
+        && std::env::var("SHELVES_ALLOW_UNSIGNED_UPDATE")
+            .ok()
+            .as_deref()
+            != Some("1")
+}
+
 /// Verify a downloaded release archive against the release's signed `SHA256SUMS`:
 /// (1) minisign-verify `SHA256SUMS` with the baked-in public key, then (2) match
-/// the archive's SHA-256 to its line. A release without those assets, or an unset
-/// public key, degrades to a warning (self-update still gated by magic/arch), but
-/// a PRESENT-and-WRONG signature or hash aborts the update.
+/// the archive's SHA-256 to its line. With a public key baked in, a release missing
+/// either asset is REFUSED (fail-closed); a present-and-wrong signature or hash
+/// always aborts. Without a baked key (or the dev escape hatch) it degrades to a
+/// warning, self-update still gated by magic/arch.
 fn verify_release_archive(
     release: &serde_json::Value,
     asset_name: &str,
     archive: &Path,
 ) -> Result<(), String> {
     let Some(sums_url) = find_asset_url_by_names(release, &["SHA256SUMS"]) else {
+        if signatures_required() {
+            return Err(
+                "release has no SHA256SUMS but update signatures are required — refusing update"
+                    .to_string(),
+            );
+        }
         log_warning(
             "populate",
             "release has no SHA256SUMS — skipping hash/signature check (archive magic/arch still verified).",
@@ -805,8 +824,8 @@ fn verify_release_archive(
         return Ok(());
     };
     let sums = curl_text(&sums_url)?;
-    // Signature: enforced only when BOTH the signature asset and an embedded
-    // public key are present; otherwise warn and fall through to the hash check.
+    // Signature: enforced when a signature asset and an embedded key are present.
+    // Absent, we fail closed if signatures are required, else warn (hash only).
     match find_asset_url_by_names(release, &["SHA256SUMS.minisig"]) {
         Some(sig_url) if !MINISIGN_PUBLIC_KEY.is_empty() => {
             let sig_text = curl_text(&sig_url)?;
@@ -816,6 +835,12 @@ fn verify_release_archive(
                 .map_err(|e| format!("SHA256SUMS.minisig is malformed: {e}"))?;
             pk.verify(sums.as_bytes(), &sig, false)
                 .map_err(|_| "SHA256SUMS signature does not verify — refusing update".to_string())?;
+        }
+        _ if signatures_required() => {
+            return Err(
+                "release has no SHA256SUMS.minisig but update signatures are required — refusing update"
+                    .to_string(),
+            );
         }
         _ => log_warning(
             "populate",

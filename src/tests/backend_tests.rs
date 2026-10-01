@@ -28,3 +28,12 @@ fn call_without_configuration_fails_cleanly() {
     let result = call("get_settings", &Value::Null);
     assert_eq!(result.unwrap_err(), "backend is not running");
 }
+
+#[test]
+fn python_bin_falls_back_to_platform_default() {
+    // SETTINGS is never initialised in unit tests, so we get the platform default.
+    let expected = if cfg!(windows) { "python" } else { "python3" };
+    assert_eq!(python_bin(), expected);
+    // Probing must return a bool without panicking and be stable (cached).
+    assert_eq!(python_available(), python_available());
+}

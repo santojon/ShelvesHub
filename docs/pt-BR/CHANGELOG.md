@@ -14,8 +14,9 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   desktop e atualizações automáticas + canais de pré-lançamento na hora da
   instalação — um prompt quando você roda o instalador num terminal, ou variáveis
   de ambiente `SHELVES_*` para instalar via `curl | bash`. São semeadas uma vez e
-  continuam editáveis na aba do ShelvesHub. (Windows: disponível no instalador via
-  script/zip; o setup .exe mantém os padrões por enquanto.)
+  continuam editáveis na aba do ShelvesHub. No Windows todos os caminhos oferecem
+  isso: o `setup.exe` mostra uma página "Setup options" com checkboxes, e o
+  instalador via script/zip pergunta ou lê `SHELVES_*`.
 
 ### Segurança
 - **A autoatualização agora é verificada antes de substituir qualquer coisa.** O
@@ -23,14 +24,28 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   pública embutida no daemon — e o SHA-256 do arquivo baixado contra ele; uma
   assinatura ou hash inválidos abortam a atualização. Os downloads agora são
   extraídos em um diretório de trabalho privado (0700), e um arquivo com caminho
-  absoluto, travessia `..` ou membro symlink/dispositivo é recusado. (A verificação
-  de assinatura passa a valer quando a chave de assinatura for configurada; até lá,
-  o hash ainda é conferido.)
+  absoluto, travessia `..` ou membro symlink/dispositivo é recusado. Com a chave de
+  assinatura embarcada, uma atualização cujo lançamento **não tenha** `SHA256SUMS` ou
+  a assinatura é agora recusada (fail-closed), não só a que falha na verificação; o
+  escape `SHELVES_ALLOW_UNSIGNED_UPDATE=1` é apenas para desenvolvimento.
 - **Os instaladores verificam o checksum do download.** Os instaladores de SteamOS,
-  macOS e Windows conferem o pacote baixado contra o `SHA256SUMS` do lançamento
-  antes de instalar, então um download corrompido ou truncado é detectado.
+  Linux, macOS e Windows — inclusive os lançadores de um clique (`.desktop`) de
+  SteamOS/Linux — conferem o pacote baixado contra o `SHA256SUMS` do lançamento antes
+  de instalar, então um download corrompido ou adulterado é detectado (um mismatch
+  aborta; um lançamento sem `SHA256SUMS` ainda instala).
+- **O instalador de Linux/SteamOS recusa rodar como root.** Ele instala por usuário e
+  precisa rodar como você para alcançar o seu Steam, então rodá-lo com `sudo` agora
+  para com uma explicação em vez de criar uma instalação de root (override para
+  imagens de sistema: `SHELVES_ALLOW_ROOT=1`).
 
 ### Alterado
+- **A recuperação de tela preta tem um default claro e um opt-out.** Numa colapso
+  confirmado da interface do Steam, o host roda por padrão a recuperação oficial da
+  plataforma (`recover_cmd` vazio ou ausente) — reiniciando a sessão do Modo de Jogo do
+  Deck, ou trazendo o Steam de volta ao Big Picture no desktop — sem configurar nada.
+  Defina `recover_cmd` com um comando personalizado para sobrescrever, ou `off` para
+  desligar a auto-recuperação (só pausar). As docs e o comentário do config que diziam
+  "vazio = só pausar" estavam errados e foram corrigidos.
 - **O ícone do instalador não aparece mais sobre um quadrado branco.** Os ícones dos
   instaladores de macOS e Windows agora usam o fundo escuro do site (com o brilho
   azul); os ícones transparentes da aba/favicon seguem iguais.
@@ -51,8 +66,18 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   (`routes.addPatch` / `removePatch` e o formato `RoutePatch`) junto do handshake do
   host e do teardown de ciclo de vida adicionados antes. Aditivo e retrocompatível —
   um bundle compilado contra `1.2.0` roda sem alterações.
+- **O status do backend agora reporta o interpretador Python.** O `getBackendStatus`
+  inclui o nome do interpretador e se ele realmente roda, então um aparelho sem `python3`
+  (alguns setups ARM mínimos) aparece no diagnóstico em vez de só falhar na primeira
+  chamada de dados.
 
 ### Corrigido
+- **Uma instalação que falha não some mais sem deixar rastro.** Os instaladores de
+  Linux, SteamOS e macOS agora gravam a execução inteira em
+  `~/.local/share/shelveshub/install.log` e imprimem uma linha clara de falha, e a
+  pausa do lançador lê do terminal (com uma espera curta de fallback) para a janela
+  não sumir na hora num aparelho console-first — dá para ver, ou ler depois, por que
+  a instalação parou.
 - **Atualizações do plugin não somem mais quando há um carregador de plugins.** Quando
   o ShelvesHub era forçado a hospedar por cima de um carregador (modo cooperativo), o
   Deck Shelves escondia o próprio aviso de "atualização disponível" esperando que o host

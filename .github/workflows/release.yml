@@ -228,6 +228,7 @@ jobs:
           New-Item -ItemType Directory -Force nsis\payload | Out-Null
           Copy-Item dist\* nsis\payload\ -Recurse -Force
           Copy-Item installer\Windows\register-task.ps1 nsis\payload\ -Force
+          Copy-Item installer\Windows\apply-setup.ps1 nsis\payload\ -Force
           Copy-Item installer\Windows\shelveshub.nsi nsis\ -Force
           Copy-Item assets\icons\icon.ico nsis\icon.ico -Force
           & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" nsis\shelveshub.nsi

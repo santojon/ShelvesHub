@@ -35,18 +35,18 @@ systemctl --user stop shelveshub
 ### A partir do pacote
 
 ```bash
-# Extract shelveshub-linux.tar.gz (x86_64) or shelveshub-linux-aarch64.tar.gz
-# (ARM64), then:
-sudo bash installer/install.sh
+# Extraia shelveshub-linux.tar.gz (x86_64) ou shelveshub-linux-aarch64.tar.gz
+# (ARM64), então (como seu usuário normal, NÃO com sudo):
+bash installer/install.sh
 ```
 
-Instala em `/opt/shelveshub` e registra um `shelveshub.service` em nível de sistema.
+Instala em `~/.local/share/shelveshub` e registra um `shelveshub.service` em nível de usuário.
 
 **Comandos do serviço:**
 
 ```bash
-systemctl status shelveshub
-sudo systemctl restart shelveshub
+systemctl --user status shelveshub
+systemctl --user restart shelveshub
 ```
 
 ---

@@ -7,8 +7,29 @@
 Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "nsDialogs.nsh"
 
 !define APPNAME "ShelvesHub"
+
+; ── Setup-options page state (checkbox handles + 0/1 results) ──────────────────
+Var Dialog
+Var CbForce
+Var CbNqam
+Var CbDesk
+Var CbAuto
+Var CbAhub
+Var CbAplug
+Var CbHpre
+Var CbPpre
+Var SForce
+Var SNqam
+Var SDesk
+Var SAuto
+Var SAhub
+Var SAplug
+Var SHpre
+Var SPpre
+Var ConfigWasFresh
 
 Name "${APPNAME}"
 OutFile "shelveshub-setup.exe"
@@ -23,11 +44,59 @@ ShowUnInstDetails show
 !define MUI_UNICON "icon.ico"
 
 !insertmacro MUI_PAGE_WELCOME
+Page custom OptionsPageCreate OptionsPageLeave
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
+
+; ── Setup options page ────────────────────────────────────────────────────────
+; Checkboxes for the same choices the script/zip installer prompts for. All stay
+; editable later in the ShelvesHub tab; defaults match install.ps1.
+Function OptionsPageCreate
+  !insertmacro MUI_HEADER_TEXT "Setup options" "Choose how ShelvesHub runs. You can change any of these later in the ShelvesHub tab."
+  nsDialogs::Create 1018
+  Pop $Dialog
+  ${If} $Dialog == error
+    Abort
+  ${EndIf}
+
+  ${NSD_CreateCheckbox} 0 0u 100% 11u "Host Deck Shelves even if a plugin loader is present (cooperative)"
+  Pop $CbForce
+  ${NSD_CreateCheckbox} 0 14u 100% 11u "Add ShelvesHub's own Quick Access tab"
+  Pop $CbNqam
+  ${NSD_Check} $CbNqam
+  ${NSD_CreateCheckbox} 0 28u 100% 11u "Also inject into the plain desktop client (experimental)"
+  Pop $CbDesk
+
+  ${NSD_CreateCheckbox} 0 48u 100% 11u "Enable automatic updates"
+  Pop $CbAuto
+  ${NSD_Check} $CbAuto
+  ${NSD_CreateCheckbox} 14u 62u 100% 11u "Auto-update ShelvesHub itself"
+  Pop $CbAhub
+  ${NSD_Check} $CbAhub
+  ${NSD_CreateCheckbox} 14u 76u 100% 11u "Auto-update Deck Shelves"
+  Pop $CbAplug
+  ${NSD_Check} $CbAplug
+  ${NSD_CreateCheckbox} 14u 90u 100% 11u "Include ShelvesHub pre-releases"
+  Pop $CbHpre
+  ${NSD_CreateCheckbox} 14u 104u 100% 11u "Include Deck Shelves pre-releases"
+  Pop $CbPpre
+
+  nsDialogs::Show
+FunctionEnd
+
+Function OptionsPageLeave
+  ${NSD_GetState} $CbForce $SForce
+  ${NSD_GetState} $CbNqam $SNqam
+  ${NSD_GetState} $CbDesk $SDesk
+  ${NSD_GetState} $CbAuto $SAuto
+  ${NSD_GetState} $CbAhub $SAhub
+  ${NSD_GetState} $CbAplug $SAplug
+  ${NSD_GetState} $CbHpre $SHpre
+  ${NSD_GetState} $CbPpre $SPpre
+FunctionEnd
 
 Section "Install"
   SetOutPath "$INSTDIR"
@@ -38,8 +107,17 @@ Section "Install"
   File "payload\register-task.ps1"
 
   ; Config file — install only if absent, so a re-install never clobbers edits.
-  IfFileExists "$INSTDIR\shelveshub.config.json" +2
+  StrCpy $ConfigWasFresh "0"
+  IfFileExists "$INSTDIR\shelveshub.config.json" cfg_exists 0
     File "payload\shelveshub.config.json"
+    StrCpy $ConfigWasFresh "1"
+  cfg_exists:
+
+  ; Apply the Setup-options page choices (config flips on a fresh config; prefs
+  ; seeded once). Mirrors the script/zip installer; stays editable in the tab.
+  File "payload\apply-setup.ps1"
+  nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -NoProfile -File "$INSTDIR\apply-setup.ps1" -InstallPath "$INSTDIR" -ConfigWasFresh $ConfigWasFresh -Force $SForce -NativeQam $SNqam -DesktopUi $SDesk -AutoUpdate $SAuto -AutoUpdateHub $SAhub -AutoUpdatePlugin $SAplug -HubPrerelease $SHpre -PluginPrerelease $SPpre'
+  Pop $0
 
   DetailPrint "Registering the ShelvesHub background service..."
   nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -NoProfile -File "$INSTDIR\register-task.ps1" -InstallPath "$INSTDIR"'
@@ -63,6 +141,7 @@ Section "Uninstall"
   Delete "$INSTDIR\shelveshub.exe"
   Delete "$INSTDIR\shelves-devtools.exe"
   Delete "$INSTDIR\register-task.ps1"
+  Delete "$INSTDIR\apply-setup.ps1"
   Delete "$INSTDIR\shelveshub.config.json"
   RMDir /r "$INSTDIR\runtime"
   RMDir /r "$INSTDIR\bundle"

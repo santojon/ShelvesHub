@@ -3,8 +3,31 @@
 # Usage: bash <(curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/install-steamos.sh)
 set -e
 
+# Per-user by design: refuse root so we never create a root-owned install that
+# can't reach your Steam. (Migration below still uses sudo where it must.)
+# Override only for a deliberate system image: SHELVES_ALLOW_ROOT=1.
+if [[ "${EUID:-$(id -u)}" -eq 0 && "${SHELVES_ALLOW_ROOT:-}" != "1" ]]; then
+  echo "[!] Don't run this as root/sudo. ShelvesHub installs per-user"
+  echo "    (~/.local/share/shelveshub) and runs as you so it can reach your Steam."
+  echo "    Re-run it as your normal user (the 'deck' user), without sudo."
+  exit 1
+fi
+
 REPO="santojon/ShelvesHub"
 INSTALL_DIR="$HOME/.local/share/shelveshub"
+
+# Capture the whole run to a log next to the install, so a failure is diagnosable
+# even when the terminal window closes instantly (e.g. launched from Game Mode /
+# without an interactive shell — common on console-first devices). Fail-soft: if
+# the tee redirect can't be set up, keep going with plain output.
+LOGFILE="$INSTALL_DIR/install.log"
+if mkdir -p "$INSTALL_DIR" 2>/dev/null && exec > >(tee "$LOGFILE") 2>&1; then
+  echo "[i] Full log: $LOGFILE"
+fi
+# On any early exit, say so clearly and point at the log (the terminal may have
+# already vanished, but the file remains). The download branch re-arms this to
+# also clean its temp dir.
+trap 'rc=$?; [[ $rc -ne 0 ]] && { echo; echo "[!] Install failed (exit $rc). Full log: $LOGFILE"; }' EXIT
 SERVICE_DIR="$HOME/.config/systemd/user"
 BINARY="shelveshub"
 
@@ -66,7 +89,7 @@ else
   fi
 
   TMPDIR=$(mktemp -d)
-  trap 'rm -rf "$TMPDIR"' EXIT
+  trap 'rc=$?; rm -rf "$TMPDIR"; [[ $rc -ne 0 ]] && { echo; echo "[!] Install failed (exit $rc). Full log: $LOGFILE"; }' EXIT
 
   echo "[i] Downloading $PACKAGE..."
   curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"

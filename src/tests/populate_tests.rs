@@ -330,6 +330,30 @@ fn release_tag_reads_tag_name_and_rejects_empty() {
 }
 
 #[test]
+fn signatures_required_when_key_is_baked() {
+    // The public key is embedded (see embedded_minisign_key_parses), so updates
+    // fail closed by default; only the explicit dev escape hatch relaxes it.
+    assert!(!MINISIGN_PUBLIC_KEY.is_empty());
+    assert!(std::env::var("SHELVES_ALLOW_UNSIGNED_UPDATE").is_err());
+    assert!(signatures_required());
+}
+
+#[test]
+fn release_without_sums_is_refused_when_signatures_required() {
+    // No SHA256SUMS asset → the fail-closed branch returns before any download,
+    // so a dummy archive path is fine.
+    let release: serde_json::Value = serde_json::from_str(r#"{"assets":[]}"#).unwrap();
+    let err = verify_release_archive(
+        &release,
+        "shelveshub-linux.tar.gz",
+        std::path::Path::new("/x"),
+    )
+    .unwrap_err();
+    assert!(err.contains("SHA256SUMS"), "unexpected error: {err}");
+    assert!(err.contains("refusing update"), "unexpected error: {err}");
+}
+
+#[test]
 fn placeholder_is_not_a_real_bundle() {
     let dir = std::env::temp_dir().join("shelveshub-populate-test");
     let _ = fs::create_dir_all(&dir);

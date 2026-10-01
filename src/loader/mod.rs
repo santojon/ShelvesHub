@@ -211,8 +211,9 @@ pub fn run(mut config: Config) {
                     "loader",
                     "Steam UI windows have collapsed. NOT calling StartRestart (it worsens this) — recover by restarting steam-launcher.service on the device.",
                 );
-                // Empty/whitespace `recover_cmd` = pause only (explicit opt-out),
-                // same as unset-with-no-default. A real command runs through a shell.
+                // `recover_cmd = "off"` resolves to None in config (explicit opt-out)
+                // = pause only. Otherwise it's the official default or a custom command,
+                // run through a shell. (The empty filter stays as a defensive guard.)
                 match config
                     .recover_cmd
                     .as_deref()
