@@ -330,9 +330,27 @@ jobs:
           # signature was unavailable). Set MINISIGN_SECRET_KEY + MINISIGN_PASSWORD
           # (from `minisign -G`) to enable tamper-proof signature verification.
           if [ -n "${MINISIGN_SECRET_KEY:-}" ]; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+            sudo systemctl stop unattended-upgrades 2>/dev/null || true
+            for i in 1 2 3 4 5; do
+              sudo apt-get update -qq && sudo apt-get install -y -qq minisign && break
+              sudo fuser -k /var/lib/dpkg/lock-frontend 2>/dev/null || true; sleep 15
+            done
+            command -v minisign >/dev/null || { echo "::error::minisign install failed"; exit 1; }
             printf '%s\n' "$MINISIGN_SECRET_KEY" > mkey
-            printf '%s\n' "${MINISIGN_PASSWORD:-}" | minisign -S -s mkey -m SHA256SUMS -x SHA256SUMS.minisig
+            # Validate the key FILE shape without printing it: a minisign secret key
+            # is two lines — an "untrusted comment:" line then the base64 key. A
+            # secret set to only the base64 line (comment omitted on paste) fails to
+            # load with "Error while loading the secret key file".
+            if [ "$(grep -c . mkey)" -lt 2 ] || ! head -1 mkey | grep -q 'untrusted comment:'; then
+              rm -f mkey
+              echo "::error::MINISIGN_SECRET_KEY is not a valid minisign secret-key file. Re-set the secret to the FULL content of your minisign.key (BOTH lines: the 'untrusted comment:' line AND the base64 line). If the key is password-protected, also set MINISIGN_PASSWORD."
+              exit 1
+            fi
+            printf '%s\n' "${MINISIGN_PASSWORD:-}" | minisign -S -s mkey -m SHA256SUMS -x SHA256SUMS.minisig || {
+              rm -f mkey
+              echo "::error::minisign signing failed. If your key is password-protected, set the MINISIGN_PASSWORD secret; otherwise re-generate a passwordless key (minisign -G -W) and update MINISIGN_SECRET_KEY + the embedded MINISIGN_PUBLIC_KEY in src/constants.rs."
+              exit 1
+            }
             rm -f mkey
             echo "SHA256SUMS signed with minisign."
           else
