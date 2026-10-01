@@ -76,6 +76,9 @@ jobs:
             oneclick_uninstall_name: uninstall-windows.bat
 
     runs-on: ${{ matrix.os }}
+    # Whole-job cap: a wedged apt/network step fails fast instead of burning the
+    # 6h GitHub default (a build normally finishes in a few minutes).
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -105,11 +108,23 @@ jobs:
           perl -0777 -pi -e "s/^version = \"[^\"]*\"/version = \"$V\"/m" Cargo.toml
           grep '^version' Cargo.toml
 
+      # apt on the hosted runner can wedge waiting for the dpkg lock held by the
+      # runner's own unattended-upgrades, or on a slow mirror. Bound the step, wait
+      # for the lock, and retry instead of hanging the whole release for hours.
       - name: Install ARM64 cross compiler
         if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo systemctl stop unattended-upgrades 2>/dev/null || true
+          for i in 1 2 3 4 5; do
+            sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu && break
+            echo "apt attempt $i failed; freeing any dpkg lock and retrying..."
+            sudo fuser -k /var/lib/dpkg/lock-frontend 2>/dev/null || true
+            sleep 15
+          done
+          command -v aarch64-linux-gnu-gcc >/dev/null || { echo "::error::aarch64 cross compiler install failed"; exit 1; }
 
       - name: Build release binary
         env:
