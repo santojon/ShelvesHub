@@ -54,6 +54,10 @@ releases/
 *.tar.gz
 *.zip
 *.deb
+# Release checksum manifests (CI uploads them as assets; a local build at the repo
+# root must never commit them).
+SHA256SUMS
+SHA256SUMS.minisig
 *.rpm
 *.bak
 *.tmp

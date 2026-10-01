@@ -82,6 +82,12 @@ ask() {
   fi
 }
 b() { [[ "$1" == 1 ]] && echo true || echo false; }
+# Re-install: options are set on the FIRST install and never silently reconfigured
+# (an upgrade must not clobber your choices). Say so, so a re-run doesn't look idle.
+if [[ "$CONFIG_WAS_FRESH" != 1 && -f "$PREFS_JSON" ]]; then
+  echo "[i] Existing setup kept — ShelvesHub is already configured on this device."
+  echo "    Change any option anytime in the ShelvesHub tab (Quick Access Menu)."
+fi
 if [[ "$CONFIG_WAS_FRESH" == 1 ]]; then
   [[ -t 0 ]] && { echo ""; echo "── Optional setup (press Enter for the default) ──"; }
   FORCE=$(ask "${SHELVES_FORCE_OWNER:-}" "Host Deck Shelves even if a plugin loader is present (cooperative)?" n)

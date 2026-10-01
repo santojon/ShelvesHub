@@ -52,7 +52,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   install. Your `shelveshub.config.json` is carried over, and if the old install kept
   your Deck Shelves settings under root, they're rescued to your account (only when
   you don't already have your own — never overwritten). Your settings live in a
-  separate directory, so they're never touched otherwise.
+  separate directory, so they're never touched otherwise. On Windows this runs from
+  both the `setup.exe` and the script/zip installer (shared migration step).
 - **Windows now installs per-user — no administrator rights.** ShelvesHub installs
   under `%LOCALAPPDATA%\ShelvesHub` and runs as you at logon, so it can manage its
   own bundle/backend/config, self-update, and reach your Steam. Previously it went
@@ -67,11 +68,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   minimal ARM setups) shows up in diagnostics instead of only failing at the first data call.
 
 ### Fixed
-- **A failed install no longer disappears without a trace.** The Linux, SteamOS and
-  macOS installers now write the whole run to `~/.local/share/shelveshub/install.log`
-  and print a clear failure line, and the desktop launcher's pause reads from the
-  terminal (with a short fallback wait) so the window doesn't vanish instantly on a
-  console-first device — you can see, or afterwards read, why an install stopped.
+- **A failed install no longer disappears without a trace.** The Linux, SteamOS,
+  macOS **and Windows** installers now write the whole run to a log next to the install
+  (`install.log`) and print a clear failure line, and the desktop launcher's pause reads
+  from the terminal (with a short fallback wait) so the window doesn't vanish instantly on
+  a console-first device — you can see, or afterwards read, why an install stopped.
 - **Plugin updates no longer go silent under a plugin loader.** When ShelvesHub was
   forced to host over a loader (cooperative mode), Deck Shelves hid its own "update
   available" banner expecting the host to install it — but the host can't replace a

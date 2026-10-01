@@ -10,32 +10,29 @@ $binary      = "shelveshub.exe"
 $package     = "shelveshub-windows.zip"
 $installPath = Join-Path $env:LOCALAPPDATA "ShelvesHub"
 
+# Capture the whole run to a log next to the install so a failure is diagnosable
+# even if the window closes. Start-Transcript keeps writing on a terminating error,
+# so the log survives; the trap adds a clear failure line. Fail-soft.
+$logFile = Join-Path $installPath "install.log"
+try {
+  New-Item -ItemType Directory -Force -Path $installPath | Out-Null
+  Start-Transcript -Path $logFile -Append -ErrorAction SilentlyContinue | Out-Null
+  Write-Output "[i] Full log: $logFile"
+} catch {}
+trap {
+  Write-Warning "[!] Install failed: $($_.Exception.Message)  Full log: $logFile"
+  try { Stop-Transcript | Out-Null } catch {}
+  break
+}
+
 Write-Output "=== ShelvesHub — Windows Installer ==="
 
 # ── Migrate any older Program Files (admin) install to the current per-user one ──
-# Your Deck Shelves settings live in %APPDATA%\deck-shelves (separate), so this never
-# loses data. Rescues the old config + settings (only when yours don't exist yet),
-# then removes the old install/registry entry (which may need admin — warns if not).
-$oldInstall  = Join-Path $env:ProgramFiles "ShelvesHub"
+# Shared with the setup.exe via migrate.ps1 (single source of truth). Settings live
+# in %APPDATA%\deck-shelves (separate), so this never loses data.
 $userSettings = Join-Path $env:APPDATA "deck-shelves"
-if (Test-Path $oldInstall) {
-  Write-Output "[i] Migrating an old Program Files (admin) install to per-user..."
-  New-Item -Path $installPath -ItemType Directory -Force | Out-Null
-  $oldCfg = Join-Path $oldInstall "shelveshub.config.json"
-  if ((Test-Path $oldCfg) -and -not (Test-Path (Join-Path $installPath "shelveshub.config.json"))) {
-    Copy-Item $oldCfg $installPath -Force -ErrorAction SilentlyContinue
-  }
-  $sysSettings = "C:\Windows\System32\config\systemprofile\AppData\Roaming\deck-shelves"
-  if ((Test-Path $sysSettings) -and -not (Test-Path $userSettings)) {
-    Copy-Item $sysSettings $userSettings -Recurse -Force -ErrorAction SilentlyContinue
-    if (Test-Path $userSettings) { Write-Output "[i] Rescued your Deck Shelves settings from the old system install." }
-  }
-  Remove-Item -Recurse -Force $oldInstall -ErrorAction SilentlyContinue
-  Remove-Item "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ShelvesHub" -Recurse -Force -ErrorAction SilentlyContinue
-  if (Test-Path $oldInstall) {
-    Write-Warning "[!] Could not remove $oldInstall (needs admin). Delete it manually or run this installer once elevated; your data and the new per-user install are unaffected."
-  }
-}
+$migrate = Join-Path $PSScriptRoot "migrate.ps1"
+if (Test-Path $migrate) { & $migrate -InstallPath $installPath }
 
 if (Test-Path $binary) {
   Write-Output "[i] Binary found locally, skipping download."
@@ -116,6 +113,12 @@ if ($configWasFresh) {
   Set-Content -Path $cfgPath -Value $c -NoNewline
 }
 $prefsPath = Join-Path $userSettings "shelveshub.json"
+# Re-install: options are set on the FIRST install and never silently reconfigured
+# (an upgrade must not clobber your choices). Say so, so a re-run doesn't look idle.
+if (-not $configWasFresh -and (Test-Path $prefsPath)) {
+  Write-Output "[i] Existing setup kept — ShelvesHub is already configured on this machine."
+  Write-Output "    Change any option anytime in the ShelvesHub tab (Quick Access Menu)."
+}
 if (-not (Test-Path $prefsPath)) {
   $auto = Ask $env:SHELVES_AUTO_UPDATE "Enable automatic updates?" $true
   if ($auto) {
@@ -187,3 +190,5 @@ Write-Output "  Open Steam Big Picture, then the Quick Access Menu, and find"
 Write-Output "  the ShelvesHub tab. If a plugin loader is already hosting Deck"
 Write-Output "  Shelves, ShelvesHub coexists (adds only its tab) and won't"
 Write-Output "  replace it."
+
+try { Stop-Transcript | Out-Null } catch {}

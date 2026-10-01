@@ -359,7 +359,10 @@ fn default_recover_cmd() -> Option<String> {
         "systemctl --user restart steam-launcher.service"
     } else if cfg!(target_os = "macos") {
         // macOS (always a sole host): bounce Steam and return to Big Picture.
-        "osascript -e 'tell application \"Steam\" to quit'; sleep 5; open -a Steam; sleep 12; open \"steam://open/bigpicture\""
+        // Ask Steam to quit, force-kill if it's wedged (the usual state on a
+        // collapse), then reopen via the URL — which relaunches Steam into Big
+        // Picture. Mirrors scripts/mac-deploy-hard.sh.
+        "osascript -e 'quit app \"Steam\"' 2>/dev/null; sleep 5; pkill -x steam_osx 2>/dev/null; sleep 2; open \"steam://open/bigpicture\""
     } else if cfg!(windows) {
         // Windows (always a sole host): nudge Steam back into Big Picture.
         "start \"\" \"steam://open/bigpicture\""

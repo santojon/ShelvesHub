@@ -56,6 +56,8 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   antigo guardava suas configurações do Deck Shelves sob o root, elas são resgatadas para
   a sua conta (só quando você ainda não tem as suas — nunca sobrescreve). Suas
   configurações ficam num diretório separado, então não são tocadas em nenhum outro caso.
+  No Windows isso roda tanto pelo `setup.exe` quanto pelo instalador via script/zip (passo
+  de migração compartilhado).
 - **No Windows a instalação agora é por usuário — sem direitos de administrador.**
   O ShelvesHub instala em `%LOCALAPPDATA%\ShelvesHub` e roda como você no login,
   então consegue gerenciar o próprio bundle/backend/config, se autoatualizar e
@@ -73,8 +75,8 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ### Corrigido
 - **Uma instalação que falha não some mais sem deixar rastro.** Os instaladores de
-  Linux, SteamOS e macOS agora gravam a execução inteira em
-  `~/.local/share/shelveshub/install.log` e imprimem uma linha clara de falha, e a
+  Linux, SteamOS, macOS **e Windows** agora gravam a execução inteira num log ao lado
+  do install (`install.log`) e imprimem uma linha clara de falha, e a
   pausa do lançador lê do terminal (com uma espera curta de fallback) para a janela
   não sumir na hora num aparelho console-first — dá para ver, ou ler depois, por que
   a instalação parou.
