@@ -26,7 +26,19 @@ function Run-Pkg($scriptName, $argLine, $outFile) {
   # so relax it to Continue for just this invocation (function-scoped).
   $ErrorActionPreference = 'Continue'
   $wrapper = Join-Path $env:TEMP ("wrap-" + [guid]::NewGuid() + ".ps1")
+  # Set the redirected profile + option env INSIDE the wrapper so the child shell
+  # definitely sees them (process env inheritance into `& powershell` isn't
+  # reliable for well-known folder vars like LOCALAPPDATA on the runner).
   @"
+`$env:LOCALAPPDATA = '$($env:LOCALAPPDATA)'
+`$env:APPDATA = '$($env:APPDATA)'
+`$env:ProgramFiles = '$($env:ProgramFiles)'
+`$env:SHTASK_LOG = '$($env:SHTASK_LOG)'
+`$env:SHELVES_FORCE_OWNER = '$($env:SHELVES_FORCE_OWNER)'
+`$env:SHELVES_NATIVE_QAM = '$($env:SHELVES_NATIVE_QAM)'
+`$env:SHELVES_DESKTOP_UI = '$($env:SHELVES_DESKTOP_UI)'
+`$env:SHELVES_AUTO_UPDATE = '$($env:SHELVES_AUTO_UPDATE)'
+`$env:SHELVES_PLUGIN_PRERELEASE = '$($env:SHELVES_PLUGIN_PRERELEASE)'
 function New-ScheduledTaskAction {}
 function New-ScheduledTaskTrigger {}
 function New-ScheduledTaskSettingsSet {}
@@ -73,6 +85,11 @@ Write-Output "[1] install.ps1 (fresh, with options)"
 $env:SHELVES_FORCE_OWNER = "1"; $env:SHELVES_NATIVE_QAM = "0"; $env:SHELVES_DESKTOP_UI = "1"
 $env:SHELVES_AUTO_UPDATE = "1"; $env:SHELVES_PLUGIN_PRERELEASE = "1"
 Run-Pkg "install.ps1" "" "$env:TEMP\win-install.out"
+if (-not (Test-Path "$installPath\shelveshub.exe")) {
+  Write-Output "--- install.ps1 output (install did not lay down the binary) ---"
+  Get-Content "$env:TEMP\win-install.out" -ErrorAction SilentlyContinue | Write-Output
+  Write-Output "--- installPath=$installPath ---"
+}
 Check "binary installed"            (Test-Path "$installPath\shelveshub.exe")
 Check "config present"              (Test-Path $cfgPath)
 Check "runtime copied"              (Test-Path "$installPath\runtime\shelves-host.js")
