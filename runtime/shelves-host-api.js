@@ -471,9 +471,19 @@
     } catch (e) {}
   }
   let _navPruneTimer = null;
+  function stopNavPrune() {
+    if (_navPruneTimer) { clearInterval(_navPruneTimer); _navPruneTimer = null; }
+  }
   function startNavPrune() {
     if (_navPruneTimer) return;
-    _navPruneTimer = setInterval(pruneHiddenNavNodes, 500);
+    // Pause the work while the document is hidden (game in front / UI off) so the
+    // poll costs nothing when it can't matter; register a stop path so a hot-swap
+    // teardown clears it instead of leaking a timer per re-eval.
+    _navPruneTimer = setInterval(function () {
+      try { if (document.hidden) return; } catch (e) {}
+      pruneHiddenNavNodes();
+    }, 500);
+    unmountHandlers.push(stopNavPrune);
   }
 
   /* (A) Host API — installed only when we are NOT coexisting with another

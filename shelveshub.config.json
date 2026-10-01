@@ -1,7 +1,7 @@
 {
   "//": "ShelvesHub configuration. Precedence per setting: environment variable > this file > built-in default. Remove a key to use its default. Keys starting with // are comments (ignored by the parser — JSON has no real comments). Installed next to the binary; the daemon also honours SHELVES_CONFIG_FILE. See docs/troubleshooting.md.",
 
-  "// rpc_host": "Host the local RPC server binds to — the injected bundle talks to it on the same machine. Loopback by default; rarely changed.",
+  "// rpc_host": "Host the local RPC server binds to — the injected bundle talks to it on the same machine. KEEP this at 127.0.0.1 (loopback): the endpoint is token-gated but meant for this machine only; a routable address exposes it to the local network (the daemon logs a warning if you do).",
   "rpc_host": "127.0.0.1",
 
   "// rpc_port": "Port for the local RPC server. Change this if another program already uses 60123 (you'll see a bind error in the log).",

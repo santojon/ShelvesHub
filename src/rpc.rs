@@ -79,6 +79,21 @@ pub fn serve(addr: &str) {
     let listener = match TcpListener::bind(addr) {
         Ok(l) => {
             log_info("rpc", &format!("Listening on {addr}"));
+            // The control endpoint is token-gated, but it is meant for loopback
+            // only. Surface a non-loopback bind loudly — someone set rpc_host to a
+            // routable address, exposing the endpoint to the local network.
+            let loopback = addr.starts_with("127.")
+                || addr.starts_with("localhost")
+                || addr.starts_with("[::1]");
+            if !loopback {
+                log_warning(
+                    "rpc",
+                    &format!(
+                        "Control endpoint bound to a NON-loopback address ({addr}) — it is reachable \
+                         from the local network. Keep rpc_host at 127.0.0.1 unless you intend this."
+                    ),
+                );
+            }
             l
         }
         Err(e) => {

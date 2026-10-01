@@ -55,6 +55,13 @@ static STATE: Mutex<State> = Mutex::new(State {
     last_spawn: None,
 });
 
+/// Lock `STATE`, tolerating a poisoned mutex: if a prior holder panicked, recover
+/// the guard instead of propagating the panic — a transient backend hiccup must
+/// not permanently wedge every later data call on the RPC threads.
+fn lock_state() -> std::sync::MutexGuard<'static, State> {
+    STATE.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
 /// Configure backend hosting and eagerly spawn the child. No-op when
 /// `SHELVES_BACKEND_DIR` is unset (backend hosting disabled).
 pub fn init(config: &Config) {
@@ -71,7 +78,7 @@ pub fn init(config: &Config) {
     if SETTINGS.set(settings).is_err() {
         return; // already initialised
     }
-    let mut state = STATE.lock().unwrap();
+    let mut state = lock_state();
     ensure_running(&mut state);
 }
 
@@ -82,7 +89,7 @@ pub fn enabled() -> bool {
 
 /// Whether the backend child process is currently alive.
 pub fn is_running() -> bool {
-    let mut state = STATE.lock().unwrap();
+    let mut state = lock_state();
     match state.handle.as_mut() {
         Some(h) => h.child.try_wait().ok().flatten().is_none(),
         None => false,
@@ -134,7 +141,7 @@ pub fn call(method: &str, args: &Value) -> Result<Value, String> {
     if !valid_method_name(method) {
         return Err(format!("invalid method name: {method}"));
     }
-    let mut state = STATE.lock().unwrap();
+    let mut state = lock_state();
     if !ensure_running(&mut state) {
         return Err("backend is not running".to_string());
     }
