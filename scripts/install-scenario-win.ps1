@@ -2,9 +2,10 @@
 # runner (no Steam). Proves install.ps1 / uninstall.ps1 lay down and tear down the
 # right files under a redirected per-user profile, apply the SHELVES_* options on a
 # FIRST install, keep settings on a plain uninstall and remove them on -Purge,
-# migrate an old Program Files install, and write install.log. The scheduled task
-# is registered for real (allowed per-user on the runner) and cleaned up at the
-# end; LOCALAPPDATA / APPDATA / ProgramFiles are redirected to temp sandboxes.
+# migrate an old Program Files install, and write install.log. The ScheduledTask
+# cmdlets are STUBBED (a recording shim, like the Linux systemctl / macOS launchctl
+# stubs) so no real task is registered and no daemon starts; LOCALAPPDATA / APPDATA
+# / ProgramFiles are redirected to temp sandboxes.
 $ErrorActionPreference = "Stop"
 $ROOT = (Resolve-Path "$PSScriptRoot\..").Path
 Set-Location $ROOT
@@ -13,17 +14,28 @@ $script:FAILS = 0
 function Check($label, [bool]$ok) {
   if ($ok) { Write-Output "  [ok] $label" } else { Write-Output "  [X]  $label"; $script:FAILS++ }
 }
-function Cleanup-Task {
-  schtasks /end /tn "ShelvesHub" 2>$null | Out-Null
-  schtasks /delete /tn "ShelvesHub" /f 2>$null | Out-Null
-  Get-Process -Name "shelveshub" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-}
-# Run a packaged installer script in a child shell whose LOCATION is the package
-# dir (so install.ps1's `Test-Path shelveshub.exe` finds the local binary and
-# skips the download) with the child's stderr+stdout captured to a file.
+
+# Run a packaged installer script in a child shell that FIRST defines no-op stubs
+# for the ScheduledTask cmdlets (a simple function with no param block swallows any
+# args), then cd's into the package dir (so install.ps1's `Test-Path shelveshub.exe`
+# finds the local binary and skips the download) and runs the script. Register-
+# ScheduledTask records to $env:SHTASK_LOG so we can assert it was attempted.
 function Run-Pkg($scriptName, $argLine, $outFile) {
-  $inner = "Set-Location -LiteralPath '$PKG'; & '$PKG\installer\$scriptName' $argLine"
-  & powershell -NoProfile -ExecutionPolicy Bypass -Command $inner *> $outFile
+  $wrapper = Join-Path $env:TEMP ("wrap-" + [guid]::NewGuid() + ".ps1")
+  @"
+function New-ScheduledTaskAction {}
+function New-ScheduledTaskTrigger {}
+function New-ScheduledTaskSettingsSet {}
+function New-ScheduledTaskPrincipal {}
+function Register-ScheduledTask { 'Register-ScheduledTask' | Out-File -Append -LiteralPath `$env:SHTASK_LOG }
+function Start-ScheduledTask {}
+function Stop-ScheduledTask {}
+function Unregister-ScheduledTask {}
+Set-Location -LiteralPath '$PKG'
+& '$PKG\installer\$scriptName' $argLine
+"@ | Set-Content -LiteralPath $wrapper -Encoding utf8
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $wrapper *> $outFile
+  Remove-Item -LiteralPath $wrapper -ErrorAction SilentlyContinue
 }
 
 Write-Output "== Windows install / uninstall lifecycle =="
@@ -45,54 +57,50 @@ $SAND = Join-Path ([System.IO.Path]::GetTempPath()) ("shsand-" + [guid]::NewGuid
 $env:LOCALAPPDATA = Join-Path $SAND "Local"
 $env:APPDATA      = Join-Path $SAND "Roaming"
 $env:ProgramFiles = Join-Path $SAND "ProgramFiles"
+$env:SHTASK_LOG   = Join-Path $SAND "schtask.log"
 New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA,$env:APPDATA,$env:ProgramFiles | Out-Null
 $installPath = Join-Path $env:LOCALAPPDATA "ShelvesHub"
 $settingsDir = Join-Path $env:APPDATA "deck-shelves"
 $prefsPath   = Join-Path $settingsDir "shelveshub.json"
 $cfgPath     = Join-Path $installPath "shelveshub.config.json"
 
-try {
-  # ── [1] Install (fresh) with the SHELVES_* options exercised ────────────────
-  Write-Output "[1] install.ps1 (fresh, with options)"
-  $env:SHELVES_FORCE_OWNER = "1"; $env:SHELVES_NATIVE_QAM = "0"; $env:SHELVES_DESKTOP_UI = "1"
-  $env:SHELVES_AUTO_UPDATE = "1"; $env:SHELVES_PLUGIN_PRERELEASE = "1"
-  Run-Pkg "install.ps1" "" "$env:TEMP\win-install.out"
-  Check "binary installed"            (Test-Path "$installPath\shelveshub.exe")
-  Check "config present"              (Test-Path $cfgPath)
-  Check "runtime copied"              (Test-Path "$installPath\runtime\shelves-host.js")
-  Check "install.log written"         (Test-Path "$installPath\install.log")
-  Check "scheduled task registered"   (@(schtasks /query /tn "ShelvesHub" 2>$null).Count -gt 0)
-  $cfg = Get-Content $cfgPath -Raw
-  Check "force_owner flipped on"      ($cfg -match '"force_owner":\s*true')
-  Check "native_qam flipped off"      ($cfg -match '"native_qam":\s*false')
-  Check "desktop_ui flipped on"       ($cfg -match '"desktop_ui":\s*true')
-  Check "prefs seeded"                (Test-Path $prefsPath)
-  Check "plugin_prerelease seeded"    ((Get-Content $prefsPath -Raw) -match '"plugin_prerelease":\s*true')
+# ── [1] Install (fresh) with the SHELVES_* options exercised ──────────────────
+Write-Output "[1] install.ps1 (fresh, with options)"
+$env:SHELVES_FORCE_OWNER = "1"; $env:SHELVES_NATIVE_QAM = "0"; $env:SHELVES_DESKTOP_UI = "1"
+$env:SHELVES_AUTO_UPDATE = "1"; $env:SHELVES_PLUGIN_PRERELEASE = "1"
+Run-Pkg "install.ps1" "" "$env:TEMP\win-install.out"
+Check "binary installed"            (Test-Path "$installPath\shelveshub.exe")
+Check "config present"              (Test-Path $cfgPath)
+Check "runtime copied"              (Test-Path "$installPath\runtime\shelves-host.js")
+Check "install.log written"         (Test-Path "$installPath\install.log")
+Check "task registration attempted" ((Test-Path $env:SHTASK_LOG) -and [bool](Select-String -Path $env:SHTASK_LOG -Pattern "Register-ScheduledTask" -Quiet))
+$cfg = if (Test-Path $cfgPath) { Get-Content $cfgPath -Raw } else { "" }
+Check "force_owner flipped on"      ($cfg -match '"force_owner":\s*true')
+Check "native_qam flipped off"      ($cfg -match '"native_qam":\s*false')
+Check "desktop_ui flipped on"       ($cfg -match '"desktop_ui":\s*true')
+Check "prefs seeded"                (Test-Path $prefsPath)
+Check "plugin_prerelease seeded"    ((Test-Path $prefsPath) -and ((Get-Content $prefsPath -Raw) -match '"plugin_prerelease":\s*true'))
 
-  # ── [2] Re-install says it kept the existing setup ──────────────────────────
-  Write-Output "[2] install.ps1 (re-install keeps setup)"
-  Run-Pkg "install.ps1" "" "$env:TEMP\win-reinstall.out"
-  Check "re-install reports kept setup" ([bool](Select-String -Path "$env:TEMP\win-reinstall.out" -Pattern "Existing setup kept" -Quiet))
+# ── [2] Re-install says it kept the existing setup ────────────────────────────
+Write-Output "[2] install.ps1 (re-install keeps setup)"
+Run-Pkg "install.ps1" "" "$env:TEMP\win-reinstall.out"
+Check "re-install reports kept setup" ([bool](Select-String -Path "$env:TEMP\win-reinstall.out" -Pattern "Existing setup kept" -Quiet))
 
-  # Seed shared settings to prove a plain uninstall preserves them.
-  "{}" | Out-File -FilePath (Join-Path $settingsDir "settings.json") -Encoding ascii
+# Seed shared settings to prove a plain uninstall preserves them.
+"{}" | Out-File -FilePath (Join-Path $settingsDir "settings.json") -Encoding ascii
 
-  # ── [3] Uninstall (keep settings) ───────────────────────────────────────────
-  Write-Output "[3] uninstall.ps1 (keep settings)"
-  Run-Pkg "uninstall.ps1" "" "$env:TEMP\win-uninstall.out"
-  Check "install dir removed"         (-not (Test-Path $installPath))
-  Check "shared settings PRESERVED"   (Test-Path (Join-Path $settingsDir "settings.json"))
+# ── [3] Uninstall (keep settings) ─────────────────────────────────────────────
+Write-Output "[3] uninstall.ps1 (keep settings)"
+Run-Pkg "uninstall.ps1" "" "$env:TEMP\win-uninstall.out"
+Check "install dir removed"         (-not (Test-Path $installPath))
+Check "shared settings PRESERVED"   (Test-Path (Join-Path $settingsDir "settings.json"))
 
-  # ── [3b] Reinstall, then uninstall -Purge → settings removed ────────────────
-  Write-Output "[3b] uninstall.ps1 -Purge (remove settings)"
-  Run-Pkg "install.ps1" "" "$env:TEMP\win-reinstall2.out"
-  Run-Pkg "uninstall.ps1" "-Purge" "$env:TEMP\win-purge.out"
-  Check "install dir removed (purge)"     (-not (Test-Path $installPath))
-  Check "shared settings REMOVED (purge)" (-not (Test-Path $settingsDir))
-
-} finally {
-  Cleanup-Task
-}
+# ── [3b] Reinstall, then uninstall -Purge → settings removed ──────────────────
+Write-Output "[3b] uninstall.ps1 -Purge (remove settings)"
+Run-Pkg "install.ps1" "" "$env:TEMP\win-reinstall2.out"
+Run-Pkg "uninstall.ps1" "-Purge" "$env:TEMP\win-purge.out"
+Check "install dir removed (purge)"     (-not (Test-Path $installPath))
+Check "shared settings REMOVED (purge)" (-not (Test-Path $settingsDir))
 
 # ── [4] Migration: an old Program Files install is removed + config carried ───
 Write-Output "[4] migration from Program Files"
@@ -100,13 +108,9 @@ $oldInstall = Join-Path $env:ProgramFiles "ShelvesHub"
 New-Item -ItemType Directory -Force -Path $oldInstall | Out-Null
 '{"migrated":true}' | Out-File -FilePath (Join-Path $oldInstall "shelveshub.config.json") -Encoding ascii
 Remove-Item -Recurse -Force $installPath -ErrorAction SilentlyContinue
-try {
-  Run-Pkg "install.ps1" "" "$env:TEMP\win-migrate.out"
-  Check "old Program Files install removed" (-not (Test-Path $oldInstall))
-  Check "old config carried over"           ((Test-Path $cfgPath) -and ((Get-Content $cfgPath -Raw) -match '"migrated":\s*true'))
-} finally {
-  Cleanup-Task
-}
+Run-Pkg "install.ps1" "" "$env:TEMP\win-migrate.out"
+Check "old Program Files install removed" (-not (Test-Path $oldInstall))
+Check "old config carried over"           ((Test-Path $cfgPath) -and ((Get-Content $cfgPath -Raw) -match '"migrated":\s*true'))
 
 Remove-Item -Recurse -Force $PKG,$SAND -ErrorAction SilentlyContinue
 Write-Output ""

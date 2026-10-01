@@ -54,7 +54,7 @@ if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
   if sudo env HOME="$FAKEHOME" PATH="$STUB:$PATH" bash "$PKG/installer/install_mac.sh" >/tmp/root.out 2>&1; then
     echo "  [X]  install_mac.sh should have refused to run as root"; FAILS=$((FAILS + 1))
   else
-    check "refuses root with an explanation" grep -q "Don't run this as root" /tmp/root.out
+    check "refuses root with an explanation" grep -q "installs per-user" /tmp/root.out
     check "left no install dir behind"        test ! -e "$INSTALL_DIR"
   fi
 fi
