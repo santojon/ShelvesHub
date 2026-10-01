@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-01
+
 ### Added
 - **The installer can set your key options up front.** Choose cooperative hosting
   (`force_owner`), the Quick Access tab, desktop-client injection, and automatic

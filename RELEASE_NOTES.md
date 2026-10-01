@@ -10,6 +10,8 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-01
+
 - **Notifications now show up when running without a plugin loader.** ShelvesHub's
   own toasts — update available, suggestions, settings recovery — appear on screen
   in standalone mode instead of silently doing nothing.
