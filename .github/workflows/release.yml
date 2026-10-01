@@ -370,7 +370,9 @@ jobs:
           body: ${{ steps.notes.outputs.body }}
           generate_release_notes: ${{ steps.notes.outputs.body == '' }}
           prerelease: ${{ steps.tag.outputs.prerelease }}
+          # `artifacts/**/*` already includes SHA256SUMS + SHA256SUMS.minisig (both
+          # live in artifacts/). Listing them again made action-gh-release process
+          # them twice -> a clobber/label-update race that 404'd AND dropped the
+          # plain SHA256SUMS from the release. One glob, each asset uploaded once.
           files: |
             artifacts/**/*
-            artifacts/SHA256SUMS
-            artifacts/SHA256SUMS.minisig
