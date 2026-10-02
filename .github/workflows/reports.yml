@@ -83,4 +83,17 @@ jobs:
           git commit -m "chore(report): quality snapshot"
           # Push with the token in the URL: the checkout ran with
           # persist-credentials:false, so no auth is stored in git config.
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          # The snapshot only ADDS a timestamped file under site/reports/, so it
+          # never conflicts with other work — if main moved between checkout and
+          # push (a concurrent push), rebase onto the latest main and retry.
+          for i in 1 2 3 4 5; do
+            if git push "$REMOTE" HEAD:main; then
+              exit 0
+            fi
+            echo "Push rejected (main moved) — rebasing onto latest main and retrying ($i/5)…"
+            git fetch "$REMOTE" main || exit 1
+            git rebase FETCH_HEAD || { git rebase --abort; exit 1; }
+          done
+          echo "Could not push the quality snapshot after retries."
+          exit 1
