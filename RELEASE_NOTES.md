@@ -10,6 +10,8 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-02
+
 - **See updates sooner — and check on demand.** The ShelvesHub tab now shows whether
   you're up to date and when it last looked, with a **Check now** button to look right
   away. It reliably flags a new version even when a plugin loader is present, and a small

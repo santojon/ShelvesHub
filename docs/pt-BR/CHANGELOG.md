@@ -8,6 +8,8 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-02
+
 ### Adicionado
 - **Uma linha de status de atualização com um botão "Verificar agora".** A aba do
   ShelvesHub agora sempre mostra se você está atualizado e há quanto tempo ela checou

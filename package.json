@@ -1,6 +1,6 @@
 {
   "name": "shelveshub",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Official installation and management service for Deck Shelves",
   "license": "MIT",

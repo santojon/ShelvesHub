@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-02
+
 ### Added
 - **An update status line with a "Check now" button.** The ShelvesHub tab now always
   shows whether you're up to date and how long ago it last checked, and a "Check now"

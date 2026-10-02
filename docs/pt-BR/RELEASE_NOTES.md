@@ -10,6 +10,8 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-02
+
 - **Veja atualizações mais cedo — e verifique quando quiser.** A aba do ShelvesHub agora
   mostra se você está atualizado e quando ela olhou pela última vez, com um botão
   **Verificar agora** para olhar na hora. Ela sinaliza uma versão nova de forma confiável
