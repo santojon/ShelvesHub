@@ -425,6 +425,12 @@ fn dispatch(body: &str) -> String {
                             "version".to_string(),
                             Value::String(env!("CARGO_PKG_VERSION").to_string()),
                         );
+                        // Millis since the last update check (null = never this
+                        // session), so the hub view can show "checked X ago".
+                        obj.insert(
+                            "last_update_check_ms".to_string(),
+                            state::millis_since_update_check().map_or(Value::Null, Value::from),
+                        );
                     }
                     ok(v.to_string())
                 }
@@ -748,6 +754,21 @@ fn dispatch(body: &str) -> String {
                     err(&e)
                 }
             }
+        }
+        // Manual "Check now": run one update check immediately (same path as the
+        // periodic loop, single-flight) and report the refreshed status so the hub
+        // view updates without waiting for the next 30-minute cycle.
+        Some("checkUpdates") => {
+            let ran = crate::loader::run_update_check_now();
+            let pending = state::pending_hub_update().map_or(Value::Null, Value::String);
+            let last_ms = state::millis_since_update_check().map_or(Value::Null, Value::from);
+            ok(format!(
+                r#"{{"ran":{},"pending_hub_update":{},"hub_update_staged":{},"last_update_check_ms":{}}}"#,
+                ran,
+                pending,
+                state::hub_update_staged(),
+                last_ms
+            ))
         }
         // Restart the daemon so pending config-file edits (interval, native_qam,
         // owner_settle, force_owner, …) take effect — they are only read at startup.

@@ -9,6 +9,21 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **Uma linha de status de atualização com um botão "Verificar agora".** A aba do
+  ShelvesHub agora sempre mostra se você está atualizado e há quanto tempo ela checou
+  pela última vez, e um botão "Verificar agora" faz a checagem na hora em vez de esperar
+  a periódica. Um pontinho no botão do ShelvesHub marca quando há uma atualização
+  esperando.
+
+### Corrigido
+- **O aviso de "atualização disponível" agora aparece mesmo com um carregador de plugins
+  presente.** A checagem de atualização não espera mais a interface assentar antes de
+  rodar, então um ShelvesHub mais novo é detectado também em configurações cooperativas —
+  não só quando ele roda sozinho — e a aba atualiza o status enquanto está aberta.
+
+## [0.4.0] - 2026-10-01
+
+### Adicionado
 - **O instalador pode definir suas opções principais logo de cara.** Escolha
   hospedagem cooperativa (`force_owner`), a aba do Quick Access, injeção no cliente
   desktop e atualizações automáticas + canais de pré-lançamento na hora da

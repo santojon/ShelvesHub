@@ -8,6 +8,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- **An update status line with a "Check now" button.** The ShelvesHub tab now always
+  shows whether you're up to date and how long ago it last checked, and a "Check now"
+  button runs a check on the spot instead of waiting for the periodic one. A small dot
+  on the ShelvesHub button marks when an update is waiting.
+
+### Fixed
+- **The "update available" notice now shows up even alongside a plugin loader.** The
+  update check no longer waits for the interface to settle before it runs, so a newer
+  ShelvesHub is detected in cooperative setups too — not only when running on its own —
+  and the tab refreshes the status while it's open.
+
 ## [0.4.0] - 2026-10-01
 
 ### Added
