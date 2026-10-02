@@ -114,6 +114,9 @@ pub fn run(mut config: Config) {
     // busy-spin this loop — worse, when the renderer is unreachable it would
     // hammer connect() until the OS runs out of ephemeral ports (EADDRNOTAVAIL).
     let interval = Duration::from_secs(config.interval_secs.max(1));
+    // Stash the effective config so the RPC server's manual "Check now"
+    // (`checkUpdates`) runs against the same inputs as this loop.
+    state::set_daemon_config(config.clone());
     // While the bundle is NOT yet active (renderer still settling, not confirmed,
     // etc.) poll on a short interval so the first inject lands promptly after the
     // renderer appears — otherwise a renderer that settles just after a tick waits
@@ -342,13 +345,20 @@ pub fn run(mut config: Config) {
             }
         }
 
-        // Periodically check for updates (throttled, best-effort) whenever the
-        // daemon is settled — Active OR coexisting. The hub keeps its OWN binary
-        // current in either mode; the plugin-bundle update is gated on `hosting`
-        // inside (in coexist the loader owns the bundle).
-        if settled && last_update_check.is_none_or(|t| t.elapsed() >= UPDATE_CHECK_INTERVAL) {
+        // Periodically check for updates (throttled, best-effort) regardless of
+        // whether the tick settled — the network and GitHub don't depend on the
+        // renderer, so a coexist tick that never settles (or a transient probe
+        // error) must not starve the hub self-update check. The plugin-bundle
+        // update stays gated on `hosting` inside (in coexist the loader owns it,
+        // and when not settled `hosting` is false, so only the hub binary check
+        // runs — nothing touches the renderer).
+        if last_update_check.is_none_or(|t| t.elapsed() >= UPDATE_CHECK_INTERVAL) {
             last_update_check = Some(Instant::now());
-            auto_update_check(&config, hosting);
+            // Single-flight: skip if a manual checkUpdates is mid-download.
+            if state::try_begin_update_check() {
+                auto_update_check(&config, hosting);
+                state::end_update_check();
+            }
         }
 
         // Hot-swap watch: if the bundle on disk changed since the last tick — an
@@ -390,6 +400,7 @@ pub fn run(mut config: Config) {
 /// miss is a silent no-op until the next check, and a working bundle is never
 /// replaced unless a genuinely different release tag is published.
 fn auto_update_check(config: &Config, hosting: bool) {
+    state::mark_update_checked_now();
     let mut settings = crate::store::load(&config.hub_config_path);
     if !settings.auto_update {
         state::set_pending_hub_update(None); // master off — clear any stale notice
@@ -446,6 +457,22 @@ fn auto_update_check(config: &Config, hosting: bool) {
         state::set_pending_hub_update(None);
         state::set_hub_update_staged(false);
     }
+}
+
+/// Manual "Check now" entry point for the RPC server: runs one update check
+/// against the stashed daemon config, using the current injected state as the
+/// `hosting` proxy. Single-flight with the periodic loop — returns false when a
+/// check is already running or the config isn't available yet.
+pub(crate) fn run_update_check_now() -> bool {
+    let Some(config) = state::daemon_config() else {
+        return false;
+    };
+    if !state::try_begin_update_check() {
+        return false; // a check is already in flight
+    }
+    auto_update_check(config, state::is_injected());
+    state::end_update_check();
+    true
 }
 
 /// Hub self-update: detect a newer ShelvesHub release for the channel and stage

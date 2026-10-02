@@ -173,6 +173,14 @@ jobs:
             fi
           fi
 
+          # Promote the pt-BR translations the same way, so the site's "What's new"
+          # shows pt-BR for the new version instead of falling back to English.
+          for f in docs/pt-BR/CHANGELOG.md docs/pt-BR/RELEASE_NOTES.md; do
+            if [[ -f "$f" ]] && grep -q "^## \[Unreleased\]" "$f"; then
+              sed -i "s/^## \[Unreleased\]/## [Unreleased]\n\n## [${VERSION}] - ${DATE}/" "$f"
+            fi
+          done
+
       - name: Format
         run: cargo fmt --check
 
@@ -194,6 +202,7 @@ jobs:
           git ls-files --error-unmatch Cargo.lock >/dev/null 2>&1 && git add Cargo.lock || true
           [[ -f RELEASE_NOTES.md ]] && git add RELEASE_NOTES.md || true
           [[ -f docs/release-announcements.md ]] && git add docs/release-announcements.md || true
+          for f in docs/pt-BR/CHANGELOG.md docs/pt-BR/RELEASE_NOTES.md; do [[ -f "$f" ]] && git add "$f" || true; done
 
       - name: Commit bump
         run: |

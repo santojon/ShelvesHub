@@ -274,6 +274,43 @@
           try { const u = window.SteamClient && window.SteamClient.User; if (u && typeof u.StartRestart === "function") u.StartRestart(false); } catch (e) {}
         }, 600);
       }
+      /* Hub self-update: restart ONLY the daemon. The fresh binary reinjects the
+         runtime on its next tick, so no Steam restart is needed — never StartRestart
+         (black-screen discipline) and never close a running game. */
+      function doRestartDaemonOnly() {
+        if (busy) return;
+        setBusy("restart");
+        hostRpc("restartService", {}).then(function () {}, function () {});
+      }
+      // Manual "Check now": ask the daemon to run an update check immediately and
+      // fold the refreshed status (pending version, staged flag, last-check age)
+      // back into the config — so the user doesn't wait for the 30-minute cycle.
+      function doCheckNow() {
+        if (busy) return;
+        setBusy("checkupd");
+        hostRpc("checkUpdates").then(function (r) {
+          setBusy(null);
+          const res = r && r.ok && r.result && typeof r.result === "object" ? r.result : null;
+          if (!res) return;
+          setCfg(function (prev) {
+            const base = prev || DEFAULT_UPD; const m = {}; for (const k in base) m[k] = base[k];
+            m.pending_hub_update = res.pending_hub_update;
+            m.hub_update_staged = res.hub_update_staged;
+            m.last_update_check_ms = res.last_update_check_ms;
+            return m;
+          });
+        }, function () { setBusy(null); });
+      }
+      // Compact relative age from "ms since last check" (null when never checked).
+      function agoText(ms) {
+        if (typeof ms !== "number" || ms < 0) return null;
+        if (ms < 60000) return I18N.t("upd_just_now");
+        const mins = Math.floor(ms / 60000);
+        if (mins < 60) return mins + "m";
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return hrs + "h";
+        return Math.floor(hrs / 24) + "d";
+      }
       /* Same pattern as the pinned "ShelvesHub" button (native DialogButton when
          available, else the subtle inset row) — matched colour and alignment.
          Full-width action button shared by the restart and hub-update banners,
@@ -317,6 +354,38 @@
           setCfg(r && r.ok && r.result && typeof r.result === "object" ? r.result : DEFAULT_UPD);
         }, function () { if (alive) setCfg(DEFAULT_UPD); });
         return function () { alive = false; };
+      }, []);
+      // Keep the update status fresh while the hub view is open: re-read getConfig
+      // when the panel becomes visible and on a slow interval (visible-only), so an
+      // update the daemon detects after the view opened still surfaces. One stop
+      // path tears both down. Only the daemon-owned status fields are merged, so a
+      // refresh never clobbers an in-flight optimistic toggle edit.
+      React.useEffect(function () {
+        let alive = true;
+        function refresh() {
+          if (!alive) return;
+          try { if (typeof document !== "undefined" && document.hidden) return; } catch (e) {}
+          hostRpc("getConfig").then(function (r) {
+            if (!alive || !(r && r.ok && r.result && typeof r.result === "object")) return;
+            const res = r.result;
+            setCfg(function (prev) {
+              const base = prev || DEFAULT_UPD; const m = {}; for (const k in base) m[k] = base[k];
+              m.pending_hub_update = res.pending_hub_update;
+              m.hub_update_staged = res.hub_update_staged;
+              m.last_update_check_ms = res.last_update_check_ms;
+              return m;
+            });
+          }, function () {});
+        }
+        const iv = setInterval(refresh, 60000);
+        let doc = null;
+        try { doc = document; } catch (e) {}
+        if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", refresh);
+        return function () {
+          alive = false;
+          clearInterval(iv);
+          if (doc && doc.removeEventListener) doc.removeEventListener("visibilitychange", refresh);
+        };
       }, []);
       // While the log viewer is open, poll getLogs so new lines appear live (like
       // the plugin's log view) instead of a one-time snapshot.
@@ -386,7 +455,31 @@
            shows for a manually-run daemon). */
         const label = uc.hub_update_staged === true ? "hub_update_staged" : "hub_update_restart";
         return h("div", { key: "hubupd", style: { padding: "10px 14px 8px" } },
-          bannerButton("hub-update", I18N.t(label) + " (" + ver + ")", doApplyRestart));
+          bannerButton("hub-update", I18N.t(label) + " (" + ver + ")", doRestartDaemonOnly));
+      }
+      // Always-visible update status (only while auto-update is on, since that's
+      // when the daemon checks): a dot + "up to date"/"vX available", the last-check
+      // age, and a "Check now" button that forces an immediate check.
+      function updateStatusRow() {
+        const pending = (typeof uc.pending_hub_update === "string" && uc.pending_hub_update) ? uc.pending_hub_update : null;
+        const ago = agoText(uc.last_update_check_ms);
+        const checkedText = I18N.t("upd_last_checked") + ": " + (ago || I18N.t("upd_never_checked"));
+        const statusText = pending ? (I18N.t("upd_available") + " (" + pending + ")") : I18N.t("upd_uptodate");
+        const checking = busy === "checkupd";
+        const subStyle = { fontSize: "11px", color: "rgba(255,255,255,0.55)", lineHeight: "1.3", marginTop: "1px" };
+        return h("div", { key: "upd-status", style: { display: "flex", alignItems: "center", gap: "10px", padding: "2px 16px 8px" } }, [
+          h("div", { key: "txt", style: { flex: "1 1 auto", minWidth: "0", display: "flex", flexDirection: "column", gap: "1px" } }, [
+            h("div", { key: "s", style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "13px" } }, [
+              h("span", { key: "dot", style: { width: "8px", height: "8px", borderRadius: "50%", flex: "0 0 auto", background: pending ? "#ffcf6b" : "#6bd06b" } }),
+              h("span", { key: "lbl" }, statusText),
+            ]),
+            h("div", { key: "c", style: subStyle }, checkedText),
+          ]),
+          clickable(doCheckNow, {
+            "data-fb": "check-now", focusClassName: "shelves-gpfocus",
+            style: { flex: "0 0 auto", padding: "6px 12px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: busy ? "default" : "pointer", fontSize: "12px", opacity: busy ? 0.6 : 1 },
+          }, [h("span", { key: "t" }, checking ? I18N.t("upd_checking") : I18N.t("upd_check_now"))]),
+        ]);
       }
       // The "Advanced" area: a plugin-style collapsible whose content is grouped
       // into collapsible sub-sections (Troubleshooting / Configuration / Status),
@@ -667,6 +760,7 @@
       if (rcDirty) body.push(restartBanner());
       const notice = hubUpdateNotice();
       if (notice) body.push(h("div", { key: "nw", style: { padding: "0 16px" } }, notice));
+      if (on) body.push(updateStatusRow());
       if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
       body = body.concat(buildSections(useNative, TF));
       if (logs !== null) body.push(buildLogView());
@@ -680,6 +774,31 @@
       useSlotRefresh();
       const hub = React.useState(false);
       const showHub = hub[0], setShowHub = hub[1];
+      // A pending hub update surfaces as a small dot on the ShelvesHub button so
+      // it's noticeable without opening the hub view. Cheap: read getConfig once on
+      // mount and again when the tab becomes visible — no polling interval.
+      const pu = React.useState(null);
+      const pendingUpd = pu[0], setPendingUpd = pu[1];
+      React.useEffect(function () {
+        let alive = true;
+        function refresh() {
+          if (!alive) return;
+          try { if (typeof document !== "undefined" && document.hidden) return; } catch (e) {}
+          hostRpc("getConfig").then(function (r) {
+            if (!alive || !(r && r.ok && r.result && typeof r.result === "object")) return;
+            const v = r.result.pending_hub_update;
+            setPendingUpd(typeof v === "string" && v ? v : null);
+          }, function () {});
+        }
+        refresh();
+        let doc = null;
+        try { doc = document; } catch (e) {}
+        if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", refresh);
+        return function () {
+          alive = false;
+          if (doc && doc.removeEventListener) doc.removeEventListener("visibilitychange", refresh);
+        };
+      }, []);
       const s = firstSpec();
       let body;
       // No registered panel → the hub view IS the content (the fallback).
@@ -690,9 +809,12 @@
       // view (the host's own options, reachable while Deck Shelves is loaded).
       else {
         const openHub = function () { setShowHub(true); };
+        const updDot = pendingUpd
+          ? h("span", { key: "ud", title: I18N.t("upd_available") + " (" + pendingUpd + ")", style: { width: "8px", height: "8px", borderRadius: "50%", background: "#ffcf6b", flex: "0 0 auto" } })
+          : null;
         const hubBtn = (nativeUiOn() && UI.DialogButton)
           ? h(UI.DialogButton, { "data-fb": "open-hub", onClick: openHub, style: { width: "100%", marginTop: "8px" } },
-              h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } }, fbIcon("hub"), h("span", null, I18N.t("hub_title"))))
+              h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } }, fbIcon("hub"), h("span", null, I18N.t("hub_title")), updDot))
           : clickable(openHub, {
               "data-fb": "open-hub",
               style: {
@@ -701,7 +823,7 @@
                 border: "none", borderTop: "1px solid rgba(255,255,255,0.08)",
                 background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: "13px",
               },
-            }, [fbIcon("hub"), h("span", { key: "t" }, I18N.t("hub_title"))]);
+            }, [fbIcon("hub"), h("span", { key: "t" }, I18N.t("hub_title")), updDot]);
         // Natural flow (no flex column, no overflow): the editor keeps its own
         // height and the hub button sits AFTER it — so the button never overlaps
         // the editor, and no overflow ancestor clips the plugin's IntersectionObserver

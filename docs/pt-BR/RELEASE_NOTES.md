@@ -10,6 +10,14 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **Veja atualizações mais cedo — e verifique quando quiser.** A aba do ShelvesHub agora
+  mostra se você está atualizado e quando ela olhou pela última vez, com um botão
+  **Verificar agora** para olhar na hora. Ela sinaliza uma versão nova de forma confiável
+  mesmo com um carregador de plugins presente, e um pontinho no botão do ShelvesHub avisa
+  quando há uma atualização esperando.
+
+## [0.4.0] - 2026-10-01
+
 - **As notificações agora aparecem quando rodando sem um carregador de plugins.**
   Os avisos do próprio ShelvesHub — atualização disponível, sugestões, recuperação
   de configurações — aparecem na tela no modo standalone em vez de não fazer nada

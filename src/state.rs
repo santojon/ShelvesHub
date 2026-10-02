@@ -60,6 +60,31 @@ pub fn hub_update_staged() -> bool {
     HUB_UPDATE_STAGED.load(Ordering::Relaxed)
 }
 
+/// Wall-clock millis (since epoch) of the most recent update check, so the hub
+/// view can show "checked X ago". 0 = never checked this session.
+static LAST_UPDATE_CHECK_MS: AtomicU64 = AtomicU64::new(0);
+
+pub fn mark_update_checked_now() {
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    LAST_UPDATE_CHECK_MS.store(ms, Ordering::Relaxed);
+}
+
+/// Millis elapsed since the last update check, or `None` if never checked.
+pub fn millis_since_update_check() -> Option<u64> {
+    let at = LAST_UPDATE_CHECK_MS.load(Ordering::Relaxed);
+    if at == 0 {
+        return None;
+    }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    now.checked_sub(at)
+}
+
 /// Troubleshooting: when set, the loader stands down (stops injecting) until the
 /// service restarts. In-memory only, so a restart always clears it — "disable
 /// until next restart". Toggled by the `setHostingPaused` RPC.
@@ -201,6 +226,33 @@ pub fn runtime_config() -> Option<&'static serde_json::Value> {
 /// The path the advanced-configuration editor writes to (`shelveshub.config.json`).
 pub fn config_file_path() -> Option<&'static PathBuf> {
     CONFIG_FILE_PATH.get()
+}
+
+/// The effective daemon config, stashed once at startup so the RPC server can run
+/// an on-demand update check (`checkUpdates`) with the same inputs as the loop.
+static DAEMON_CONFIG: OnceLock<crate::config::Config> = OnceLock::new();
+
+pub fn set_daemon_config(config: crate::config::Config) {
+    let _ = DAEMON_CONFIG.set(config);
+}
+
+pub fn daemon_config() -> Option<&'static crate::config::Config> {
+    DAEMON_CONFIG.get()
+}
+
+/// A single-flight guard so the periodic loop and a manual `checkUpdates` RPC never
+/// run an update check at the same time (both download + swap files). `try_begin`
+/// returns false when a check is already in flight; `end` releases it.
+static UPDATE_CHECK_RUNNING: AtomicBool = AtomicBool::new(false);
+
+pub fn try_begin_update_check() -> bool {
+    UPDATE_CHECK_RUNNING
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+pub fn end_update_check() {
+    UPDATE_CHECK_RUNNING.store(false, Ordering::Release);
 }
 
 /// Append a formatted log line to the in-memory ring the `getLogs` RPC serves
