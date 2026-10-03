@@ -1,18 +1,8 @@
 #!/usr/bin/env node
-/*
- * Capture a screenshot of the Steam Big Picture window over the CEF debug port
- * (the same port shelves-devtools uses). Open the view you want on screen first,
- * then run this with a name — it writes site/img/<name>.png, ready for the
- * landing page's gallery and the next Pages publish.
- *
- * Prereqs: Steam launched with CEF remote debugging (a
- * `.cef-enable-remote-debugging` flag / `-cef-enable-remote-debugging` arg), and
- * Big Picture open. See docs/showcase.md.
- *
- * Usage:
- *   node scripts/site/capture-screenshots.mjs home
- *   node scripts/site/capture-screenshots.mjs qam-tab --port 8080 --out site/img
- */
+/* Capture a screenshot of the Steam Big Picture window over the CEF debug port. Open the view you
+   want first, then run with a name — it writes site/img/<name>.png for the landing-page gallery.
+   Needs Steam with CEF remote debugging + Big Picture open (see docs/showcase.md).
+   Usage: node scripts/site/capture-screenshots.mjs <name> [--port 8080] [--out site/img] */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 

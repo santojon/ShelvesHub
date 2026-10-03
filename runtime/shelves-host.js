@@ -15,16 +15,23 @@
     try {
       const g = window;
       let closes = 0, stable = 0, tries = 0, t0 = 0;
-      const iv = setInterval(function () {
-        tries++;
+      function resolveMenuStore() {
         const inst = g.SteamUIStore && g.SteamUIStore.WindowStore && g.SteamUIStore.WindowStore.GamepadUIMainWindowInstance;
         const ms = inst && inst.m_MenuStore;
-        if (!ms || typeof ms.CloseSideMenus !== "function") { if (tries > 400) clearInterval(iv); return; }
+        return (ms && typeof ms.CloseSideMenus === "function") ? ms : null;
+      }
+      function shouldStop() {
+        return (closes > 0 && stable >= 3) || closes >= 6 || Date.now() - t0 > 10000;
+      }
+      const iv = setInterval(function () {
+        tries++;
+        const ms = resolveMenuStore();
+        if (!ms) { if (tries > 400) clearInterval(iv); return; }
         if (!t0) t0 = Date.now();
         const st = ms.m_eOpenSideMenu;
         if (st === 1 && closes < 6) { try { ms.CloseSideMenus(); } catch (e) {} closes++; stable = 0; }
         else if (st === 0) { stable++; }
-        if ((closes > 0 && stable >= 3) || closes >= 6 || Date.now() - t0 > 10000) clearInterval(iv);
+        if (shouldStop()) clearInterval(iv);
       }, 250);
     } catch (e) {}
   })();
@@ -47,14 +54,9 @@
   if (window.__SHELVES_HOST__ && window.__SHELVES_HOST__.__shelvesRuntime) {
     return window.__SHELVES_HOST__.version;
   }
-  // ── Structured logging ────────────────────────────────────────────────────
-  // Leveled (INFO/WARN/ERROR) + scoped, the same shape the plugin uses, so the
-  // runtime and the daemon read as ONE consistent stream in the log viewer.
-  // Every entry is: styled in the renderer console (%c badges), buffered as
-  // {t,level,scope,msg} in `window.__SHELVES_LOG__` (bounded ring, newest last),
-  // and — WARN/ERROR always, INFO only when `window.__SHELVES_LOG_VERBOSE__` —
-  // forwarded (debounced set) to the daemon's ring via the `pushLogs` RPC so
-  // `getLogs` returns host + daemon lines together.
+  // Structured logging: leveled (INFO/WARN/ERROR) + scoped, same shape the plugin uses. Each entry is
+  // styled in the console, buffered in `window.__SHELVES_LOG__` (bounded ring), and — WARN/ERROR always,
+  // INFO only when `__SHELVES_LOG_VERBOSE__` — forwarded to the daemon via `pushLogs` so getLogs merges.
   const LOG_SCOPE_COLOR = {
     HOST: "#22c55e", UI: "#a78bfa", ROUTER: "#ec4899", QAM: "#06b6d4",
     MENU: "#f59e0b", NAV: "#3b82f6", RPC: "#0ea5e9", UPDATE: "#14b8a6",
@@ -87,9 +89,7 @@
       try { return typeof x === "string" ? x : JSON.stringify(x); } catch (e) { return String(x); }
     }).join(" ");
   }
-  function hlog(scope, level, msg, ctx) {
-    scope = scope || "HOST"; level = level || "INFO";
-    const text = ctx === undefined ? String(msg) : String(msg) + " " + _logText([ctx]);
+  function _logStyled(scope, level, text) {
     try {
       const sc = LOG_SCOPE_COLOR[scope] || "#8b5cf6";
       const lb = LOG_LEVEL_BG[level] || "#0ea5e9";
@@ -99,6 +99,11 @@
         "background:" + sc + ";color:#04121f;padding:1px 4px;font-weight:800;border-radius:0 2px 2px 0",
         "color:#93c5fd;font-weight:600");
     } catch (e) {}
+  }
+  function hlog(scope, level, msg, ctx) {
+    scope = scope || "HOST"; level = level || "INFO";
+    const text = ctx === undefined ? String(msg) : String(msg) + " " + _logText([ctx]);
+    _logStyled(scope, level, text);
     const entry = { t: Date.now(), level: level, scope: scope, msg: text };
     try {
       const b = (window.__SHELVES_LOG__ = window.__SHELVES_LOG__ || []);
@@ -116,20 +121,11 @@
   // changes beyond gaining a level/scope, the styled badge, and the buffer entry.
   function log() { return hlog("HOST", "INFO", _logText([].slice.call(arguments))); }
 
-  // ── Coexistence: never break another host, but always keep OUR tab ────────
-  // Two separable things this runtime does:
-  //   (A) install `window.__SHELVES_HOST__` — the host API the bundle selects
-  //       on via its host-selection check. When a plugin loader is already
-  //       hosting Deck Shelves, installing this makes ITS bundle mis-select the
-  //       ShelvesHub adapter and drop its home patches. So (A) is SKIPPED in
-  //       coexistence — that is the hard safety invariant: loading ShelvesHub
-  //       must never disturb that loader or its plugins.
-  //   (B) add our Quick Access tab — harmless, additive (a new tab in the
-  //       array; it never removes the other loader's tab). This ALWAYS runs, so
-  //       ShelvesHub's tab is present with or without a loader.
-  // `SHELVES_FORCE_OWNER=shelveshub` (→ `window.__SHELVES_FORCE_OWNER__`) forces
-  // full ownership (installs (A) anyway), an advanced opt-in that needs the
-  // loader adapter to stand down cooperatively.
+  /* Coexistence: never break another host, but always keep OUR tab. Two separable things: (A) install
+     `window.__SHELVES_HOST__` (the host API the bundle selects on) — SKIPPED under a loader, else its
+     bundle mis-selects our adapter and drops its home patches (the hard safety invariant); (B) add our
+     Quick Access tab — additive, ALWAYS runs. `SHELVES_FORCE_OWNER=shelveshub` forces (A) anyway, an
+     advanced opt-in that needs the loader adapter to stand down cooperatively. */
   function otherLoaderPresent() {
     try {
       const w = window;
@@ -157,26 +153,18 @@
   const COEXIST = _otherLoader; // any loader present → no scan, borrow its UI
   if (COEXIST) {
     log("Another plugin loader detected — coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched).");
-    // Safety stand-down. When the native tab is NOT requested there is nothing
-    // to install (host skipped in coexistence) and nothing to patch (the tab is
-    // gated on the native-tab opt-in) — so return NOW, before capturing Steam's
-    // webpack or enumerating any modules. Walking Steam's module graph
-    // (force-require + touching every export) while another loader owns the UI
-    // is invasive and a suspected trigger of the Steam UI window teardown (black
-    // screen). Truly inert means never touching Steam internals when we have
-    // nothing to add.
+    // Safety stand-down: when the native tab isn't requested there's nothing to install or patch,
+    // so return NOW, before capturing Steam's webpack or enumerating modules. Walking the graph while
+    // another loader owns the UI is invasive and a suspected black-screen trigger — stay truly inert.
     if (!NATIVE_QAM_REQUESTED && !COOP) {
       log("Native tab not requested — standing down without touching Steam internals.");
       return;
     }
   }
 
-  // ── i18n ──────────────────────────────────────────────────────────────────
-  // Lightweight i18n for the host's OWN UI (the fallback panel + error text),
-  // mirroring the plugin's molds: an ordered prefix→locale map, a
-  // navigator-language pick, per-locale dictionaries, and an en-US fallback.
-  // Standalone (no framework, no fetch): the plugin's i18n is NOT available when
-  // the bundle fails to load — which is exactly when this UI must show text.
+  // i18n for the host's OWN UI (fallback panel + error text): an ordered prefix→locale map, a
+  // navigator-language pick, per-locale dictionaries, and an en-US fallback. Standalone (no
+  // framework/fetch) because the plugin's i18n is gone exactly when the bundle fails to load.
   const I18N = (function () {
     const PREFIXES = [
       ["pt-pt", "pt-PT"], ["pt", "pt-BR"], ["es-es", "es-ES"], ["es", "es-419"],
@@ -240,36 +228,35 @@
       } catch (e) { logWarn("HOST", "webpack capture failed: " + (e && e.message)); }
     }
 
-    // Incremental: chunks keep loading long after boot starts, so every call
-    // picks up modules that appeared since the last one (early-injection path
-    // depends on this — the QAM tab-list builder loads late in boot).
-    function init() {
-      capture();
-      if (!req) return;
-      // Prefer the module CACHE (`req.c`): already-instantiated modules, read
-      // WITHOUT a force-require, so we never run an unloaded module's factory
-      // (side effects) and never block the renderer main thread walking the
-      // whole graph. That block is what starved the plugin's async shelf
-      // resolves → React #31 → black screen. Another loader (and Steam itself)
-      // populates the cache during boot, so it is usually complete by the time
-      // we inject; chunks that appear later are picked up on the next call.
+    // Read already-instantiated modules from the require CACHE (`req.c`) WITHOUT a force-require,
+    // so we never run an unloaded factory nor walk the graph (that block starved the plugin →
+    // React #31). Returns true when the cache yielded modules.
+    function readFromCache() {
       const cache = req.c;
-      if (cache && typeof cache === "object") {
-        const cids = Object.keys(cache);
-        for (let i = 0; i < cids.length; i++) {
-          if (modules.has(cids[i])) continue;
-          try { const mod = cache[cids[i]]; const ex = mod && mod.exports; if (ex) modules.set(cids[i], ex); } catch (e) {}
-        }
-        if (modules.size > 0) return; // cache had modules — done, no force-require
+      if (!cache || typeof cache !== "object") return false;
+      const cids = Object.keys(cache);
+      for (let i = 0; i < cids.length; i++) {
+        if (modules.has(cids[i])) continue;
+        try { const mod = cache[cids[i]]; const ex = mod && mod.exports; if (ex) modules.set(cids[i], ex); } catch (e) {}
       }
-      // Last resort (cache empty — nothing loaded yet): force-require. Heavy;
-      // only runs when there is no cache to read from at all.
+      return modules.size > 0;
+    }
+    // Last resort (cache empty — nothing loaded yet): force-require every module. Heavy.
+    function forceRequireAll() {
       if (!req.m) return;
       const ids = Object.keys(req.m);
       for (let j = 0; j < ids.length; j++) {
         if (modules.has(ids[j])) continue;
         try { const m = req(ids[j]); if (m) modules.set(ids[j], m); } catch (e) {}
       }
+    }
+    // Incremental: chunks keep loading long after boot starts, so every call picks up modules that
+    // appeared since the last (the early-injection path depends on this — the QAM builder loads late).
+    function init() {
+      capture();
+      if (!req) return;
+      if (readFromCache()) return; // cache had modules — no force-require
+      forceRequireAll();
     }
 
     function findModule(filter) {
@@ -284,6 +271,20 @@
       }
     }
 
+    // Scan ONE module variant's exports for the first that matches `filter`; returns the
+    // [mod, export, name, id] tuple or null. Skips non-objects, `window`, and modules below
+    // `minExports`.
+    function matchInModule(mod, filter, minExports, id) {
+      if (typeof mod !== "object" || mod === window) return null;
+      if (minExports && Object.keys(mod).length < minExports) return null;
+      for (const exportName in mod) {
+        let ex;
+        try { ex = mod[exportName]; } catch (e) { continue; }
+        if (!ex) continue;
+        try { if (filter(ex, exportName)) return [mod, ex, exportName, id]; } catch (e) {}
+      }
+      return null;
+    }
     function findModuleDetailsByExport(filter, minExports) {
       init();
       const it = modules.entries();
@@ -292,15 +293,8 @@
         if (!m) continue;
         const variants = [m.default, m];
         for (let vi = 0; vi < variants.length; vi++) {
-          const mod = variants[vi];
-          if (typeof mod !== "object" || mod === window) continue;
-          if (minExports && Object.keys(mod).length < minExports) continue;
-          for (const exportName in mod) {
-            let ex;
-            try { ex = mod[exportName]; } catch (e) { continue; }
-            if (!ex) continue;
-            try { if (filter(ex, exportName)) return [mod, ex, exportName, id]; } catch (e) {}
-          }
+          const hit = matchInModule(variants[vi], filter, minExports, id);
+          if (hit) return hit;
         }
       }
       return [undefined, undefined, undefined, undefined];
@@ -310,62 +304,62 @@
     function findModuleByExport(filter, minExports) { return findModuleDetailsByExport(filter, minExports)[0]; }
 
     function isSteam() { init(); return modules.size > 0; }
-    // React stack. A plugin loader normally publishes Steam's React / ReactDOM /
-    // jsx-runtime as the globals the bundle reads. In owner mode (no loader) we
-    // instead DISCOVER them from Steam's own webpack and expose them on the host
-    // object (`host.React` / `host.ReactDOM` / `host.jsx`); the bundle's shims read
-    // them from `__SHELVES_HOST__`. We deliberately never publish loader-shaped
-    // globals — the host environment stays neutral. When a global is already
-    // present (coexistence) we reuse it, so the heavy module scan is skipped there.
+    // React stack. A loader normally publishes Steam's React/ReactDOM/jsx globals; in owner mode we
+    // DISCOVER them from Steam's webpack and expose them on the host (`host.React` etc.) — never as
+    // loader-shaped globals (neutral). When one is already present (coexist) we reuse it, skip the scan.
     let _stack = null;
+    function discoverReact(w) {
+      if (w.SP_REACT && w.SP_REACT.createElement) return w.SP_REACT;
+      return findModule(function (m) {
+        return m && typeof m.createElement === "function"
+          && typeof m.useState === "function"
+          && typeof m.Fragment !== "undefined" && m.Component;
+      });
+    }
+    // `createPortal` is the react-dom marker. Do NOT also require `render`/`createRoot`:
+    // React 19's react-dom dropped legacy `render` and moved `createRoot` to react-dom/client.
+    function discoverReactDOM(w) {
+      if (w.SP_REACTDOM && w.SP_REACTDOM.createPortal) return w.SP_REACTDOM;
+      return findModule(function (m) { return m && typeof m.createPortal === "function"; });
+    }
+    function discoverJsx(w, React) {
+      if (w.SP_JSX && w.SP_JSX.jsx) return w.SP_JSX;
+      const found = findModule(function (m) { return m && typeof m.jsx === "function" && typeof m.jsxs === "function"; });
+      if (found) return found;
+      // Fallback: build jsx from React — jsx(type, config, key) carries children/key in config.
+      const mk = function (type, config, key) {
+        let props = config || {};
+        if (key !== undefined && key !== null) { props = Object.assign({}, props); props.key = key; }
+        return React.createElement(type, props);
+      };
+      return { Fragment: React.Fragment, jsx: mk, jsxs: mk, jsxDEV: mk };
+    }
+    function discoverReactClient(w, ReactDOM) {
+      let client = (w.SP_REACTDOM_CLIENT && w.SP_REACTDOM_CLIENT.createRoot) ? w.SP_REACTDOM_CLIENT
+        : findModule(function (m) { return m && typeof m.createRoot === "function" && typeof m.hydrateRoot === "function"; });
+      if (!client && ReactDOM && typeof ReactDOM.createRoot === "function") client = ReactDOM;
+      return client;
+    }
+    /* React 19 splits the portal API (react-dom) from the root API (react-dom/client); return a
+       ReactDOM carrying BOTH so the bundle's react-dom (createPortal) and react-dom-client
+       (createRoot) shims are both satisfied from `host.ReactDOM`. */
+    function mergeRootApi(ReactDOM, client) {
+      if (ReactDOM && client && typeof ReactDOM.createRoot !== "function" && typeof client.createRoot === "function") {
+        return Object.assign({}, ReactDOM, { createRoot: client.createRoot, hydrateRoot: client.hydrateRoot });
+      }
+      return ReactDOM;
+    }
     function getReactStack() {
       if (_stack) return _stack;
       const w = window;
-      const React = (w.SP_REACT && w.SP_REACT.createElement) ? w.SP_REACT
-        : findModule(function (m) {
-            return m && typeof m.createElement === "function"
-              && typeof m.useState === "function"
-              && typeof m.Fragment !== "undefined" && m.Component;
-          });
+      const React = discoverReact(w);
       if (!React || !React.createElement) {
         return { React: null, ReactDOM: null, jsx: null, client: null };
       }
-      // `createPortal` is the react-dom marker. Do NOT also require `render` /
-      // `createRoot`: React 19's react-dom dropped legacy `render` and moved
-      // `createRoot` to react-dom/client, so a strict filter finds nothing.
-      let ReactDOM = (w.SP_REACTDOM && w.SP_REACTDOM.createPortal) ? w.SP_REACTDOM
-        : findModule(function (m) {
-            return m && typeof m.createPortal === "function";
-          });
-      let jsx = (w.SP_JSX && w.SP_JSX.jsx) ? w.SP_JSX
-        : findModule(function (m) {
-            return m && typeof m.jsx === "function" && typeof m.jsxs === "function";
-          });
-      if (!jsx) {
-        // Fallback: build jsx from React — jsx(type, config, key) carries
-        // children/key in the config object, which createElement accepts.
-        const mk = function (type, config, key) {
-          let props = config || {};
-          if (key !== undefined && key !== null) { props = Object.assign({}, props); props.key = key; }
-          return React.createElement(type, props);
-        };
-        jsx = { Fragment: React.Fragment, jsx: mk, jsxs: mk, jsxDEV: mk };
-      }
-      let client = (w.SP_REACTDOM_CLIENT && w.SP_REACTDOM_CLIENT.createRoot) ? w.SP_REACTDOM_CLIENT
-        : findModule(function (m) {
-            return m && typeof m.createRoot === "function" && typeof m.hydrateRoot === "function";
-          });
-      if (!client && ReactDOM && typeof ReactDOM.createRoot === "function") client = ReactDOM;
-      /* React 19 splits the portal API (react-dom) from the root API
-         (react-dom/client); expose a ReactDOM carrying BOTH so the bundle's
-         react-dom (createPortal) and react-dom-client (createRoot) shims are both
-         satisfied from `host.ReactDOM`. */
-      if (ReactDOM && client && typeof ReactDOM.createRoot !== "function" && typeof client.createRoot === "function") {
-        ReactDOM = Object.assign({}, ReactDOM, {
-          createRoot: client.createRoot,
-          hydrateRoot: client.hydrateRoot,
-        });
-      }
+      const baseDom = discoverReactDOM(w);
+      const client = discoverReactClient(w, baseDom);
+      const ReactDOM = mergeRootApi(baseDom, client);
+      const jsx = discoverJsx(w, React);
       _stack = { React: React, ReactDOM: ReactDOM || null, jsx: jsx, client: client || null };
       return _stack;
     }
@@ -385,12 +379,9 @@
   const React = ReactStack.React;
   function h() { return React.createElement.apply(React, arguments); }
 
-  // Steam's platform React globals (SP_REACT / SP_REACTDOM / SP_JSX). This Steam
-  // build does not set them in this JS context, but the plugin reads them directly
-  // (its React accessor and the menu passive-capture hook, which patches
-  // SP_REACT.createElement) — without them the game context menu can't build. Publish
-  // the SAME React stack we discovered from Steam's webpack, only when absent. These
-  // are Steam's own platform globals, not a loader surface — the host stays neutral.
+  // Steam's platform React globals (SP_REACT / SP_REACTDOM / SP_JSX). This build doesn't set them
+  // in this JS context, but the plugin reads them directly (patching SP_REACT.createElement for the
+  // menu hook) — so publish the SAME React stack from Steam's webpack when absent (Steam's, neutral).
   try {
     if (React && !window.SP_REACT) window.SP_REACT = React;
     if (ReactStack.ReactDOM && !window.SP_REACTDOM) window.SP_REACTDOM = ReactStack.ReactDOM;
@@ -419,13 +410,9 @@
     return "";
   }
 
-  // ── Steam's native, gamepad-focusable UI components ───────────────────────
-  // `ensureUi` is idempotent. The sole-host path calls it eagerly (the bundle
-  // needs these to render). Under another loader (COEXIST) it is deferred until
-  // the host's own hub view first renders — a user action, off the boot path —
-  // because this scan (toString over thousands of exports) blocks the renderer
-  // main thread, and at boot that starves the active plugin's async shelf
-  // resolves → React #31 → black screen. Off the boot path it is harmless.
+  // Steam's native, gamepad-focusable UI components. `ensureUi` is idempotent: the sole-host path
+  // calls it eagerly; under a loader (COEXIST) it's deferred to the hub view's first render (off the
+  // boot path) because this scan blocks the main thread and at boot starves the plugin → React #31.
   const UI = {};
   let uiReady = false;
   let _commonValues = [];
@@ -484,12 +471,9 @@
         ? Object.values(panelDetails[0]).filter(function (exp) { return srcOf(exp).indexOf(".PanelSection") < 0; })[0]
         : undefined;
     },
-    // ── Extended host.ui surface (sole host) ─────────────────────────────────
-    // The QAM panel needs only the widgets above, but the full plugin UI (its
-    // own screens, dialogs, menus, navigation) needs more. Under a loader the
-    // plugin reaches those through the loader; as the sole host we resolve
-    // Steam's own from the webpack (same discovery technique). Each is guarded
-    // so a miss never blocks the rest.
+    // Extended host.ui surface (sole host): the full plugin UI (screens, dialogs, menus,
+    // navigation) needs more than the QAM widgets above. Under a loader the plugin reaches those
+    // through the loader; as sole host we resolve Steam's from the webpack, each guarded.
     function () {
       // Modals. `showModal` wraps Steam's raw opener with the argument shape the
       // plugin calls; `ConfirmModal` is Steam's confirm dialog.
@@ -537,25 +521,36 @@
       UI.Spinner = Steam.findModuleExport(function (e) {
         const s = srcOf(e); return s.indexOf("Steam Spinner") >= 0 && s.indexOf("src") >= 0;
       });
-      // Navigation: the module carrying `Navigate` + `NavigationManager` (stable),
-      // OR — on newer clients (beta/desktop) where that module is gone — the
-      // `SteamUIStore` navigation surface. `navFn` prefers the focused window's
-      // own method, then falls back to `SteamUIStore[name]`, so screen routing
-      // (About/Settings + Back) works on both. Without this the plugin's
-      // `Navigation.Navigate` degrades to a no-op in sole mode on the beta.
+      // Navigation: the module carrying `Navigate` + `NavigationManager` (stable), OR — on newer
+      // clients where that's gone — the `SteamUIStore` navigation surface. `navFn` prefers the
+      // focused window's method, falling back to `SteamUIStore[name]`, so routing works on both.
       const Router = Steam.findModuleExport(function (e) { return e && e.Navigate && e.NavigationManager; });
       let SUS = null; try { SUS = window.SteamUIStore; } catch (e) {}
       if (Router || (SUS && typeof SUS.Navigate === "function")) {
+        // The focused window instance, else the main gamepad window (or the first Steam UI window).
+        const resolveWindow = function () {
+          let win = null;
+          try { if (SUS && SUS.GetFocusedWindowInstance) win = SUS.GetFocusedWindowInstance(); } catch (e) {}
+          if (!win && Router && Router.WindowStore) {
+            win = Router.WindowStore.GamepadUIMainWindowInstance || (Router.WindowStore.SteamUIWindows && Router.WindowStore.SteamUIWindows[0]) || null;
+          }
+          return win;
+        };
+        // Call `name` on the first target that has it; { ok, value }.
+        const invokeNav = function (name, targets, args) {
+          for (let i = 0; i < targets.length; i++) {
+            const t = targets[i];
+            if (t && typeof t[name] === "function") return { ok: true, value: t[name].apply(t, args) };
+          }
+          return { ok: false };
+        };
         const navFn = function (name, handler) {
           return function () {
-            let win = null;
-            try { if (SUS && SUS.GetFocusedWindowInstance) win = SUS.GetFocusedWindowInstance(); } catch (e) {}
-            if (!win && Router && Router.WindowStore) win = Router.WindowStore.GamepadUIMainWindowInstance || (Router.WindowStore.SteamUIWindows && Router.WindowStore.SteamUIWindows[0]) || null;
+            const win = resolveWindow();
             try {
               const t = (handler && win) ? handler(win) : win;
-              if (t && typeof t[name] === "function") return t[name].apply(t, arguments);
-              if (win && typeof win[name] === "function") return win[name].apply(win, arguments);
-              if (SUS && typeof SUS[name] === "function") return SUS[name].apply(SUS, arguments);
+              const r = invokeNav(name, [t, win, SUS], arguments);
+              if (r.ok) return r.value;
               log("nav: no target for " + name);
             } catch (e) { log("nav " + name + ":", e && e.message); }
           };
@@ -584,11 +579,13 @@
          render, so render each candidate with empty props and map by the leading
          class name (guarded — a render can throw). */
       const byClass = {};
+      const rendersDivWrapper = function (rs) {
+        return rs.indexOf('jsx)("div",{...') >= 0 || rs.indexOf('jsx)("div",Object.assign({},') >= 0 ||
+          rs.indexOf('createElement("div",{...') >= 0 || rs.indexOf('createElement("div",Object.assign({},') >= 0;
+      };
       _commonValues.forEach(function (m) {
         if (!m || typeof m !== "object") return;
-        const rs = renderSrc(m);
-        if (rs.indexOf('jsx)("div",{...') < 0 && rs.indexOf('jsx)("div",Object.assign({},') < 0 &&
-          rs.indexOf('createElement("div",{...') < 0 && rs.indexOf('createElement("div",Object.assign({},') < 0) return;
+        if (!rendersDivWrapper(renderSrc(m))) return;
         try {
           const el = m.render({});
           const cn = el && el.props && el.props.className;
@@ -721,20 +718,12 @@
     };
   }
 
-  // ── React tree patch helpers ──────────────────────────────────────────────
-  // GenericPatchHandler: (args, ret) => newRet. This mirrors the tree-patcher
-  // semantics the plugin's menu / recents code relies on, so the same plugin
-  // works here as under a loader — but the internals stay neutrally named.
-  //
-  // The plugin patches `element.type` slots directly (the native recents replace
-  // does three nested `afterPatch(el, "type", …)`). On this Steam an `element.type`
-  // is very often a React `memo` — an OBJECT, not a callable — or a `forwardRef`.
-  // A wrapper that simply re-invokes the original as a function then breaks
-  // (a memo is not callable → throws at render → the whole route unmounts). So
-  // `afterPatch` PRESERVES the original's shape: it wraps a memo's inner render
-  // component (`.type`), a forwardRef's `.render`, or a plain function directly,
-  // and `handler.call(this, …)` binds `this` so class-render handlers can read
-  // `this.props` (the card menu's inject path resolves the shelf id from it).
+  // React tree patch helpers
+  /* GenericPatchHandler (args, ret) => newRet, mirroring the tree-patcher semantics the plugin's
+     menu/recents code relies on (same plugin works here as under a loader, internals neutrally
+     named). The plugin patches `element.type` slots directly, which on this Steam are often a
+     `memo` OBJECT or `forwardRef` — so afterPatch PRESERVES the original's shape (wraps a memo's
+     inner `.type`, a forwardRef's `.render`, or a plain fn) and binds `this` for class handlers. */
   function reactTag(v) { try { return v && v.$$typeof ? "" + v.$$typeof : null; } catch (e) { return null; } }
   function wrapRenderFn(origFn, handler, options, patch) {
     const f = function () {
@@ -751,6 +740,23 @@
     try { f.__shelvesPatched = true; } catch (e) {}
     return f;
   }
+  // Build the wrapped replacement preserving the original's React shape: a memo (wrap its inner
+  // `.type`), a forwardRef (wrap its `.render`), or a plain function. null = nothing to wrap.
+  function buildReplacement(orig, handler, options, patch) {
+    const tag = reactTag(orig);
+    if (tag && tag.indexOf("react.memo") >= 0 && orig.type) {
+      const memo = {}; for (const mk in orig) memo[mk] = orig[mk];
+      memo.type = wrapRenderFn(orig.type, handler, options, patch);
+      return memo;
+    }
+    if (tag && tag.indexOf("react.forward_ref") >= 0 && typeof orig.render === "function") {
+      const fr = {}; for (const fk in orig) fr[fk] = orig[fk];
+      fr.render = wrapRenderFn(orig.render, handler, options, patch);
+      return fr;
+    }
+    if (typeof orig === "function") return wrapRenderFn(orig, handler, options, patch);
+    return null;
+  }
   function afterPatch(object, property, handler, options) {
     options = options || {};
     const orig = object[property];
@@ -763,21 +769,8 @@
         patch.hasUnpatched = true;
       },
     };
-    let replacement; const tag = reactTag(orig);
-    if (tag && tag.indexOf("react.memo") >= 0 && orig.type) {
-      // memo → React renders memo.type(props); wrap the inner render component.
-      const memo = {}; for (const mk in orig) memo[mk] = orig[mk];
-      memo.type = wrapRenderFn(orig.type, handler, options, patch);
-      replacement = memo;
-    } else if (tag && tag.indexOf("react.forward_ref") >= 0 && typeof orig.render === "function") {
-      const fr = {}; for (const fk in orig) fr[fk] = orig[fk];
-      fr.render = wrapRenderFn(orig.render, handler, options, patch);
-      replacement = fr;
-    } else if (typeof orig === "function") {
-      replacement = wrapRenderFn(orig, handler, options, patch);
-    } else {
-      return patch; // nothing renderable/callable to wrap — leave the slot as-is
-    }
+    const replacement = buildReplacement(orig, handler, options, patch);
+    if (!replacement) return patch; // nothing renderable/callable to wrap — leave the slot as-is
     patch.patchedFunction = replacement;
     try { replacement.__shelvesPatch = patch; } catch (e) {}
     try { replacement.__shelvesPatched = true; } catch (e) {}
@@ -786,13 +779,7 @@
   }
 
   // findInTree / findInReactTree: recursive search walking the given keys.
-  function findInTree(parent, filter, walkable) {
-    if (!parent || typeof parent !== "object") return null;
-    try { if (filter(parent)) return parent; } catch (e) {}
-    if (Array.isArray(parent)) {
-      for (let i = 0; i < parent.length; i++) { const r = findInTree(parent[i], filter, walkable); if (r) return r; }
-      return null;
-    }
+  function findInChildren(parent, filter, walkable) {
     const keys = walkable || Object.keys(parent);
     for (let k = 0; k < keys.length; k++) {
       let v; try { v = parent[keys[k]]; } catch (e) { continue; }
@@ -800,6 +787,15 @@
       if (found) return found;
     }
     return null;
+  }
+  function findInTree(parent, filter, walkable) {
+    if (!parent || typeof parent !== "object") return null;
+    try { if (filter(parent)) return parent; } catch (e) {}
+    if (Array.isArray(parent)) {
+      for (let i = 0; i < parent.length; i++) { const r = findInTree(parent[i], filter, walkable); if (r) return r; }
+      return null;
+    }
+    return findInChildren(parent, filter, walkable);
   }
   function findInReactTree(node, filter) {
     return findInTree(node, filter, ["props", "children", "child", "sibling"]);
@@ -820,14 +816,9 @@
     return fiber;
   }
 
-  // ── RouterHook: register full-screen routes and patch existing ones ────────
-  // The plugin's own screens (About/Settings) are React-Router routes, and its
-  // home shelves are injected by PATCHING the /library/home route's render. Under
-  // a loader the loader supplies this hook; as the sole host we patch Steam's own
-  // gamepad router: find its node by the `Settings.Root()` its render mentions,
-  // then wrap that render to splice our routes into the route list and apply our
-  // per-path patches. Best-effort throughout — a failure never tears the UI down
-  // (afterPatch swallows handler errors and returns the original render).
+  // RouterHook: register full-screen routes and patch existing ones. Under a loader the loader
+  // supplies this; as sole host we patch Steam's gamepad router (found via `Settings.Root()`),
+  // wrapping it to splice our routes + apply per-path patches. Best-effort (afterPatch swallows).
   function makeRouterHook() {
     const routes = new Map(); // path -> { component, props }
     const routePatches = new Map(); // path -> Set<patch>
@@ -838,12 +829,9 @@
     const OUR_ARRAY = "__shelvesRoutes"; // marks the sub-array we append
     const IS_PATCHED = "__shelvesRoutePatched"; // marks an already-patched route
 
-    // Minimal router-state store: the mounted
-    // wrapper components subscribe; a route/patch/global change calls bump() to
-    // re-render them CLEANLY via React state — instead of the old fiber-repoint
-    // force, which mutated the router fiber out-of-band and left Steam's gamepad
-    // FocusNavController unable to register our route subtree (unfocusable pages),
-    // besides flashing the previous route back on repeated re-renders.
+    // Minimal router-state store: the mounted wrapper components subscribe; a route/patch/global
+    // change calls bump() to re-render them CLEANLY via React state — instead of the old fiber-repoint
+    // force, which mutated the router fiber out-of-band and left focus unable to register our pages.
     const listeners = new Set();
     function bump() { listeners.forEach(function (l) { try { l(); } catch (e) {} }); }
     function subscribe(l) { listeners.add(l); return function () { listeners["delete"](l); }; }
@@ -853,18 +841,22 @@
        NOTE: this yields Steam's route WRAPPER (e.g. `/library/home` = a services-
        gated wrapper), not the raw Route — so it can carry unwanted context; the raw
        Route from findRoute is preferred. Cached once resolved. */
-    function routeTypeFromList(routeList) {
-      if (RouteComp) return RouteComp;
-      if (!routeList) return null;
+    // Prefer the `/library/home` route's type; else the first path-carrying route's type.
+    function scanRouteList(routeList) {
       let first = null;
       for (let i = 0; i < routeList.length; i++) {
         const el = routeList[i];
         if (el && el.type && el.props && typeof el.props.path === "string") {
           if (!first) first = el.type;
-          if (el.props.path === "/library/home") { RouteComp = el.type; break; }
+          if (el.props.path === "/library/home") return el.type;
         }
       }
-      if (!RouteComp) RouteComp = first;
+      return first;
+    }
+    function routeTypeFromList(routeList) {
+      if (RouteComp) return RouteComp;
+      if (!routeList) return null;
+      RouteComp = scanRouteList(routeList);
       if (RouteComp && routerDebug()) log("[dbg] routeTypeFromList: " + typeName(RouteComp));
       return RouteComp;
     }
@@ -889,32 +881,29 @@
       return RouteComp;
     }
 
+    // Apply the registered patches for ONE route (no-op unless it has a path with patches that
+    // haven't been applied to its current children yet).
+    function applyPatchesToRoute(route) {
+      if (!route || !route.props || !route.props.path) return;
+      const set = routePatches.get(route.props.path);
+      if (!set || !set.size) return;
+      if (route.props.children && route.props.children[IS_PATCHED]) return;
+      set.forEach(function (patch) {
+        try {
+          const res = patch(Object.assign({}, route.props));
+          if (res && res.children !== undefined) route.props.children = res.children;
+        } catch (e) { log("routePatch:", route.props.path, e && e.message); }
+      });
+      try { if (route.props.children) route.props.children[IS_PATCHED] = true; } catch (e) {}
+    }
     // Apply registered patches to the existing routes in one route-list array.
     function applyPatches(routeList) {
-      for (let i = 0; i < routeList.length; i++) {
-        const route = routeList[i];
-        if (!route || !route.props || !route.props.path) continue;
-        const set = routePatches.get(route.props.path);
-        if (!set || !set.size) continue;
-        if (route.props.children && route.props.children[IS_PATCHED]) continue;
-        set.forEach(function (patch) {
-          try {
-            const res = patch(Object.assign({}, route.props));
-            if (res && res.children !== undefined) route.props.children = res.children;
-          } catch (e) { log("routePatch:", route.props.path, e && e.message); }
-        });
-        try { if (route.props.children) route.props.children[IS_PATCHED] = true; } catch (e) {}
-      }
+      for (let i = 0; i < routeList.length; i++) applyPatchesToRoute(routeList[i]);
     }
 
-    // Build our route elements ONCE per (route-set, Route-type) and CACHE the
-    // resulting array. Steam rebuilds the route-list array on every render, so
-    // the old code — which rebuilt fresh, UNKEYED route elements each render —
-    // gave React new child identities every frame: react-router re-mounted our
-    // routes and Steam's FocusNavController lost track of focus (home shelves
-    // unfocusable) while a matched route re-appeared after any input (sticky).
-    // A cached array of KEYED elements keeps stable identities across renders, so
-    // React reconciles in place — no re-mount, no focus loss, no stickiness.
+    // Build our route elements ONCE per (route-set, Route-type) and CACHE the array. Steam rebuilds
+    // the route-list every render, so rebuilding fresh UNKEYED elements gave React new identities each
+    // frame (re-mount → focus loss + sticky routes). A cached KEYED array keeps identities stable.
     let builtRoutes = null, builtSig = "", builtType = null;
     function buildOurRoutes(Route) {
       let sig = [];
@@ -934,17 +923,11 @@
       return arr;
     }
 
-    // APPEND our routes (as the stable cached nested array — React flattens it) at
-    // the END of the main route-list array. Two facts make this correct and
-    // focus-safe on both stable and beta:
-    //   1. Steam's own route elements are UNKEYED, so appending leaves them at
-    //      their original positions — React reconciles them by position and never
-    //      re-mounts them (prepending would shift every position → a full remount →
-    //      the gamepad focus loss + sticky routes we saw earlier).
-    //   2. The Switch's catch-all (`path:['/','/index.html','/sp.html']`) is
-    //      `exact`, so it does NOT shadow a trailing `/deck-shelves/*` route.
-    // Our nested array is the SAME cached object across renders with KEYED children,
-    // so React keeps our routes' identities stable too (no re-mount, no stickiness).
+    /* APPEND our routes (the stable cached nested array — React flattens it) at the END of the main
+       route-list. Steam's own route elements are UNKEYED, so appending leaves them at their positions
+       (React reconciles by position, no remount — prepending would shift all → focus loss). The
+       Switch's catch-all (`['/','/index.html','/sp.html']`) is `exact`, so it won't shadow a trailing
+       `/deck-shelves/*` route. Our nested array is the SAME cached object with KEYED children. */
     function injectRoutes(routeList) {
       if (!routes.size) return;
       // Prefer the RAW react-router Route (findRoute): reusing a route's wrapper
@@ -974,6 +957,16 @@
       if (n) return n;
       try { const s = srcOf(t); return "fn<" + s.slice(0, 40).replace(/\s+/g, " ") + ">"; } catch (e) { return "fn"; }
     }
+    function childKind(ch) {
+      if (Array.isArray(ch)) return "array(" + ch.length + ")";
+      if (ch && ch.props) return "elem";
+      if (ch == null) return "none";
+      return typeof ch;
+    }
+    function describeChildren(ch, depth, path) {
+      if (Array.isArray(ch)) { for (let j = 0; j < ch.length && j < 12; j++) describe(ch[j], depth + 1, path + ".children[" + j + "]"); }
+      else if (ch && ch.props) describe(ch, depth + 1, path + ".children");
+    }
     function describe(el, depth, path) {
       if (depth > 6 || el == null) return;
       if (Array.isArray(el)) {
@@ -984,23 +977,13 @@
       if (typeof el !== "object" || !el.props) return;
       const pth = el.props.path !== undefined ? (" path=" + JSON.stringify(el.props.path)) : "";
       const ch = el.props.children;
-      const chKind = Array.isArray(ch) ? ("array(" + ch.length + ")") : (ch && ch.props ? "elem" : (ch == null ? "none" : typeof ch));
-      log("  [dbg] " + path + " <" + typeName(el.type) + ">" + pth + " children=" + chKind);
-      if (Array.isArray(ch)) { for (let j = 0; j < ch.length && j < 12; j++) describe(ch[j], depth + 1, path + ".children[" + j + "]"); }
-      else if (ch && ch.props) describe(ch, depth + 1, path + ".children");
+      log("  [dbg] " + path + " <" + typeName(el.type) + ">" + pth + " children=" + childKind(ch));
+      describeChildren(ch, depth, path);
     }
     function routerDebug() { try { return !!window.__SHELVES_ROUTER_DEBUG__; } catch (e) { return false; } }
 
-    // Inject our routes + apply our patches into the router's output. Its output
-    // (confirmed on stable AND beta) is a Fragment with two children, each a
-    // container whose `children` is a route-list array: [0] = MAIN routes,
-    // [1] = in-game routes. We patch every list (home shelves live on
-    // `/library/home` in the main list) and append our routes into the main list.
-    // This runs INSIDE the wrapper component below (a real mounted component), so
-    // Steam's focus system registers the resulting subtree normally.
-    function processLists(routerOutput) {
-      if (!routerOutput || !routerOutput.props) return;
-      if (routerDebug()) { try { window.__DBG_RET__ = routerOutput; } catch (e) {} }
+    // The route-list arrays inside the router output: each top container whose `children` is an array.
+    function collectRouteLists(routerOutput) {
       const top = routerOutput.props.children;
       const containers = Array.isArray(top) ? top : [top];
       const lists = [];
@@ -1008,21 +991,30 @@
         const c = containers[i];
         if (c && c.props && Array.isArray(c.props.children)) lists.push(c.props.children);
       }
-      for (let j = 0; j < lists.length; j++) applyPatches(lists[j]);
-      if (lists.length) injectRoutes(lists[0]);
+      return lists;
+    }
+    function recordRouterStats(lists) {
       try {
         const st = (window.__SHELVES_ROUTER_STATS__ = window.__SHELVES_ROUTER_STATS__ || { renders: 0 });
         st.renders++; st.lists = lists.length; st.mainLen = lists.length ? lists[0].length : 0;
         st.routeType = RouteComp ? typeName(RouteComp) : null; st.ourRoutes = routes.size; st.builtLen = builtRoutes ? builtRoutes.length : 0;
       } catch (e) {}
     }
+    // Inject our routes + patches into the router's output: a Fragment of two containers whose
+    // `children` are route-list arrays ([0] = main, [1] = in-game). We patch every list (home
+    // shelves live on `/library/home`) and append our routes into the main list.
+    function processLists(routerOutput) {
+      if (!routerOutput || !routerOutput.props) return;
+      if (routerDebug()) { try { window.__DBG_RET__ = routerOutput; } catch (e) {} }
+      const lists = collectRouteLists(routerOutput);
+      for (let j = 0; j < lists.length; j++) applyPatches(lists[j]);
+      if (lists.length) injectRoutes(lists[0]);
+      recordRouterStats(lists);
+    }
 
-    // The stateful route wrapper: it receives the router's own output as
-    // `children`, injects into that output's
-    // route lists on render, then returns it unchanged. Because the injection now
-    // happens in a normally-mounted component (not an out-of-band fiber mutation),
-    // the gamepad focus tree registers our route pages. Subscribes to the router
-    // state so a later addRoute/addPatch re-renders it without touching the fiber.
+    // The stateful route wrapper: receives the router's output as `children`, injects into its
+    // route lists on render, then returns it unchanged — mounted normally (not an out-of-band fiber
+    // mutation), so focus registers our pages; subscribes to router state so addRoute re-renders it.
     function ShelvesRouterWrapper(props) {
       const st = React.useState(0);
       React.useEffect(function () {
@@ -1070,55 +1062,66 @@
 
     let routerFiber = null; // the mounted route-declaring fiber, for re-rendering
 
+    // The route-declaring fiber is the one whose component source mentions `Settings.Root()`.
+    function isRouterNode(n) {
+      const t = n && (n.elementType || n.type);
+      if (!t) return false;
+      if (srcOf(t).indexOf("Settings.Root()") >= 0) return true;
+      try { if (t.type && srcOf(t.type).indexOf("Settings.Root()") >= 0) return true; } catch (e) {}
+      return false;
+    }
+    // Patch a located router node's memo `.type` (once) and record its fiber. false = unpatchable.
+    function patchRouterNode(node) {
+      const et = node.elementType || node.type;
+      if (!et || typeof et.type !== "function") return false;
+      routerFiber = node;
+      if (!et.type.__shelvesPatched) { afterPatch(et, "type", handleRender); log("routerHook: router patched."); }
+      return true;
+    }
     function ensurePatched() {
       if (patched || !React) return patched;
       try {
         const rf = getReactRoot(document.getElementById("root"));
         if (!rf) return false;
-        const node = findInReactTree(rf, function (n) {
-          const t = n && (n.elementType || n.type);
-          if (!t) return false;
-          if (srcOf(t).indexOf("Settings.Root()") >= 0) return true;
-          try { if (t.type && srcOf(t.type).indexOf("Settings.Root()") >= 0) return true; } catch (e) {}
-          return false;
-        });
+        const node = findInReactTree(rf, isRouterNode);
         if (!node) return false;
-        const et = node.elementType || node.type;
-        if (!et || typeof et.type !== "function") return false;
-        routerFiber = node;
-        if (!et.type.__shelvesPatched) { afterPatch(et, "type", handleRender); log("routerHook: router patched."); }
+        if (!patchRouterNode(node)) return false;
         patched = true;
         return true;
       } catch (e) { logWarn("ROUTER", "patch failed: " + (e && e.message)); return false; }
     }
 
-    // ONE-TIME memo-bust: Steam's route-declaring component is memoized and
-    // captured its render fn at mount (before our afterPatch), so it will not
-    // re-render on its own to pick up our patched render. To INSERT our wrapper
-    // the first time, re-point the live fiber's `type` at the patched fn,
-    // invalidate its memo props, and forceUpdate the nearest class ancestor. Once
-    // handleRender runs, our wrapper is mounted (`wrapperInserted`) and owns all
-    // subsequent updates via React state (bump) — we NEVER touch the fiber again
-    // (the repeated fiber-repoint was what broke gamepad focus / flashed routes).
+    // ONE-TIME memo-bust: Steam's route-declaring component is memoized and captured its render fn
+    // at mount (before our afterPatch), so re-point the live fiber's `type` at the patched fn once,
+    // invalidate memo props and forceUpdate the class ancestor. After that our wrapper owns updates.
     let forcePending = false;
+    // Re-point the fiber's `type` to the patched inner fn and stamp fresh memoizedProps (on both
+    // buffers) so React can't bail out of the memo on the forced re-render.
+    function repointRouterFiber() {
+      const et = routerFiber.elementType;
+      if (et && typeof et.type === "function") {
+        routerFiber.type = et.type;
+        if (routerFiber.alternate) routerFiber.alternate.type = et.type;
+      }
+      const stamp = { __shForce: Date.now() };
+      routerFiber.memoizedProps = Object.assign({}, stamp, routerFiber.memoizedProps);
+      if (routerFiber.alternate) routerFiber.alternate.memoizedProps = Object.assign({}, stamp, routerFiber.alternate.memoizedProps || {});
+    }
+    // Walk up to the nearest class ancestor and forceUpdate it. true = one was found.
+    function forceUpdateAncestor() {
+      let p = routerFiber.return, hops = 0;
+      while (p && hops++ < 80) {
+        if (p.stateNode && typeof p.stateNode.forceUpdate === "function") { p.stateNode.forceUpdate(); return true; }
+        p = p.return;
+      }
+      return false;
+    }
     function doForce() {
       forcePending = false;
       if (!routerFiber || wrapperInserted) return;
       try {
-        const et = routerFiber.elementType;
-        if (et && typeof et.type === "function") {
-          routerFiber.type = et.type;
-          if (routerFiber.alternate) routerFiber.alternate.type = et.type;
-        }
-        const stamp = { __shForce: Date.now() };
-        routerFiber.memoizedProps = Object.assign({}, stamp, routerFiber.memoizedProps);
-        if (routerFiber.alternate) routerFiber.alternate.memoizedProps = Object.assign({}, stamp, routerFiber.alternate.memoizedProps || {});
-        let p = routerFiber.return, hops = 0;
-        while (p && hops++ < 80) {
-          if (p.stateNode && typeof p.stateNode.forceUpdate === "function") { p.stateNode.forceUpdate(); return; }
-          p = p.return;
-        }
-        log("routerHook: no updatable ancestor to force.");
+        repointRouterFiber();
+        if (!forceUpdateAncestor()) log("routerHook: no updatable ancestor to force.");
       } catch (e) { log("routerHook force:", e && e.message); }
     }
     function scheduleForce() { if (wrapperInserted || forcePending) return; forcePending = true; setTimeout(doForce, 0); }

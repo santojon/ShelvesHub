@@ -1,15 +1,6 @@
-// examples/harness/orchestrate.js
-//
-// Drives one scenario end to end against the Steam mock, in the order that
-// matters. Reads window.__HARNESS__ (set by the page from ?scenario=):
-//
-//   coexist     — a foreign loader (DFL) is present (mock installs it)
-//   pluginPanel — a coexisting plugin registers a QAM panel (mirroring)
-//   lateMount   — mount the QAM BEFORE the runtime loads (native-arming path)
-//
-// Loads runtime/shelves-host.js via a <script> tag so the file:// path needs no
-// extra browser flags. Sets window.__HARNESS_READY__ when the scenario is fully
-// wired, so the runner knows the report is stable.
+// examples/harness/orchestrate.js — drives one scenario end to end against the Steam mock.
+// Reads window.__HARNESS__ (?scenario=: coexist / pluginPanel / lateMount), loads shelves-host.js
+// via a <script> tag (no browser flags), and sets window.__HARNESS_READY__ when fully wired.
 
 (function () {
   "use strict";

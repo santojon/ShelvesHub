@@ -167,11 +167,9 @@
        "Download"). applyUpdate reloads once the swap succeeds, so the daemon re-injects
        the new bundle and the plugin re-boots on it. */
     updates: {
-      // True only when THIS host INJECTS the bundle (sole / true owner) — then a
-      // hub-driven swap actually takes effect and the plugin can hide its banner.
-      // Under ANY loader (plain coexist OR cooperative/force) the loader still
-      // injects its own copy, so the hub can't replace it: report false so the
-      // plugin keeps its own update banner instead of silently deferring to us.
+      // True only when THIS host INJECTS the bundle (sole / true owner): only then
+      // does a hub-driven swap take effect. Under any loader the loader injects its
+      // own copy, so report false and let the plugin keep its own update banner.
       canSelfInstall: function () { return !COEXIST; },
       applyUpdate: function (release) {
         return fetch(RPC_ENDPOINT, { method: "POST", headers: rpcHeaders(), body: JSON.stringify({ method: "applyUpdate", args: release == null ? null : release }) })
@@ -183,21 +181,11 @@
     _steam: Steam,
   };
 
-  // The native QAM tab's registration surface — the @deck-shelves/host contract's
-  // `window.__SHELVES_QAM__` (a `HostQam`), exposed on its own global. Unlike
-  // `__SHELVES_HOST__` this never participates in host selection, so a Deck
-  // Shelves running under ANOTHER loader (which owns the home) can still populate
-  // THIS host's native tab by registering a panel here — the one safe hook in
-  // coexistence. In owner mode it is the same object as `__SHELVES_HOST__.qam`.
-  // Idempotent: the first runtime to patch the tab stays the registration target,
-  // so a panel registered against it always feeds the tab that is actually live.
-  //
-  // NOTE: bridge presence is NOT the ownership signal — this object exists at
-  // boot, before any tab is inserted. The tab-ownership handshake uses the
-  // separate `window.__SHELVES_QAM_OWNER__` global, stamped only once our tab
-  // actually lands in the strip (see pushTab). A coexisting Deck Shelves retracts
-  // its own early tab on that, not on this bridge, so there is never a window
-  // where both tabs vanish.
+  /* The native QAM tab's registration surface (the contract's `HostQam`), on its own
+     `window.__SHELVES_QAM__` global. It never participates in host selection, so a Deck
+     Shelves under another loader can still feed THIS host's tab — the one safe coexist
+     hook; idempotent (the first runtime to patch the tab stays the target). Ownership is
+     the separate `__SHELVES_QAM_OWNER__` global, stamped only once our tab lands (pushTab). */
   try { if (!window.__SHELVES_QAM__) window.__SHELVES_QAM__ = host.qam; } catch (e) {}
   /* Drain panels a Deck Shelves registered before this bridge existed: when it
      boots first (under another loader) it leaves them on `__SHELVES_QAM_PENDING__`.
@@ -212,23 +200,29 @@
      an object whose values are all obfuscated class-name strings). The plugin reads
      this off the loader global for stable native-class discovery; without a loader
      it falls back to fragile DOM probing. Mirrors the loader's own filter. */
+  // A class-map module: a plain object of only string values (CSS class maps),
+  // excluding version-only and localization modules.
+  function allStringValues(m, keys) {
+    for (let i = 0; i < keys.length; i++) {
+      const d = Object.getOwnPropertyDescriptor(m, keys[i]);
+      if ((d && d.get) || typeof m[keys[i]] !== "string") return false;
+    }
+    return true;
+  }
+  function isClassMapModule(m) {
+    if (!m || typeof m !== "object" || m.__esModule) return false;
+    const keys = Object.keys(m);
+    if (keys.length === 0 || keys.length >= 1000) return false;
+    if (keys.length === 1 && m.version) return false; // a version-only module
+    if (m.AboutSettings) return false; // the localization module
+    return allStringValues(m, keys);
+  }
   function buildClassMap() {
     const out = [];
     try {
       const it = Steam.modules.values();
       for (let n = it.next(); !n.done; n = it.next()) {
-        const m = n.value;
-        if (!m || typeof m !== "object" || m.__esModule) continue;
-        const keys = Object.keys(m);
-        if (keys.length === 0 || keys.length >= 1000) continue;
-        if (keys.length === 1 && m.version) continue; // a version-only module
-        if (m.AboutSettings) continue; // the localization module
-        let allStrings = true;
-        for (let i = 0; i < keys.length; i++) {
-          const d = Object.getOwnPropertyDescriptor(m, keys[i]);
-          if ((d && d.get) || typeof m[keys[i]] !== "string") { allStrings = false; break; }
-        }
-        if (allStrings) out.push(m);
+        if (isClassMapModule(n.value)) out.push(n.value);
       }
     } catch (e) {}
     return out;
@@ -250,16 +244,23 @@
      (renders a function component off-tree to read its output, so the plugin's menu
      discovery can locate the class/type to patch). Handles the React 18 secret-
      internals shape and the React 19 one. */
-  function internalHooks() {
+  function hooksFromSecretInternals() {
     try {
       const d = React && React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
       if (d && d.ReactCurrentDispatcher && d.ReactCurrentDispatcher.current) return d.ReactCurrentDispatcher.current;
     } catch (e) {}
+    return null;
+  }
+  function hooksFromClientInternals() {
     try {
       const ci = React && React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
       if (ci) { for (const k in ci) { const p = ci[k]; if (p && p.useEffect) return p; } }
     } catch (e) {}
     return null;
+  }
+  // React's internal hook dispatcher (React 18 secret-internals OR React 19 client-internals).
+  function internalHooks() {
+    return hooksFromSecretInternals() || hooksFromClientInternals();
   }
   let _savedHooks = null;
   function applyHookStubs(customHooks) {
@@ -306,30 +307,17 @@
     return undefined;
   }
 
-  // Sole host: the plugin resolves its frontend-library helpers per host (it falls
-  // back to `__SHELVES_HOST__.ui` when no loader is present — the plugin's neutral
-  // path). Our `host.ui` already carries the discovered Steam components; augment it
-  // IN PLACE with the extra helpers the plugin's menu/class code needs (webpack
-  // finders, react-tree/patch utilities, the GamepadButton enum, menu sub-components,
-  // and the native class maps). We do NOT publish any loader-named global (`window.DFL`)
-  // — the host stays neutral; the plugin reads these off the host adapter instead.
-  //
-  // The plugin's UI shim reads MenuGroup + the native class maps at bundle-boot, so
-  // they must be resolved BEFORE the bundle is released (signalUiReady). But those
-  // module scans are heavy — running them all synchronously blocks the main thread
-  // long enough to starve STEAM's own home render (observed: whole home comes up
-  // empty). So run them CHUNKED (one per timer tick, yielding between — like the UI
-  // scan), and only call `onDone` (signalUiReady) once they finish.
+  /* Augment `host.ui` IN PLACE with the extra helpers the plugin's menu/class code needs
+     (webpack finders, react-tree/patch utils, GamepadButton, menu sub-components, native
+     class maps) — no loader-named global, the host stays neutral. These must resolve BEFORE
+     the bundle is released (signalUiReady), but the scans are heavy enough to starve Steam's
+     home render, so run them CHUNKED (one per timer tick, yielding) and call onDone after. */
   function augmentHostUi(onDone) {
     if (UI.__loaderAugmented || !React) { if (onDone) onDone(); return; }
     UI.__loaderAugmented = true;
-    // Cheap assignments (references + literals — no scans): safe to do now. These
-    // are all references the plugin calls ON DEMAND (menu open, native-recents
-    // render) — never invoked here at boot — so publishing them is free. The
-    // tree-patcher (afterPatch) preserves the original's React shape (memo /
-    // forwardRef / function), which the native recents replace requires — it
-    // patches `element.type` slots that are `memo` OBJECTS on this Steam, and a
-    // naive function wrapper threw at render and unmounted the whole route.
+    // Cheap reference/literal assignments (no scans): all called on demand, never at boot.
+    // afterPatch preserves the original's React shape (memo / forwardRef / function) — the
+    // native-recents replace patches `element.type` memo OBJECTS, where a naive wrapper threw.
     try {
       UI.staticClasses = {};
       UI.afterPatch = afterPatch;
@@ -391,31 +379,55 @@
 
   // The root node of Steam's main home gamepad-nav tree (GamepadUI_Full_Root), or
   // null. Shared by the hidden-node prune and the unhandled-button bridge below.
+  function navTreeArray(ctx) {
+    const trees = ctx.m_rgGamepadNavigationTrees;
+    if (Array.isArray(trees)) return trees;
+    return trees.values ? Array.from(trees.values()) : [];
+  }
   function mainNavRoot() {
     const ctrl = window.FocusNavController;
     if (!ctrl) return null;
     const ctx = ctrl.m_ActiveContext || ctrl.m_LastActiveContext;
     if (!ctx || !ctx.m_rgGamepadNavigationTrees) return null;
-    const trees = ctx.m_rgGamepadNavigationTrees;
-    const arr = Array.isArray(trees) ? trees : (trees.values ? Array.from(trees.values()) : []);
+    const arr = navTreeArray(ctx);
     for (let i = 0; i < arr.length; i++) {
-      if (arr[i] && arr[i].m_ID === "GamepadUI_Full_Root") return arr[i].Root || arr[i].m_Root || null;
+      const t = arr[i];
+      if (t && t.m_ID === "GamepadUI_Full_Root") return t.Root || t.m_Root || null;
     }
     return null;
   }
 
-  // Sole host: hidden native home sections (recents "Jogo atual", news/friends
-  // "Novidades") stay 0x0 but remain FOCUSABLE gamepad nav nodes, so DOWN from the
-  // search bar stops on each invisible node before reaching our shelves (extra dpad
-  // presses). Under a loader they never linger as nav nodes; here they do. Remove 0x0
-  // nodes that are NOT ours from the home nav tree — but REVERSIBLY: each removed node
-  // is recorded, and the moment its element becomes visible again (the plugin
-  // re-enabled that section) it is put straight back, so re-enabling recents / the
-  // home tabs still works. The 0x0 test only ever removes ALREADY-hidden nodes, so it
-  // obeys whatever the plugin shows or hides — the plugin needs no changes. Steam
-  // rebuilds the tree on real remounts (not on a CSS-only show/hide, which is exactly
-  // why the restore step is needed), so this re-runs on a modest interval.
+  /* Sole host: hidden native home sections stay 0x0 but remain FOCUSABLE nav nodes, so DOWN
+     from the search bar stops on each invisible one before our shelves (extra dpad presses).
+     Remove 0x0 nodes that aren't ours from the home nav tree, REVERSIBLY — each is recorded
+     and put back the moment its element is visible again, so re-enabling a section still works.
+     A CSS show/hide doesn't rebuild the tree, so this re-runs on a modest interval. */
   const _prunedNodes = [];
+  // Restore pass: any node we removed whose element is now VISIBLE again goes back into its
+  // parent (clearing m_bChildrenSorted makes Steam re-sort by DOM position); drop detached
+  // records. Returns true when the tree changed.
+  function reattachNode(rec) {
+    if (rec.parent && rec.parent.m_rgChildren && rec.parent.m_rgChildren.indexOf(rec.node) < 0) {
+      rec.parent.m_rgChildren.push(rec.node);
+      rec.parent.m_bChildrenSorted = false;
+      return true;
+    }
+    return false;
+  }
+  function restorePrunedNodes(zeroSize) {
+    let touched = false;
+    for (let k = _prunedNodes.length - 1; k >= 0; k--) {
+      const rec = _prunedNodes[k];
+      const el = rec.node && rec.node.m_element;
+      const attached = !!(el && el.ownerDocument && el.ownerDocument.contains(el));
+      if (!attached) { _prunedNodes.splice(k, 1); continue; }
+      if (!zeroSize(el)) {
+        try { if (reattachNode(rec)) touched = true; } catch (e) {}
+        _prunedNodes.splice(k, 1);
+      }
+    }
+    return touched;
+  }
   function pruneHiddenNavNodes() {
     try {
       const root = mainNavRoot();
@@ -431,26 +443,7 @@
           return !!(m && m.contains(el));
         } catch (e) { return false; }
       };
-      let touched = false;
-      // Restore pass: any node we removed whose element is now VISIBLE again goes
-      // back into its parent (nav order is fixed by clearing m_bChildrenSorted, so
-      // Steam re-sorts by DOM position). Drop records whose element has detached.
-      for (let k = _prunedNodes.length - 1; k >= 0; k--) {
-        const rec = _prunedNodes[k];
-        const el = rec.node && rec.node.m_element;
-        const attached = !!(el && el.ownerDocument && el.ownerDocument.contains(el));
-        if (!attached) { _prunedNodes.splice(k, 1); continue; }
-        if (!zeroSize(el)) {
-          try {
-            if (rec.parent && rec.parent.m_rgChildren && rec.parent.m_rgChildren.indexOf(rec.node) < 0) {
-              rec.parent.m_rgChildren.push(rec.node);
-              rec.parent.m_bChildrenSorted = false;
-              touched = true;
-            }
-          } catch (e) {}
-          _prunedNodes.splice(k, 1);
-        }
-      }
+      let touched = restorePrunedNodes(zeroSize);
       // Prune pass: remove currently-hidden 0x0 native nodes, recording each so the
       // restore pass can put it back when the plugin shows that section again.
       (function walk(node, depth) {

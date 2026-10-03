@@ -1,32 +1,9 @@
 #!/usr/bin/env node
-/*
- * Run the ShelvesHub daemon against the REAL local Steam Big Picture (sole
- * host) on macOS, Windows or Linux — the desktop counterpart to the `deck:*`
- * tasks (which target a Deck over SSH) and to `debug:local` (which drives a
- * throwaway Chromium harness, not Steam).
- *
- * The plugin does NOT need to be checked out: by default the daemon's own
- * `ensure_bundle` downloads the latest Deck Shelves (pre)release from GitHub into
- * a managed bundle under the OS data dir (exactly what a real install does). If a
- * sibling plugin checkout is present (`../Deck-Shelves/dist/index.iife.js`) or
- * `SHELVES_BUNDLE_PATH` points at a build, that local bundle is used instead — for
- * co-developing the hub and plugin together. An existing managed bundle is kept
- * across restarts (`--reseed` forces a refresh; `--prerelease` widens the download
- * to pre-releases).
- *
- * Prereqs: Steam launched with CEF remote debugging
- * (`~/.steam/.../.cef-enable-remote-debugging`, or `-cef-enable-remote-debugging`
- * on macOS/Windows) and Big Picture open. Settings/env live in `.env`.
- *
- * Usage:
- *   node scripts/local-run.mjs            # keep the managed bundle (seed if missing)
- *   node scripts/local-run.mjs --reseed   # re-seed from the plugin build
- *   node scripts/local-run.mjs --reload   # also reload the renderer after starting
- *   node scripts/local-run.mjs --no-build # skip `cargo build`
- * Env: SHELVES_BUNDLE_PATH (plugin IIFE; default ../Deck-Shelves/dist/index.iife.js),
- *      SHELVES_CEF_HOST/SHELVES_CEF_PORT (default 127.0.0.1:8080),
- *      SHELVES_SETTINGS_DIR (default: the daemon's per-OS location).
- */
+/* Run the ShelvesHub daemon against the REAL local Steam Big Picture (sole host) on macOS/Windows/
+   Linux. The plugin need not be checked out (the daemon downloads the latest Deck Shelves release);
+   a sibling checkout or SHELVES_BUNDLE_PATH overrides it. Needs Steam with CEF remote debugging +
+   Big Picture open; settings/env in `.env`. Flags: --reseed (refresh bundle), --reload, --prerelease,
+   --no-build. */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, copyFileSync, statSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
@@ -93,12 +70,9 @@ if (!existsSync(bin)) { console.error(`[!] Daemon binary not found at ${bin} —
 
 seedBundle();
 
-// ── Seed the daemon's config file with the sole-host dev defaults ────────────
-// The daemon reads `<exe_dir>/shelveshub.config.json`. We seed dev defaults
-// (force_owner / native_qam) into that FILE instead of forcing them via env, so
-// the hub's advanced-config editor can change them and the change PERSISTS across
-// restarts (env would override the file every boot). Only missing keys are added
-// — an existing value (a user edit) is never overwritten.
+// Seed the daemon's config file (<exe_dir>/shelveshub.config.json) with sole-host dev defaults
+// (force_owner / native_qam) in the FILE not env, so the advanced-config editor can change them and
+// the change PERSISTS across restarts. Only missing keys are added — an existing value is kept.
 const CONFIG_FILE = join(ROOT, "target", "debug", "shelveshub.config.json");
 function seedConfig() {
   const defaults = { force_owner: true, native_qam: true, owner_settle_secs: 0 };
