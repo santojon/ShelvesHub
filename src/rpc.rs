@@ -202,10 +202,16 @@ fn handle_connection(mut stream: TcpStream) {
     }
 
     let response_body = dispatch(&request.body);
-    log_info(
-        "rpc",
-        &format!("{peer} -> {}", truncate_for_log(&request.body)),
-    );
+    match request.correlation.as_deref() {
+        Some(id) => log_info(
+            "rpc",
+            &format!("[{id}] {peer} -> {}", truncate_for_log(&request.body)),
+        ),
+        None => log_info(
+            "rpc",
+            &format!("{peer} -> {}", truncate_for_log(&request.body)),
+        ),
+    }
     if let Err(e) = write_response(&mut stream, 200, &response_body, origin) {
         log_warning("rpc", &format!("Write error to {peer}: {e}"));
     }
@@ -230,6 +236,9 @@ struct HttpRequest {
     origin: Option<String>,
     authorization: Option<String>,
     content_type: Option<String>,
+    /// Optional `X-DS-Req` correlation id from the caller, echoed into the RPC log
+    /// line so a renderer-side call can be matched to its daemon-side log entry.
+    correlation: Option<String>,
     /// Content-Length exceeded `MAX_BODY_BYTES` — the body was not read.
     too_large: bool,
 }
@@ -250,6 +259,7 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
     let mut origin = None;
     let mut authorization = None;
     let mut content_type = None;
+    let mut correlation = None;
     loop {
         let mut line = String::new();
         let n = reader.read_line(&mut line)?;
@@ -267,6 +277,9 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
                 authorization = Some(value);
             } else if name.eq_ignore_ascii_case("content-type") {
                 content_type = Some(value);
+            } else if name.eq_ignore_ascii_case("x-ds-req") {
+                // Cap the echoed id so a hostile caller can't bloat the log line.
+                correlation = Some(value.chars().take(64).collect());
             }
         }
     }
@@ -278,6 +291,7 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
             origin,
             authorization,
             content_type,
+            correlation,
             too_large: true,
         });
     }
@@ -293,6 +307,7 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
         origin,
         authorization,
         content_type,
+        correlation,
         too_large: false,
     })
 }
@@ -365,6 +380,40 @@ fn dispatch(body: &str) -> String {
             serde_json::Value::String(backend::python_bin().to_string()),
             backend::python_available()
         )),
+        // One snapshot for the plugin's "Copy diagnostics" / Support block: host
+        // identity + versions + OS/arch + runtime modes + backend/python + update
+        // state. Read-only aggregation of what the daemon already knows.
+        Some("getDiagnostics") => {
+            let rc = state::runtime_config();
+            let mode = |k: &str| rc.and_then(|v| v.get(k)).cloned().unwrap_or(Value::Null);
+            let diag = serde_json::json!({
+                "hostKind": "shelveshub",
+                "hubVersion": env!("CARGO_PKG_VERSION"),
+                "hostApiVersion": crate::HOST_API_VERSION,
+                "os": std::env::consts::OS,
+                "arch": std::env::consts::ARCH,
+                "hosting": state::is_injected(),
+                "bundleReady": state::is_bundle_ready(),
+                "backend": {
+                    "configured": backend::enabled(),
+                    "running": backend::is_running(),
+                    "python": backend::python_bin(),
+                    "pythonAvailable": backend::python_available(),
+                },
+                "modes": {
+                    "native_qam": mode("native_qam"),
+                    "force_owner": mode("force_owner"),
+                    "desktop_ui": mode("desktop_ui"),
+                    "prerelease": mode("prerelease"),
+                },
+                "update": {
+                    "pending": state::pending_hub_update(),
+                    "staged": state::hub_update_staged(),
+                    "lastCheckMs": state::millis_since_update_check(),
+                },
+            });
+            ok(diag.to_string())
+        }
         // Manual bundle re-download (the fallback panel's "download" action):
         // fetch the newest release into the bundle path; the loop re-injects it.
         Some("populateBundle") => match state::populate_config() {
@@ -843,7 +892,7 @@ fn write_response(
          Content-Length: {len}\r\n\
          {cors_origin}\
          Access-Control-Allow-Methods: POST, OPTIONS\r\n\
-         Access-Control-Allow-Headers: Content-Type, Authorization\r\n\
+         Access-Control-Allow-Headers: Content-Type, Authorization, X-DS-Req\r\n\
          Connection: close\r\n\
          \r\n\
          {body}",

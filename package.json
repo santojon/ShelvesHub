@@ -37,6 +37,7 @@
     "deck:deploy": "bash scripts/deck-deploy.sh",
     "deck:deploy:hard": "bash scripts/deck-deploy-hard.sh",
     "mac:deploy:hard": "bash scripts/mac-deploy-hard.sh",
+    "perf:combined": "bash scripts/combined-host-run.sh",
     "deck:tunnel": "bash scripts/deck-tunnel.sh",
     "deck:logs": "bash scripts/deck-logs.sh",
     "build:site": "node scripts/build-site.mjs",
@@ -63,7 +64,7 @@
   },
   "devDependencies": {
     "dotenv-cli": "^7.4.4",
-    "eslint": "^10.11.0",
+    "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1"
   }
 }

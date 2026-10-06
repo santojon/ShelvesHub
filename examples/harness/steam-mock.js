@@ -210,6 +210,19 @@
   };
   window.webpackChunksteamui = chunk;
 
+  // Minimal SteamUIStore so the host's boot side-menu-close loop (shelves-host.js)
+  // finds a MenuStore, closes the open menu and SELF-TERMINATES — as on-device —
+  // instead of polling until its retry cap (which would look like a permanent timer).
+  (function () {
+    const menuStore = {
+      m_eOpenSideMenu: 1,
+      CloseSideMenus: function () { this.m_eOpenSideMenu = 0; },
+    };
+    window.SteamUIStore = {
+      WindowStore: { GamepadUIMainWindowInstance: { m_MenuStore: menuStore } },
+    };
+  })();
+
   // ── Coexistence: a foreign loader (DFL) present ───────────────────────────
   if (S.coexist) {
     window.DFL = {
@@ -301,6 +314,7 @@
       shelvesTabText: shelvesTabText(),
       log: (window.__SHELVES_LOG__ || []).slice(-16),
       errors: (window.__HARNESS_ERRORS__ || []).slice(-6),
+      idle: window.__HARNESS_IDLE__,
       fallbackUi: (function () {
         const panel = document.querySelector("[data-fb-panel]");
         if (!panel) return null;

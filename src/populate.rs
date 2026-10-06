@@ -263,6 +263,11 @@ fn extract_tgz_url(url: &str, dest: &Path) -> Result<(), String> {
     fs::create_dir_all(dest).map_err(|e| format!("create {}: {e}", dest.display()))?;
     let tmp = dest.join(".backend-download.tar.gz");
     curl_download(url, &tmp)?;
+    // Integrity-check the archive against the release's SHA256SUMS before extracting.
+    if let Err(e) = verify_plugin_asset_against_sums(url, &tmp) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
     let result = extract_archive(&tmp, dest); // vets members before extracting
     let _ = fs::remove_file(&tmp);
     result
@@ -315,6 +320,7 @@ fn download_latest_iife(dest: &Path, prerelease: bool) -> Result<String, String>
             dest.display()
         ));
     }
+    verify_plugin_asset_against_sums(&url, dest)?;
     log_info("populate", &format!("Downloaded bundle from {url}"));
     Ok(url)
 }
@@ -785,6 +791,52 @@ fn sha256_hex_bytes(bytes: &[u8]) -> String {
 fn sha256_hex(path: &Path) -> Result<String, String> {
     let bytes = fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
     Ok(sha256_hex_bytes(&bytes))
+}
+
+/// The expected lowercase SHA-256 for `name` in a `SHA256SUMS` body, if listed.
+/// Accepts the usual `<64-hex>␠␠name` / `<64-hex> *name` shapes; ignores other lines
+/// (so a 404 "Not Found" body or a different file name simply yields `None`).
+fn sha256_for_name(sums: &str, name: &str) -> Option<String> {
+    sums.lines().find_map(|line| {
+        let mut it = line.split_whitespace();
+        let hash = it.next()?;
+        if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let fname = it.last()?.trim_start_matches('*');
+        (fname == name).then(|| hash.to_ascii_lowercase())
+    })
+}
+
+/// Verify a downloaded PLUGIN asset against the release's `SHA256SUMS`, fail-closed
+/// **once present**: if the sibling `SHA256SUMS` is published and lists this asset,
+/// a mismatch deletes the file and aborts; if it isn't published yet or doesn't list
+/// the asset, we skip (the plugin only recently started shipping it). This is an
+/// integrity check against a corrupted/truncated download — authenticity of the
+/// plugin bundle is a later step (a minisigned plugin SHA256SUMS the hub can trust).
+fn verify_plugin_asset_against_sums(asset_url: &str, file: &Path) -> Result<(), String> {
+    let Some(slash) = asset_url.rfind('/') else {
+        return Ok(());
+    };
+    let name = &asset_url[slash + 1..];
+    let sums_url = format!("{}/SHA256SUMS", &asset_url[..slash]);
+    let sums = match curl_text(&sums_url) {
+        Ok(s) => s,
+        Err(_) => return Ok(()), // unreachable/not published — skip (grace period)
+    };
+    let Some(expected) = sha256_for_name(&sums, name) else {
+        return Ok(()); // SHA256SUMS absent or doesn't list this asset — skip
+    };
+    let got = sha256_hex(file)?;
+    if got.eq_ignore_ascii_case(&expected) {
+        log_info("populate", &format!("Verified {name} against SHA256SUMS."));
+        Ok(())
+    } else {
+        let _ = fs::remove_file(file);
+        Err(format!(
+            "SHA256 mismatch for {name} (expected {expected}, got {got}) — refusing the download"
+        ))
+    }
 }
 
 /// Whether a missing `SHA256SUMS`/`SHA256SUMS.minisig` must ABORT the update

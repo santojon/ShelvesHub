@@ -8,6 +8,28 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- **The tab now shows who's hosting Deck Shelves.** The ShelvesHub tab's status readout
+  names the current host (this host, or a plugin loader), the running Deck Shelves version,
+  and warns when a loader's copy predates the coexistence protocol (so you know to update it).
+- **`shelveshub status` — a one-command diagnostics report.** Run it in a terminal to
+  print OS, architecture (target vs. running, so translation shows up), glibc, Python,
+  and — on Linux — the device model, display connectors and whether the SteamOS session
+  service is present. Handy for filing an ARM64 report without opening the interface.
+
+### Changed
+- **Automatic recovery now detects your system instead of assuming it.** On a Steam Deck
+  it still restarts the Gaming Mode session; on a generic Linux without that service it
+  defaults to pause-only (no futile restart). macOS and Windows are unchanged.
+- **The optional boot animation matches your display.** On Linux the cut is chosen from the
+  actual panel resolution (the Deck's 1280×800 vs. a 1080p screen) rather than assuming a Deck.
+
+### Security
+- **Downloaded Deck Shelves bundles are now integrity-checked.** When a plugin release
+  publishes a `SHA256SUMS`, ShelvesHub verifies the bundle and the backend it downloads
+  against it and refuses a file that doesn't match — so a corrupted or tampered download
+  is rejected instead of injected.
+
 ## [0.4.1] - 2026-10-02
 
 ### Added

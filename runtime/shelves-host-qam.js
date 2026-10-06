@@ -214,6 +214,21 @@
       return h("div", { key: "verfoot", "data-fb": "version", style: { textAlign: "center", padding: "10px 12px 6px", fontSize: "11px", lineHeight: "15px", color: "rgba(255,255,255,0.4)" } },
         "ShelvesHub" + (version ? " · v" + version : ""));
     }
+    function ownerLabel(owner) {
+      if (!owner) return "—";
+      return owner === "shelveshub" ? I18N.t("host_self") : owner + " " + I18N.t("host_loader_suffix");
+    }
+    // Host-detection readout: who currently hosts Deck Shelves (this host vs. a plugin loader),
+    // the running Deck Shelves version (from the owner-metadata global the owning bundle stamps),
+    // and `legacy` when a loader owns it but stamps no version (predates the coexistence protocol).
+    function hostDetection() {
+      let owner = null, meta = null;
+      try { owner = window.__DECK_SHELVES_OWNER__ || null; } catch (e) {}
+      try { meta = window.__DECK_SHELVES_OWNER_META__ || null; } catch (e) {}
+      const dsVersion = meta && meta.dsVersion ? String(meta.dsVersion) : null;
+      const legacy = !!(owner && owner !== "shelveshub" && !dsVersion);
+      return { owner: owner, label: ownerLabel(owner), dsVersion: dsVersion, legacy: legacy };
+    }
     function FallbackPanel(props) {
       const onBack = props && props.onBack;
       const st = React.useState(null);
@@ -569,7 +584,15 @@
       function buildStatusSection() {
         const onOff = function (v) { return v ? "on" : "off"; };
         const modeLabel = function () { return COOP ? "cooperative" : (coexist ? "coexist" : "sole"); };
-        const status = [advRoRow("mode", I18N.t("cfg_mode"), modeLabel())];
+        const hd = hostDetection();
+        const status = [
+          advRoRow("mode", I18N.t("cfg_mode"), modeLabel()),
+          advRoRow("hostedby", I18N.t("cfg_hosted_by"), hd.label),
+          advRoRow("dsver", I18N.t("cfg_ds_version"), hd.dsVersion || "—"),
+        ];
+        if (hd.legacy) {
+          status.push(h("div", { key: "legacy", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("legacy_bundle_warning")));
+        }
         if (!rc.loader_possible) status.push(advRoRow("force", I18N.t("cfg_force_owner"), onOff(rc.force_owner)));
         status.push(
           advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),

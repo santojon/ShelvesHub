@@ -3,6 +3,13 @@ use shelveshub::logger::{log_info, log_warning};
 use shelveshub::{backend, bootmovie, loader, populate, rpc, state};
 
 fn main() {
+    // `shelveshub status [--report]`: emit a one-shot diagnostics report and exit,
+    // without starting the daemon (the terminal-side tester report — see report.rs).
+    if std::env::args().nth(1).as_deref() == Some("status") {
+        shelveshub::report::print_status_report();
+        return;
+    }
+
     log_info("main", "ShelvesHub starting...");
     log_info("main", concat!("Version: ", env!("CARGO_PKG_VERSION")));
 

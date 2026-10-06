@@ -969,11 +969,21 @@ pub(super) fn i18n_stamp(host_runtime_path: &Path) -> String {
 /// Expose the host-facing config to the runtime so it derives the RPC endpoint and
 /// the contract version from the daemon (one source) instead of hardcoding them.
 pub(super) fn config_stamp(config: &Config) -> String {
+    // The Deck Shelves bundle version this host carries (the last installed release
+    // tag), for the handshake's `bundleVersion` — null until one is recorded.
+    let bundle_tag = crate::store::load(&config.hub_config_path).bundle_tag;
+    let bundle_version = if bundle_tag.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::Value::String(bundle_tag)
+    };
     let obj = serde_json::json!({
         "rpcEndpoint": format!("http://{}", config.rpc_addr),
         "hostApiVersion": crate::HOST_API_VERSION,
         "hostVersion": env!("CARGO_PKG_VERSION"),
         "rpcToken": state::rpc_token(),
+        "device": crate::config::detected_device(),
+        "bundleVersion": bundle_version,
     });
     format!("window.__SHELVES_CONFIG__ = {obj};\n")
 }

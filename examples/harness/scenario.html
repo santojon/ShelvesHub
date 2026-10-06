@@ -17,6 +17,7 @@
           "coexist-late": { coexist: true, pluginPanel: true, lateMount: true },
           "coexist-native": { coexist: true, pluginPanel: true, nativeUi: true },
           "coexist-fallback-native": { coexist: true, pluginPanel: false, nativeUi: true },
+          "coexist-idle": { coexist: true, pluginPanel: true, nativeUi: true },
         };
         window.__HARNESS__ = map[sc] || map["coexist-mirror"];
         // Native-component rendering is gated behind this runtime flag on-device
@@ -29,6 +30,35 @@
         window.addEventListener("error", function (e) {
           window.__HARNESS_ERRORS__.push(String((e && (e.message || e.error)) || e));
         });
+
+        // Idle-cost instrumentation (must wrap before the mock/runtime create anything):
+        // track LIVE repeating timers (handle -> interval ms) and MutationObservers so the
+        // coexist-idle scenario can assert no permanent sub-1s poll / observer churn after settle.
+        (function () {
+          var idle = { intervals: 0, observers: 0, intervalTicks: 0, observerCbs: 0, live: {} };
+          window.__HARNESS_IDLE__ = idle;
+          var _si = window.setInterval.bind(window), _ci = window.clearInterval.bind(window);
+          window.setInterval = function (fn, ms) {
+            var h = _si(function () { idle.intervalTicks++; try { return fn.apply(this, arguments); } catch (e) {} }, ms);
+            idle.live[h] = ms || 0; idle.intervals++; return h;
+          };
+          window.clearInterval = function (h) {
+            if (Object.prototype.hasOwnProperty.call(idle.live, h)) { delete idle.live[h]; idle.intervals--; }
+            return _ci(h);
+          };
+          var MO = window.MutationObserver;
+          if (MO) {
+            var Wrapped = function (cb) {
+              var o = new MO(function () { idle.observerCbs++; try { return cb.apply(this, arguments); } catch (e) {} });
+              var obs = o.observe.bind(o), dis = o.disconnect.bind(o), on = false;
+              o.observe = function () { if (!on) { on = true; idle.observers++; } return obs.apply(o, arguments); };
+              o.disconnect = function () { if (on) { on = false; idle.observers--; } return dis.apply(o, arguments); };
+              return o;
+            };
+            Wrapped.prototype = MO.prototype;
+            window.MutationObserver = Wrapped;
+          }
+        })();
 
         // Hermetic RPC: the runtime fetches getConfig / getRuntimeConfig / getLogs
         // from the daemon (127.0.0.1:60123) to build the fallback panel's Updates,

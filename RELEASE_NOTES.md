@@ -10,6 +10,16 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **One-command diagnostics.** `shelveshub status` prints a report (OS, architecture,
+  glibc, Python, and — on Linux — device model and displays) you can paste into a bug
+  report, especially on ARM64.
+- **Smarter automatic recovery.** It now detects whether your system has the SteamOS
+  session service: a Steam Deck still restarts it, a generic Linux without it just pauses
+  instead of running a pointless restart.
+- **Safer bundle downloads.** When a Deck Shelves release ships a `SHA256SUMS`, ShelvesHub
+  checks the bundle and backend it downloads against it and refuses anything that doesn't
+  match — a corrupted or tampered download is rejected, not injected.
+
 ## [0.4.1] - 2026-10-02
 
 - **See updates sooner — and check on demand.** The ShelvesHub tab now shows whether

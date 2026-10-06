@@ -61,10 +61,19 @@ if [[ -f /etc/systemd/system/shelveshub.service || -d /opt/shelveshub ]]; then
     mkdir -p "$INSTALL_DIR"
     sudo cp /opt/shelveshub/shelveshub.config.json "$INSTALL_DIR/" && sudo chown "$USER" "$INSTALL_DIR/shelveshub.config.json"
   fi
-  if [[ ! -d "$SETTINGS_DIR" && -d /root/.local/share/deck-shelves ]]; then
-    mkdir -p "$(dirname "$SETTINGS_DIR")"
-    sudo cp -r /root/.local/share/deck-shelves "$SETTINGS_DIR" && sudo chown -R "$USER" "$SETTINGS_DIR"
-    echo "[i] Rescued your Deck Shelves settings from the old root install."
+  # Rescue the old root install's settings when the per-user store doesn't exist yet.
+  # The old system unit ran with WorkingDirectory=/opt/shelveshub and no HOME, so the
+  # daemon's store could land off-canonical at /opt/shelveshub/.local/share/deck-shelves;
+  # also check root's home. First match wins — copied before /opt is removed below.
+  if [[ ! -d "$SETTINGS_DIR" ]]; then
+    for _old in /opt/shelveshub/.local/share/deck-shelves /root/.local/share/deck-shelves; do
+      if [[ -d "$_old" ]]; then
+        mkdir -p "$(dirname "$SETTINGS_DIR")"
+        sudo cp -r "$_old" "$SETTINGS_DIR" && sudo chown -R "$USER" "$SETTINGS_DIR"
+        echo "[i] Rescued your Deck Shelves settings from the old root install ($_old)."
+        break
+      fi
+    done
   fi
   sudo rm -rf /opt/shelveshub
 fi

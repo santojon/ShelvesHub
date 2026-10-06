@@ -283,6 +283,13 @@ jobs:
           cargo check --all-targets --target aarch64-unknown-linux-gnu
           cargo build --release --target aarch64-unknown-linux-gnu
 
+      # ELF arch audit: the arm64 release binaries must actually be aarch64 ELF —
+      # catches an accidental x86-only artifact slipping into an ARM64 build.
+      - name: ELF arch audit
+        run: |
+          bash scripts/arch-audit.sh target/aarch64-unknown-linux-gnu/release/shelveshub aarch64
+          bash scripts/arch-audit.sh target/aarch64-unknown-linux-gnu/release/shelves-devtools aarch64
+
   # The full simulation harness on REAL emulated ARM64 (QEMU) — the daemon,
   # runtime scenarios and injection smoke actually running, not just compiling.
   # A cargo release build under emulation is slow, so this is manual-dispatch only

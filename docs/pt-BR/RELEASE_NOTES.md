@@ -10,6 +10,17 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **Diagnóstico em um comando.** `shelveshub status` imprime um relatório (SO, arquitetura,
+  glibc, Python e — no Linux — modelo do dispositivo e displays) que você cola num relato de
+  bug, especialmente em ARM64.
+- **Recuperação automática mais esperta.** Ela agora detecta se o seu sistema tem o serviço
+  de sessão do SteamOS: um Steam Deck ainda o reinicia, um Linux genérico sem ele apenas pausa
+  em vez de rodar um reinício inútil.
+- **Downloads de pacote mais seguros.** Quando um lançamento do Deck Shelves inclui um
+  `SHA256SUMS`, o ShelvesHub verifica o pacote e o backend que baixa contra ele e recusa
+  qualquer coisa que não corresponda — um download corrompido ou adulterado é rejeitado,
+  não injetado.
+
 ## [0.4.1] - 2026-10-02
 
 - **Veja atualizações mais cedo — e verifique quando quiser.** A aba do ShelvesHub agora

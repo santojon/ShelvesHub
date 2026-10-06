@@ -85,7 +85,7 @@
     // Identify this host + the capabilities it implements, so a bundle can adapt
     // without feature-detecting each member (contract `HostHandshake`).
     handshake: function () {
-      return {
+      const hs = {
         hostKind: "shelveshub",
         hostVersion: SHELVES_CFG.hostVersion || HOST_API_VERSION,
         hostApiVersion: HOST_API_VERSION,
@@ -96,6 +96,12 @@
           coexist: !!COEXIST,
         },
       };
+      // Additive (contract 1.4.0): device identity + the bundle version this host
+      // carries, both stamped by the daemon into __SHELVES_CONFIG__. Omitted when the
+      // daemon is older (the bundle falls back to its own detection).
+      if (SHELVES_CFG.device) hs.device = SHELVES_CFG.device;
+      if (SHELVES_CFG.bundleVersion) hs.bundleVersion = SHELVES_CFG.bundleVersion;
+      return hs;
     },
     // Steam's React stack, discovered from webpack in owner mode — the bundle's
     // react / react-dom / jsx-runtime shims read these from `__SHELVES_HOST__`

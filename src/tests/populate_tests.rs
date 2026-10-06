@@ -364,3 +364,25 @@ fn placeholder_is_not_a_real_bundle() {
     assert!(is_real_bundle(&p));
     let _ = fs::remove_file(&p);
 }
+
+#[test]
+fn sha256_for_name_parses_both_shapes_and_skips_noise() {
+    let h = "a".repeat(64);
+    let g = "b".repeat(64);
+    // two-space (text) form and `*` (binary) form both parse; a 404 "Not Found"
+    // body or a short/garbage hash yields None (→ verification is skipped).
+    let sums = format!(
+        "{h}  index.iife.js\n{g} *deck-shelves-backend.tar.gz\nNot Found\ndead  short.js\n"
+    );
+    assert_eq!(
+        sha256_for_name(&sums, "index.iife.js").as_deref(),
+        Some(h.as_str())
+    );
+    assert_eq!(
+        sha256_for_name(&sums, "deck-shelves-backend.tar.gz").as_deref(),
+        Some(g.as_str())
+    );
+    assert_eq!(sha256_for_name(&sums, "short.js"), None); // hash not 64 hex
+    assert_eq!(sha256_for_name(&sums, "missing.js"), None); // not listed
+    assert_eq!(sha256_for_name("404: Not Found", "index.iife.js"), None);
+}
