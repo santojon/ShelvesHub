@@ -9,6 +9,14 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **Um companheiro de tray no desktop opcional, pelo mesmo instalador.** Todo instalador agora
+  oferece uma escolha **desligada por padrão** (prompt / env `SHELVES_TRAY` / um checkbox no
+  `setup.exe` no Windows) pra instalar um pequeno app de barra de menu / tray que mostra se o
+  ShelvesHub está hospedando e oferece ações rápidas (pausar/retomar, reiniciar o serviço, reiniciar
+  o backend de dados). É um binário separado que conversa só com o RPC local do daemon —
+  autenticado com o token por-boot que o daemon agora grava num arquivo `0600` — então nenhuma
+  superfície de rede nova é aberta. Os desinstaladores o removem junto com a entrada de autostart.
+  Veja [docs/installation.md](installation.md).
 - **`shelveshub doctor` — verifica o seu setup e se oferece pra consertar.** Rode num terminal
   para checar a flag de debug CEF do Steam, a porta de debug do renderer, se o Steam está rodando
   e o serviço em segundo plano, cada um com um próximo passo concreto. `shelveshub doctor --fix`
@@ -29,12 +37,14 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ### Alterado
 - **O modo cooperativo agora recua sozinho quando conflita com um loader de plugins.** Se forçar
-  o ShelvesHub a hospedar o Deck Shelves com um loader presente ficar coincidindo com a tela do
-  Steam colapsando, o ShelvesHub abaixa a posse forçada pela sessão e roda como coexistência
-  simples, em vez de brigar com o loader num ciclo de reinícios — e a leitura de status avisa. Fica
-  ligado por padrão; use `SHELVES_COOP_SAFE_MODE=0` (ou `coop_safe_mode: false`) para seguir
-  forçando mesmo com o churn. Uma atualização do plugin feita pelo hub também é segurada no modo
-  cooperativo (o loader é dono da cópia em disco), pra as duas não ficarem em versões diferentes.
+  o ShelvesHub a hospedar o Deck Shelves com um loader presente ficar dando errado — a tela do Steam
+  colapsando, ou a recuperação da própria aba do Deck Shelves tropeçando no churn — o ShelvesHub
+  abaixa a posse forçada pela sessão e roda como coexistência simples, em vez de brigar com o loader
+  num ciclo de reinícios, e a leitura de status explica. Fica ligado por padrão; use
+  `SHELVES_COOP_SAFE_MODE=0` (ou `coop_safe_mode: false`) para seguir forçando mesmo assim. No modo
+  cooperativo os toggles de atualização do plugin também ficam escondidos e uma atualização do plugin
+  feita pelo hub é segurada (o loader é dono da cópia em disco), pra as duas não ficarem em versões
+  diferentes.
 - **A recuperação automática agora detecta o seu sistema em vez de presumir.** Num Steam
   Deck ela ainda reinicia a sessão do Gaming Mode; num Linux genérico sem esse serviço ela
   passa a só pausar (sem reinício fútil). macOS e Windows seguem iguais.

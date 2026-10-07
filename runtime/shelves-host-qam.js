@@ -249,10 +249,17 @@
       const rc = rcS[0], setRc = rcS[1];
       const rd = React.useState(false);
       const rcDirty = rd[0], setRcDirty = rd[1];
+      // Live coexistence state (getDiagnostics): whether auto-safe-mode stood force
+      // down this session, so the Status readout can explain it. Fetched once on open.
+      const cxS = React.useState(null);
+      const coex = cxS[0], setCoex = cxS[1];
       React.useEffect(function () {
         let alive = true;
         hostRpc("getRuntimeConfig").then(function (r) {
           if (alive && r && r.ok && r.result && typeof r.result === "object") setRc(r.result);
+        }, function () {});
+        hostRpc("getDiagnostics").then(function (r) {
+          if (alive && r && r.ok && r.result && r.result.coexistence) setCoex(r.result.coexistence);
         }, function () {});
         return function () { alive = false; };
       }, []);
@@ -538,7 +545,10 @@
            - ShelvesHub self-update remains available even in coexistence, so the
              daemon can update itself independently of the plugin's owner. */
         let upd, updCount;
-        if (coexist) {
+        // Cooperative counts as "loader manages the plugin" for updates: the
+        // loader's copy is the one that runs, so hide the plugin update toggles
+        // (keep the hub self-update) — the hub won't swap the loader's on-disk copy.
+        if (coexist || COOP) {
           upd = [
             h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere")),
           ];
@@ -582,8 +592,16 @@
         if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));
         return h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: confCount }, conf);
       }
-      // Read-only Status readout (rc present): the effective mode + key config values, incl. the
-      // ownership value when its toggle is hidden (pure sole host).
+      // Amber status warnings (legacy loader bundle; cooperative auto-paused), as
+      // their own list so buildStatusSection stays within the complexity budget.
+      function statusWarnings(hd, cx) {
+        const amber = { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" };
+        const w = [];
+        if (hd.legacy) w.push(h("div", { key: "legacy", style: amber }, I18N.t("legacy_bundle_warning")));
+        if (cx && cx.forceReceded) w.push(h("div", { key: "coopreceded", style: amber }, I18N.t("coop_receded_warning")));
+        return w;
+      }
+      // Read-only Status readout (rc present): mode + key config + the warnings above.
       function buildStatusSection() {
         const onOff = function (v) { return v ? "on" : "off"; };
         const modeLabel = function () { return COOP ? "cooperative" : (coexist ? "coexist" : "sole"); };
@@ -592,10 +610,7 @@
           advRoRow("mode", I18N.t("cfg_mode"), modeLabel()),
           advRoRow("hostedby", I18N.t("cfg_hosted_by"), hd.label),
           advRoRow("dsver", I18N.t("cfg_ds_version"), hd.dsVersion || "—"),
-        ];
-        if (hd.legacy) {
-          status.push(h("div", { key: "legacy", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("legacy_bundle_warning")));
-        }
+        ].concat(statusWarnings(hd, coex));
         if (!rc.loader_possible) status.push(advRoRow("force", I18N.t("cfg_force_owner"), onOff(rc.force_owner)));
         status.push(
           advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),

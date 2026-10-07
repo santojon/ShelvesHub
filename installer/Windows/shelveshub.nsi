@@ -21,6 +21,7 @@ Var CbAhub
 Var CbAplug
 Var CbHpre
 Var CbPpre
+Var CbTray
 Var SForce
 Var SNqam
 Var SDesk
@@ -29,6 +30,7 @@ Var SAhub
 Var SAplug
 Var SHpre
 Var SPpre
+Var STray
 Var ConfigWasFresh
 
 Name "${APPNAME}"
@@ -84,6 +86,9 @@ Function OptionsPageCreate
   ${NSD_CreateCheckbox} 14u 104u 100% 11u "Include Deck Shelves pre-releases"
   Pop $CbPpre
 
+  ${NSD_CreateCheckbox} 0 124u 100% 11u "Install the tray companion (system-tray icon) - optional"
+  Pop $CbTray
+
   nsDialogs::Show
 FunctionEnd
 
@@ -96,6 +101,7 @@ Function OptionsPageLeave
   ${NSD_GetState} $CbAplug $SAplug
   ${NSD_GetState} $CbHpre $SHpre
   ${NSD_GetState} $CbPpre $SPpre
+  ${NSD_GetState} $CbTray $STray
 FunctionEnd
 
 ; ── Write the install-details list to a file ──────────────────────────────────
@@ -163,6 +169,9 @@ Section "Install"
   File /r "payload\runtime"
   File /r "payload\bundle"
   File "payload\register-task.ps1"
+  ; Optional tray companion binary — /nonfatal so the setup still builds when a
+  ; package doesn't ship it; register-task.ps1 only wires it when -Tray and present.
+  File /nonfatal "payload\shelveshub-tray.exe"
 
   ; Config file — install only if absent, so a re-install never clobbers edits.
   StrCpy $ConfigWasFresh "0"
@@ -178,7 +187,7 @@ Section "Install"
   Pop $0
 
   DetailPrint "Registering the ShelvesHub background service..."
-  nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -NoProfile -File "$INSTDIR\register-task.ps1" -InstallPath "$INSTDIR"'
+  nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -NoProfile -File "$INSTDIR\register-task.ps1" -InstallPath "$INSTDIR" -Tray $STray'
   Pop $0
   ${If} $0 != 0
     DetailPrint "Warning: service registration returned $0 (see log)."
@@ -201,6 +210,10 @@ SectionEnd
 Section "Uninstall"
   nsExec::ExecToLog 'schtasks /end /tn "ShelvesHub"'
   nsExec::ExecToLog 'schtasks /delete /tn "ShelvesHub" /f'
+  ; Opt-in tray companion task + binary (harmless no-ops if it was never installed).
+  nsExec::ExecToLog 'schtasks /end /tn "ShelvesHubTray"'
+  nsExec::ExecToLog 'schtasks /delete /tn "ShelvesHubTray" /f'
+  Delete "$INSTDIR\shelveshub-tray.exe"
   Delete "$INSTDIR\shelveshub.exe"
   Delete "$INSTDIR\shelves-devtools.exe"
   Delete "$INSTDIR\register-task.ps1"

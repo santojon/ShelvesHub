@@ -31,6 +31,10 @@ cargo build --quiet --bin shelveshub || { echo "error: build failed"; exit 1; }
 # ── Assemble a release-style package (mirrors release.yml's dist layout) ──────
 PKG="$(mktemp -d)"
 cp target/debug/shelveshub "$PKG/"
+# A stand-in tray companion binary so the opt-in tray step can prove the installer
+# lays it down + writes autostart. Default-off runs (steps [1]-[4]) must NOT install
+# it (no SHELVES_TRAY), which also checks the opt-in stays off by default.
+printf '#!/bin/sh\nexit 0\n' > "$PKG/shelveshub-tray"; chmod +x "$PKG/shelveshub-tray"
 mkdir -p "$PKG/installer" "$PKG/bundle" "$PKG/runtime"
 # The whole SteamOS installer dir (install.sh + uninstall.sh + service + .desktop),
 # exactly as release.yml lays it into the package.
@@ -128,6 +132,26 @@ run_installer installer/install.sh >/tmp/mig.out 2>&1 || { echo "  migrate insta
 check "settings rescued from /opt to canonical" test -f "$SETTINGS_DIR/settings.json"
 check "rescued content preserved"               grep -q migrated "$SETTINGS_DIR/settings.json"
 check "/opt removed by migration"               test ! -d /opt/shelveshub
+
+# ── Tray companion opt-in ([5]): default-off, then installed with SHELVES_TRAY=1,
+# then removed on uninstall. The autostart entry lives OUTSIDE the install dir. ──
+AUTOSTART="$FAKEHOME/.config/autostart/shelveshub-tray.desktop"
+echo "[5a] tray stays OFF by default"
+rm -rf "$INSTALL_DIR" "$SERVICE_DIR" "$AUTOSTART"
+run_installer installer/install.sh >/tmp/tray0.out 2>&1 || { echo "  install exited non-zero"; FAILS=$((FAILS+1)); }
+check "no tray binary without opt-in"   test ! -e "$INSTALL_DIR/shelveshub-tray"
+check "no autostart without opt-in"      test ! -e "$AUTOSTART"
+
+echo "[6] tray installed with SHELVES_TRAY=1, removed on uninstall"
+rm -rf "$INSTALL_DIR" "$SERVICE_DIR" "$AUTOSTART"
+( cd "$PKG" && HOME="$FAKEHOME" PATH="$STUB:$PATH" SCLOG_TARGET="$SCLOG" \
+    SHELVES_ALLOW_ROOT=1 SHELVES_TRAY=1 bash installer/install.sh >/tmp/tray1.out 2>&1 ) || { echo "  tray install exited non-zero"; FAILS=$((FAILS+1)); }
+check "tray binary installed + executable" test -x "$INSTALL_DIR/shelveshub-tray"
+check "autostart entry written"            test -f "$AUTOSTART"
+check "autostart points at the binary"     grep -q "$INSTALL_DIR/shelveshub-tray" "$AUTOSTART"
+run_installer "$INSTALL_DIR/uninstall.sh" >/tmp/trayun.out 2>&1 || { echo "  uninstall exited non-zero"; FAILS=$((FAILS+1)); }
+check "autostart removed on uninstall"     test ! -e "$AUTOSTART"
+check "tray binary removed (install dir)"  test ! -e "$INSTALL_DIR/shelveshub-tray"
 
 rm -rf "$PKG" "$FAKEHOME" "$STUB"
 echo ""

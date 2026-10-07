@@ -60,5 +60,6 @@
   "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
   "cfg_desktop_ui": "Desktop client shelves (experimental)",
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
-  "action_restart_backend": "重启后端"
+  "action_restart_backend": "重启后端",
+  "coop_receded_warning": "协作模式已暂停 — 与插件加载器冲突；本次会话以共存模式运行。"
 }

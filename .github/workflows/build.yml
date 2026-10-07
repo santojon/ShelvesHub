@@ -97,12 +97,25 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --release --target ${{ matrix.target }}
 
+      # Keep the optional tray companion compiling on every build (and shipped in
+      # the artifact), everywhere except aarch64 Linux (no practical GTK cross yet).
+      - name: Build tray companion
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev
+          fi
+          cargo build --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+
       - name: Package (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist/bundle dist/runtime dist/installer
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           cp target/${{ matrix.target }}/release/shelves-devtools dist/
+          [ -f target/${{ matrix.target }}/release/shelveshub-tray ] && cp target/${{ matrix.target }}/release/shelveshub-tray dist/ || true
           cp -r bundle/. dist/bundle/
           cp -r runtime/. dist/runtime/
           cp -r ${{ matrix.installer_dir }}/. dist/installer/
@@ -115,6 +128,7 @@ jobs:
           New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer | Out-Null
           Copy-Item target\${{ matrix.target }}\release\${{ matrix.binary }} dist\
           Copy-Item target\${{ matrix.target }}\release\shelves-devtools.exe dist\
+          if (Test-Path target\${{ matrix.target }}\release\shelveshub-tray.exe) { Copy-Item target\${{ matrix.target }}\release\shelveshub-tray.exe dist\ }
           Copy-Item -Recurse bundle\* dist\bundle\
           Copy-Item -Recurse runtime\* dist\runtime\
           Copy-Item -Recurse ${{ matrix.installer_dir }}\* dist\installer\

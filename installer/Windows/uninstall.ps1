@@ -14,6 +14,12 @@ Stop-ScheduledTask -TaskName "ShelvesHub" -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName "ShelvesHub" -Confirm:$false -ErrorAction SilentlyContinue
 Get-Process shelveshub -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
+# Tray companion (opt-in): stop + unregister its logon task and kill it. Its
+# binary under $installPath goes with the directory removal below.
+Stop-ScheduledTask -TaskName "ShelvesHubTray" -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName "ShelvesHubTray" -Confirm:$false -ErrorAction SilentlyContinue
+Get-Process shelveshub-tray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
 if (Test-Path $installPath) { Remove-Item -Recurse -Force $installPath }
 
 if ($Purge) {

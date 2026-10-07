@@ -60,5 +60,6 @@
   "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
   "cfg_desktop_ui": "Desktop client shelves (experimental)",
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
-  "action_restart_backend": "Backend opnieuw starten"
+  "action_restart_backend": "Backend opnieuw starten",
+  "coop_receded_warning": "Coöperatieve modus gepauzeerd — conflict met de plugin-loader; draait deze sessie als co-existentie."
 }

@@ -251,6 +251,23 @@ pub fn backend_install_dir() -> Option<PathBuf> {
     Some(exe.parent()?.join("backend"))
 }
 
+/// Local file the daemon writes its per-boot RPC token to (0600 on Unix) so a
+/// same-user companion — the optional tray — can authenticate to the loopback RPC
+/// without going through CDP. Resolved identically by the daemon and the tray:
+/// the per-user install dir (`~/.local/share/shelveshub` on Linux/macOS,
+/// `%LOCALAPPDATA%\shelveshub` on Windows); `SHELVES_RPC_TOKEN_FILE` overrides.
+pub fn rpc_token_path() -> Option<PathBuf> {
+    if let Some(p) = env::var_os("SHELVES_RPC_TOKEN_FILE") {
+        return Some(PathBuf::from(p));
+    }
+    let dir = if cfg!(windows) {
+        PathBuf::from(env::var_os("LOCALAPPDATA")?).join("shelveshub")
+    } else {
+        PathBuf::from(env::var_os("HOME")?).join(".local/share/shelveshub")
+    };
+    Some(dir.join(".rpc-token"))
+}
+
 fn default_python() -> &'static str {
     if cfg!(windows) {
         "python"

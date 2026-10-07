@@ -15,6 +15,11 @@ is pushed — the notes below are picked up and published with the release.
   backs off to plain coexistence for the session instead of fighting the loader — and the tab
   explains why. You can keep forcing through it with `SHELVES_COOP_SAFE_MODE=0`. It also holds
   back hub-driven plugin updates in this mode so your two copies can't drift apart in version.
+- **Optional desktop tray icon — tick one box in the installer.** The installer now has an
+  off-by-default option to add a small menu-bar / system-tray app showing whether ShelvesHub is
+  hosting, with quick actions (pause/resume, restart the service, restart the data backend). It is
+  a separate helper installed by the same installer (no extra download) and removed cleanly on
+  uninstall. See [docs/installation.md](docs/installation.md).
 - **Restart the data backend without restarting everything.** If the data backend gets stuck,
   the tab's Troubleshooting section now has a "Restart backend" button that restarts only it —
   your shelves and hosting keep running.

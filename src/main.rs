@@ -121,6 +121,12 @@ fn main() {
         }),
     );
 
+    // Publish the per-boot RPC token to a 0600 file so the optional same-user
+    // tray companion can authenticate to the loopback RPC without CDP.
+    if let Some(p) = shelveshub::config::rpc_token_path() {
+        state::persist_rpc_token(&p);
+    }
+
     // Spawn the RPC server on a background thread so the loader loop
     // can run concurrently without blocking on incoming connections.
     let rpc_addr = config.rpc_addr.clone();

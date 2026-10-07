@@ -25,6 +25,13 @@ if [[ -f /etc/systemd/system/shelveshub.service ]]; then
 fi
 [[ -d /opt/shelveshub ]] && sudo rm -rf /opt/shelveshub 2>/dev/null && echo "[OK] Removed /opt/shelveshub." || true
 
+# Tray companion (opt-in): stop it and remove its autostart entry. The binary
+# itself lives under $INSTALL_DIR and goes with the directory removal below.
+pkill -f "$INSTALL_DIR/shelveshub-tray" 2>/dev/null || true
+[[ -f "$HOME/.config/autostart/shelveshub-tray.desktop" ]] \
+  && rm -f "$HOME/.config/autostart/shelveshub-tray.desktop" \
+  && echo "[OK] Removed the tray autostart entry." || true
+
 if [[ -d "$INSTALL_DIR" ]]; then
   rm -rf "$INSTALL_DIR"
   echo "[OK] Removed $INSTALL_DIR."

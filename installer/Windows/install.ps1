@@ -146,6 +146,28 @@ if (Test-Path "$extractedDir\assets") {
   Copy-Item -Recurse -Path "$extractedDir\assets" -Destination $installPath -Force
 }
 
+# Optional tray companion (opt-in, OFF by default): a system-tray icon over the
+# daemon's local RPC. Installs only when the package ships the binary AND the user
+# opts in; a per-user logon task (no elevation) starts it.
+$tray = Ask $env:SHELVES_TRAY "Install the ShelvesHub tray companion (system-tray icon)?" $false
+if ($tray) {
+  if (Test-Path "$extractedDir\shelveshub-tray.exe") {
+    $trayExe = Join-Path $installPath "shelveshub-tray.exe"
+    Copy-Item -Path "$extractedDir\shelveshub-tray.exe" -Destination $trayExe -Force
+    $ta = New-ScheduledTaskAction -Execute $trayExe
+    $tt = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+    $tp = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+    Register-ScheduledTask -TaskName "ShelvesHubTray" -Action $ta -Trigger $tt -Principal $tp -Force | Out-Null
+    Stop-ScheduledTask -TaskName "ShelvesHubTray" -ErrorAction SilentlyContinue
+    Get-Process -Name "shelveshub-tray" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 300
+    Start-ScheduledTask -TaskName "ShelvesHubTray"
+    Write-Output "[i] Tray companion installed and started (system-tray icon)."
+  } else {
+    Write-Output "[i] Tray companion not bundled in this package - skipping."
+  }
+}
+
 # Per-user task: runs as YOU at logon (interactive, no elevation) so it can write
 # under %LOCALAPPDATA%, self-update, and reach your Steam. Registering a task for
 # the current user needs no admin rights.

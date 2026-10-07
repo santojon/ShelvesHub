@@ -60,5 +60,6 @@
   "cfg_interval_sub": "Segundos entre verificações de injeção",
   "adv_disable_hub_sub": "Parar a injeção até reativar (para diagnóstico)",
   "adv_restart_apply": "Reiniciar para aplicar",
-  "action_restart_backend": "Reiniciar backend"
+  "action_restart_backend": "Reiniciar backend",
+  "coop_receded_warning": "Modo cooperativo pausado — estava conflitando com o loader de plugins; rodando como coexistência nesta sessão."
 }

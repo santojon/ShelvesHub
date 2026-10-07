@@ -223,6 +223,23 @@ pub fn rpc_token() -> &'static str {
     })
 }
 
+/// Persist the per-boot RPC token to `path` (0600 on Unix) so a same-user
+/// companion can read it. Best-effort: a failure just means the tray falls back
+/// to reporting "can't reach the daemon" rather than acting — never fatal.
+pub fn persist_rpc_token(path: &std::path::Path) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if std::fs::write(path, rpc_token()).is_err() {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+}
+
 /// Record the effective operational-config snapshot + the config file it maps to
 /// (for the advanced-configuration mirror). Set once at startup.
 pub fn set_runtime_config(config_file: Option<PathBuf>, snapshot: serde_json::Value) {

@@ -22,6 +22,14 @@ path = "src/main.rs"
 name = "shelves-devtools"
 path = "src/bin/devtools.rs"
 
+# Optional cross-OS tray companion. Behind the `tray` feature so the daemon and
+# its CI never pull the GUI dependency tree; built and shipped separately, and
+# installed only when the user opts in. Talks to the daemon over its local RPC.
+[[bin]]
+name = "shelveshub-tray"
+path = "src/bin/tray.rs"
+required-features = ["tray"]
+
 [dependencies]
 # All third-party crates below are dual-licensed MIT OR Apache-2.0, which is
 # compatible with this project's MIT license. See docs/debugging.md.
@@ -37,6 +45,16 @@ clap = { version = "4", features = ["derive", "env"] }
 # minisign signature check of the release's SHA256SUMS (public key baked in below).
 sha2 = "0.10"
 minisign-verify = "0.2"
+
+# Tray companion only (feature `tray`): cross-OS system-tray icon + menu and an
+# event loop to drive it. Optional so the daemon build never pulls them.
+tray-icon = { version = "0.21", optional = true }
+tao = { version = "0.34", optional = true }
+png = { version = "0.17", optional = true }
+
+[features]
+# Builds the `shelveshub-tray` companion binary and its GUI dependencies.
+tray = ["dep:tray-icon", "dep:tao", "dep:png"]
 
 # Lints, enforced the same way in CI (`cargo clippy -- -D warnings`) and locally.
 # Kept adequate — not maximally pedantic — for a small, dependency-light daemon.

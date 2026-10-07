@@ -319,19 +319,31 @@ pub fn run(mut config: Config) {
 
         // Use the force-cleared config once auto-safe-mode has receded.
         let tick_config = coexist_config.as_ref().unwrap_or(&config);
-        let result = tick(tick_config, &mut empty_since);
+        let mut coop_churn = false;
+        let result = tick(tick_config, &mut empty_since, &mut coop_churn);
         // Bundle hosted (Active) or the coexist tab is in place → idle cadence;
         // anything else means we still have work to do soon → fast cadence.
         let settled = matches!(&result, Ok(Tick::Active) | Ok(Tick::CoexistTab(_)));
-        // A healthy settled tick clears the collapse-strike streak (only
-        // consecutive collapses while forced recede force).
-        if settled {
+        // A healthy settled tick with NO churn clears the strike streak; a churning
+        // cooperative tick must not reset it, or the strikes never accumulate.
+        if settled && !coop_churn {
             coop.settled_ok();
         }
         // Cooperative = forced ownership with a loader present (the tab-coexist
         // result under force, before any recede). Feeds the plugin-swap guard.
         let cooperative =
             config.force_owner && !coop.receded() && matches!(&result, Ok(Tick::CoexistTab(_)));
+        // Renderer churn while cooperative counts toward standing force down.
+        if cooperative && coop_churn && coexist_config.is_none() && coop.renderer_churn() {
+            log_warning(
+                "loader",
+                "Cooperative ownership kept churning the loader (QAM-tab breaker tripping) — standing force down for this session (coexist only). Set SHELVES_COOP_SAFE_MODE=0 to keep forcing.",
+            );
+            let mut c = config.clone();
+            c.force_owner = false;
+            coexist_config = Some(c);
+            state::set_coop_receded(true);
+        }
         // We host the bundle ourselves (sole/owner) only on Active — NOT coexist,
         // where the plugin loader owns its own copy and must not be touched.
         let hosting = matches!(&result, Ok(Tick::Active));
@@ -737,8 +749,14 @@ fn run_recovery(cmd: &str) {
 }
 
 /// One injection cycle. `empty_since` carries the owner-settle clock across ticks
-/// (see `owner_settle_secs`).
-fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick> {
+/// (see `owner_settle_secs`). `coop_churn` is set true when, in cooperative mode,
+/// the renderer shows a churn signal (the bundle's QAM-tab breaker tripped) — the
+/// loop feeds it to auto-safe-mode.
+fn tick(
+    config: &Config,
+    empty_since: &mut Option<Instant>,
+    coop_churn: &mut bool,
+) -> cdp::Result<Tick> {
     let mut client = CdpClient::connect_renderer(
         &config.cef_host,
         config.cef_port,
@@ -771,6 +789,11 @@ fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick>
     let cooperative = config.force_owner && loader_present;
     if is_foreign_owner(&owner) || cooperative {
         *empty_since = None;
+        // In cooperative mode, read the renderer churn signal once (the bundle's
+        // QAM-tab breaker) so auto-safe-mode can recede force if it keeps tripping.
+        if cooperative {
+            *coop_churn = probe_coop_churn(&mut client).unwrap_or(false);
+        }
         if !config.native_qam && !cooperative {
             return Ok(Tick::StoodDown(owner));
         }
@@ -922,6 +945,16 @@ fn gamepad_ui_visible(host: &str, port: u16, filter: Option<&str>) -> bool {
 /// (`probe_injected`), so this is the distinct "tab already delivered" probe.
 fn probe_coexist_tab(client: &mut CdpClient) -> cdp::Result<bool> {
     let value = client.evaluate("!!window.__SHELVES_QAM__")?;
+    Ok(value.as_bool().unwrap_or(false))
+}
+
+/// A cooperative-churn signal from the renderer: the bundle's own QAM-tab breaker
+/// has tripped (host-switching churn trips it). Read over the daemon's local CDP;
+/// any eval error reads as "no churn" so a transient miss never recedes force.
+fn probe_coop_churn(client: &mut CdpClient) -> cdp::Result<bool> {
+    let expr = "(function(){try{return !!(window.localStorage && \
+         localStorage.getItem('ds-own-qam-tab-trip'));}catch(e){return false;}})()";
+    let value = client.evaluate(expr)?;
     Ok(value.as_bool().unwrap_or(false))
 }
 

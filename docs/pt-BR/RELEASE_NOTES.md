@@ -15,6 +15,11 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   pra coexistência simples pela sessão em vez de brigar com o loader — e a aba explica o porquê. Dá
   pra seguir forçando com `SHELVES_COOP_SAFE_MODE=0`. Ele também segura atualizações do plugin feitas
   pelo hub nesse modo, pra as suas duas cópias não ficarem em versões diferentes.
+- **Ícone de tray no desktop opcional — marque uma caixa no instalador.** O instalador agora tem
+  uma opção desligada por padrão pra adicionar um pequeno app de barra de menu / tray que mostra se
+  o ShelvesHub está hospedando, com ações rápidas (pausar/retomar, reiniciar o serviço, reiniciar o
+  backend de dados). É um utilitário separado instalado pelo mesmo instalador (sem download extra) e
+  removido de forma limpa na desinstalação. Veja [docs/installation.md](installation.md).
 - **Reinicie o backend de dados sem reiniciar tudo.** Se o backend de dados travar, a seção Solução
   de problemas da aba agora tem um botão "Reiniciar backend" que reinicia só ele — as suas shelves e
   a hospedagem seguem rodando.

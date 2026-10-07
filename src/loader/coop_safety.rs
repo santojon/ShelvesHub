@@ -24,10 +24,9 @@ impl CoopSafety {
         }
     }
 
-    /// Record a confirmed UI collapse that happened while force was in effect.
-    /// Returns true exactly once — the tick the strikes reach the threshold — so
-    /// the caller recedes and logs a single time.
-    pub fn collapse_while_forced(&mut self) -> bool {
+    /// One force-trouble strike. Returns true exactly once — the tick the strikes
+    /// reach the threshold — so the caller recedes and logs a single time.
+    fn strike(&mut self) -> bool {
         if !self.enabled || self.receded {
             return false;
         }
@@ -37,6 +36,18 @@ impl CoopSafety {
             return true;
         }
         false
+    }
+
+    /// A confirmed Steam-UI collapse while force was in effect.
+    pub fn collapse_while_forced(&mut self) -> bool {
+        self.strike()
+    }
+
+    /// A renderer-side churn signal while cooperative (the bundle's own QAM-tab
+    /// breaker tripped). Shares the collapse counter — any force-trouble signal
+    /// moves toward standing force down.
+    pub fn renderer_churn(&mut self) -> bool {
+        self.strike()
     }
 
     /// A healthy, settled tick clears the strike streak (until actually receded):
@@ -83,6 +94,14 @@ mod tests {
         s.settled_ok(); // recovered — streak reset
         assert!(!s.collapse_while_forced()); // strike 1 again, not 2
         assert!(!s.receded());
+    }
+
+    #[test]
+    fn collapse_and_churn_share_the_counter() {
+        let mut s = CoopSafety::new(true, 2);
+        assert!(!s.collapse_while_forced()); // strike 1 (collapse)
+        assert!(s.renderer_churn()); // strike 2 (churn) → recede
+        assert!(s.receded());
     }
 
     #[test]

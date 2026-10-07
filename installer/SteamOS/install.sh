@@ -206,6 +206,28 @@ if [[ ! -f "$PREFS_JSON" ]]; then
 EOF
 fi
 
+# Optional tray companion (opt-in, OFF by default): a desktop menu-bar icon over
+# the daemon's local RPC. Installs only when the package ships the binary AND the
+# user opts in; autostart is an XDG entry (Desktop Mode sessions).
+install_tray() {
+  if [[ ! -f "$EXTRACTED_DIR/shelveshub-tray" ]]; then
+    echo "[i] Tray companion not bundled in this package — skipping."
+    return
+  fi
+  cp "$EXTRACTED_DIR/shelveshub-tray" "$INSTALL_DIR/"; chmod +x "$INSTALL_DIR/shelveshub-tray"
+  mkdir -p "$HOME/.config/autostart"
+  cat > "$HOME/.config/autostart/shelveshub-tray.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=ShelvesHub Tray
+Exec=$INSTALL_DIR/shelveshub-tray
+X-GNOME-Autostart-enabled=true
+EOF
+  echo "[i] Tray companion installed — it starts on your next Desktop Mode login."
+}
+TRAY=$(ask "${SHELVES_TRAY:-}" "Install the ShelvesHub tray companion (Desktop Mode menu-bar icon)?" n)
+[[ "$TRAY" == 1 ]] && install_tray
+
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
 if [[ -d "$EXTRACTED_DIR/backend" ]]; then
   mkdir -p "$INSTALL_DIR/backend"

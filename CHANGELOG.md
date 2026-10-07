@@ -9,6 +9,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- **An optional desktop tray companion, via the same installer.** Every installer now offers an
+  **off-by-default** choice (prompt / env `SHELVES_TRAY` / a `setup.exe` checkbox on Windows) to
+  install a small system-tray / menu-bar app that shows whether ShelvesHub is hosting and offers
+  quick actions (pause/resume, restart the service, restart the data backend). It is a separate
+  binary that talks only to the daemon's local RPC — authenticated with the per-boot token the
+  daemon now writes to a `0600` file — so no new network surface is opened. The uninstallers remove
+  it and its autostart entry. See [docs/installation.md](docs/installation.md).
 - **`shelveshub doctor` — checks your setup and offers to fix it.** Run it in a terminal to
   check the Steam CEF debug flag, the renderer debug port, whether Steam is running, and the
   background service, each with a concrete next step. `shelveshub doctor --fix` applies the one
@@ -28,12 +35,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Changed
 - **Cooperative mode now backs off on its own when it conflicts with a plugin loader.** If
-  forcing ShelvesHub to host Deck Shelves while a loader is present keeps coinciding with the
-  Steam UI collapsing, ShelvesHub stands the forced ownership down for the session and runs as
-  plain coexistence instead of fighting the loader in a restart loop — and the status readout
-  says so. On by default; set `SHELVES_COOP_SAFE_MODE=0` (or `coop_safe_mode: false`) to keep
-  forcing through the churn. A hub-driven plugin update is also held back in cooperative mode
-  (the loader owns its on-disk copy) so the two can't end up on different versions.
+  forcing ShelvesHub to host Deck Shelves while a loader is present keeps going wrong — the Steam
+  UI collapsing, or Deck Shelves' own tab-recovery tripping over the churn — ShelvesHub stands the
+  forced ownership down for the session and runs as plain coexistence instead of fighting the loader
+  in a restart loop, and the status readout explains it. On by default; set `SHELVES_COOP_SAFE_MODE=0`
+  (or `coop_safe_mode: false`) to keep forcing through it. In cooperative mode the plugin update
+  toggles are also hidden and a hub-driven plugin update is held back (the loader owns its on-disk
+  copy) so the two can't end up on different versions.
 - **Automatic recovery now detects your system instead of assuming it.** On a Steam Deck
   it still restarts the Gaming Mode session; on a generic Linux without that service it
   defaults to pause-only (no futile restart). macOS and Windows are unchanged.
