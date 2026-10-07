@@ -230,14 +230,14 @@ pub fn persist_rpc_token(path: &std::path::Path) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if std::fs::write(path, rpc_token()).is_err() {
-        return;
-    }
+    let wrote = std::fs::write(path, rpc_token()).is_ok();
     #[cfg(unix)]
-    {
+    if wrote {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     }
+    #[cfg(not(unix))]
+    let _ = wrote; // no file mode to tighten off Unix
 }
 
 /// Record the effective operational-config snapshot + the config file it maps to
