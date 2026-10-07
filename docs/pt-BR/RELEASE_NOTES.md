@@ -10,6 +10,18 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **O modo cooperativo se protege.** Se você forçar o ShelvesHub a hospedar o Deck Shelves com um
+  loader de plugins instalado e isso ficar deixando a tela do Steam preta, o ShelvesHub agora recua
+  pra coexistência simples pela sessão em vez de brigar com o loader — e a aba explica o porquê. Dá
+  pra seguir forçando com `SHELVES_COOP_SAFE_MODE=0`. Ele também segura atualizações do plugin feitas
+  pelo hub nesse modo, pra as suas duas cópias não ficarem em versões diferentes.
+- **Reinicie o backend de dados sem reiniciar tudo.** Se o backend de dados travar, a seção Solução
+  de problemas da aba agora tem um botão "Reiniciar backend" que reinicia só ele — as suas shelves e
+  a hospedagem seguem rodando.
+- **Um verificador de setup que se conserta.** `shelveshub doctor` checa as coisas que impedem o
+  ShelvesHub de aparecer — a flag de debug do Steam, a porta de debug, o Steam rodando, o serviço em
+  segundo plano — e diz exatamente o que fazer pra cada falha. `shelveshub doctor --fix` cria a flag
+  de debug do Steam pra você.
 - **Diagnóstico em um comando.** `shelveshub status` imprime um relatório (SO, arquitetura,
   glibc, Python e — no Linux — modelo do dispositivo e displays) que você cola num relato de
   bug, especialmente em ARM64.

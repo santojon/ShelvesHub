@@ -21,7 +21,10 @@ use crate::logger::{log_error, log_info, log_warning};
 use crate::populate;
 use crate::state;
 
+mod coop_safety;
 mod preload;
+
+use coop_safety::CoopSafety;
 
 /// Global the loader sets in the renderer to mark a successful injection. The
 /// probe reads it back; the bundle and `shelves-devtools probe` can too.
@@ -68,6 +71,8 @@ enum Tick {
 }
 
 use crate::constants::defaults::COLLAPSE_HALT_THRESHOLD;
+/// Confirmed collapse episodes while forced before auto-safe-mode recedes force.
+const COOP_RECEDE_STRIKES: u32 = 2;
 use crate::constants::timers::{FAST_POLL, SOLE_IDLE, UPDATE_CHECK_INTERVAL};
 
 pub fn run(mut config: Config) {
@@ -145,6 +150,12 @@ pub fn run(mut config: Config) {
     // re-inject it in place instead of reloading the whole renderer. Baselined
     // here — AFTER the initial obtain above — so the first host is not a "change".
     let mut last_bundle_mtime = bundle_mtime(&config.bundle_path);
+    // Coexistence auto-safe-mode: if forced ownership keeps coinciding with
+    // confirmed UI collapses, stand force down for the session and run as plain
+    // coexist. `coexist_config` holds the force-cleared config once that happens;
+    // until then ticks use the real `config`.
+    let mut coop = CoopSafety::new(config.coop_safe_mode, COOP_RECEDE_STRIKES);
+    let mut coexist_config: Option<Config> = None;
 
     loop {
         // Health gate. The visible Steam UI lives in windows (Big Picture, Main
@@ -229,6 +240,19 @@ pub fn run(mut config: Config) {
                         "Auto-recovery disabled — run scripts/recover-deck.sh, or set SHELVES_RECOVER_CMD (e.g. `systemctl --user restart steam-launcher.service`).",
                     ),
                 }
+                // Auto-safe-mode: a confirmed collapse while ownership is forced
+                // counts against force. After enough episodes, stand force down
+                // for the session so a churning force stops fighting the loader.
+                if config.force_owner && coexist_config.is_none() && coop.collapse_while_forced() {
+                    log_warning(
+                        "loader",
+                        "Cooperative ownership kept collapsing the Steam UI — standing force down for this session (coexist only). Set SHELVES_COOP_SAFE_MODE=0 to keep forcing.",
+                    );
+                    let mut c = config.clone();
+                    c.force_owner = false;
+                    coexist_config = Some(c);
+                    state::set_coop_receded(true);
+                }
             }
             thread::sleep(interval);
             continue;
@@ -293,10 +317,21 @@ pub fn run(mut config: Config) {
             was_desktop_idle = false;
         }
 
-        let result = tick(&config, &mut empty_since);
+        // Use the force-cleared config once auto-safe-mode has receded.
+        let tick_config = coexist_config.as_ref().unwrap_or(&config);
+        let result = tick(tick_config, &mut empty_since);
         // Bundle hosted (Active) or the coexist tab is in place → idle cadence;
         // anything else means we still have work to do soon → fast cadence.
         let settled = matches!(&result, Ok(Tick::Active) | Ok(Tick::CoexistTab(_)));
+        // A healthy settled tick clears the collapse-strike streak (only
+        // consecutive collapses while forced recede force).
+        if settled {
+            coop.settled_ok();
+        }
+        // Cooperative = forced ownership with a loader present (the tab-coexist
+        // result under force, before any recede). Feeds the plugin-swap guard.
+        let cooperative =
+            config.force_owner && !coop.receded() && matches!(&result, Ok(Tick::CoexistTab(_)));
         // We host the bundle ourselves (sole/owner) only on Active — NOT coexist,
         // where the plugin loader owns its own copy and must not be touched.
         let hosting = matches!(&result, Ok(Tick::Active));
@@ -356,7 +391,7 @@ pub fn run(mut config: Config) {
             last_update_check = Some(Instant::now());
             // Single-flight: skip if a manual checkUpdates is mid-download.
             if state::try_begin_update_check() {
-                auto_update_check(&config, hosting);
+                auto_update_check(&config, hosting, cooperative);
                 state::end_update_check();
             }
         }
@@ -399,7 +434,7 @@ pub fn run(mut config: Config) {
 /// own binary stays current even while coexisting. Best-effort: any network/parse
 /// miss is a silent no-op until the next check, and a working bundle is never
 /// replaced unless a genuinely different release tag is published.
-fn auto_update_check(config: &Config, hosting: bool) {
+fn auto_update_check(config: &Config, hosting: bool, cooperative: bool) {
     state::mark_update_checked_now();
     let mut settings = crate::store::load(&config.hub_config_path);
     if !settings.auto_update {
@@ -407,7 +442,12 @@ fn auto_update_check(config: &Config, hosting: bool) {
         return;
     }
     // ── Plugin bundle: download + swap + reload on a newer release. ──
-    if hosting && settings.auto_update_plugin {
+    // In plain cooperative mode the loader owns the on-disk copy, so a hub swap is
+    // deferred (lockstep guard) unless the cooperative-bundle protocol is enabled.
+    if hosting
+        && settings.auto_update_plugin
+        && coop_safety::coop_plugin_swap_allowed(cooperative, config.coop_bundle)
+    {
         if let Some(latest) = populate::latest_release_tag(config.prerelease) {
             // Apply when we don't yet know what's installed (seed the tag) OR the
             // latest on the channel is strictly newer by SEMVER — never a downgrade
@@ -470,7 +510,9 @@ pub(crate) fn run_update_check_now() -> bool {
     if !state::try_begin_update_check() {
         return false; // a check is already in flight
     }
-    auto_update_check(config, state::is_injected());
+    // Manual check: a hosted bundle (`is_injected`) means sole/owner today, so
+    // cooperative is false here; the cooperative-bundle track revisits this path.
+    auto_update_check(config, state::is_injected(), false);
     state::end_update_check();
     true
 }

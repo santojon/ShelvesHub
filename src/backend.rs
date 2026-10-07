@@ -96,6 +96,20 @@ pub fn is_running() -> bool {
     }
 }
 
+/// Restart ONLY the backend child (not the daemon): discard the current process
+/// and spawn a fresh one, clearing the respawn cooldown so a deliberate restart
+/// is immediate. Returns whether a backend is running afterwards; false (no-op)
+/// when backend hosting isn't configured.
+pub fn restart() -> bool {
+    if SETTINGS.get().is_none() {
+        return false;
+    }
+    let mut state = lock_state();
+    drop_handle(&mut state, "manual restart");
+    state.last_spawn = None; // bypass the respawn cooldown for a deliberate restart
+    ensure_running(&mut state)
+}
+
 static PYTHON_OK: OnceLock<bool> = OnceLock::new();
 
 /// The interpreter the backend runs with: the configured one, or the platform

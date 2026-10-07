@@ -9,6 +9,13 @@ fn main() {
         shelveshub::report::print_status_report();
         return;
     }
+    // `shelveshub doctor [--fix]`: check the setup (CEF flag, debug port, Steam,
+    // service) and, with --fix, apply the one safe fix (create the CEF flag).
+    if std::env::args().nth(1).as_deref() == Some("doctor") {
+        let fix = std::env::args().any(|a| a == "--fix");
+        shelveshub::report::print_doctor(fix);
+        return;
+    }
 
     log_info("main", "ShelvesHub starting...");
     log_info("main", concat!("Version: ", env!("CARGO_PKG_VERSION")));

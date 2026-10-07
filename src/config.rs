@@ -46,6 +46,17 @@ pub struct Config {
     /// host adapter already owns the renderer; the owner-preference global is
     /// stamped so the other adapter stands down cooperatively.
     pub force_owner: bool,
+    /// When true (the default), the loop stands force down for the session if
+    /// forced ownership keeps coinciding with confirmed UI collapses — a churning
+    /// force then recedes to plain coexist instead of fighting the loader in a
+    /// collapse loop. `SHELVES_COOP_SAFE_MODE=0` (or `coop_safe_mode: false`) pins
+    /// force even through churn.
+    pub coop_safe_mode: bool,
+    /// When true (`SHELVES_COOP_BUNDLE=1`), the cooperative-bundle protocol is on:
+    /// the hub owns the bundle under force and may update it. Off by default — in
+    /// plain cooperative mode the loader owns the on-disk copy, so a hub-driven
+    /// swap is deferred to avoid divergent versions.
+    pub coop_bundle: bool,
     /// When true (`SHELVES_NATIVE_QAM=1`), stamp the renderer so the injected
     /// runtime attempts the native Quick Access tab (guarded by a trip
     /// breaker; overlay remains the fallback). Off by default.
@@ -155,6 +166,13 @@ impl Config {
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
             },
+            coop_safe_mode: cfg_bool_default(
+                &file,
+                "SHELVES_COOP_SAFE_MODE",
+                "coop_safe_mode",
+                true,
+            ),
+            coop_bundle: cfg_bool(&file, "SHELVES_COOP_BUNDLE", "coop_bundle"),
             native_qam: cfg_bool(&file, "SHELVES_NATIVE_QAM", "native_qam"),
             desktop_ui: cfg_bool(&file, "SHELVES_DESKTOP_UI", "desktop_ui"),
             recover_cmd: resolve_recover_cmd(env::var("SHELVES_RECOVER_CMD").ok().or_else(|| {
@@ -373,10 +391,16 @@ fn cfg_u64(file: &Value, env_key: &str, json_key: &str, default: u64) -> u64 {
 }
 
 fn cfg_bool(file: &Value, env_key: &str, json_key: &str) -> bool {
+    cfg_bool_default(file, env_key, json_key, false)
+}
+
+fn cfg_bool_default(file: &Value, env_key: &str, json_key: &str, default: bool) -> bool {
     if let Ok(v) = env::var(env_key) {
         return v == "1" || v.eq_ignore_ascii_case("true");
     }
-    file.get(json_key).and_then(Value::as_bool).unwrap_or(false)
+    file.get(json_key)
+        .and_then(Value::as_bool)
+        .unwrap_or(default)
 }
 
 /// Map a raw `recover_cmd` override (env over file) to the effective command:

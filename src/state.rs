@@ -98,6 +98,20 @@ pub fn hosting_paused() -> bool {
     HOSTING_PAUSED.load(Ordering::Relaxed)
 }
 
+/// Coexistence auto-safe-mode: set when forced ownership kept coinciding
+/// with confirmed UI collapses and the loop stood force down for the session.
+/// In-memory only — a restart re-reads config and starts forced again. Surfaced
+/// in diagnostics so the hub screen can explain why cooperative mode paused.
+static COOP_RECEDED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_coop_receded(value: bool) {
+    COOP_RECEDED.store(value, Ordering::Relaxed);
+}
+
+pub fn coop_receded() -> bool {
+    COOP_RECEDED.load(Ordering::Relaxed)
+}
+
 /// Live state of the optional boot animation. Toggled by the `setBootMovie` RPC,
 /// which installs or removes the movie immediately; the source WebM to install
 /// from is fixed at boot. The atomic mirrors the config flag so the hub screen

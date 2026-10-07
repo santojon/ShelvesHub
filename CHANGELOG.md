@@ -9,6 +9,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- **`shelveshub doctor` — checks your setup and offers to fix it.** Run it in a terminal to
+  check the Steam CEF debug flag, the renderer debug port, whether Steam is running, and the
+  background service, each with a concrete next step. `shelveshub doctor --fix` applies the one
+  safe fix (creates the CEF debug flag); it exits non-zero when something is broken, so a script
+  can gate on it.
+- **Restart just the data backend from the tab.** When a data backend is hosted, the
+  Troubleshooting section gains a "Restart backend" action that bounces only the Python backend
+  (not the whole service), so a wedged backend recovers without interrupting hosting. Its log
+  lines already show up in the Logs view.
 - **The tab now shows who's hosting Deck Shelves.** The ShelvesHub tab's status readout
   names the current host (this host, or a plugin loader), the running Deck Shelves version,
   and warns when a loader's copy predates the coexistence protocol (so you know to update it).
@@ -18,6 +27,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   service is present. Handy for filing an ARM64 report without opening the interface.
 
 ### Changed
+- **Cooperative mode now backs off on its own when it conflicts with a plugin loader.** If
+  forcing ShelvesHub to host Deck Shelves while a loader is present keeps coinciding with the
+  Steam UI collapsing, ShelvesHub stands the forced ownership down for the session and runs as
+  plain coexistence instead of fighting the loader in a restart loop — and the status readout
+  says so. On by default; set `SHELVES_COOP_SAFE_MODE=0` (or `coop_safe_mode: false`) to keep
+  forcing through the churn. A hub-driven plugin update is also held back in cooperative mode
+  (the loader owns its on-disk copy) so the two can't end up on different versions.
 - **Automatic recovery now detects your system instead of assuming it.** On a Steam Deck
   it still restarts the Gaming Mode session; on a generic Linux without that service it
   defaults to pause-only (no futile restart). macOS and Windows are unchanged.

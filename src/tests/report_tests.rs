@@ -58,3 +58,35 @@ fn device_block_reads_sysfs_fixtures() {
     assert_eq!(conns[0]["status"], "connected");
     let _ = fs::remove_dir_all(&root);
 }
+
+#[test]
+fn doctor_classifiers_map_states() {
+    assert_eq!(classify_cef_flag(true, false).0, Status::Ok);
+    assert_eq!(classify_cef_flag(false, true).0, Status::Warn); // just created → restart Steam
+    assert_eq!(classify_cef_flag(false, false).0, Status::Fail);
+
+    assert_eq!(classify_port(true).0, Status::Ok);
+    assert_eq!(classify_port(false).0, Status::Fail);
+
+    assert_eq!(classify_steam(Some(true)).0, Status::Ok);
+    assert_eq!(classify_steam(Some(false)).0, Status::Warn);
+    assert_eq!(classify_steam(None).0, Status::Warn);
+
+    assert_eq!(classify_service(Some(true)).0, Status::Ok);
+    assert_eq!(classify_service(Some(false)).0, Status::Fail);
+    assert_eq!(classify_service(None).0, Status::Warn);
+}
+
+#[test]
+fn worst_is_the_most_severe_check() {
+    let mk = |s: Status| Check {
+        name: "x",
+        status: s,
+        detail: String::new(),
+        fix: None,
+    };
+    assert_eq!(worst(&[mk(Status::Ok), mk(Status::Ok)]), Status::Ok);
+    assert_eq!(worst(&[mk(Status::Ok), mk(Status::Warn)]), Status::Warn);
+    assert_eq!(worst(&[mk(Status::Warn), mk(Status::Fail)]), Status::Fail);
+    assert_eq!(worst(&[]), Status::Ok);
+}

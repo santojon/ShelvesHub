@@ -140,6 +140,274 @@ pub fn print_status_report() {
     );
 }
 
+// ── doctor: checks + safe fixes ──────────────────────────────────────────────
+
+/// Outcome of one check. `Ok` = fine, `Warn` = worth noting but not blocking,
+/// `Fail` = the thing that stops ShelvesHub from working until fixed.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Status {
+    Ok,
+    Warn,
+    Fail,
+}
+
+impl Status {
+    fn glyph(self) -> &'static str {
+        match self {
+            Status::Ok => "[ok]  ",
+            Status::Warn => "[warn]",
+            Status::Fail => "[FAIL]",
+        }
+    }
+}
+
+/// One diagnostic line: a name, its outcome, a human detail, and — when not Ok —
+/// a concrete next step. `fix` is guidance; only the CEF-flag fix is applied by
+/// `--fix` (it is the one safe, idempotent action).
+pub struct Check {
+    pub name: &'static str,
+    pub status: Status,
+    pub detail: String,
+    pub fix: Option<String>,
+}
+
+/// The overall exit status is the worst single check (Fail > Warn > Ok). Pure.
+pub fn worst(checks: &[Check]) -> Status {
+    checks
+        .iter()
+        .fold(Status::Ok, |acc, c| match (acc, c.status) {
+            (Status::Fail, _) | (_, Status::Fail) => Status::Fail,
+            (Status::Warn, _) | (_, Status::Warn) => Status::Warn,
+            _ => Status::Ok,
+        })
+}
+
+/// Classify the CEF remote-debugging flag. Found ⇒ Ok; missing ⇒ Fail (Steam
+/// never opens the debug port ShelvesHub needs without it). Pure.
+pub fn classify_cef_flag(found: bool, created: bool) -> (Status, Option<String>) {
+    if found {
+        (Status::Ok, None)
+    } else if created {
+        (
+            Status::Warn,
+            Some("created it — restart Steam once so the debug port opens".into()),
+        )
+    } else {
+        (
+            Status::Fail,
+            Some("re-run with `doctor --fix` (or reinstall), then restart Steam".into()),
+        )
+    }
+}
+
+/// Classify the renderer debug port probe. Reachable ⇒ Ok; not ⇒ Fail. Pure.
+pub fn classify_port(reachable: bool) -> (Status, Option<String>) {
+    if reachable {
+        (Status::Ok, None)
+    } else {
+        (
+            Status::Fail,
+            Some("enable the CEF flag (above) and fully restart Steam".into()),
+        )
+    }
+}
+
+/// Classify the Steam-process probe. Running ⇒ Ok; not ⇒ Warn (nothing to inject
+/// into yet, but not broken). `None` = couldn't tell (no probe tool) ⇒ Warn. Pure.
+pub fn classify_steam(running: Option<bool>) -> (Status, Option<String>) {
+    match running {
+        Some(true) => (Status::Ok, None),
+        Some(false) => (
+            Status::Warn,
+            Some("start Steam (Big Picture) to host".into()),
+        ),
+        None => (Status::Warn, None),
+    }
+}
+
+/// Classify the service-active probe. Active ⇒ Ok; inactive ⇒ Fail; unknown ⇒
+/// Warn (not installed as a service, or no probe). Pure.
+pub fn classify_service(active: Option<bool>) -> (Status, Option<String>) {
+    match active {
+        Some(true) => (Status::Ok, None),
+        Some(false) => (
+            Status::Fail,
+            Some("start it (SteamOS/Linux: `systemctl --user restart shelveshub`)".into()),
+        ),
+        None => (
+            Status::Warn,
+            Some("not detected as a managed service".into()),
+        ),
+    }
+}
+
+fn home_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(std::path::PathBuf::from)
+}
+
+/// Steam roots that may hold the `.cef-enable-remote-debugging` flag, per OS.
+fn steam_roots() -> Vec<std::path::PathBuf> {
+    let Some(home) = home_dir() else {
+        return Vec::new();
+    };
+    if cfg!(target_os = "macos") {
+        vec![home.join("Library/Application Support/Steam")]
+    } else if cfg!(target_os = "windows") {
+        Vec::new() // created by the Windows installer; doctor doesn't touch it
+    } else {
+        vec![
+            home.join(".steam/steam"),
+            home.join(".local/share/Steam"),
+            home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"),
+        ]
+    }
+}
+
+/// Probe + (optionally) fix the CEF flag: found if any Steam root already has it;
+/// when `fix` and none do, create it in the first existing root. Returns
+/// (found, created).
+fn probe_cef_flag(fix: bool) -> (bool, bool) {
+    let roots = steam_roots();
+    let flag = ".cef-enable-remote-debugging";
+    if roots.iter().any(|r| r.join(flag).exists()) {
+        return (true, false);
+    }
+    if fix {
+        if let Some(root) = roots.iter().find(|r| r.exists()) {
+            if std::fs::File::create(root.join(flag)).is_ok() {
+                return (false, true);
+            }
+        }
+    }
+    (false, false)
+}
+
+/// True if the loopback CEF debug port answers a TCP connect (8080/8081).
+fn probe_cef_port() -> bool {
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+    for port in [8080u16, 8081u16] {
+        if let Ok(addrs) = (format!("127.0.0.1:{port}")).to_socket_addrs() {
+            for addr in addrs {
+                if TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn probe_steam_running() -> Option<bool> {
+    let name = if cfg!(target_os = "macos") {
+        "steam_osx"
+    } else if cfg!(target_os = "windows") {
+        return None; // no portable pgrep; skip rather than guess
+    } else {
+        "steam"
+    };
+    // `pgrep -x` exits 0 only when a match exists; cmd_out returns Some on success.
+    Some(cmd_out("pgrep", &["-x", name]).is_some())
+}
+
+fn probe_service_active() -> Option<bool> {
+    if cfg!(target_os = "linux") {
+        // is-active prints "active"/"inactive"; absent unit → None (unknown).
+        match cmd_out("systemctl", &["--user", "is-active", "shelveshub.service"]) {
+            Some(s) => Some(s == "active"),
+            None => Some(false),
+        }
+    } else if cfg!(target_os = "macos") {
+        cmd_out(
+            "launchctl",
+            &["print", &format!("gui/{}/com.shelveshub", current_uid())],
+        )
+        .map(|_| true)
+        .or(Some(false))
+    } else {
+        None
+    }
+}
+
+/// Current uid via `id -u` (present on macOS/Linux) — for the per-user launchd
+/// domain path; avoids pulling the libc crate for one call.
+fn current_uid() -> String {
+    cmd_out("id", &["-u"]).unwrap_or_else(|| "0".into())
+}
+
+/// Run every check (and apply the CEF-flag fix when `fix`), newest-first severity.
+pub fn run_doctor(fix: bool) -> Vec<Check> {
+    let (found, created) = probe_cef_flag(fix);
+    let (cef_status, cef_fix) = classify_cef_flag(found, created);
+    let cef_detail = if found {
+        "Steam CEF remote-debugging flag present".into()
+    } else if created {
+        "Steam CEF remote-debugging flag was missing — created".into()
+    } else {
+        "Steam CEF remote-debugging flag missing".into()
+    };
+
+    let (port_status, port_fix) = classify_port(probe_cef_port());
+    let (steam_status, steam_fix) = classify_steam(probe_steam_running());
+    let (svc_status, svc_fix) = classify_service(probe_service_active());
+
+    vec![
+        Check {
+            name: "CEF debug flag",
+            status: cef_status,
+            detail: cef_detail,
+            fix: cef_fix,
+        },
+        Check {
+            name: "Renderer debug port",
+            status: port_status,
+            detail: "loopback CEF port (8080/8081)".into(),
+            fix: port_fix,
+        },
+        Check {
+            name: "Steam running",
+            status: steam_status,
+            detail: "Steam process".into(),
+            fix: steam_fix,
+        },
+        Check {
+            name: "ShelvesHub service",
+            status: svc_status,
+            detail: "background service active".into(),
+            fix: svc_fix,
+        },
+    ]
+}
+
+/// `shelveshub doctor [--fix]`: print the checks, apply the safe fix when asked,
+/// and exit non-zero if anything failed (so a script can gate on it).
+pub fn print_doctor(fix: bool) {
+    let checks = run_doctor(fix);
+    println!("ShelvesHub doctor{}:\n", if fix { " (--fix)" } else { "" });
+    for c in &checks {
+        println!("  {} {} — {}", c.status.glyph(), c.name, c.detail);
+        if let Some(f) = &c.fix {
+            if c.status != Status::Ok {
+                println!("         → {f}");
+            }
+        }
+    }
+    let overall = worst(&checks);
+    println!(
+        "\n{}",
+        match overall {
+            Status::Ok => "All good.",
+            Status::Warn => "Mostly fine — see the notes above.",
+            Status::Fail => "Problems found — follow the steps above, then re-run `doctor`.",
+        }
+    );
+    if overall == Status::Fail {
+        std::process::exit(1);
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/report_tests.rs"]
 mod tests;

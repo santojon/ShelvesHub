@@ -9,6 +9,15 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **`shelveshub doctor` — verifica o seu setup e se oferece pra consertar.** Rode num terminal
+  para checar a flag de debug CEF do Steam, a porta de debug do renderer, se o Steam está rodando
+  e o serviço em segundo plano, cada um com um próximo passo concreto. `shelveshub doctor --fix`
+  aplica o único conserto seguro (cria a flag de debug CEF); sai com código diferente de zero quando
+  algo está quebrado, então dá pra um script depender disso.
+- **Reinicie só o backend de dados pela aba.** Quando há um backend de dados hospedado, a seção
+  Solução de problemas ganha uma ação "Reiniciar backend" que reinicia só o backend Python (não o
+  serviço inteiro), então um backend travado se recupera sem interromper a hospedagem. As linhas de
+  log dele já aparecem na visão de Logs.
 - **A aba agora mostra quem está hospedando o Deck Shelves.** O resumo de estado da aba do
   ShelvesHub indica o host atual (este host, ou um carregador de plugins), a versão do Deck
   Shelves em execução e avisa quando a cópia de um carregador é anterior ao protocolo de
@@ -19,6 +28,13 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   de sessão do SteamOS está presente. Útil para abrir um relatório ARM64 sem abrir a interface.
 
 ### Alterado
+- **O modo cooperativo agora recua sozinho quando conflita com um loader de plugins.** Se forçar
+  o ShelvesHub a hospedar o Deck Shelves com um loader presente ficar coincidindo com a tela do
+  Steam colapsando, o ShelvesHub abaixa a posse forçada pela sessão e roda como coexistência
+  simples, em vez de brigar com o loader num ciclo de reinícios — e a leitura de status avisa. Fica
+  ligado por padrão; use `SHELVES_COOP_SAFE_MODE=0` (ou `coop_safe_mode: false`) para seguir
+  forçando mesmo com o churn. Uma atualização do plugin feita pelo hub também é segurada no modo
+  cooperativo (o loader é dono da cópia em disco), pra as duas não ficarem em versões diferentes.
 - **A recuperação automática agora detecta o seu sistema em vez de presumir.** Num Steam
   Deck ela ainda reinicia a sessão do Gaming Mode; num Linux genérico sem esse serviço ela
   passa a só pausar (sem reinício fútil). macOS e Windows seguem iguais.

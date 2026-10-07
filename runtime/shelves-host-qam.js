@@ -553,11 +553,14 @@
         }
         sections.push(h(HubCollapsible, { key: "sec-upd", id: "sec-updates", title: I18N.t("sec_updates"), count: updCount, initialOpen: true }, upd));
         const trouble = [actionRow("logs", "logs", "action_logs", "getLogs")];
+        // Restart ONLY the Python backend (not the daemon) — recovers a wedged
+        // backend without bouncing hosting. Shown only when a backend is configured.
+        if (rc && rc.backend) trouble.push(actionRow("restart-backend", "update", "action_restart_backend", "restartBackend"));
         if (rc) {
           trouble.push(advToggleRow("adv-pause", I18N.t("adv_disable_hub"), I18N.t("adv_disable_hub_sub"), rc.paused === true, applyPaused));
           if (rc.paused === true) trouble.push(h("div", { key: "pn", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_paused")));
         }
-        sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: rc ? 2 : 1 }, trouble));
+        sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: trouble.length }, trouble));
         if (rc) { sections.push(buildConfigSection()); sections.push(buildStatusSection()); }
         return sections;
       }

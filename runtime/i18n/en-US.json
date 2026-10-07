@@ -59,5 +59,6 @@
   "cfg_owner_settle_sub": "Seconds to wait for another host before hosting",
   "cfg_interval_sub": "Seconds between injection checks",
   "adv_disable_hub_sub": "Stop injecting until re-enabled (for troubleshooting)",
-  "adv_restart_apply": "Restart to apply"
+  "adv_restart_apply": "Restart to apply",
+  "action_restart_backend": "Restart backend"
 }

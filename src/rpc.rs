@@ -380,6 +380,22 @@ fn dispatch(body: &str) -> String {
             serde_json::Value::String(backend::python_bin().to_string()),
             backend::python_available()
         )),
+        // Restart ONLY the Python backend (not the daemon): a wedged backend is
+        // recovered without bouncing hosting/injection. Returns the fresh status.
+        Some("restartBackend") => {
+            let running = backend::restart();
+            log_info(
+                "rpc",
+                &format!("Backend restart requested — running={running}."),
+            );
+            ok(format!(
+                r#"{{"configured":{},"running":{},"python":{},"python_available":{}}}"#,
+                backend::enabled(),
+                running,
+                serde_json::Value::String(backend::python_bin().to_string()),
+                backend::python_available()
+            ))
+        }
         // One snapshot for the plugin's "Copy diagnostics" / Support block: host
         // identity + versions + OS/arch + runtime modes + backend/python + update
         // state. Read-only aggregation of what the daemon already knows.
@@ -405,6 +421,11 @@ fn dispatch(body: &str) -> String {
                     "force_owner": mode("force_owner"),
                     "desktop_ui": mode("desktop_ui"),
                     "prerelease": mode("prerelease"),
+                },
+                "coexistence": {
+                    "safeMode": state::daemon_config().map(|c| c.coop_safe_mode).unwrap_or(true),
+                    "coopBundle": state::daemon_config().map(|c| c.coop_bundle).unwrap_or(false),
+                    "forceReceded": state::coop_receded(),
                 },
                 "update": {
                     "pending": state::pending_hub_update(),
