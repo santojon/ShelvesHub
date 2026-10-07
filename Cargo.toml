@@ -46,15 +46,23 @@ clap = { version = "4", features = ["derive", "env"] }
 sha2 = "0.10"
 minisign-verify = "0.2"
 
-# Tray companion only (feature `tray`): cross-OS system-tray icon + menu and an
-# event loop to drive it. Optional so the daemon build never pulls them.
-tray-icon = { version = "0.21", optional = true }
-tao = { version = "0.34", optional = true }
+# Tray companion only (feature `tray`). `png` decodes the embedded icon on every
+# OS; the tray backend is per-OS (below). All optional so the daemon never pulls them.
 png = { version = "0.17", optional = true }
 
+# macOS + Windows tray: tray-icon + a tao event loop to drive it.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+tray-icon = { version = "0.21", optional = true }
+tao = { version = "0.34", optional = true }
+
+# Linux tray: ksni — a pure-Rust StatusNotifierItem (zbus), which the KDE/SteamOS
+# panel hosts natively. No gtk / appindicator / xdo, and cross-compilable.
+[target.'cfg(target_os = "linux")'.dependencies]
+ksni = { version = "0.3", optional = true, default-features = false, features = ["blocking", "async-io"] }
+
 [features]
-# Builds the `shelveshub-tray` companion binary and its GUI dependencies.
-tray = ["dep:tray-icon", "dep:tao", "dep:png"]
+# Builds the `shelveshub-tray` companion and its per-OS tray backend.
+tray = ["dep:png", "dep:tray-icon", "dep:tao", "dep:ksni"]
 
 # Lints, enforced the same way in CI (`cargo clippy -- -D warnings`) and locally.
 # Kept adequate — not maximally pedantic — for a small, dependency-light daemon.

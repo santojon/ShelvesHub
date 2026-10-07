@@ -86,28 +86,32 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Install ARM64 cross compiler
+      # aarch64 Linux cross-links with cargo-zigbuild (apt-free — no dpkg-lock wedge).
+      - name: Install zig + cargo-zigbuild (apt-free aarch64 linker)
         if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          python3 -m pip install --break-system-packages ziglang
+          cargo install --locked cargo-zigbuild
 
       - name: Build release binary
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --release --target ${{ matrix.target }}
-
-      # Keep the optional tray companion compiling on every build (and shipped in
-      # the artifact), everywhere except aarch64 Linux (no practical GTK cross yet).
-      - name: Build tray companion
-        if: matrix.target != 'aarch64-unknown-linux-gnu'
         shell: bash
         run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            sudo apt-get update
-            sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            cargo zigbuild --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
           fi
-          cargo build --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+
+      # Keep the optional tray companion compiling on every build (and shipped in
+      # the artifact). Linux uses ksni (pure Rust) — no apt; aarch64 via zigbuild.
+      - name: Build tray companion
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            cargo zigbuild --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+          else
+            cargo build --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+          fi
 
       - name: Package (Linux / macOS)
         if: runner.os != 'Windows'
