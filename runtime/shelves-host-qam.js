@@ -253,6 +253,8 @@
       // down this session, so the Status readout can explain it. Fetched once on open.
       const cxS = React.useState(null);
       const coex = cxS[0], setCoex = cxS[1];
+      const arS = React.useState(null);
+      const armedRestart = arS[0], setArmedRestart = arS[1];
       React.useEffect(function () {
         let alive = true;
         hostRpc("getRuntimeConfig").then(function (r) {
@@ -290,6 +292,20 @@
         setBusy("restart");
         hostRpc("restartService", {}).then(function () {}, function () {});
       }
+      /* Confirm-before-restart: the first tap arms the button (label → "tap again
+         to restart") and the second runs it, so a restart (which may bounce Steam)
+         is never a single accidental press. Auto-disarms after 4 s. */
+      function armRestart(which, fn) {
+        if (busy) return;
+        if (armedRestart !== which) {
+          setArmedRestart(which);
+          setTimeout(function () { setArmedRestart(function (p) { return p === which ? null : p; }); }, 4000);
+          return;
+        }
+        setArmedRestart(null);
+        fn();
+      }
+      function restartLabel(which, label) { return armedRestart === which ? I18N.t("restart_confirm") : label; }
       // Manual "Check now": ask the daemon to run an update check immediately and
       // fold the refreshed status (pending version, staged flag, last-check age)
       // back into the config — so the user doesn't wait for the 30-minute cycle.
@@ -341,7 +357,7 @@
       }
       function restartBanner() {
         return h("div", { key: "restart-banner", style: { padding: "10px 14px 8px" } },
-          bannerButton("apply-restart", I18N.t("adv_restart_apply"), doApplyRestart));
+          bannerButton("apply-restart", restartLabel("apply", I18N.t("adv_restart_apply")), function () { armRestart("apply", doApplyRestart); }));
       }
       function viewLogs() {
         setBusy("logs");
@@ -461,7 +477,7 @@
            shows for a manually-run daemon). */
         const label = uc.hub_update_staged === true ? "hub_update_staged" : "hub_update_restart";
         return h("div", { key: "hubupd", style: { padding: "10px 14px 8px" } },
-          bannerButton("hub-update", I18N.t(label) + " (" + ver + ")", doRestartDaemonOnly));
+          bannerButton("hub-update", restartLabel("hub", I18N.t(label) + " (" + ver + ")"), function () { armRestart("hub", doRestartDaemonOnly); }));
       }
       // Always-visible update status (only while auto-update is on, since that's
       // when the daemon checks): a dot + "up to date"/"vX available", the last-check

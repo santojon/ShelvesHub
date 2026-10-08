@@ -847,19 +847,23 @@ fn dispatch(body: &str) -> String {
         // config; otherwise the "restart to apply" notice stands. The renderer
         // restart (for owner claiming on a fresh boot) is the caller's job.
         Some("restartService") => {
-            let restarting = crate::populate::under_relaunching_service();
+            let managed = crate::populate::under_relaunching_service();
             log_info(
                 "rpc",
-                &format!("Service restart requested to apply config (restarting={restarting})."),
+                &format!("Service restart requested (relaunching manager={managed})."),
             );
-            if restarting {
-                std::thread::spawn(|| {
-                    std::thread::sleep(std::time::Duration::from_millis(1500));
-                    log_info("rpc", "Restarting to apply configuration.");
-                    std::process::exit(0);
-                });
-            }
-            ok(format!(r#"{{"restarting":{restarting}}}"#))
+            // Always restart: under a relaunching manager (launchd KeepAlive /
+            // systemd Restart=always / Windows task) just exit and let it bring us
+            // back; otherwise relaunch ourselves so the request is never a no-op.
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                if !managed {
+                    crate::populate::relaunch_self();
+                }
+                log_info("rpc", "Restarting now.");
+                std::process::exit(0);
+            });
+            ok(r#"{"restarting":true}"#.to_string())
         }
         // A data method owned by the hosted Python backend — only if it's in the
         // known API allowlist (else it falls through to "unknown method" below).

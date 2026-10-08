@@ -10,6 +10,11 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **O botão "reiniciar para aplicar uma atualização" agora sempre reinicia.** Em alguns setups ele
+  podia não fazer nada; agora reinicia o ShelvesHub de forma confiável (relançando a si mesmo se
+  preciso) pra uma atualização baixada realmente entrar — e pede uma confirmação rápida (toque de
+  novo) antes.
+
 - **O modo cooperativo se protege.** Se você forçar o ShelvesHub a hospedar o Deck Shelves com um
   loader de plugins instalado e isso ficar deixando a tela do Steam preta, o ShelvesHub agora recua
   pra coexistência simples pela sessão em vez de brigar com o loader — e a aba explica o porquê. Dá

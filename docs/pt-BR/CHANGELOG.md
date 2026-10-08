@@ -51,6 +51,13 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 - **A animação de boot opcional combina com o seu display.** No Linux o corte é escolhido pela
   resolução real do painel (1280×800 do Deck vs. uma tela 1080p) em vez de presumir um Deck.
 
+### Corrigido
+- **"Reiniciar para aplicar" agora sempre reinicia.** Depois de uma atualização do ShelvesHub, a ação
+  de reiniciar podia não fazer nada em alguns setups (onde o SO não reportava um gerenciador de serviço
+  que relança o ShelvesHub). Agora reinicia em todos os casos — relançando a si mesmo quando nada mais
+  faria — então a nova versão realmente assume. Os botões de reiniciar também pedem uma confirmação
+  rápida (toque de novo), pra um reinício nunca ser um toque único acidental.
+
 ### Segurança
 - **Os pacotes do Deck Shelves baixados agora passam por verificação de integridade.**
   Quando um lançamento do plugin publica um `SHA256SUMS`, o ShelvesHub verifica o pacote

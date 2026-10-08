@@ -10,6 +10,10 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **The "restart to apply an update" button now always restarts.** On some setups it could do
+  nothing; now it reliably restarts ShelvesHub (relaunching itself if needed) so a downloaded update
+  actually takes effect — and it asks for a quick confirm (tap again) first.
+
 - **Cooperative mode protects itself.** If you force ShelvesHub to host Deck Shelves while a
   plugin loader is installed and that keeps making the Steam screen go black, ShelvesHub now
   backs off to plain coexistence for the session instead of fighting the loader — and the tab

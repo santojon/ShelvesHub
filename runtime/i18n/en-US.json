@@ -61,5 +61,6 @@
   "adv_disable_hub_sub": "Stop injecting until re-enabled (for troubleshooting)",
   "adv_restart_apply": "Restart to apply",
   "action_restart_backend": "Restart backend",
-  "coop_receded_warning": "Cooperative mode paused — it kept conflicting with the plugin loader; running as coexistence this session."
+  "coop_receded_warning": "Cooperative mode paused — it kept conflicting with the plugin loader; running as coexistence this session.",
+  "restart_confirm": "Tap again to restart"
 }

@@ -775,6 +775,31 @@ pub fn under_relaunching_service() -> bool {
     }
 }
 
+/// Relaunch the daemon when NO service manager will bring it back (so a restart
+/// request isn't a silent no-op). Spawns a detached relauncher that waits ~2 s for
+/// this process to exit and free the RPC port, then starts the executable fresh —
+/// on Unix the self-update has already swapped the new binary in at the exe path.
+/// Best-effort: a spawn failure just means no restart, which the caller logs.
+pub fn relaunch_self() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let exe = exe.to_string_lossy().into_owned();
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", &format!("timeout /t 2 >nul & \"{exe}\"")])
+            .spawn();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!("sleep 2; exec \"{exe}\""))
+            .spawn();
+    }
+}
+
 /// Lowercase hex SHA-256 of a byte slice.
 fn sha256_hex_bytes(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};

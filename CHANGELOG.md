@@ -48,6 +48,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - **The optional boot animation matches your display.** On Linux the cut is chosen from the
   actual panel resolution (the Deck's 1280×800 vs. a 1080p screen) rather than assuming a Deck.
 
+### Fixed
+- **"Restart to apply" now always restarts.** After a ShelvesHub self-update, the restart action
+  could do nothing on some setups (where the OS didn't report a service manager that relaunches
+  ShelvesHub). It now restarts in every case — relaunching itself when nothing else would — so the
+  new version actually takes over. The restart buttons also ask for a quick confirm (tap again)
+  so a restart is never an accidental single press.
+
 ### Security
 - **Downloaded Deck Shelves bundles are now integrity-checked.** When a plugin release
   publishes a `SHA256SUMS`, ShelvesHub verifies the bundle and the backend it downloads
