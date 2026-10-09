@@ -97,7 +97,13 @@ REMOTE
 case "$PLAT" in
   deck)
     if [[ "$PLUGIN" == 1 ]]; then need_plugin_dir; say "plugin → loader on the Deck"; ( cd "$PLUGIN_DIR" && pnpm run "deploy:deck$PSFX" ); fi
-    say "hub → Deck"; bash "scripts/deck-deploy$HSFX.sh"
+    say "hub → Deck"
+    # With the plugin included, the HUB's own bundle must be the freshly built one
+    # too. `deck-deploy.sh` otherwise ships this repo's checked-in `bundle/index.js`,
+    # which nothing rebuilds — so cooperative/sole mode (where the hub injects its
+    # OWN copy, not the loader's) kept running a stale bundle. Mirrors the mac leg.
+    if [[ "$PLUGIN" == 1 ]]; then BUNDLE="$(build_iife)" bash "scripts/deck-deploy$HSFX.sh"
+    else bash "scripts/deck-deploy$HSFX.sh"; fi
     ;;
   mac)
     if [[ "$PLUGIN" == 1 ]]; then local_iife="$(build_iife)"; say "plugin bundle → hub install"; mkdir -p "$HOME/.local/share/shelveshub/bundle"; cp "$local_iife" "$HOME/.local/share/shelveshub/bundle/index.js"; fi
