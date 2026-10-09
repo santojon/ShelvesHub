@@ -516,5 +516,58 @@
       }
     },
     "runtimeCodeLines": 2201
+  },
+  {
+    "ts": "2026-10-09_14-41-16",
+    "scope": "release",
+    "version": "0.4.1",
+    "overall": "PASS",
+    "tests": {
+      "passed": 76,
+      "failed": 0,
+      "skipped": 0,
+      "total": 76
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "harness": {
+      "passed": 9,
+      "failed": 0,
+      "total": 9
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 2420
+  },
+  {
+    "ts": "2026-10-09_14-42-02",
+    "scope": "local",
+    "version": "0.4.1",
+    "overall": "PASS",
+    "tests": {
+      "passed": 63,
+      "failed": 0,
+      "skipped": 0,
+      "total": 63
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "harness": null,
+    "suppressions": {
+      "total": 78,
+      "byRule": {
+        "ds-local/comment-length": 51,
+        "complexity": 27
+      }
+    },
+    "runtimeCodeLines": 2201
   }
 ]
