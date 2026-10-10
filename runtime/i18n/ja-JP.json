@@ -51,8 +51,16 @@
   "adv_disable_hub_sub": "再有効化までインジェクションを停止（トラブル対応）",
   "adv_restart_apply": "再起動して適用",
   "cfg_mode": "Ownership mode",
+  "cfg_hosted_by": "ホスト",
+  "cfg_ds_version": "Deck Shelves のバージョン",
+  "host_self": "ShelvesHub（このホスト）",
+  "host_loader_suffix": "(プラグインローダー)",
+  "legacy_bundle_warning": "この Deck Shelves は共存プロトコルより前のものです。両方のホストが問題なく共存できるよう更新してください。",
   "cfg_boot_movie": "Boot animation",
   "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
   "cfg_desktop_ui": "Desktop client shelves (experimental)",
-  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
+  "action_restart_backend": "バックエンドを再起動",
+  "coop_receded_warning": "協調モードを一時停止 — プラグインローダーと競合していたため、今回のセッションは共存モードで動作します。",
+  "restart_confirm": "もう一度タップで再起動"
 }

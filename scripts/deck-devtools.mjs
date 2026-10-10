@@ -1,10 +1,7 @@
 #!/usr/bin/env node
-// Cross-platform wrapper for the shelves-devtools CDP tasks. Reads
-// DECK_CDP_HOST / DECK_CDP_PORT from the environment (dotenv-cli injects them
-// from .env) and runs the Rust devtools binary — replacing the `sh -c '...'`
-// one-liners so `pnpm run deck:*` works natively on Windows too.
-//
-// Usage: node scripts/deck-devtools.mjs <subcommand> [args...]
+// Cross-platform wrapper for the shelves-devtools CDP tasks. Reads DECK_CDP_HOST / DECK_CDP_PORT
+// from the environment (dotenv-cli injects from .env) and runs the Rust devtools binary, so
+// `pnpm run deck:*` works natively on Windows too. Usage: node scripts/deck-devtools.mjs <cmd>...
 import { spawnSync } from "node:child_process";
 
 const host = process.env.DECK_CDP_HOST;

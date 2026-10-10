@@ -51,8 +51,16 @@
   "adv_disable_hub_sub": "다시 켤 때까지 주입 중지 (문제 해결)",
   "adv_restart_apply": "다시 시작하여 적용",
   "cfg_mode": "Ownership mode",
+  "cfg_hosted_by": "호스트",
+  "cfg_ds_version": "Deck Shelves 버전",
+  "host_self": "ShelvesHub (이 호스트)",
+  "host_loader_suffix": "(플러그인 로더)",
+  "legacy_bundle_warning": "이 Deck Shelves는 공존 프로토콜 이전 버전입니다 — 두 호스트가 깔끔하게 공존하도록 업데이트하세요.",
   "cfg_boot_movie": "Boot animation",
   "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
   "cfg_desktop_ui": "Desktop client shelves (experimental)",
-  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
+  "action_restart_backend": "백엔드 다시 시작",
+  "coop_receded_warning": "협조 모드 일시 중지 — 플러그인 로더와 충돌하여 이번 세션은 공존 모드로 실행됩니다.",
+  "restart_confirm": "다시 눌러 재시작"
 }

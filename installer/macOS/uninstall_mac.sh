@@ -8,6 +8,7 @@ set -e
 
 INSTALL_DIR="$HOME/.local/share/shelveshub"
 PLIST="$HOME/Library/LaunchAgents/com.shelveshub.plist"
+TRAY_PLIST="$HOME/Library/LaunchAgents/com.shelveshub.tray.plist"
 SETTINGS_DIR="$HOME/Library/Application Support/deck-shelves"
 CEF_FLAG="$HOME/Library/Application Support/Steam/.cef-enable-remote-debugging"
 PURGE=0
@@ -24,8 +25,16 @@ else
   echo "[i] No LaunchAgent found."
 fi
 
-# Stop any running instance started outside the agent.
+# Tray companion (opt-in): unload + remove its LaunchAgent if present.
+if [[ -f "$TRAY_PLIST" ]]; then
+  launchctl unload "$TRAY_PLIST" 2>/dev/null || true
+  rm -f "$TRAY_PLIST"
+  echo "[OK] Removed tray LaunchAgent (com.shelveshub.tray)."
+fi
+
+# Stop any running instance started outside the agent (daemon + tray).
 pkill -x shelveshub 2>/dev/null || true
+pkill -x shelveshub-tray 2>/dev/null || true
 
 if [[ -d "$INSTALL_DIR" ]]; then
   rm -rf "$INSTALL_DIR"

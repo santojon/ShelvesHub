@@ -259,29 +259,27 @@ jobs:
           key: ${{ runner.os }}-cargo-arm64-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-arm64-
 
-      # apt on the hosted runner can wedge waiting for the dpkg lock held by the
-      # runner's own unattended-upgrades, or on a slow mirror. Bound the step, wait
-      # for the lock, and retry a few times instead of hanging the whole job.
-      - name: Install ARM64 linker
+      # The apt cross toolchain (gcc-aarch64-linux-gnu) intermittently wedged on the
+      # hosted runner's dpkg lock / a slow mirror and timed the job out. Use
+      # cargo-zigbuild instead — zig bundles the cross linker, so there is NO apt
+      # cross-toolchain to hang on (the same tool the Deck build already uses).
+      - name: Install zig + cargo-zigbuild (apt-free aarch64 linker)
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo systemctl stop unattended-upgrades 2>/dev/null || true
-          for i in 1 2 3 4 5; do
-            sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu && break
-            echo "apt attempt $i failed; waiting for any dpkg lock…"
-            sudo fuser -k /var/lib/dpkg/lock-frontend 2>/dev/null || true
-            sleep 15
-          done
-          command -v aarch64-linux-gnu-gcc >/dev/null || { echo "::error::aarch64 linker install failed"; exit 1; }
+          python3 -m pip install --break-system-packages ziglang
+          cargo install --locked cargo-zigbuild
 
-      - name: ARM64 check + release build
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+      - name: ARM64 check + release build (zigbuild)
         run: |
           cargo check --all-targets --target aarch64-unknown-linux-gnu
-          cargo build --release --target aarch64-unknown-linux-gnu
+          cargo zigbuild --release --target aarch64-unknown-linux-gnu
+
+      # ELF arch audit: the arm64 release binaries must actually be aarch64 ELF —
+      # catches an accidental x86-only artifact slipping into an ARM64 build.
+      - name: ELF arch audit
+        run: |
+          bash scripts/arch-audit.sh target/aarch64-unknown-linux-gnu/release/shelveshub aarch64
+          bash scripts/arch-audit.sh target/aarch64-unknown-linux-gnu/release/shelves-devtools aarch64
 
   # The full simulation harness on REAL emulated ARM64 (QEMU) — the daemon,
   # runtime scenarios and injection smoke actually running, not just compiling.

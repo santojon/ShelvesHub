@@ -14,6 +14,7 @@ pub mod constants;
 pub mod loader;
 pub mod logger;
 pub mod populate;
+pub mod report;
 pub mod rpc;
 pub mod state;
 pub mod store;

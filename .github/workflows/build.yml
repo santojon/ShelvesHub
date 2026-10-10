@@ -86,16 +86,32 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Install ARM64 cross compiler
+      # aarch64 Linux cross-links with cargo-zigbuild (apt-free — no dpkg-lock wedge).
+      - name: Install zig + cargo-zigbuild (apt-free aarch64 linker)
         if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          python3 -m pip install --break-system-packages ziglang
+          cargo install --locked cargo-zigbuild
 
       - name: Build release binary
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            cargo zigbuild --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+
+      # Keep the optional tray companion compiling on every build (and shipped in
+      # the artifact). Linux uses ksni (pure Rust) — no apt; aarch64 via zigbuild.
+      - name: Build tray companion
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            cargo zigbuild --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+          else
+            cargo build --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+          fi
 
       - name: Package (Linux / macOS)
         if: runner.os != 'Windows'
@@ -103,6 +119,7 @@ jobs:
           mkdir -p dist/bundle dist/runtime dist/installer
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           cp target/${{ matrix.target }}/release/shelves-devtools dist/
+          [ -f target/${{ matrix.target }}/release/shelveshub-tray ] && cp target/${{ matrix.target }}/release/shelveshub-tray dist/ || true
           cp -r bundle/. dist/bundle/
           cp -r runtime/. dist/runtime/
           cp -r ${{ matrix.installer_dir }}/. dist/installer/
@@ -115,6 +132,7 @@ jobs:
           New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer | Out-Null
           Copy-Item target\${{ matrix.target }}\release\${{ matrix.binary }} dist\
           Copy-Item target\${{ matrix.target }}\release\shelves-devtools.exe dist\
+          if (Test-Path target\${{ matrix.target }}\release\shelveshub-tray.exe) { Copy-Item target\${{ matrix.target }}\release\shelveshub-tray.exe dist\ }
           Copy-Item -Recurse bundle\* dist\bundle\
           Copy-Item -Recurse runtime\* dist\runtime\
           Copy-Item -Recurse ${{ matrix.installer_dir }}\* dist\installer\

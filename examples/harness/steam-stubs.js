@@ -1,18 +1,6 @@
-// examples/harness/steam-stubs.js
-//
-// Stubs that approximate the environment the Deck Shelves bundle sees inside
-// the real Steam CEF renderer, so the example bundle can run in a plain local
-// Chromium. Loaded by examples/harness/index.html BEFORE the bundle is injected.
-//
-// It provides two things:
-//
-//   1. window.SteamClient — a minimal subset of the Steam client API surface,
-//      enough for the bundle to call without crashing.
-//   2. window.__SHELVES_HOST__ — a local stand-in for the ShelvesHostApi the
-//      loader will eventually inject (Set 4). Its `rpc.call` talks to the
-//      real host RPC server over HTTP, mirroring src/runtime/host/shelves.ts,
-//      so `ping` / `getVersion` / `isInjected` are answered for real when the
-//      `loader` binary is running.
+// examples/harness/steam-stubs.js — approximates the Steam CEF environment the Deck Shelves bundle
+// sees, so the example bundle runs in plain Chromium (loaded before the bundle). Provides a minimal
+// window.SteamClient and a window.__SHELVES_HOST__ stand-in whose rpc.call hits the real host RPC.
 
 (function () {
   "use strict";

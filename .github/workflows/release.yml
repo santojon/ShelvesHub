@@ -111,25 +111,23 @@ jobs:
       # apt on the hosted runner can wedge waiting for the dpkg lock held by the
       # runner's own unattended-upgrades, or on a slow mirror. Bound the step, wait
       # for the lock, and retry instead of hanging the whole release for hours.
-      - name: Install ARM64 cross compiler
+      # aarch64 Linux cross-links with cargo-zigbuild (zig bundles the linker) — no
+      # apt cross-toolchain to wedge on the runner's dpkg lock / a slow mirror.
+      - name: Install zig + cargo-zigbuild (apt-free aarch64 linker)
         if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo systemctl stop unattended-upgrades 2>/dev/null || true
-          for i in 1 2 3 4 5; do
-            sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu && break
-            echo "apt attempt $i failed; freeing any dpkg lock and retrying..."
-            sudo fuser -k /var/lib/dpkg/lock-frontend 2>/dev/null || true
-            sleep 15
-          done
-          command -v aarch64-linux-gnu-gcc >/dev/null || { echo "::error::aarch64 cross compiler install failed"; exit 1; }
+          python3 -m pip install --break-system-packages ziglang
+          cargo install --locked cargo-zigbuild
 
       - name: Build release binary
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            cargo zigbuild --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
       # macOS ships a UNIVERSAL binary so it runs on both Apple Silicon and Intel
       # Macs. The step above built the matrix's arm64 slice; also build the x86_64
@@ -153,12 +151,35 @@ jobs:
             esac
           done
 
+      # Optional tray companion. Linux uses ksni (pure-Rust StatusNotifierItem) —
+      # no gtk/appindicator/xdo, so NO apt and aarch64 cross-builds via zigbuild
+      # (zig+cargo-zigbuild are already installed for the aarch64 daemon above).
+      # macOS/Windows use tray-icon; macOS lipos the two slices like the daemon.
+      - name: Build tray companion
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            cargo zigbuild --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+          else
+            cargo build --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+          fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            rustup target add x86_64-apple-darwin
+            cargo build --release --features tray --bin shelveshub-tray --target x86_64-apple-darwin
+            lipo -create \
+              "target/aarch64-apple-darwin/release/shelveshub-tray" \
+              "target/x86_64-apple-darwin/release/shelveshub-tray" \
+              -output "target/aarch64-apple-darwin/release/shelveshub-tray"
+          fi
+
       - name: Package (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist/bundle dist/runtime dist/installer dist/assets/boot
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           cp target/${{ matrix.target }}/release/shelves-devtools dist/
+          # Tray companion when it was built for this target (not aarch64 Linux).
+          [ -f target/${{ matrix.target }}/release/shelveshub-tray ] && cp target/${{ matrix.target }}/release/shelveshub-tray dist/ || true
           cp shelveshub.config.json dist/
           cp assets/boot/deck_startup.webm assets/boot/deck_startup_1280x800.webm dist/assets/boot/
           cp -r bundle/. dist/bundle/
@@ -173,6 +194,7 @@ jobs:
           New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer, dist\assets\boot | Out-Null
           Copy-Item target\${{ matrix.target }}\release\${{ matrix.binary }} dist\
           Copy-Item target\${{ matrix.target }}\release\shelves-devtools.exe dist\
+          if (Test-Path target\${{ matrix.target }}\release\shelveshub-tray.exe) { Copy-Item target\${{ matrix.target }}\release\shelveshub-tray.exe dist\ }
           Copy-Item shelveshub.config.json dist\
           Copy-Item assets\boot\deck_startup.webm, assets\boot\deck_startup_1280x800.webm dist\assets\boot\
           Copy-Item -Recurse bundle\* dist\bundle\

@@ -3,6 +3,20 @@ use shelveshub::logger::{log_info, log_warning};
 use shelveshub::{backend, bootmovie, loader, populate, rpc, state};
 
 fn main() {
+    // `shelveshub status [--report]`: emit a one-shot diagnostics report and exit,
+    // without starting the daemon (the terminal-side tester report — see report.rs).
+    if std::env::args().nth(1).as_deref() == Some("status") {
+        shelveshub::report::print_status_report();
+        return;
+    }
+    // `shelveshub doctor [--fix]`: check the setup (CEF flag, debug port, Steam,
+    // service) and, with --fix, apply the one safe fix (create the CEF flag).
+    if std::env::args().nth(1).as_deref() == Some("doctor") {
+        let fix = std::env::args().any(|a| a == "--fix");
+        shelveshub::report::print_doctor(fix);
+        return;
+    }
+
     log_info("main", "ShelvesHub starting...");
     log_info("main", concat!("Version: ", env!("CARGO_PKG_VERSION")));
 
@@ -106,6 +120,12 @@ fn main() {
             "loader_possible": cfg!(target_os = "linux"),
         }),
     );
+
+    // Publish the per-boot RPC token to a 0600 file so the optional same-user
+    // tray companion can authenticate to the loopback RPC without CDP.
+    if let Some(p) = shelveshub::config::rpc_token_path() {
+        state::persist_rpc_token(&p);
+    }
 
     // Spawn the RPC server on a background thread so the loader loop
     // can run concurrently without blocking on incoming connections.

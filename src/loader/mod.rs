@@ -21,7 +21,10 @@ use crate::logger::{log_error, log_info, log_warning};
 use crate::populate;
 use crate::state;
 
+mod coop_safety;
 mod preload;
+
+use coop_safety::CoopSafety;
 
 /// Global the loader sets in the renderer to mark a successful injection. The
 /// probe reads it back; the bundle and `shelves-devtools probe` can too.
@@ -68,6 +71,8 @@ enum Tick {
 }
 
 use crate::constants::defaults::COLLAPSE_HALT_THRESHOLD;
+/// Confirmed collapse episodes while forced before auto-safe-mode recedes force.
+const COOP_RECEDE_STRIKES: u32 = 2;
 use crate::constants::timers::{FAST_POLL, SOLE_IDLE, UPDATE_CHECK_INTERVAL};
 
 pub fn run(mut config: Config) {
@@ -145,6 +150,12 @@ pub fn run(mut config: Config) {
     // re-inject it in place instead of reloading the whole renderer. Baselined
     // here — AFTER the initial obtain above — so the first host is not a "change".
     let mut last_bundle_mtime = bundle_mtime(&config.bundle_path);
+    // Coexistence auto-safe-mode: if forced ownership keeps coinciding with
+    // confirmed UI collapses, stand force down for the session and run as plain
+    // coexist. `coexist_config` holds the force-cleared config once that happens;
+    // until then ticks use the real `config`.
+    let mut coop = CoopSafety::new(config.coop_safe_mode, COOP_RECEDE_STRIKES);
+    let mut coexist_config: Option<Config> = None;
 
     loop {
         // Health gate. The visible Steam UI lives in windows (Big Picture, Main
@@ -229,6 +240,19 @@ pub fn run(mut config: Config) {
                         "Auto-recovery disabled — run scripts/recover-deck.sh, or set SHELVES_RECOVER_CMD (e.g. `systemctl --user restart steam-launcher.service`).",
                     ),
                 }
+                // Auto-safe-mode: a confirmed collapse while ownership is forced
+                // counts against force. After enough episodes, stand force down
+                // for the session so a churning force stops fighting the loader.
+                if config.force_owner && coexist_config.is_none() && coop.collapse_while_forced() {
+                    log_warning(
+                        "loader",
+                        "Cooperative ownership kept collapsing the Steam UI — standing force down for this session (coexist only). Set SHELVES_COOP_SAFE_MODE=0 to keep forcing.",
+                    );
+                    let mut c = config.clone();
+                    c.force_owner = false;
+                    coexist_config = Some(c);
+                    state::set_coop_receded(true);
+                }
             }
             thread::sleep(interval);
             continue;
@@ -293,10 +317,33 @@ pub fn run(mut config: Config) {
             was_desktop_idle = false;
         }
 
-        let result = tick(&config, &mut empty_since);
+        // Use the force-cleared config once auto-safe-mode has receded.
+        let tick_config = coexist_config.as_ref().unwrap_or(&config);
+        let mut coop_churn = false;
+        let result = tick(tick_config, &mut empty_since, &mut coop_churn);
         // Bundle hosted (Active) or the coexist tab is in place → idle cadence;
         // anything else means we still have work to do soon → fast cadence.
         let settled = matches!(&result, Ok(Tick::Active) | Ok(Tick::CoexistTab(_)));
+        // A healthy settled tick with NO churn clears the strike streak; a churning
+        // cooperative tick must not reset it, or the strikes never accumulate.
+        if settled && !coop_churn {
+            coop.settled_ok();
+        }
+        // Cooperative = forced ownership with a loader present (the tab-coexist
+        // result under force, before any recede). Feeds the plugin-swap guard.
+        let cooperative =
+            config.force_owner && !coop.receded() && matches!(&result, Ok(Tick::CoexistTab(_)));
+        // Renderer churn while cooperative counts toward standing force down.
+        if cooperative && coop_churn && coexist_config.is_none() && coop.renderer_churn() {
+            log_warning(
+                "loader",
+                "Cooperative ownership kept churning the loader (QAM-tab breaker tripping) — standing force down for this session (coexist only). Set SHELVES_COOP_SAFE_MODE=0 to keep forcing.",
+            );
+            let mut c = config.clone();
+            c.force_owner = false;
+            coexist_config = Some(c);
+            state::set_coop_receded(true);
+        }
         // We host the bundle ourselves (sole/owner) only on Active — NOT coexist,
         // where the plugin loader owns its own copy and must not be touched.
         let hosting = matches!(&result, Ok(Tick::Active));
@@ -356,7 +403,7 @@ pub fn run(mut config: Config) {
             last_update_check = Some(Instant::now());
             // Single-flight: skip if a manual checkUpdates is mid-download.
             if state::try_begin_update_check() {
-                auto_update_check(&config, hosting);
+                auto_update_check(&config, hosting, cooperative);
                 state::end_update_check();
             }
         }
@@ -399,7 +446,7 @@ pub fn run(mut config: Config) {
 /// own binary stays current even while coexisting. Best-effort: any network/parse
 /// miss is a silent no-op until the next check, and a working bundle is never
 /// replaced unless a genuinely different release tag is published.
-fn auto_update_check(config: &Config, hosting: bool) {
+fn auto_update_check(config: &Config, hosting: bool, cooperative: bool) {
     state::mark_update_checked_now();
     let mut settings = crate::store::load(&config.hub_config_path);
     if !settings.auto_update {
@@ -407,7 +454,12 @@ fn auto_update_check(config: &Config, hosting: bool) {
         return;
     }
     // ── Plugin bundle: download + swap + reload on a newer release. ──
-    if hosting && settings.auto_update_plugin {
+    // In plain cooperative mode the loader owns the on-disk copy, so a hub swap is
+    // deferred (lockstep guard) unless the cooperative-bundle protocol is enabled.
+    if hosting
+        && settings.auto_update_plugin
+        && coop_safety::coop_plugin_swap_allowed(cooperative, config.coop_bundle)
+    {
         if let Some(latest) = populate::latest_release_tag(config.prerelease) {
             // Apply when we don't yet know what's installed (seed the tag) OR the
             // latest on the channel is strictly newer by SEMVER — never a downgrade
@@ -470,7 +522,9 @@ pub(crate) fn run_update_check_now() -> bool {
     if !state::try_begin_update_check() {
         return false; // a check is already in flight
     }
-    auto_update_check(config, state::is_injected());
+    // Manual check: a hosted bundle (`is_injected`) means sole/owner today, so
+    // cooperative is false here; the cooperative-bundle track revisits this path.
+    auto_update_check(config, state::is_injected(), false);
     state::end_update_check();
     true
 }
@@ -695,8 +749,14 @@ fn run_recovery(cmd: &str) {
 }
 
 /// One injection cycle. `empty_since` carries the owner-settle clock across ticks
-/// (see `owner_settle_secs`).
-fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick> {
+/// (see `owner_settle_secs`). `coop_churn` is set true when, in cooperative mode,
+/// the renderer shows a churn signal (the bundle's QAM-tab breaker tripped) — the
+/// loop feeds it to auto-safe-mode.
+fn tick(
+    config: &Config,
+    empty_since: &mut Option<Instant>,
+    coop_churn: &mut bool,
+) -> cdp::Result<Tick> {
     let mut client = CdpClient::connect_renderer(
         &config.cef_host,
         config.cef_port,
@@ -729,6 +789,11 @@ fn tick(config: &Config, empty_since: &mut Option<Instant>) -> cdp::Result<Tick>
     let cooperative = config.force_owner && loader_present;
     if is_foreign_owner(&owner) || cooperative {
         *empty_since = None;
+        // In cooperative mode, read the renderer churn signal once (the bundle's
+        // QAM-tab breaker) so auto-safe-mode can recede force if it keeps tripping.
+        if cooperative {
+            *coop_churn = probe_coop_churn(&mut client).unwrap_or(false);
+        }
         if !config.native_qam && !cooperative {
             return Ok(Tick::StoodDown(owner));
         }
@@ -883,6 +948,16 @@ fn probe_coexist_tab(client: &mut CdpClient) -> cdp::Result<bool> {
     Ok(value.as_bool().unwrap_or(false))
 }
 
+/// A cooperative-churn signal from the renderer: the bundle's own QAM-tab breaker
+/// has tripped (host-switching churn trips it). Read over the daemon's local CDP;
+/// any eval error reads as "no churn" so a transient miss never recedes force.
+fn probe_coop_churn(client: &mut CdpClient) -> cdp::Result<bool> {
+    let expr = "(function(){try{return !!(window.localStorage && \
+         localStorage.getItem('ds-own-qam-tab-trip'));}catch(e){return false;}})()";
+    let value = client.evaluate(expr)?;
+    Ok(value.as_bool().unwrap_or(false))
+}
+
 /// True when another plugin loader is present in the renderer (mirrors the
 /// runtime's own detection). Under force this catches a loader that has injected
 /// its globals but not yet claimed the renderer, so cooperative mode never falls
@@ -969,11 +1044,21 @@ pub(super) fn i18n_stamp(host_runtime_path: &Path) -> String {
 /// Expose the host-facing config to the runtime so it derives the RPC endpoint and
 /// the contract version from the daemon (one source) instead of hardcoding them.
 pub(super) fn config_stamp(config: &Config) -> String {
+    // The Deck Shelves bundle version this host carries (the last installed release
+    // tag), for the handshake's `bundleVersion` — null until one is recorded.
+    let bundle_tag = crate::store::load(&config.hub_config_path).bundle_tag;
+    let bundle_version = if bundle_tag.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::Value::String(bundle_tag)
+    };
     let obj = serde_json::json!({
         "rpcEndpoint": format!("http://{}", config.rpc_addr),
         "hostApiVersion": crate::HOST_API_VERSION,
         "hostVersion": env!("CARGO_PKG_VERSION"),
         "rpcToken": state::rpc_token(),
+        "device": crate::config::detected_device(),
+        "bundleVersion": bundle_version,
     });
     format!("window.__SHELVES_CONFIG__ = {obj};\n")
 }

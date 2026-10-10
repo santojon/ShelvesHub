@@ -167,6 +167,36 @@ fi
 # Keep the uninstaller alongside the install so it's available later.
 [[ -f "$EXTRACTED_DIR/installer/uninstall_mac.sh" ]] && cp "$EXTRACTED_DIR/installer/uninstall_mac.sh" "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall_mac.sh"
 
+# Optional tray companion (opt-in, OFF by default): a menu-bar icon over the
+# daemon's local RPC. Installs only when the package ships the binary AND the
+# user opts in; a user LaunchAgent (Aqua session) starts it at login.
+install_tray() {
+  if [[ ! -f "$EXTRACTED_DIR/shelveshub-tray" ]]; then
+    echo "[i] Tray companion not bundled in this package — skipping."
+    return
+  fi
+  cp "$EXTRACTED_DIR/shelveshub-tray" "$INSTALL_DIR/"; chmod +x "$INSTALL_DIR/shelveshub-tray"
+  local plist="$LAUNCH_AGENTS_DIR/com.shelveshub.tray.plist"
+  cat > "$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.shelveshub.tray</string>
+  <key>ProgramArguments</key><array><string>$INSTALL_DIR/shelveshub-tray</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><false/>
+  <key>ProcessType</key><string>Interactive</string>
+</dict></plist>
+EOF
+  chmod 644 "$plist"
+  launchctl unload "$plist" 2>/dev/null || true
+  launchctl load "$plist" 2>/dev/null || true
+  launchctl kickstart -k "gui/$(id -u)/com.shelveshub.tray" 2>/dev/null || true
+  echo "[i] Tray companion installed and started (menu-bar icon)."
+}
+TRAY=$(ask "${SHELVES_TRAY:-}" "Install the ShelvesHub tray companion (menu-bar icon)?" n)
+[[ "$TRAY" == 1 ]] && install_tray
+
 # Generate the agent with the real install path (a user LaunchAgent runs as the
 # user, so it lives under $HOME — never root-owned /usr/local).
 sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$EXTRACTED_DIR/installer/com.shelveshub.plist" > "$PLIST_DEST"

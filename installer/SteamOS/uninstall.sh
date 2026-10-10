@@ -22,6 +22,13 @@ rm -f "$SERVICE_DIR/$SERVICE"
 systemctl --user daemon-reload 2>/dev/null || true
 echo "[OK] Stopped + removed the user service."
 
+# Tray companion (opt-in): stop it and drop its autostart entry (the binary under
+# $INSTALL_DIR goes with the directory removal below).
+pkill -f "$INSTALL_DIR/shelveshub-tray" 2>/dev/null || true
+[[ -f "$HOME/.config/autostart/shelveshub-tray.desktop" ]] \
+  && rm -f "$HOME/.config/autostart/shelveshub-tray.desktop" \
+  && echo "[OK] Removed the tray autostart entry." || true
+
 if [[ -d "$INSTALL_DIR" ]]; then
   rm -rf "$INSTALL_DIR"
   echo "[OK] Removed $INSTALL_DIR."

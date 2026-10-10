@@ -15,6 +15,7 @@
 #   coexist-late      — QAM mounted before the runtime → re-point still lands it
 #   coexist-native    — native Steam UI available → mirror + native hub button
 #   coexist-fallback-native — native UI available, no plugin → native fallback panel
+#   coexist-idle      — combined host settled → no permanent sub-1s poll / observer churn
 #
 # Usage:  scripts/harness.sh            (headless)
 #         HEADLESS=0 scripts/harness.sh (show the browser window)
@@ -95,6 +96,7 @@ assert_for() {
     coexist-late)     echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.shelvesTabPresent;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     coexist-native)   echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.owner==="decky"&&r.qamOwner==="shelveshub"&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
     coexist-fallback-native) echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var uiOk=!!(fu&&fu.panel&&fu.coexistNote&&!fu.download&&fu.update&&fu.updateToggles>=1&&fu.sections.indexOf("sec-updates")>=0&&fu.version);var ok=r.bridge&&!r.hostInstalled&&r.specs.length===0&&r.shelvesTabPresent&&uiOk&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)' ;;
+    coexist-idle) echo 'var r=__HARNESS_REPORT__();var idle=r.idle||{observers:0,live:{}};var ms=Object.keys(idle.live||{}).map(function(k){return idle.live[k];});var minMs=ms.length?Math.min.apply(null,ms):Infinity;var ok=r.bridge&&r.shelvesTabPresent&&(idle.observers<=4)&&(minMs>=1000)&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify({idle:idle,minMs:(minMs===Infinity?"none":minMs),bridge:r.bridge,tab:r.shelvesTabPresent,errors:r.errors})' ;;
   esac
 }
 
@@ -126,7 +128,7 @@ run_scenario() {
 
 echo "[i] Running scenarios…"
 FAILED=0
-for sc in coexist-mirror coexist-fallback sole-host sole-host-mirror sole-host-fallback coexist-late coexist-native coexist-fallback-native; do
+for sc in coexist-mirror coexist-fallback sole-host sole-host-mirror sole-host-fallback coexist-late coexist-native coexist-fallback-native coexist-idle; do
   run_scenario "$sc" || FAILED=$((FAILED + 1))
 done
 

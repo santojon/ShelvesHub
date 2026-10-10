@@ -160,6 +160,14 @@ function logSummary(record, n) {
 }
 
 function main() {
+  // `--aggregate-only`: skip measurement, rebuild runs.json from the files on disk
+  // — used after moving a generated run onto another branch (a release cut from a
+  // divergent branch) so the aggregate reflects THAT branch's reports, not the tag's.
+  if (flag("--aggregate-only")) {
+    const n = rebuildAggregate();
+    console.log(`[report] aggregate-only → site/reports/runs.json (${n} runs)`);
+    return 0;
+  }
   const ts = stamp();
   const tests = collectTests();
   const clippy = collectClippy();

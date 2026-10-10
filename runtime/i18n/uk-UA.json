@@ -51,8 +51,16 @@
   "adv_disable_hub_sub": "Зупинити впровадження до повторного ввімкнення (діагностика)",
   "adv_restart_apply": "Перезапустити для застосування",
   "cfg_mode": "Ownership mode",
+  "cfg_hosted_by": "Хост",
+  "cfg_ds_version": "Версія Deck Shelves",
+  "host_self": "ShelvesHub (цей хост)",
+  "host_loader_suffix": "(завантажувач плагінів)",
+  "legacy_bundle_warning": "Цей Deck Shelves старіший за протокол співіснування — оновіть його, щоб обидва хости працювали разом коректно.",
   "cfg_boot_movie": "Boot animation",
   "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
   "cfg_desktop_ui": "Desktop client shelves (experimental)",
-  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
+  "action_restart_backend": "Перезапустити бекенд",
+  "coop_receded_warning": "Кооперативний режим призупинено — конфлікт із завантажувачем плагінів; цю сесію працює як співіснування.",
+  "restart_confirm": "Натисніть ще раз, щоб перезапустити"
 }

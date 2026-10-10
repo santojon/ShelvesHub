@@ -16,12 +16,9 @@
     let confirmed = false;
     let lastVisible = true;
 
-    // Trip breaker: "armed" is written just before patching and cleared on the
-    // first healthy render through our handler. If a boot finds "armed" left
-    // over, the previous arm never confirmed (renderer likely died) — trip and
-    // refuse the native path until the key is cleared manually. Guarantees at
-    // most one bad arm, never a crash loop. All storage access is fail-safe
-    // (CEF contexts can deny localStorage).
+    // Trip breaker: "armed" is written before patching and cleared on the first healthy
+    // render. A leftover "armed" at boot means the previous arm never confirmed (renderer
+    // likely died) — trip and refuse the native path until cleared. Storage access is fail-safe.
     const TRIP_KEY = "shelves.nativeQamTrip";
     function tripGet() { try { return window.localStorage.getItem(TRIP_KEY); } catch (_) { return null; } }
     function tripSet(v) { try { window.localStorage.setItem(TRIP_KEY, v); } catch (_) {} }
@@ -37,7 +34,10 @@
        collapse risk), so the breaker must never engage there — otherwise an armed
        state left by a restart before the QAM first renders would false-trip and
        silently kill our tab on every later boot. */
-    if (NATIVE_QAM_ENABLED && !COEXIST) {
+    // Boot evaluation of the trip breaker (sole/owner only): a STALE arm trips (overlay
+    // fallback); a RECENT arm is a boot re-inject and re-arms cleanly; an existing "tripped"
+    // stays tripped. Sets `tripped` and returns it so the caller can disable the native path.
+    function tripBreakerDisablesNative() {
       const prior = tripGet();
       if (prior && prior.indexOf("armed") === 0) {
         const armTs = parseInt(prior.split(":")[1] || "0", 10) || 0;
@@ -52,7 +52,10 @@
         tripped = true;
         logError("QAM", "breaker is tripped (" + prior + ") — overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
       }
-      if (tripped) NATIVE_QAM_ENABLED = false;
+      return tripped;
+    }
+    if (NATIVE_QAM_ENABLED && !COEXIST) {
+      if (tripBreakerDisablesNative()) NATIVE_QAM_ENABLED = false;
     }
 
     function iconEl(icon) {
@@ -60,14 +63,9 @@
       if (typeof icon === "string") return h("div", { style: { display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }, dangerouslySetInnerHTML: { __html: icon } });
       return null;
     }
-    // Accept BOTH panel shapes: the @deck-shelves/host contract's imperative
-    // `render(container)` (framework-agnostic — we host it in a ref'd div), and
-    // our React `content` (element or factory), used by the example bundle.
-    // Stable host for a spec's imperative render(container). Defined ONCE (not a
-    // fresh closure per contentEl call) and keyed by spec.id at the call site, so
-    // it reconciles across PanelSlot re-renders instead of remounting — a remount
-    // re-runs spec.render and resets the mirrored editor's transient state (a
-    // toggle mid-flip, the open side panel) on every slot refresh.
+    // Accept BOTH panel shapes: the contract's imperative `render(container)` (hosted in a
+    // ref'd div) and our React `content`. SpecRenderHost is defined ONCE and keyed by spec.id
+    // so it reconciles across PanelSlot re-renders instead of remounting (a remount resets state).
     function SpecRenderHost(props) {
       const spec = props.spec;
       const ref = React.useRef(null);
@@ -89,12 +87,9 @@
       return ErrorBoundary ? h(ErrorBoundary, { fallback: h(FallbackPanel, null) }, inner) : inner;
     }
 
-    // One stable native tab whose icon and panel are LAZY slots: they render
-    // whatever panel spec is currently registered, at render time. This makes
-    // the whole path order-independent — the tab can enter the tab list at
-    // Steam boot (before the bundle loads), and the moment the bundle calls
-    // registerPanel the slots re-render with the real Deck Shelves icon and
-    // UI. The panel renders Deck Shelves DIRECTLY (never a plugin list).
+    // One stable native tab whose icon and panel are LAZY slots: they render whatever spec is
+    // registered, at render time — so the path is order-independent (the tab can enter at Steam
+    // boot, and registerPanel re-renders the slots with the real Deck Shelves icon and UI).
     const slotListeners = [];
     function notifySlots() {
       for (let i = 0; i < slotListeners.length; i++) {
@@ -141,13 +136,9 @@
         body: JSON.stringify({ method: method, args: args == null ? null : args }),
       }).then(function (r) { return r.json(); });
     }
-    // Shown in OUR tab when no panel is registered — i.e. the bundle could not be
-    // brought up. Host-branded, self-contained (plain elements, no dependency on
-    // the discovered Steam UI, which may be part of what failed), strings via I18N.
-    // Actions call the daemon over RPC; each degrades quietly if unavailable.
-    // Inline SVG (currentColor) so each action reads at a glance and the panel
-    // stays self-contained — no external icon font/asset, nothing that could be
-    // part of what failed.
+    // Shown in OUR tab when no panel is registered (the bundle could not come up). Host-branded
+    // and self-contained (plain elements + inline SVG, no dependency on the discovered Steam UI,
+    // which may be part of what failed), strings via I18N; actions call the daemon over RPC.
     const FALLBACK_ICONS = {
       download: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>',
       update: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>',
@@ -168,14 +159,9 @@
         dangerouslySetInnerHTML: { __html: FALLBACK_ICONS[name] },
       });
     }
-    // A gamepad-focusable clickable: Steam's Focusable (onActivate fires on the A
-    // button and on pointer) once it is discovered, else a plain <button>. Same
-    // styling either way; Focusable adds Steam's native focus ring so our own
-    // items join the gamepad navigation, exactly like the plugin's native controls.
-    // Focus ring for the plain (non-DialogButton) path: give the Focusable a ring
-    // class the panel's <style> targets. Steam's Focusable applies `focusClassName`
-    // while the element holds focus-nav focus; the CSS is rendered INTO the panel
-    // (see PanelSlot) so it reaches the QAM document, not SharedJSContext.
+    // A gamepad-focusable clickable: Steam's Focusable (onActivate fires on A and pointer) once
+    // discovered, else a plain <button>. Focusable adds the native focus ring via focusClassName
+    // ("shelves-gpfocus"); the CSS is rendered INTO the panel (PanelSlot) so it reaches the QAM doc.
     function clickable(onAct, extra, kids) {
       const props = focusableComp
         ? { onActivate: onAct, focusClassName: "shelves-gpfocus" }
@@ -228,6 +214,21 @@
       return h("div", { key: "verfoot", "data-fb": "version", style: { textAlign: "center", padding: "10px 12px 6px", fontSize: "11px", lineHeight: "15px", color: "rgba(255,255,255,0.4)" } },
         "ShelvesHub" + (version ? " · v" + version : ""));
     }
+    function ownerLabel(owner) {
+      if (!owner) return "—";
+      return owner === "shelveshub" ? I18N.t("host_self") : owner + " " + I18N.t("host_loader_suffix");
+    }
+    // Host-detection readout: who currently hosts Deck Shelves (this host vs. a plugin loader),
+    // the running Deck Shelves version (from the owner-metadata global the owning bundle stamps),
+    // and `legacy` when a loader owns it but stamps no version (predates the coexistence protocol).
+    function hostDetection() {
+      let owner = null, meta = null;
+      try { owner = window.__DECK_SHELVES_OWNER__ || null; } catch (e) {}
+      try { meta = window.__DECK_SHELVES_OWNER_META__ || null; } catch (e) {}
+      const dsVersion = meta && meta.dsVersion ? String(meta.dsVersion) : null;
+      const legacy = !!(owner && owner !== "shelveshub" && !dsVersion);
+      return { owner: owner, label: ownerLabel(owner), dsVersion: dsVersion, legacy: legacy };
+    }
     function FallbackPanel(props) {
       const onBack = props && props.onBack;
       const st = React.useState(null);
@@ -248,10 +249,19 @@
       const rc = rcS[0], setRc = rcS[1];
       const rd = React.useState(false);
       const rcDirty = rd[0], setRcDirty = rd[1];
+      // Live coexistence state (getDiagnostics): whether auto-safe-mode stood force
+      // down this session, so the Status readout can explain it. Fetched once on open.
+      const cxS = React.useState(null);
+      const coex = cxS[0], setCoex = cxS[1];
+      const arS = React.useState(null);
+      const armedRestart = arS[0], setArmedRestart = arS[1];
       React.useEffect(function () {
         let alive = true;
         hostRpc("getRuntimeConfig").then(function (r) {
           if (alive && r && r.ok && r.result && typeof r.result === "object") setRc(r.result);
+        }, function () {});
+        hostRpc("getDiagnostics").then(function (r) {
+          if (alive && r && r.ok && r.result && r.result.coexistence) setCoex(r.result.coexistence);
         }, function () {});
         return function () { alive = false; };
       }, []);
@@ -282,6 +292,20 @@
         setBusy("restart");
         hostRpc("restartService", {}).then(function () {}, function () {});
       }
+      /* Confirm-before-restart: the first tap arms the button (label → "tap again
+         to restart") and the second runs it, so a restart (which may bounce Steam)
+         is never a single accidental press. Auto-disarms after 4 s. */
+      function armRestart(which, fn) {
+        if (busy) return;
+        if (armedRestart !== which) {
+          setArmedRestart(which);
+          setTimeout(function () { setArmedRestart(function (p) { return p === which ? null : p; }); }, 4000);
+          return;
+        }
+        setArmedRestart(null);
+        fn();
+      }
+      function restartLabel(which, label) { return armedRestart === which ? I18N.t("restart_confirm") : label; }
       // Manual "Check now": ask the daemon to run an update check immediately and
       // fold the refreshed status (pending version, staged flag, last-check age)
       // back into the config — so the user doesn't wait for the 30-minute cycle.
@@ -333,7 +357,7 @@
       }
       function restartBanner() {
         return h("div", { key: "restart-banner", style: { padding: "10px 14px 8px" } },
-          bannerButton("apply-restart", I18N.t("adv_restart_apply"), doApplyRestart));
+          bannerButton("apply-restart", restartLabel("apply", I18N.t("adv_restart_apply")), function () { armRestart("apply", doApplyRestart); }));
       }
       function viewLogs() {
         setBusy("logs");
@@ -355,11 +379,9 @@
         }, function () { if (alive) setCfg(DEFAULT_UPD); });
         return function () { alive = false; };
       }, []);
-      // Keep the update status fresh while the hub view is open: re-read getConfig
-      // when the panel becomes visible and on a slow interval (visible-only), so an
-      // update the daemon detects after the view opened still surfaces. One stop
-      // path tears both down. Only the daemon-owned status fields are merged, so a
-      // refresh never clobbers an in-flight optimistic toggle edit.
+      // Keep the update status fresh while the hub view is open: re-read getConfig on visibility
+      // and on a slow interval (visible-only). One stop path tears both down; only the daemon-owned
+      // status fields are merged, so a refresh never clobbers an in-flight optimistic toggle edit.
       React.useEffect(function () {
         let alive = true;
         function refresh() {
@@ -455,7 +477,7 @@
            shows for a manually-run daemon). */
         const label = uc.hub_update_staged === true ? "hub_update_staged" : "hub_update_restart";
         return h("div", { key: "hubupd", style: { padding: "10px 14px 8px" } },
-          bannerButton("hub-update", I18N.t(label) + " (" + ver + ")", doRestartDaemonOnly));
+          bannerButton("hub-update", restartLabel("hub", I18N.t(label) + " (" + ver + ")"), function () { armRestart("hub", doRestartDaemonOnly); }));
       }
       // Always-visible update status (only while auto-update is on, since that's
       // when the daemon checks): a dot + "up to date"/"vX available", the last-check
@@ -539,7 +561,10 @@
            - ShelvesHub self-update remains available even in coexistence, so the
              daemon can update itself independently of the plugin's owner. */
         let upd, updCount;
-        if (coexist) {
+        // Cooperative counts as "loader manages the plugin" for updates: the
+        // loader's copy is the one that runs, so hide the plugin update toggles
+        // (keep the hub self-update) — the hub won't swap the loader's on-disk copy.
+        if (coexist || COOP) {
           upd = [
             h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere")),
           ];
@@ -554,58 +579,65 @@
         }
         sections.push(h(HubCollapsible, { key: "sec-upd", id: "sec-updates", title: I18N.t("sec_updates"), count: updCount, initialOpen: true }, upd));
         const trouble = [actionRow("logs", "logs", "action_logs", "getLogs")];
+        // Restart ONLY the Python backend (not the daemon) — recovers a wedged
+        // backend without bouncing hosting. Shown only when a backend is configured.
+        if (rc && rc.backend) trouble.push(actionRow("restart-backend", "update", "action_restart_backend", "restartBackend"));
         if (rc) {
           trouble.push(advToggleRow("adv-pause", I18N.t("adv_disable_hub"), I18N.t("adv_disable_hub_sub"), rc.paused === true, applyPaused));
           if (rc.paused === true) trouble.push(h("div", { key: "pn", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_paused")));
         }
-        sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: rc ? 2 : 1 }, trouble));
-        if (rc) {
-          // Only genuine operational config here — `native_qam` (default on; a
-          // recovery knob left to the config file/env) and `prerelease` (already
-          // covered by the Updates section's pre-release channels) are intentionally
-          // NOT surfaced. The coexist-only settings (force_owner, owner_settle_secs)
-          // are shown only when another loader is ACTUALLY present — they are inert
-          // as a sole host (no loader to force ownership from or settle behind), so
-          // they stay hidden on a pure sole platform AND on a loader-capable one
-          // whose loader is not currently running.
-          const conf = [];
-          // Ownership knobs are meaningful only where a plugin loader can share
-          // the renderer (Linux/SteamOS). On a pure sole host they are inert, so
-          // they stay in the read-only Status readout below instead of as toggles.
-          if (rc.loader_possible) {
-            conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), I18N.t("cfg_force_owner_sub"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
-            conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
-          }
-          conf.push(advToggleRow("cfg-boot_movie", I18N.t("cfg_boot_movie"), I18N.t("cfg_boot_movie_sub"), rc.boot_movie === true, applyBootMovie));
-          // Experimental: inject in the plain desktop client too (default off →
-          // gamepad / Big Picture only). Only meaningful where a desktop client
-          // exists (macOS / Windows), so hide it on the Deck's Gaming Mode.
-          if (!rc.loader_possible) {
-            conf.push(advToggleRow("cfg-desktop_ui", I18N.t("cfg_desktop_ui"), I18N.t("cfg_desktop_ui_sub"), rc.desktop_ui === true, function (v) { applyCfg("desktop_ui", v); }));
-          }
-          conf.push(advStepRow("interval_secs", I18N.t("cfg_interval"), I18N.t("cfg_interval_sub"), rc.interval_secs));
-          const confCount = conf.length;
-          if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));
-          sections.push(h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: confCount }, conf));
-          const ownerMode = COOP ? "cooperative" : (coexist ? "coexist" : "sole");
-          const status = [
-            advRoRow("mode", I18N.t("cfg_mode"), ownerMode),
-          ];
-          // On a pure sole host the ownership toggle is hidden above; surface its
-          // current value here so the state stays visible.
-          if (!rc.loader_possible) status.push(advRoRow("force", I18N.t("cfg_force_owner"), rc.force_owner ? "on" : "off"));
-          status.push(
-            advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),
-            advRoRow("rpc", I18N.t("cfg_rpc"), rc.rpc_addr || ""),
-            advRoRow("recover", I18N.t("cfg_recover_cmd"), rc.recover_cmd == null ? "—" : rc.recover_cmd),
-            advRoRow("bundle", I18N.t("cfg_bundle"), rc.bundle_path || ""),
-            advRoRow("backend", I18N.t("cfg_backend"), rc.backend ? "on" : "off"),
-            advRoRow("boot", I18N.t("cfg_boot_movie"), rc.boot_movie ? "on" : "off"),
-            advRoRow("version", I18N.t("cfg_version"), rc.version || "")
-          );
-          sections.push(h(HubCollapsible, { key: "sec-st", id: "sec-status", title: I18N.t("adv_sec_status"), count: status.length }, status));
-        }
+        sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: trouble.length }, trouble));
+        if (rc) { sections.push(buildConfigSection()); sections.push(buildStatusSection()); }
         return sections;
+      }
+      // Config section (rc present). Only genuine operational config — `native_qam` and
+      // `prerelease` are intentionally NOT surfaced; ownership knobs show only where a loader
+      // can share the renderer, the desktop-inject toggle only where a desktop client exists.
+      function buildConfigSection() {
+        const conf = [];
+        if (rc.loader_possible) {
+          conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), I18N.t("cfg_force_owner_sub"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
+          conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
+        }
+        conf.push(advToggleRow("cfg-boot_movie", I18N.t("cfg_boot_movie"), I18N.t("cfg_boot_movie_sub"), rc.boot_movie === true, applyBootMovie));
+        if (!rc.loader_possible) {
+          conf.push(advToggleRow("cfg-desktop_ui", I18N.t("cfg_desktop_ui"), I18N.t("cfg_desktop_ui_sub"), rc.desktop_ui === true, function (v) { applyCfg("desktop_ui", v); }));
+        }
+        conf.push(advStepRow("interval_secs", I18N.t("cfg_interval"), I18N.t("cfg_interval_sub"), rc.interval_secs));
+        const confCount = conf.length;
+        if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));
+        return h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: confCount }, conf);
+      }
+      // Amber status warnings (legacy loader bundle; cooperative auto-paused), as
+      // their own list so buildStatusSection stays within the complexity budget.
+      function statusWarnings(hd, cx) {
+        const amber = { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" };
+        const w = [];
+        if (hd.legacy) w.push(h("div", { key: "legacy", style: amber }, I18N.t("legacy_bundle_warning")));
+        if (cx && cx.forceReceded) w.push(h("div", { key: "coopreceded", style: amber }, I18N.t("coop_receded_warning")));
+        return w;
+      }
+      // Read-only Status readout (rc present): mode + key config + the warnings above.
+      function buildStatusSection() {
+        const onOff = function (v) { return v ? "on" : "off"; };
+        const modeLabel = function () { return COOP ? "cooperative" : (coexist ? "coexist" : "sole"); };
+        const hd = hostDetection();
+        const status = [
+          advRoRow("mode", I18N.t("cfg_mode"), modeLabel()),
+          advRoRow("hostedby", I18N.t("cfg_hosted_by"), hd.label),
+          advRoRow("dsver", I18N.t("cfg_ds_version"), hd.dsVersion || "—"),
+        ].concat(statusWarnings(hd, coex));
+        if (!rc.loader_possible) status.push(advRoRow("force", I18N.t("cfg_force_owner"), onOff(rc.force_owner)));
+        status.push(
+          advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),
+          advRoRow("rpc", I18N.t("cfg_rpc"), rc.rpc_addr || ""),
+          advRoRow("recover", I18N.t("cfg_recover_cmd"), rc.recover_cmd == null ? "—" : rc.recover_cmd),
+          advRoRow("bundle", I18N.t("cfg_bundle"), rc.bundle_path || ""),
+          advRoRow("backend", I18N.t("cfg_backend"), onOff(rc.backend)),
+          advRoRow("boot", I18N.t("cfg_boot_movie"), onOff(rc.boot_movie)),
+          advRoRow("version", I18N.t("cfg_version"), rc.version || "")
+        );
+        return h(HubCollapsible, { key: "sec-st", id: "sec-status", title: I18N.t("adv_sec_status"), count: status.length }, status);
       }
       function run(id, method) {
         if (method === "getLogs") { viewLogs(); return; }
@@ -734,38 +766,35 @@
           list);
       }
 
-      // ── Native Steam components (theme-aware, gamepad-focusable, native focus
-      // ring). Discovery is off the render path (idle), so rendering here only
-      // reads cached components — no scan on the render path. Falls through to the
-      // plain/Focusable-wrapped panel below when discovery came up empty. ──
-      // Native hub — built ONLY from primitives the bundle itself renders in this
-      // same injected tab (DialogButton, ToggleField): those are proven to mount
-      // here. ButtonItem/PanelSection/PanelSectionRow are deliberately NOT used —
-      // the bundle never renders them in the QAM, and mounting them in the injected
-      // panel collapses the Steam UI (silent main-thread stall, no throw).
-      // ── One unified panel body (no native/plain split): a shared title + notice,
-      //    then the collapsible sections (native ToggleFields when available, else
-      //    the plain fallback inside them), the inline log view, and the version
-      //    footer. EDGE-TO-EDGE: the panel has NO horizontal padding — every row and
-      //    section header owns its own 16px inset, so the focus highlight reaches the
-      //    panel edges while content stays aligned (the plugin's QAM pattern). ──
+      /* Native Steam components (theme-aware, gamepad-focusable). Discovery is off the render
+         path (idle), so rendering only reads cached components. The native hub is built ONLY
+         from primitives the bundle itself renders in this tab (DialogButton, ToggleField) —
+         proven to mount here; ButtonItem/PanelSection/PanelSectionRow are NOT used (mounting
+         them in the injected panel collapses the Steam UI — a silent main-thread stall). */
+      /* One unified panel body: a shared title + notice, the collapsible sections, the inline
+         log view and the version footer. EDGE-TO-EDGE: the panel has NO horizontal padding —
+         every row and section header owns its own 16px inset, so the focus highlight reaches
+         the panel edges while content stays aligned (the plugin's QAM pattern). */
       const TF = UI.ToggleField;
       const useNative = nativeUiOn() && !!TF;
-      const titleRow = onBack
-        ? h("div", { key: "title", style: { display: "flex", alignItems: "center", gap: "8px", padding: "4px 16px 8px" } },
-            clickable(onBack, { "data-fb": "back", title: I18N.t("action_back"), focusClassName: "shelves-gpfocus", style: { flex: "0 0 auto", width: "28px", height: "28px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" } }, [fbIcon("back")]),
-            h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
-        : h("div", { key: "title", style: { fontSize: "18px", fontWeight: "700", padding: "6px 16px 4px" } }, I18N.t("hub_title"));
-      let body = [titleRow];
-      if (rcDirty) body.push(restartBanner());
-      const notice = hubUpdateNotice();
-      if (notice) body.push(h("div", { key: "nw", style: { padding: "0 16px" } }, notice));
-      if (on) body.push(updateStatusRow());
-      if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
-      body = body.concat(buildSections(useNative, TF));
-      if (logs !== null) body.push(buildLogView());
-      body.push(hubVersionFooter(uc.version));
-      return panelRoot({ style: { padding: "8px 0 0" }, "data-fb-panel": "1" }, body);
+      function buildBody() {
+        const titleRow = onBack
+          ? h("div", { key: "title", style: { display: "flex", alignItems: "center", gap: "8px", padding: "4px 16px 8px" } },
+              clickable(onBack, { "data-fb": "back", title: I18N.t("action_back"), focusClassName: "shelves-gpfocus", style: { flex: "0 0 auto", width: "28px", height: "28px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" } }, [fbIcon("back")]),
+              h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
+          : h("div", { key: "title", style: { fontSize: "18px", fontWeight: "700", padding: "6px 16px 4px" } }, I18N.t("hub_title"));
+        const body = [titleRow];
+        if (rcDirty) body.push(restartBanner());
+        const notice = hubUpdateNotice();
+        if (notice) body.push(h("div", { key: "nw", style: { padding: "0 16px" } }, notice));
+        if (on) body.push(updateStatusRow());
+        if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
+        const out = body.concat(buildSections(useNative, TF));
+        if (logs !== null) out.push(buildLogView());
+        out.push(hubVersionFooter(uc.version));
+        return out;
+      }
+      return panelRoot({ style: { padding: "8px 0 0" }, "data-fb-panel": "1" }, buildBody());
     }
     // Our tab: the plugin's editor when present, plus a ShelvesHub row pinned at
     // the end that opens the host's hub view (the same actions as the fallback) —
@@ -799,20 +828,14 @@
           if (doc && doc.removeEventListener) doc.removeEventListener("visibilitychange", refresh);
         };
       }, []);
-      const s = firstSpec();
-      let body;
-      // No registered panel → the hub view IS the content (the fallback).
-      if (!s) body = h(FallbackPanel, null);
-      // Hub view opened from the plugin editor → show it with a back button.
-      else if (showHub) body = h(FallbackPanel, { onBack: function () { setShowHub(false); } });
-      // Plugin editor + a ShelvesHub button pinned at the end that opens the hub
-      // view (the host's own options, reachable while Deck Shelves is loaded).
-      else {
+      // The pinned ShelvesHub button (opens the hub view), with a pending-update dot — native
+      // DialogButton when available, else the subtle inset clickable fallback.
+      function renderHubButton() {
         const openHub = function () { setShowHub(true); };
         const updDot = pendingUpd
           ? h("span", { key: "ud", title: I18N.t("upd_available") + " (" + pendingUpd + ")", style: { width: "8px", height: "8px", borderRadius: "50%", background: "#ffcf6b", flex: "0 0 auto" } })
           : null;
-        const hubBtn = (nativeUiOn() && UI.DialogButton)
+        return (nativeUiOn() && UI.DialogButton)
           ? h(UI.DialogButton, { "data-fb": "open-hub", onClick: openHub, style: { width: "100%", marginTop: "8px" } },
               h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" } }, fbIcon("hub"), h("span", null, I18N.t("hub_title")), updDot))
           : clickable(openHub, {
@@ -824,25 +847,39 @@
                 background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: "13px",
               },
             }, [fbIcon("hub"), h("span", { key: "t" }, I18N.t("hub_title")), updDot]);
-        // Natural flow (no flex column, no overflow): the editor keeps its own
-        // height and the hub button sits AFTER it — so the button never overlaps
-        // the editor, and no overflow ancestor clips the plugin's IntersectionObserver
-        // (useIsActiveQamTab). The QAM panel does the scrolling.
-        // Inset the ShelvesHub button so it aligns with the plugin's own rows and
-        // our hub-screen items (which sit inside the section's 14px padding), rather
-        // than sitting flush against the QAM edge.
-        body = h("div", null, contentEl(s), h("div", { style: { padding: "0 14px" } }, hubBtn));
       }
+      /* Our edge-to-edge toggle row's Field has 0 horizontal padding, so pad the Field's CONTENT
+         (not the wrapper): the highlight still reaches the QAM edge, only the content insets. The
+         Field class is Steam's gamepadDialog class — from the webpack (sole) or the loader (coexist). */
+      function fieldPaddingCss() {
+        try {
+          let _gpdCls = null;
+          try {
+            _gpdCls = Steam.findModule(function (e) {
+              return e && typeof e === "object" && typeof e.Field === "string" &&
+                typeof e.GamepadDialogContent === "string" && typeof e.StandardPadding === "string";
+            });
+          } catch (e) {}
+          const _fieldCls = (_gpdCls && _gpdCls.Field) ||
+            (window.DFL && window.DFL.gamepadDialogClasses && window.DFL.gamepadDialogClasses.Field) || "";
+          if (_fieldCls) return ".shelves-panel .shelves-toggle-row ." + _fieldCls +
+            "{padding-left:14px!important;padding-right:14px!important;}";
+        } catch (e) {}
+        return "";
+      }
+      const s = firstSpec();
+      let body;
+      // No registered panel → the hub view IS the content (the fallback).
+      if (!s) body = h(FallbackPanel, null);
+      // Hub view opened from the plugin editor → show it with a back button.
+      else if (showHub) body = h(FallbackPanel, { onBack: function () { setShowHub(false); } });
+      // Plugin editor + the pinned ShelvesHub button. Natural flow (no flex column/overflow) so no
+      // ancestor clips the plugin's IntersectionObserver; inset the button to align with its rows.
+      else body = h("div", null, contentEl(s), h("div", { style: { padding: "0 14px" } }, renderHubButton()));
       const inner = ErrorBoundary ? h(ErrorBoundary, null, body) : body;
-      // Focus ring: Steam applies `.gpfocus` to the focused native control but draws
-      // NO ring for our injected panel (it sits outside Steam's own FocusRing
-      // ancestor). We render the ring CSS as part of the panel so it lands in the
-      // QAM document (NOT SharedJSContext, where a head-injected <style> would go
-      // and never reach these nodes), scoped to `.shelves-panel`.
-      // Ring ONLY buttons (DialogButton lacks a native focus visual in our injected
-      // panel) and our own plain clickables (.shelves-gpfocus). Toggles, collapsible
-      // titles and other native controls already get Steam's own row highlight
-      // (a background, not a ring) — ringing them too looks doubled-up/odd.
+      // Focus ring: Steam draws no ring for our injected panel, so we render the ring CSS into
+      // the panel (QAM document, not SharedJSContext), scoped to `.shelves-panel`. Ring ONLY
+      // buttons + our plain clickables — toggles/titles already get Steam's own row highlight.
       let ringCss =
         ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{" +
         "box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;" +
@@ -850,24 +887,7 @@
         // Whole-row focus highlight (a background, like the plugin's QAM rows) for
         // section headers and Advanced rows — not the button ring above.
         ".shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}";
-      /* Our edge-to-edge toggle row's Field has 0 horizontal padding, so its label/
-         switch would touch the QAM edges. Pad the Field's CONTENT (not the wrapper):
-         the highlight/background still reaches the QAM edge, only the content insets.
-         The Field class is Steam's own gamepadDialog CSS class — discovered from the
-         webpack in sole mode (no loader), or borrowed from the loader in coexist. */
-      try {
-        let _gpdCls = null;
-        try {
-          _gpdCls = Steam.findModule(function (e) {
-            return e && typeof e === "object" && typeof e.Field === "string" &&
-              typeof e.GamepadDialogContent === "string" && typeof e.StandardPadding === "string";
-          });
-        } catch (e) {}
-        const _fieldCls = (_gpdCls && _gpdCls.Field) ||
-          (window.DFL && window.DFL.gamepadDialogClasses && window.DFL.gamepadDialogClasses.Field) || "";
-        if (_fieldCls) ringCss += ".shelves-panel .shelves-toggle-row ." + _fieldCls +
-          "{padding-left:14px!important;padding-right:14px!important;}";
-      } catch (e) {}
+      ringCss += fieldPaddingCss();
       const styleEl = h("style", { "data-shelves": "ring" }, ringCss);
       // Wrap the panel in Steam's Focusable so it joins gamepad-focus navigation
       // (the mirrored editor's controls and ours), the way a loader wraps its
@@ -876,17 +896,11 @@
         ? h(focusableComp, { className: "shelves-panel", style: { height: "100%" } }, styleEl, inner)
         : h("div", { className: "shelves-panel", style: { height: "100%" } }, styleEl, inner);
     }
-    // A registered tab needs its key present in Steam's `QuickAccessTab` enum:
-    // `pt` derives the panel class as `tab_${QuickAccessTab[key]}` and the tab
-    // strip's focus/visibility logic keys off the same enum. An unregistered
-    // (string) key renders as `tab_undefined` and is not treated as a
-    // first-class tab (focus of hidden tabs misbehaves). So we register a
-    // numeric key, exactly as other hosts do (their tab sits at 999).
-    //
-    // The KEY is only the tab's identity (kept distinct from the loader's 999);
-    // the POSITION in the strip is set by insertAfterKey below, NOT by this value.
-    // To change it: edit `DEFAULT_TAB_KEY` (one place), or — without touching this
-    // file — set `window.__SHELVES_QAM_KEY__` (a number) before injection.
+    /* A registered tab needs its key present in Steam's `QuickAccessTab` enum: `pt` derives the
+       panel class as `tab_${QuickAccessTab[key]}` and the strip's focus/visibility keys off it,
+       so a string key renders as `tab_undefined` and misbehaves. We register a numeric key
+       (distinct from the loader's 999); the POSITION is set by insertAfterKey below, not by this.
+       Change it via `DEFAULT_TAB_KEY` here, or set `window.__SHELVES_QAM_KEY__` before injection. */
     const DEFAULT_TAB_KEY = 900;
     const NATIVE_TAB_KEY = (function () {
       try {
@@ -949,49 +963,45 @@
       return NATIVE_TAB_AFTER;
     }
     let cachedTab = null;
-    function pushTab(tabs) {
-      // Idempotent: if our tab is already in this list, only refresh its
-      // visibility to track the menu's open/closed state — never insert twice.
+    // Idempotent guard: if our tab is already in this list, only refresh its visibility to track
+    // the menu's open/closed state and report true — never insert twice.
+    function refreshExistingTab(tabs) {
       for (let j = 0; j < tabs.length; j++) {
         if (tabs[j] && tabs[j].key === NATIVE_TAB_KEY) {
           if (typeof tabs[j].qAMVisibilitySetter === "function") { try { tabs[j].qAMVisibilitySetter(lastVisible); } catch (e) {} }
           else { tabs[j].initialVisibility = lastVisible; }
-          return;
+          return true;
         }
       }
-      /* Reuse ONE tab object (and its panel/icon elements) across renders. The
-         list is rebuilt fresh on every QAM render, so building a NEW tab each time
-         hands Steam a new panel element every render — remounting the mirrored
-         editor, resetting toggles/side panel, and preventing gamepad focus from
-         settling. A loader adds its tab once; we keep ours stable the same way. */
+      return false;
+    }
+    // Position: right after Steam's Performance tab, so we sit ahead of any tab appended at the end.
+    function tabInsertIndex(tabs) {
+      const after = insertAfterKey();
+      if (after == null) return tabs.length;
+      for (let i = 0; i < tabs.length; i++) { if (tabs[i] && tabs[i].key === after) return i + 1; }
+      return tabs.length;
+    }
+    function pushTab(tabs) {
+      if (refreshExistingTab(tabs)) return;
+      /* Reuse ONE tab object (and its panel/icon elements) across renders. The list is rebuilt
+         fresh every QAM render, so a NEW tab each time hands Steam a new panel element — remounting
+         the mirrored editor, resetting toggles/side panel, blocking focus from settling. */
       if (!cachedTab) cachedTab = buildTab();
       const tab = cachedTab;
       tab.initialVisibility = lastVisible;
-      // Position: right after Steam's Performance tab, so we sit ahead of any
-      // tab that is appended at the end of the list (later additions land last).
-      const after = insertAfterKey(); let at = tabs.length;
-      if (after != null) {
-        for (let i = 0; i < tabs.length; i++) { if (tabs[i] && tabs[i].key === after) { at = i + 1; break; } }
-      }
-      tabs.splice(at, 0, tab); // insert in place (array mutable; element props may be frozen)
-      // Ownership handshake: stamp the QAM-owner signal the MOMENT our tab is
-      // actually in the strip — not when the `__SHELVES_QAM__` bridge global was
-      // first created (that happens at boot, well before this insertion). A Deck
-      // Shelves running under another loader retracts its own early tab on this
-      // signal, so exactly one Deck Shelves tab survives and it is this host's —
-      // and if this host never inserts (patch failed), the plugin keeps its tab
-      // as the fallback instead of both vanishing. See @deck-shelves/host.
+      // insert in place (array mutable; element props may be frozen)
+      tabs.splice(tabInsertIndex(tabs), 0, tab);
+      // Ownership handshake: stamp the QAM-owner signal the MOMENT our tab is in the strip (not
+      // at boot when the bridge was created). A Deck Shelves under another loader retracts its
+      // early tab on this, so exactly one survives; if this host never inserts, the plugin keeps its.
       try { window.__SHELVES_QAM_OWNER__ = "shelveshub"; } catch (e) {}
       if (!confirmed) { confirmed = true; tripClear(); logInfo("QAM", "tab inserted, healthy."); }
     }
 
-    // Reach the tabs array from a render output and push our tab. The array
-    // lives in the output of a deeper component (marked by `onFocusNavDeactivated`),
-    // not in the BrowserView's direct return, so we wrap that component's type
-    // ONCE — as a real function (never Object.assign on a plain function, which
-    // yields a non-callable object → the historical black screen). A memo is
-    // rewrapped as a fresh memo whose `.type` is our function. Wrappers are
-    // cached on the original so we wrap each component exactly once.
+    // Reach the tabs array (in a deeper component marked by `onFocusNavDeactivated`, not the
+    // BrowserView's direct return) and push our tab: wrap that component's type ONCE as a real
+    // function (never Object.assign → non-callable = black screen); a memo is rewrapped as a memo.
     const wrapCache = typeof WeakMap === "function" ? new WeakMap() : null;
     function tabWrapper(innerFn) {
       const w = function () {
@@ -1010,20 +1020,34 @@
       w.__shelvesTabWrap = true;
       return w;
     }
-    // True when a component carries another patcher's marker (a foreign wrap):
-    // any own enumerable key that reads like a patch/wrap marker but isn't ours.
-    // Name-agnostic on purpose, so we never double-wrap a component another host
-    // already wrapped — double-wrapping breaks that host's own composite child
-    // resolution (observed: it times out and yields `{}` → React error #31 →
-    // the Steam UI tree unmounts).
+    // True when a component carries another patcher's marker (a foreign wrap): any own enumerable
+    // key that reads like a patch/wrap marker but isn't ours. Name-agnostic so we never double-wrap
+    // a component another host wrapped (double-wrapping breaks its child resolution → React #31).
+    function hasForeignMarkerKey(obj) {
+      for (const k in obj) { if (k !== "__shelvesTabWrap" && /patch|wrapped/i.test(k)) return true; }
+      return false;
+    }
     function foreignWrapped(fn) {
       if (!fn) return false;
       try {
-        for (const k in fn) { if (k !== "__shelvesTabWrap" && /patch|wrapped/i.test(k)) return true; }
+        if (hasForeignMarkerKey(fn)) return true;
         const inner = fn.type;
-        if (inner && typeof inner === "object") { for (const k2 in inner) { if (k2 !== "__shelvesTabWrap" && /patch|wrapped/i.test(k2)) return true; } }
+        if (inner && typeof inner === "object" && hasForeignMarkerKey(inner)) return true;
       } catch (e) {}
       return false;
+    }
+    // Build the tab-append wrapper for a located component, preserving its shape: a plain function
+    // directly, or a React.memo/forwardRef cloned with our wrapped inner fn as `.type`. null = an
+    // unknown shape we must never risk wrapping.
+    function wrapTabComponent(orig) {
+      if (typeof orig === "function") return tabWrapper(orig);
+      if (orig && typeof orig.type === "function" && orig.$$typeof) {
+        const wrapped = Object.assign({}, orig);
+        wrapped.type = tabWrapper(orig.type);
+        wrapped.__shelvesTabWrap = true;
+        return wrapped;
+      }
+      return null;
     }
     function injectTabs(ret) {
       // Fast path: tabs already in this output.
@@ -1034,72 +1058,68 @@
       if (!host) return;
       const orig = host.type;
       if (orig.__shelvesTabWrap || (orig.type && orig.type.__shelvesTabWrap)) return; // already ours
-      // Chain our tab-append after whatever already wraps this component (another
-      // host may have wrapped it first): on render, its wrapper adds its tab(s),
-      // then ours adds ours. The earlier React #31 was NOT this double-wrap — it
-      // was the heavy UI discovery blocking the main thread (now skipped in
-      // coexistence), so chaining here is safe and additive. `foreignWrapped`
-      // stays available for diagnostics.
+      // Chain our tab-append after any existing wrapper (another host may have wrapped first). The
+      // earlier React #31 was the heavy UI discovery blocking the main thread (now skipped in coexist).
       void foreignWrapped;
       if (wrapCache && wrapCache.has(orig)) { host.type = wrapCache.get(orig); return; }
-      let wrapped;
-      if (typeof orig === "function") {
-        wrapped = tabWrapper(orig);
-      } else if (orig && typeof orig.type === "function" && orig.$$typeof) {
-        // React.memo/forwardRef: clone as a valid memo carrying ALL of the
-        // original's props, with our wrapped inner function as `.type`.
-        wrapped = Object.assign({}, orig);
-        wrapped.type = tabWrapper(orig.type);
-        wrapped.__shelvesTabWrap = true;
-      } else {
-        return; // unknown shape — never risk an invalid component
-      }
+      const wrapped = wrapTabComponent(orig);
+      if (!wrapped) return;
       if (wrapCache) wrapCache.set(orig, wrapped);
       host.type = wrapped;
     }
 
-    // The native mechanism — safe by construction. The tab-list *builder*
-    // export is a sealed webpack getter (non-writable, non-configurable), so it
-    // cannot be wrapped. The QAM *consumer* — the `QuickAccessMenuBrowserView`
-    // React.memo — has a WRITABLE `.type`, so we wrap that. On each render we
-    // locate the node carrying `props.tabs` in the returned element tree and
-    // PUSH our tab onto that array. Nothing else: no component-type cloning, no
-    // tree-patcher, no live-fiber surgery — those were the black-screen vectors
-    // (on-device 2026-07-23). We only
-    // add one element to a plain array, exactly what a native tab is.
-    //
-    // Timing: a mounted memo holds its pre-patch type, so this must be wrapped
-    // BEFORE the QAM first mounts. The preload path (Page.addScriptToEvaluate-
-    // OnNewDocument) runs this runtime at document-start, ahead of the mount;
-    // installPatchWithRetry polls until the BrowserView module loads. Without
-    // preload (late daemon injection) the tab waits for the next QAM mount; the
-    // overlay panel is the immediate fallback either way.
+    /* The native mechanism — safe by construction. The tab-list *builder* export is a sealed
+       webpack getter (can't be wrapped); the *consumer* (`QuickAccessMenuBrowserView` React.memo)
+       has a WRITABLE `.type`, so we wrap that. On each render we locate the node carrying
+       `props.tabs` and PUSH our tab onto that array — no component-type cloning, tree-patcher or
+       live-fiber surgery (those were the black-screen vectors, on-device 2026-07-23). */
+    /* Timing: a mounted memo holds its pre-patch type, so this must wrap BEFORE the QAM first
+       mounts. The preload path (addScriptToEvaluateOnNewDocument) runs at document-start ahead of
+       the mount; installPatchWithRetry polls until the module loads. Without preload the tab waits
+       for the next QAM mount; the overlay panel is the immediate fallback either way. */
+    // Locate the QAM tab-list consumers in the webpack: the BrowserView and the Embedded presentation
+    // (both render the tab list). null = the consumer chunk hasn't loaded yet.
+    function findQamConsumers() {
+      const mod = Steam.findModuleByExport(function (e) {
+        try { return e && e.type && typeof e.type === "function" && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; }
+      });
+      if (!mod) return null;
+      const match = function (name) {
+        return Object.values(mod).find(function (e) {
+          try { return e && e.type && e.type.toString && e.type.toString().indexOf(name) >= 0; } catch (_) { return false; }
+        });
+      };
+      return { bv: match("QuickAccessMenuBrowserView"), embedded: match("QuickAccessMenuEmbedded") };
+    }
+    // Patch each present consumer's `type` so the tab shows in either presentation.
+    function patchConsumers(bv, embedded, handler) {
+      afterPatch(bv, "type", handler);
+      if (embedded && typeof embedded.type === "function" && !embedded.type.__shelvesPatched) {
+        afterPatch(embedded, "type", handler);
+      }
+    }
+    /* Late injection: a consumer may already be mounted holding its pre-patch type, so re-point the
+       live fiber's `type` to the patched inner function (via `elementType`) so an open menu picks up
+       the tab without a remount. Safe on a settled renderer; opt out with __SHELVES_FIBER_REPOINT__=false. */
+    function maybeRepoint(bv, embedded) {
+      let doRepoint = true;
+      try { if (window.__SHELVES_FIBER_REPOINT__ === false) doRepoint = false; } catch (e) {}
+      if (doRepoint) patchMountedConsumer(bv, embedded);
+      else log("QAM native: mounted re-point OFF (opt out via __SHELVES_FIBER_REPOINT__=false).");
+    }
     function installPatch() {
       if (patched || !React) return patched;
       try {
-        const mod = Steam.findModuleByExport(function (e) {
-          try { return e && e.type && typeof e.type === "function" && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; }
-        });
-        if (!mod) return false; // consumer chunk not loaded yet — retry
-        const bv = Object.values(mod).find(function (e) {
-          try { return e && e.type && e.type.toString && e.type.toString().indexOf("QuickAccessMenuBrowserView") >= 0; } catch (_) { return false; }
-        });
-        const embedded = Object.values(mod).find(function (e) {
-          try { return e && e.type && e.type.toString && e.type.toString().indexOf("QuickAccessMenuEmbedded") >= 0; } catch (_) { return false; }
-        });
+        const found = findQamConsumers();
+        if (!found) return false; // consumer chunk not loaded yet — retry
+        const bv = found.bv, embedded = found.embedded;
         if (!bv || typeof bv.type !== "function") return false;
         if (bv.type.__shelvesPatched) { patched = true; return true; }
         // Register our key so the tab is first-class (class + focus/visibility).
         registerTabEnum();
-        // The breaker is armed by the RISKY operations only — the handler's live
-        // render (below) and the mounted-consumer re-point — NOT here at patch
-        // install. Arming at install left the breaker armed on every boot until the
-        // user first OPENED the QAM (the only place it confirmed); a reload before
-        // that (e.g. a Steam restart) then read a stale arm and false-tripped,
-        // silently killing the tab on all later boots. Arming around the actual
-        // render means a boot that never opens the QAM never arms, so it can't
-        // false-trip — while a render that truly tears the UI down still leaves a
-        // stale arm that trips the next boot.
+        // The breaker is armed by the RISKY operations only (the live render + the mounted-consumer
+        // re-point), NOT here at install — arming at install left it armed every boot until the user
+        // first OPENED the QAM, so a reload before that false-tripped and killed the tab.
         const handler = function (args, ret) {
           try {
             // Arm just before our first live render into the QAM tree; a healthy
@@ -1111,31 +1131,10 @@
           } catch (e) { logWarn("QAM", "append error (ignored): " + (e && e.message)); }
           return ret;
         };
-        // The menu has two consumers that both render the tab list; patch each
-        // that is present so the tab shows in either presentation.
-        afterPatch(bv, "type", handler);
-        if (embedded && typeof embedded.type === "function" && !embedded.type.__shelvesPatched) {
-          afterPatch(embedded, "type", handler);
-        }
+        patchConsumers(bv, embedded, handler);
         patched = true;
         log("QAM native: consumer patched.");
-        // Late injection: a consumer may already be mounted, holding its pre-
-        // patch type, so the wrap above would not take effect until a remount.
-        // Re-point the live fiber's `type` to the now-patched inner function
-        // (reached via `elementType`; the fiber's own `type` is a wrapper), so
-        // an already-open menu picks up the tab without waiting for a remount.
-        // This re-point synchronously mutates a LIVE fiber. It was once believed
-        // unsafe in OWNER (sole-host) mode — a late inject there black-screened —
-        // but that collapse was the boot-timing/scan issue (the runtime running
-        // during Steam's first paint), since resolved by injecting post-settle. A
-        // re-point on an ALREADY-SETTLED renderer is safe in BOTH modes — verified
-        // on-device in sole mode (tab appears, no UI collapse) and in the scenario
-        // harness. The daemon injects post-settle, exactly the safe window, so
-        // enable it by default; opt out with `window.__SHELVES_FIBER_REPOINT__ = false`.
-        let doRepoint = true;
-        try { if (window.__SHELVES_FIBER_REPOINT__ === false) doRepoint = false; } catch (e) {}
-        if (doRepoint) { patchMountedConsumer(bv, embedded); }
-        else { log("QAM native: mounted re-point OFF (opt out via __SHELVES_FIBER_REPOINT__=false)."); }
+        maybeRepoint(bv, embedded);
       } catch (e) {
         tripClear();
         logWarn("QAM", "installPatch failed: " + (e && e.message));
@@ -1180,14 +1179,10 @@
       if (patchAttempts < 1200) setTimeout(installPatchWithRetry, 50);
       else log("QAM native: builder never appeared — overlay only.");
     }
-    if (NATIVE_QAM_ENABLED) installPatchWithRetry();
-    // Discover Steam's native UI components off the render path, on a timer ~1.5s
-    // after inject (once the plugin's boot has settled), then re-render the slots so
-    // the panel + our items render natively (native look + focus ring). CHUNKED —
-    // one scan per timer tick (ensureUiChunked) — because a single scan is safe
-    // (~25ms) but several back-to-back block the main thread long enough to starve
-    // the running plugin and collapse the Steam UI (measured on-device: 3–48ms/step).
-    if (NATIVE_QAM_ENABLED && !focusableComp) {
+    // Discover Steam's native UI components off the render path, ~1.5s after inject (once the plugin
+    // settled), then re-render the slots to render natively. CHUNKED (one scan per tick) because
+    // several back-to-back block the main thread long enough to starve the plugin and collapse the UI.
+    function scheduleUiDiscovery() {
       try {
         setTimeout(function () {
           // Coexist borrowed UI from the loader already (uiReady) → just adopt
@@ -1198,6 +1193,8 @@
         }, 1500);
       } catch (e) {}
     }
+    if (NATIVE_QAM_ENABLED) installPatchWithRetry();
+    if (NATIVE_QAM_ENABLED && !focusableComp) scheduleUiDiscovery();
 
     function registerPanel(spec) {
       if (!spec || typeof spec.id !== "string") throw new Error("[shelves-host] qam.registerPanel: { id, title, icon, content } required");

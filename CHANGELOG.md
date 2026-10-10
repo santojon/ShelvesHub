@@ -8,6 +8,59 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- **An optional desktop tray companion, via the same installer.** Every installer now offers an
+  **off-by-default** choice (prompt / env `SHELVES_TRAY` / a `setup.exe` checkbox on Windows) to
+  install a small system-tray / menu-bar app that shows whether ShelvesHub is hosting and offers
+  quick actions (pause/resume, restart the service, restart the data backend). It is a separate
+  binary that talks only to the daemon's local RPC — authenticated with the per-boot token the
+  daemon now writes to a `0600` file — so no new network surface is opened. The uninstallers remove
+  it and its autostart entry. See [docs/installation.md](docs/installation.md).
+- **`shelveshub doctor` — checks your setup and offers to fix it.** Run it in a terminal to
+  check the Steam CEF debug flag, the renderer debug port, whether Steam is running, and the
+  background service, each with a concrete next step. `shelveshub doctor --fix` applies the one
+  safe fix (creates the CEF debug flag); it exits non-zero when something is broken, so a script
+  can gate on it.
+- **Restart just the data backend from the tab.** When a data backend is hosted, the
+  Troubleshooting section gains a "Restart backend" action that bounces only the Python backend
+  (not the whole service), so a wedged backend recovers without interrupting hosting. Its log
+  lines already show up in the Logs view.
+- **The tab now shows who's hosting Deck Shelves.** The ShelvesHub tab's status readout
+  names the current host (this host, or a plugin loader), the running Deck Shelves version,
+  and warns when a loader's copy predates the coexistence protocol (so you know to update it).
+- **`shelveshub status` — a one-command diagnostics report.** Run it in a terminal to
+  print OS, architecture (target vs. running, so translation shows up), glibc, Python,
+  and — on Linux — the device model, display connectors and whether the SteamOS session
+  service is present. Handy for filing an ARM64 report without opening the interface.
+
+### Changed
+- **Cooperative mode now backs off on its own when it conflicts with a plugin loader.** If
+  forcing ShelvesHub to host Deck Shelves while a loader is present keeps going wrong — the Steam
+  UI collapsing, or Deck Shelves' own tab-recovery tripping over the churn — ShelvesHub stands the
+  forced ownership down for the session and runs as plain coexistence instead of fighting the loader
+  in a restart loop, and the status readout explains it. On by default; set `SHELVES_COOP_SAFE_MODE=0`
+  (or `coop_safe_mode: false`) to keep forcing through it. In cooperative mode the plugin update
+  toggles are also hidden and a hub-driven plugin update is held back (the loader owns its on-disk
+  copy) so the two can't end up on different versions.
+- **Automatic recovery now detects your system instead of assuming it.** On a Steam Deck
+  it still restarts the Gaming Mode session; on a generic Linux without that service it
+  defaults to pause-only (no futile restart). macOS and Windows are unchanged.
+- **The optional boot animation matches your display.** On Linux the cut is chosen from the
+  actual panel resolution (the Deck's 1280×800 vs. a 1080p screen) rather than assuming a Deck.
+
+### Fixed
+- **"Restart to apply" now always restarts.** After a ShelvesHub self-update, the restart action
+  could do nothing on some setups (where the OS didn't report a service manager that relaunches
+  ShelvesHub). It now restarts in every case — relaunching itself when nothing else would — so the
+  new version actually takes over. The restart buttons also ask for a quick confirm (tap again)
+  so a restart is never an accidental single press.
+
+### Security
+- **Downloaded Deck Shelves bundles are now integrity-checked.** When a plugin release
+  publishes a `SHA256SUMS`, ShelvesHub verifies the bundle and the backend it downloads
+  against it and refuses a file that doesn't match — so a corrupted or tampered download
+  is rejected instead of injected.
+
 ## [0.4.1] - 2026-10-02
 
 ### Added

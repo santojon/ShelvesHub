@@ -42,5 +42,17 @@ fn recover_cmd_resolution() {
         default_recover_cmd()
     );
     assert_eq!(resolve_recover_cmd(None), default_recover_cmd());
+    // macOS/Windows (always sole hosts) always have a default; on Linux the default is
+    // runtime-detected (the steam-launcher unit may be absent → None, pause only).
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     assert!(resolve_recover_cmd(None).is_some());
+}
+
+// ARM-8: the Linux recovery default is runtime-detected — present ⇒ restart the
+// session service, absent ⇒ None (pause only). Deterministic on any Linux (CI has
+// no steam-launcher ⇒ None; a Deck has it ⇒ Some).
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_recovery_matches_steam_launcher_presence() {
+    assert_eq!(default_recover_cmd().is_some(), steam_launcher_present());
 }

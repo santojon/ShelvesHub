@@ -51,8 +51,16 @@
   "adv_disable_hub_sub": "Yeniden etkinleştirilene kadar enjeksiyonu durdur (sorun giderme)",
   "adv_restart_apply": "Uygulamak için yeniden başlat",
   "cfg_mode": "Ownership mode",
+  "cfg_hosted_by": "Barındıran",
+  "cfg_ds_version": "Deck Shelves sürümü",
+  "host_self": "ShelvesHub (bu ana makine)",
+  "host_loader_suffix": "(eklenti yükleyici)",
+  "legacy_bundle_warning": "Bu Deck Shelves, birlikte çalışma protokolünden eski — iki ana makinenin sorunsuz birlikte çalışması için güncelleyin.",
   "cfg_boot_movie": "Boot animation",
   "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
   "cfg_desktop_ui": "Desktop client shelves (experimental)",
-  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
+  "action_restart_backend": "Arka ucu yeniden başlat",
+  "coop_receded_warning": "İşbirlikçi mod duraklatıldı — eklenti yükleyiciyle çakışıyordu; bu oturumda birlikte çalışma olarak çalışıyor.",
+  "restart_confirm": "Yeniden başlatmak için tekrar dokun"
 }

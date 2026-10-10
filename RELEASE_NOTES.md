@@ -10,6 +10,37 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **The "restart to apply an update" button now always restarts.** On some setups it could do
+  nothing; now it reliably restarts ShelvesHub (relaunching itself if needed) so a downloaded update
+  actually takes effect — and it asks for a quick confirm (tap again) first.
+
+- **Cooperative mode protects itself.** If you force ShelvesHub to host Deck Shelves while a
+  plugin loader is installed and that keeps making the Steam screen go black, ShelvesHub now
+  backs off to plain coexistence for the session instead of fighting the loader — and the tab
+  explains why. You can keep forcing through it with `SHELVES_COOP_SAFE_MODE=0`. It also holds
+  back hub-driven plugin updates in this mode so your two copies can't drift apart in version.
+- **Optional desktop tray icon — tick one box in the installer.** The installer now has an
+  off-by-default option to add a small menu-bar / system-tray app showing whether ShelvesHub is
+  hosting, with quick actions (pause/resume, restart the service, restart the data backend). It is
+  a separate helper installed by the same installer (no extra download) and removed cleanly on
+  uninstall. See [docs/installation.md](docs/installation.md).
+- **Restart the data backend without restarting everything.** If the data backend gets stuck,
+  the tab's Troubleshooting section now has a "Restart backend" button that restarts only it —
+  your shelves and hosting keep running.
+- **A setup checker that can fix itself.** `shelveshub doctor` checks the things that stop
+  ShelvesHub from appearing — the Steam debug flag, the debug port, Steam running, the
+  background service — and tells you exactly what to do for any that fail. `shelveshub doctor
+  --fix` creates the Steam debug flag for you.
+- **One-command diagnostics.** `shelveshub status` prints a report (OS, architecture,
+  glibc, Python, and — on Linux — device model and displays) you can paste into a bug
+  report, especially on ARM64.
+- **Smarter automatic recovery.** It now detects whether your system has the SteamOS
+  session service: a Steam Deck still restarts it, a generic Linux without it just pauses
+  instead of running a pointless restart.
+- **Safer bundle downloads.** When a Deck Shelves release ships a `SHA256SUMS`, ShelvesHub
+  checks the bundle and backend it downloads against it and refuses anything that doesn't
+  match — a corrupted or tampered download is rejected, not injected.
+
 ## [0.4.1] - 2026-10-02
 
 - **See updates sooner — and check on demand.** The ShelvesHub tab now shows whether

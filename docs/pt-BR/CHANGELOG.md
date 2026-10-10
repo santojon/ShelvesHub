@@ -8,6 +8,62 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+### Adicionado
+- **Um companheiro de tray no desktop opcional, pelo mesmo instalador.** Todo instalador agora
+  oferece uma escolha **desligada por padrão** (prompt / env `SHELVES_TRAY` / um checkbox no
+  `setup.exe` no Windows) pra instalar um pequeno app de barra de menu / tray que mostra se o
+  ShelvesHub está hospedando e oferece ações rápidas (pausar/retomar, reiniciar o serviço, reiniciar
+  o backend de dados). É um binário separado que conversa só com o RPC local do daemon —
+  autenticado com o token por-boot que o daemon agora grava num arquivo `0600` — então nenhuma
+  superfície de rede nova é aberta. Os desinstaladores o removem junto com a entrada de autostart.
+  Veja [docs/installation.md](installation.md).
+- **`shelveshub doctor` — verifica o seu setup e se oferece pra consertar.** Rode num terminal
+  para checar a flag de debug CEF do Steam, a porta de debug do renderer, se o Steam está rodando
+  e o serviço em segundo plano, cada um com um próximo passo concreto. `shelveshub doctor --fix`
+  aplica o único conserto seguro (cria a flag de debug CEF); sai com código diferente de zero quando
+  algo está quebrado, então dá pra um script depender disso.
+- **Reinicie só o backend de dados pela aba.** Quando há um backend de dados hospedado, a seção
+  Solução de problemas ganha uma ação "Reiniciar backend" que reinicia só o backend Python (não o
+  serviço inteiro), então um backend travado se recupera sem interromper a hospedagem. As linhas de
+  log dele já aparecem na visão de Logs.
+- **A aba agora mostra quem está hospedando o Deck Shelves.** O resumo de estado da aba do
+  ShelvesHub indica o host atual (este host, ou um carregador de plugins), a versão do Deck
+  Shelves em execução e avisa quando a cópia de um carregador é anterior ao protocolo de
+  coexistência (para você saber que deve atualizá-la).
+- **`shelveshub status` — um relatório de diagnóstico em um comando.** Rode num terminal
+  para imprimir SO, arquitetura (alvo vs. em execução, então tradução aparece), glibc,
+  Python e — no Linux — o modelo do dispositivo, os conectores de display e se o serviço
+  de sessão do SteamOS está presente. Útil para abrir um relatório ARM64 sem abrir a interface.
+
+### Alterado
+- **O modo cooperativo agora recua sozinho quando conflita com um loader de plugins.** Se forçar
+  o ShelvesHub a hospedar o Deck Shelves com um loader presente ficar dando errado — a tela do Steam
+  colapsando, ou a recuperação da própria aba do Deck Shelves tropeçando no churn — o ShelvesHub
+  abaixa a posse forçada pela sessão e roda como coexistência simples, em vez de brigar com o loader
+  num ciclo de reinícios, e a leitura de status explica. Fica ligado por padrão; use
+  `SHELVES_COOP_SAFE_MODE=0` (ou `coop_safe_mode: false`) para seguir forçando mesmo assim. No modo
+  cooperativo os toggles de atualização do plugin também ficam escondidos e uma atualização do plugin
+  feita pelo hub é segurada (o loader é dono da cópia em disco), pra as duas não ficarem em versões
+  diferentes.
+- **A recuperação automática agora detecta o seu sistema em vez de presumir.** Num Steam
+  Deck ela ainda reinicia a sessão do Gaming Mode; num Linux genérico sem esse serviço ela
+  passa a só pausar (sem reinício fútil). macOS e Windows seguem iguais.
+- **A animação de boot opcional combina com o seu display.** No Linux o corte é escolhido pela
+  resolução real do painel (1280×800 do Deck vs. uma tela 1080p) em vez de presumir um Deck.
+
+### Corrigido
+- **"Reiniciar para aplicar" agora sempre reinicia.** Depois de uma atualização do ShelvesHub, a ação
+  de reiniciar podia não fazer nada em alguns setups (onde o SO não reportava um gerenciador de serviço
+  que relança o ShelvesHub). Agora reinicia em todos os casos — relançando a si mesmo quando nada mais
+  faria — então a nova versão realmente assume. Os botões de reiniciar também pedem uma confirmação
+  rápida (toque de novo), pra um reinício nunca ser um toque único acidental.
+
+### Segurança
+- **Os pacotes do Deck Shelves baixados agora passam por verificação de integridade.**
+  Quando um lançamento do plugin publica um `SHA256SUMS`, o ShelvesHub verifica o pacote
+  e o backend que baixa contra ele e recusa um arquivo que não corresponde — então um
+  download corrompido ou adulterado é rejeitado em vez de injetado.
+
 ## [0.4.1] - 2026-10-02
 
 ### Adicionado

@@ -46,6 +46,17 @@ pub struct Config {
     /// host adapter already owns the renderer; the owner-preference global is
     /// stamped so the other adapter stands down cooperatively.
     pub force_owner: bool,
+    /// When true (the default), the loop stands force down for the session if
+    /// forced ownership keeps coinciding with confirmed UI collapses — a churning
+    /// force then recedes to plain coexist instead of fighting the loader in a
+    /// collapse loop. `SHELVES_COOP_SAFE_MODE=0` (or `coop_safe_mode: false`) pins
+    /// force even through churn.
+    pub coop_safe_mode: bool,
+    /// When true (`SHELVES_COOP_BUNDLE=1`), the cooperative-bundle protocol is on:
+    /// the hub owns the bundle under force and may update it. Off by default — in
+    /// plain cooperative mode the loader owns the on-disk copy, so a hub-driven
+    /// swap is deferred to avoid divergent versions.
+    pub coop_bundle: bool,
     /// When true (`SHELVES_NATIVE_QAM=1`), stamp the renderer so the injected
     /// runtime attempts the native Quick Access tab (guarded by a trip
     /// breaker; overlay remains the fallback). Off by default.
@@ -155,6 +166,13 @@ impl Config {
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
             },
+            coop_safe_mode: cfg_bool_default(
+                &file,
+                "SHELVES_COOP_SAFE_MODE",
+                "coop_safe_mode",
+                true,
+            ),
+            coop_bundle: cfg_bool(&file, "SHELVES_COOP_BUNDLE", "coop_bundle"),
             native_qam: cfg_bool(&file, "SHELVES_NATIVE_QAM", "native_qam"),
             desktop_ui: cfg_bool(&file, "SHELVES_DESKTOP_UI", "desktop_ui"),
             recover_cmd: resolve_recover_cmd(env::var("SHELVES_RECOVER_CMD").ok().or_else(|| {
@@ -233,12 +251,72 @@ pub fn backend_install_dir() -> Option<PathBuf> {
     Some(exe.parent()?.join("backend"))
 }
 
+/// Local file the daemon writes its per-boot RPC token to (0600 on Unix) so a
+/// same-user companion — the optional tray — can authenticate to the loopback RPC
+/// without going through CDP. Resolved identically by the daemon and the tray:
+/// the per-user install dir (`~/.local/share/shelveshub` on Linux/macOS,
+/// `%LOCALAPPDATA%\shelveshub` on Windows); `SHELVES_RPC_TOKEN_FILE` overrides.
+pub fn rpc_token_path() -> Option<PathBuf> {
+    if let Some(p) = env::var_os("SHELVES_RPC_TOKEN_FILE") {
+        return Some(PathBuf::from(p));
+    }
+    let dir = if cfg!(windows) {
+        PathBuf::from(env::var_os("LOCALAPPDATA")?).join("shelveshub")
+    } else {
+        PathBuf::from(env::var_os("HOME")?).join(".local/share/shelveshub")
+    };
+    Some(dir.join(".rpc-token"))
+}
+
 fn default_python() -> &'static str {
     if cfg!(windows) {
         "python"
     } else {
         "python3"
     }
+}
+
+/// A compact device identity for the host handshake (contract `HostHandshake.device`):
+/// `{ kind, arch, model }`. `kind` is conservative — desktop on macOS/Windows, deck on a
+/// SteamOS Deck panel, else unknown (the plugin refines with its own detection). `arch` is
+/// the build target arch; `model` is a device-tree/DMI label on Linux when readable.
+pub fn detected_device() -> Value {
+    let arch = std::env::consts::ARCH;
+    #[cfg(target_os = "linux")]
+    {
+        let deck = steam_launcher_present()
+            && linux_primary_mode().is_some_and(|(w, h)| w == 1280 && h == 800);
+        serde_json::json!({
+            "kind": if deck { "deck" } else { "unknown" },
+            "arch": arch,
+            "model": linux_device_model(),
+        })
+    }
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        serde_json::json!({ "kind": "desktop", "arch": arch, "model": Value::Null })
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        serde_json::json!({ "kind": "unknown", "arch": arch, "model": Value::Null })
+    }
+}
+
+/// A free-text device label on Linux: device-tree model (ARM boards) or DMI product
+/// (x86), trimmed; `None` when neither is readable.
+#[cfg(target_os = "linux")]
+fn linux_device_model() -> Option<String> {
+    for p in ["/proc/device-tree/model", "/sys/class/dmi/id/product_name"] {
+        if let Ok(s) = std::fs::read_to_string(p) {
+            let t = s
+                .trim_matches(|c: char| c == '\0' || c.is_whitespace())
+                .to_string();
+            if !t.is_empty() {
+                return Some(t);
+            }
+        }
+    }
+    None
 }
 
 /// Per-OS default for the ShelvesHub settings store. Mirrors the runner's
@@ -330,10 +408,16 @@ fn cfg_u64(file: &Value, env_key: &str, json_key: &str, default: u64) -> u64 {
 }
 
 fn cfg_bool(file: &Value, env_key: &str, json_key: &str) -> bool {
+    cfg_bool_default(file, env_key, json_key, false)
+}
+
+fn cfg_bool_default(file: &Value, env_key: &str, json_key: &str, default: bool) -> bool {
     if let Ok(v) = env::var(env_key) {
         return v == "1" || v.eq_ignore_ascii_case("true");
     }
-    file.get(json_key).and_then(Value::as_bool).unwrap_or(false)
+    file.get(json_key)
+        .and_then(Value::as_bool)
+        .unwrap_or(default)
 }
 
 /// Map a raw `recover_cmd` override (env over file) to the effective command:
@@ -354,33 +438,97 @@ fn resolve_recover_cmd(raw: Option<String>) -> Option<String> {
 /// interface on each host; a custom `SHELVES_RECOVER_CMD` / config `recover_cmd`
 /// replaces it, and the literal `"off"` disables auto-recovery (pause only).
 fn default_recover_cmd() -> Option<String> {
-    let cmd = if cfg!(target_os = "linux") {
-        // SteamOS / Steam Deck: restart the Gaming Mode session service.
-        "systemctl --user restart steam-launcher.service"
-    } else if cfg!(target_os = "macos") {
-        // macOS (always a sole host): bounce Steam and return to Big Picture.
-        // Ask Steam to quit, force-kill if it's wedged (the usual state on a
-        // collapse), then reopen via the URL — which relaunches Steam into Big
-        // Picture. Mirrors scripts/mac-deploy-hard.sh.
-        "osascript -e 'quit app \"Steam\"' 2>/dev/null; sleep 5; pkill -x steam_osx 2>/dev/null; sleep 2; open \"steam://open/bigpicture\""
-    } else if cfg!(windows) {
-        // Windows (always a sole host): nudge Steam back into Big Picture.
-        "start \"\" \"steam://open/bigpicture\""
-    } else {
-        return None;
-    };
-    Some(cmd.to_string())
+    // Linux: restart the Gaming Mode session service ONLY where it exists (SteamOS /
+    // Steam Deck). On a generic Linux (e.g. an ARM device or a portable/proot setup)
+    // without that unit, auto-recovery is OFF (pause only) so we never run a futile or
+    // destructive restart on an unknown system — detected at runtime, not by target_os.
+    #[cfg(target_os = "linux")]
+    {
+        if steam_launcher_present() {
+            Some("systemctl --user restart steam-launcher.service".to_string())
+        } else {
+            None
+        }
+    }
+    // macOS (always a sole host): ask Steam to quit, force-kill if wedged, then reopen
+    // via the URL to relaunch into Big Picture. Mirrors scripts/mac-deploy-hard.sh.
+    #[cfg(target_os = "macos")]
+    {
+        Some("osascript -e 'quit app \"Steam\"' 2>/dev/null; sleep 5; pkill -x steam_osx 2>/dev/null; sleep 2; open \"steam://open/bigpicture\"".to_string())
+    }
+    // Windows (always a sole host): nudge Steam back into Big Picture.
+    #[cfg(target_os = "windows")]
+    {
+        Some("start \"\" \"steam://open/bigpicture\"".to_string())
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        None
+    }
+}
+
+/// Whether the SteamOS Gaming Mode session service is installed (Steam Deck). Used
+/// to pick the Linux recovery default at runtime: present ⇒ restart it, absent ⇒
+/// no auto-recovery. `systemctl --user cat` exits 0 only when the unit exists.
+#[cfg(target_os = "linux")]
+fn steam_launcher_present() -> bool {
+    std::process::Command::new("systemctl")
+        .args(["--user", "cat", "steam-launcher.service"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 /// The startup movie to install by default. SteamOS / Steam Deck (the primary
 /// target) has a native 1280x800 16:10 panel, so it gets the matching cut;
 /// desktop platforms get the 16:9 1080p cut.
 fn default_boot_movie() -> &'static str {
-    if cfg!(target_os = "linux") {
-        "assets/boot/deck_startup_1280x800.webm"
-    } else {
+    // Choose the cut by the ACTUAL panel on Linux (ARM-9), not just target_os: the
+    // Deck's 1280x800 16:10 panel keeps the matching cut; a clearly-HD display (a Steam
+    // Machine on a TV, or another device) gets the 1080p cut. Detection failure keeps the
+    // Deck cut (the primary target). Desktop (macOS/Windows) always gets the 1080p cut.
+    #[cfg(target_os = "linux")]
+    {
+        let hd = linux_primary_mode().is_some_and(|(w, h)| w >= 1920 || h >= 1080);
+        if hd {
+            "assets/boot/deck_startup.webm"
+        } else {
+            "assets/boot/deck_startup_1280x800.webm"
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
         "assets/boot/deck_startup.webm"
     }
+}
+
+/// Primary display resolution from DRM sysfs: the first mode (preferred first) of the
+/// first connected, non-writeback connector. Best-effort — `None` when sysfs is absent
+/// or unreadable (e.g. a portable/proot setup), so the caller keeps its default.
+#[cfg(target_os = "linux")]
+fn linux_primary_mode() -> Option<(u32, u32)> {
+    for e in std::fs::read_dir("/sys/class/drm").ok()?.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if !name.contains('-') || name.contains("writeback") {
+            continue; // skip cardN / renderDN / writeback
+        }
+        let base = format!("/sys/class/drm/{name}");
+        if std::fs::read_to_string(format!("{base}/status"))
+            .map(|s| s.trim() != "connected")
+            .unwrap_or(true)
+        {
+            continue;
+        }
+        let modes = std::fs::read_to_string(format!("{base}/modes")).unwrap_or_default();
+        if let Some((w, h)) = modes.lines().next().and_then(|l| l.trim().split_once('x')) {
+            if let (Ok(w), Ok(h)) = (w.parse::<u32>(), h.parse::<u32>()) {
+                return Some((w, h));
+            }
+        }
+    }
+    None
 }
 
 /// Resolve an asset path: explicit env override wins, otherwise look next to the

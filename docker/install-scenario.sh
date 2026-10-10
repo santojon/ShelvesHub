@@ -31,6 +31,10 @@ cargo build --quiet --bin shelveshub || { echo "error: build failed"; exit 1; }
 # ── Assemble a release-style package (mirrors release.yml's dist layout) ──────
 PKG="$(mktemp -d)"
 cp target/debug/shelveshub "$PKG/"
+# A stand-in tray companion binary so the opt-in tray step can prove the installer
+# lays it down + writes autostart. Default-off runs (steps [1]-[4]) must NOT install
+# it (no SHELVES_TRAY), which also checks the opt-in stays off by default.
+printf '#!/bin/sh\nexit 0\n' > "$PKG/shelveshub-tray"; chmod +x "$PKG/shelveshub-tray"
 mkdir -p "$PKG/installer" "$PKG/bundle" "$PKG/runtime"
 # The whole SteamOS installer dir (install.sh + uninstall.sh + service + .desktop),
 # exactly as release.yml lays it into the package.
@@ -49,6 +53,14 @@ echo "$*" >> "$SCLOG_TARGET"
 exit 0
 STUBEOF
 chmod +x "$STUB/systemctl"
+# A plain container runs as root and may have no `sudo`; the installers use it for
+# the root→user migration. Stub it as a passthrough (we are already root) so the
+# migration path runs deterministically.
+cat > "$STUB/sudo" <<'STUBEOF'
+#!/usr/bin/env bash
+exec "$@"
+STUBEOF
+chmod +x "$STUB/sudo"
 
 INSTALL_DIR="$FAKEHOME/.local/share/shelveshub"
 SERVICE_DIR="$FAKEHOME/.config/systemd/user"
@@ -107,6 +119,39 @@ run_installer installer/install.sh >/dev/null 2>&1
 run_installer "$INSTALL_DIR/uninstall.sh" --purge >/tmp/purge.out 2>&1 || { echo "  purge exited non-zero"; cat /tmp/purge.out; FAILS=$((FAILS+1)); }
 check "install dir removed (purge)"     test ! -e "$INSTALL_DIR"
 check "shared settings REMOVED (purge)" test ! -e "$SETTINGS_DIR"
+
+# ── Root→user settings migration (H6): the old root unit ran with
+# WorkingDirectory=/opt/shelveshub and no HOME, so its settings could land
+# off-canonical at /opt/shelveshub/.local/share/deck-shelves. The installer must
+# rescue them to the per-user store and remove /opt. ───────────────────────────
+echo "[4] root→user settings migration (off-canonical /opt)"
+rm -rf "$INSTALL_DIR" "$SERVICE_DIR" "$SETTINGS_DIR"
+mkdir -p /opt/shelveshub/.local/share/deck-shelves
+echo '{"migrated":true}' > /opt/shelveshub/.local/share/deck-shelves/settings.json
+run_installer installer/install.sh >/tmp/mig.out 2>&1 || { echo "  migrate install exited non-zero"; cat /tmp/mig.out; FAILS=$((FAILS+1)); }
+check "settings rescued from /opt to canonical" test -f "$SETTINGS_DIR/settings.json"
+check "rescued content preserved"               grep -q migrated "$SETTINGS_DIR/settings.json"
+check "/opt removed by migration"               test ! -d /opt/shelveshub
+
+# ── Tray companion opt-in ([5]): default-off, then installed with SHELVES_TRAY=1,
+# then removed on uninstall. The autostart entry lives OUTSIDE the install dir. ──
+AUTOSTART="$FAKEHOME/.config/autostart/shelveshub-tray.desktop"
+echo "[5a] tray stays OFF by default"
+rm -rf "$INSTALL_DIR" "$SERVICE_DIR" "$AUTOSTART"
+run_installer installer/install.sh >/tmp/tray0.out 2>&1 || { echo "  install exited non-zero"; FAILS=$((FAILS+1)); }
+check "no tray binary without opt-in"   test ! -e "$INSTALL_DIR/shelveshub-tray"
+check "no autostart without opt-in"      test ! -e "$AUTOSTART"
+
+echo "[6] tray installed with SHELVES_TRAY=1, removed on uninstall"
+rm -rf "$INSTALL_DIR" "$SERVICE_DIR" "$AUTOSTART"
+( cd "$PKG" && HOME="$FAKEHOME" PATH="$STUB:$PATH" SCLOG_TARGET="$SCLOG" \
+    SHELVES_ALLOW_ROOT=1 SHELVES_TRAY=1 bash installer/install.sh >/tmp/tray1.out 2>&1 ) || { echo "  tray install exited non-zero"; FAILS=$((FAILS+1)); }
+check "tray binary installed + executable" test -x "$INSTALL_DIR/shelveshub-tray"
+check "autostart entry written"            test -f "$AUTOSTART"
+check "autostart points at the binary"     grep -q "$INSTALL_DIR/shelveshub-tray" "$AUTOSTART"
+run_installer "$INSTALL_DIR/uninstall.sh" >/tmp/trayun.out 2>&1 || { echo "  uninstall exited non-zero"; FAILS=$((FAILS+1)); }
+check "autostart removed on uninstall"     test ! -e "$AUTOSTART"
+check "tray binary removed (install dir)"  test ! -e "$INSTALL_DIR/shelveshub-tray"
 
 rm -rf "$PKG" "$FAKEHOME" "$STUB"
 echo ""

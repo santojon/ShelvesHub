@@ -1,28 +1,6 @@
-// examples/harness/steam-mock.js
-//
-// A faithful-enough mock of Steam's CEF renderer internals so the ShelvesHub
-// host runtime (runtime/shelves-host.js) can be exercised WITHOUT a Steam Deck.
-// It reproduces the exact seams the runtime discovers:
-//
-//   * a webpack chunk registry (`window.webpackChunksteamui`) whose push
-//     protocol hands back a `require` with a `.c` module cache;
-//   * modules exporting React / ReactDOM / jsx-runtime (the real vendored
-//     React 18 UMD) so `Steam.getReactStack()` finds them;
-//   * a `QuickAccessMenuBrowserView` consumer (React.memo-shaped, WRITABLE
-//     `.type`) that renders a node carrying `props.tabs` — what the runtime
-//     wraps and appends our tab onto;
-//   * a `QuickAccessTab` enum (both via `window.DFL` in coexistence and via a
-//     webpack module for the sole host).
-//
-// Scenarios are driven by `window.__HARNESS__` (set by the page before this
-// script loads):
-//   { coexist: bool,       // a foreign loader (DFL) is present
-//     pluginPanel: bool,    // a coexisting plugin registers a QAM panel
-//     lateMount: bool }     // mount the QAM BEFORE injecting the runtime
-//
-// The page then injects the runtime and calls window.__HARNESS_MOUNT_QAM__()
-// and window.__HARNESS_RENDER__() at the right moments; assertions read
-// window.__HARNESS_REPORT__().
+// examples/harness/steam-mock.js — a faithful-enough mock of Steam's CEF renderer internals so the
+// host runtime runs WITHOUT a Deck: a webpack chunk registry with a `.c` cache, React/ReactDOM/jsx
+// modules, a memo-shaped `QuickAccessMenuBrowserView` (props.tabs), and a `QuickAccessTab` enum.
 
 (function () {
   "use strict";
@@ -36,13 +14,9 @@
   const S = window.__HARNESS__ || {};
   const MEMO = Symbol.for("react.memo");
 
-  // ── Hermetic RPC stub ───────────────────────────────────────────────────────
-  // The runtime fetches `getRuntimeConfig` / `getConfig` / `getLogs` from the
-  // daemon's RPC endpoint to populate the fallback panel's Configuration / Updates
-  // / Logs sections. In the harness there is no daemon, so we stub `fetch` to the
-  // RPC endpoint with canned, representative results — the scenario harness stays
-  // hermetic (no live daemon needed, no silent dependence on one). Only the RPC
-  // endpoint is intercepted; anything else falls through to the real fetch.
+  // Hermetic RPC stub: the runtime fetches getRuntimeConfig / getConfig / getLogs from the daemon's
+  // RPC endpoint for the fallback panel. The harness has no daemon, so stub `fetch` to that endpoint
+  // with canned results (only the RPC endpoint is intercepted; everything else is the real fetch).
   (function stubRpc() {
     const RPC_HOST = "127.0.0.1:60123"; // matches the runtime's default RPC_ENDPOINT
     const results = {
@@ -127,13 +101,9 @@
   function QuickAccessMenuEmbedded(props) {
     return h(TabList, { tabs: steamTabs() });
   }
-  // React.memo-shaped with a plain (writable) `.type`, exactly what the runtime
-  // wraps via afterPatch(bv, "type", …). `compare: null` makes React use a
-  // SimpleMemoComponent fiber: `elementType` is this memo object (what the
-  // re-point's `elementType === bv` lookup matches) while `type` is the inner
-  // function (what the re-point rewrites to the patched wrapper) — matching
-  // Steam's QAM consumer. A distinct __tick prop each render defeats the memo
-  // bailout so the re-pointed type actually re-runs.
+  // React.memo-shaped with a writable `.type`, what the runtime wraps via afterPatch(bv, "type", …).
+  // `compare: null` gives a SimpleMemoComponent fiber: `elementType` is this memo (matched by the
+  // re-point's `elementType === bv`), `type` the inner fn it rewrites — like Steam's QAM consumer.
   const bvExport = { $$typeof: MEMO, type: QuickAccessMenuBrowserView, compare: null };
   const embExport = { $$typeof: MEMO, type: QuickAccessMenuEmbedded, compare: null };
   const qamModule = { BrowserView: bvExport, Embedded: embExport };
@@ -240,6 +210,19 @@
   };
   window.webpackChunksteamui = chunk;
 
+  // Minimal SteamUIStore so the host's boot side-menu-close loop (shelves-host.js)
+  // finds a MenuStore, closes the open menu and SELF-TERMINATES — as on-device —
+  // instead of polling until its retry cap (which would look like a permanent timer).
+  (function () {
+    const menuStore = {
+      m_eOpenSideMenu: 1,
+      CloseSideMenus: function () { this.m_eOpenSideMenu = 0; },
+    };
+    window.SteamUIStore = {
+      WindowStore: { GamepadUIMainWindowInstance: { m_MenuStore: menuStore } },
+    };
+  })();
+
   // ── Coexistence: a foreign loader (DFL) present ───────────────────────────
   if (S.coexist) {
     window.DFL = {
@@ -331,6 +314,7 @@
       shelvesTabText: shelvesTabText(),
       log: (window.__SHELVES_LOG__ || []).slice(-16),
       errors: (window.__HARNESS_ERRORS__ || []).slice(-6),
+      idle: window.__HARNESS_IDLE__,
       fallbackUi: (function () {
         const panel = document.querySelector("[data-fb-panel]");
         if (!panel) return null;

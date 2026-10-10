@@ -51,8 +51,16 @@
   "adv_disable_hub_sub": "Detener la inyección hasta reactivar (diagnóstico)",
   "adv_restart_apply": "Reiniciar para aplicar",
   "cfg_mode": "Ownership mode",
+  "cfg_hosted_by": "Alojado por",
+  "cfg_ds_version": "Versión de Deck Shelves",
+  "host_self": "ShelvesHub (este host)",
+  "host_loader_suffix": "(cargador de plugins)",
+  "legacy_bundle_warning": "Este Deck Shelves es anterior al protocolo de coexistencia — actualízalo para que ambos hosts convivan correctamente.",
   "cfg_boot_movie": "Boot animation",
   "cfg_boot_movie_sub": "Play a startup animation when the Steam gamepad UI launches",
   "cfg_desktop_ui": "Desktop client shelves (experimental)",
-  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture"
+  "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
+  "action_restart_backend": "Reiniciar backend",
+  "coop_receded_warning": "Modo cooperativo en pausa — entraba en conflicto con el cargador de plugins; funcionando como coexistencia esta sesión.",
+  "restart_confirm": "Toca otra vez para reiniciar"
 }

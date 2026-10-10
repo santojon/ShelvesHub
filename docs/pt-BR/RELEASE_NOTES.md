@@ -10,6 +10,39 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **O botão "reiniciar para aplicar uma atualização" agora sempre reinicia.** Em alguns setups ele
+  podia não fazer nada; agora reinicia o ShelvesHub de forma confiável (relançando a si mesmo se
+  preciso) pra uma atualização baixada realmente entrar — e pede uma confirmação rápida (toque de
+  novo) antes.
+
+- **O modo cooperativo se protege.** Se você forçar o ShelvesHub a hospedar o Deck Shelves com um
+  loader de plugins instalado e isso ficar deixando a tela do Steam preta, o ShelvesHub agora recua
+  pra coexistência simples pela sessão em vez de brigar com o loader — e a aba explica o porquê. Dá
+  pra seguir forçando com `SHELVES_COOP_SAFE_MODE=0`. Ele também segura atualizações do plugin feitas
+  pelo hub nesse modo, pra as suas duas cópias não ficarem em versões diferentes.
+- **Ícone de tray no desktop opcional — marque uma caixa no instalador.** O instalador agora tem
+  uma opção desligada por padrão pra adicionar um pequeno app de barra de menu / tray que mostra se
+  o ShelvesHub está hospedando, com ações rápidas (pausar/retomar, reiniciar o serviço, reiniciar o
+  backend de dados). É um utilitário separado instalado pelo mesmo instalador (sem download extra) e
+  removido de forma limpa na desinstalação. Veja [docs/installation.md](installation.md).
+- **Reinicie o backend de dados sem reiniciar tudo.** Se o backend de dados travar, a seção Solução
+  de problemas da aba agora tem um botão "Reiniciar backend" que reinicia só ele — as suas shelves e
+  a hospedagem seguem rodando.
+- **Um verificador de setup que se conserta.** `shelveshub doctor` checa as coisas que impedem o
+  ShelvesHub de aparecer — a flag de debug do Steam, a porta de debug, o Steam rodando, o serviço em
+  segundo plano — e diz exatamente o que fazer pra cada falha. `shelveshub doctor --fix` cria a flag
+  de debug do Steam pra você.
+- **Diagnóstico em um comando.** `shelveshub status` imprime um relatório (SO, arquitetura,
+  glibc, Python e — no Linux — modelo do dispositivo e displays) que você cola num relato de
+  bug, especialmente em ARM64.
+- **Recuperação automática mais esperta.** Ela agora detecta se o seu sistema tem o serviço
+  de sessão do SteamOS: um Steam Deck ainda o reinicia, um Linux genérico sem ele apenas pausa
+  em vez de rodar um reinício inútil.
+- **Downloads de pacote mais seguros.** Quando um lançamento do Deck Shelves inclui um
+  `SHA256SUMS`, o ShelvesHub verifica o pacote e o backend que baixa contra ele e recusa
+  qualquer coisa que não corresponda — um download corrompido ou adulterado é rejeitado,
+  não injetado.
+
 ## [0.4.1] - 2026-10-02
 
 - **Veja atualizações mais cedo — e verifique quando quiser.** A aba do ShelvesHub agora

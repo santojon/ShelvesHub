@@ -44,6 +44,11 @@
   "cfg_backend": "Backend de dados",
   "cfg_version": "Versão",
   "cfg_mode": "Modo de propriedade",
+  "cfg_hosted_by": "Hospedado por",
+  "cfg_ds_version": "Versão do Deck Shelves",
+  "host_self": "ShelvesHub (este host)",
+  "host_loader_suffix": "(carregador de plugins)",
+  "legacy_bundle_warning": "Este Deck Shelves é anterior ao protocolo de coexistência — atualize-o para que os dois hosts coexistam de forma limpa.",
   "cfg_boot_movie": "Animação de inicialização",
   "cfg_boot_movie_sub": "Reproduz uma animação ao abrir a interface de controle do Steam",
   "cfg_desktop_ui": "Prateleiras no cliente desktop (experimental)",
@@ -54,5 +59,8 @@
   "cfg_owner_settle_sub": "Segundos de espera por outro host antes de hospedar",
   "cfg_interval_sub": "Segundos entre verificações de injeção",
   "adv_disable_hub_sub": "Parar a injeção até reativar (para diagnóstico)",
-  "adv_restart_apply": "Reiniciar para aplicar"
+  "adv_restart_apply": "Reiniciar para aplicar",
+  "action_restart_backend": "Reiniciar backend",
+  "coop_receded_warning": "Modo cooperativo pausado — estava conflitando com o loader de plugins; rodando como coexistência nesta sessão.",
+  "restart_confirm": "Toque de novo para reiniciar"
 }
