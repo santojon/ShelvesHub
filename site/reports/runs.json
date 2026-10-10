@@ -518,15 +518,15 @@
     "runtimeCodeLines": 2201
   },
   {
-    "ts": "2026-10-08_10-40-28",
-    "scope": "local",
+    "ts": "2026-10-09_14-41-16",
+    "scope": "release",
     "version": "0.4.1",
     "overall": "PASS",
     "tests": {
-      "passed": 72,
+      "passed": 76,
       "failed": 0,
       "skipped": 0,
-      "total": 72
+      "total": 76
     },
     "clippy": {
       "warnings": 0,
@@ -542,11 +542,11 @@
       "total": 0,
       "byRule": {}
     },
-    "runtimeCodeLines": 2405
+    "runtimeCodeLines": 2420
   },
   {
-    "ts": "2026-10-09_14-41-16",
-    "scope": "release",
+    "ts": "2026-10-10_14-29-36",
+    "scope": "ci",
     "version": "0.4.1",
     "overall": "PASS",
     "tests": {
