@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
 ### Added
 - **An optional desktop tray companion, via the same installer.** Every installer now offers an
   **off-by-default** choice (prompt / env `SHELVES_TRAY` / a `setup.exe` checkbox on Windows) to

@@ -1,6 +1,6 @@
 [package]
 name = "shelveshub"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 description = "A cross-platform loader for Deck Shelves"
 license = "MIT"

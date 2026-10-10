@@ -10,6 +10,8 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
 - **The "restart to apply an update" button now always restarts.** On some setups it could do
   nothing; now it reliably restarts ShelvesHub (relaunching itself if needed) so a downloaded update
   actually takes effect — and it asks for a quick confirm (tap again) first.

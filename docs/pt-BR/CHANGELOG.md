@@ -8,6 +8,8 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
 ### Adicionado
 - **Um companheiro de tray no desktop opcional, pelo mesmo instalador.** Todo instalador agora
   oferece uma escolha **desligada por padrão** (prompt / env `SHELVES_TRAY` / um checkbox no

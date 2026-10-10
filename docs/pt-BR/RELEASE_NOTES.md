@@ -10,6 +10,8 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
 - **O botão "reiniciar para aplicar uma atualização" agora sempre reinicia.** Em alguns setups ele
   podia não fazer nada; agora reinicia o ShelvesHub de forma confiável (relançando a si mesmo se
   preciso) pra uma atualização baixada realmente entrar — e pede uma confirmação rápida (toque de
