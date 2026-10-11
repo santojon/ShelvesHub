@@ -8,6 +8,37 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ## [Unreleased]
 
+### Adicionado
+- **Voltar à versão anterior — do ShelvesHub e do Deck Shelves.** Toda atualização agora guarda o
+  que substituiu: o pacote do Deck Shelves como uma cópia `.prev` ao lado do ativo, e o binário do
+  ShelvesHub + runtime injetado + assets como um snapshot `previous/` ao lado do binário. A seção
+  Atualizações da aba ganha duas linhas "Voltar ao … anterior" (confirmação em dois toques) que os
+  restauram offline — sem download — pelos novos métodos RPC `rollbackBundle` / `rollbackHub`. Um
+  Deck Shelves restaurado é trocado a quente como numa atualização; um ShelvesHub restaurado é
+  preparado como numa autoatualização e entra em vigor no próximo reinício (automático sob um
+  gerenciador de serviço que relança). A versão da qual você voltou fica **retida** das atualizações
+  automáticas até uma mais nova ser publicada, então o retorno não é desfeito na próxima verificação;
+  atualizar manualmente libera a retenção.
+- **Novidades, antes de aplicar.** A verificação periódica agora registra as notas de lançamento de
+  uma atualização pendente do ShelvesHub (e de uma atualização retida do Deck Shelves), e a aba as
+  mostra como uma seção recolhida "Novidades (vX)" abaixo do status de atualização, para você ler o
+  que muda antes de aplicar.
+- **Atualizações silenciosas.** Um novo interruptor "Esperar até nenhum jogo estar em execução"
+  (ligado por padrão, sob Atualizações automáticas) faz a verificação periódica segurar downloads e
+  trocas enquanto o Steam reporta um app em execução; ela tenta de novo num tick seguinte e a linha
+  de status mostra "esperando até nenhum jogo estar em execução". Um "Verificar agora" manual segue
+  normalmente. Uma versão retida do Deck Shelves mostra um botão "Atualizar o Deck Shelves agora".
+  `getConfig` reporta `update_deferred`, `pending_plugin_update`, `pending_hub_notes`,
+  `hub_previous_version` e `bundle_rollback_available`; `setUpdatePref` aceita `quiet_updates`.
+
+### Corrigido
+- **Um download automático do Deck Shelves que falha não danifica mais o pacote ativo.** A
+  atualização periódica baixava direto por cima do pacote injetado e verificava depois, então um
+  download truncado ou uma divergência de checksum deixava um arquivo quebrado (ou apagado) no lugar.
+  Agora ela baixa para um arquivo temporário, verifica tamanho e `SHA256SUMS`, e só então troca — o
+  mesmo caminho tmp → verificar → renomear que a atualização manual já usava (que agora também roda
+  o checksum).
+
 ## [0.5.0] - 2026-10-10
 
 ### Adicionado

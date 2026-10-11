@@ -10,6 +10,18 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **Go back a version when an update misbehaves.** Updates now keep the previous ShelvesHub and the
+  previous Deck Shelves around, and the tab's Updates section has "Go back to the previous …" rows
+  (tap twice) that restore them in seconds, no download needed. The version you left is held back
+  from automatic updates until a newer one comes out, so it stays undone until you decide otherwise.
+- **See what's new before it applies.** When an update is pending, the tab shows its release notes
+  in a collapsed "What's new" section.
+- **Quiet updates.** By default, automatic updates now wait until no game is running before
+  downloading or swapping anything (switch it off under Automatic updates). "Check now" still
+  updates right away, and a held-back Deck Shelves release gets an "Update now" button.
+- **Safer automatic downloads.** A Deck Shelves download that fails or doesn't match its checksum can
+  no longer leave a broken bundle in place — it is verified before it replaces anything.
+
 ## [0.5.0] - 2026-10-10
 
 - **The "restart to apply an update" button now always restarts.** On some setups it could do

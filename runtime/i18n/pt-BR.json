@@ -62,5 +62,14 @@
   "adv_restart_apply": "Reiniciar para aplicar",
   "action_restart_backend": "Reiniciar backend",
   "coop_receded_warning": "Modo cooperativo pausado — estava conflitando com o loader de plugins; rodando como coexistência nesta sessão.",
-  "restart_confirm": "Toque de novo para reiniciar"
+  "restart_confirm": "Toque de novo para reiniciar",
+  "action_rollback_plugin": "Voltar ao Deck Shelves anterior",
+  "action_rollback_hub": "Voltar ao ShelvesHub anterior",
+  "rollback_confirm": "Toque de novo para voltar",
+  "hub_rollback_staged": "ShelvesHub anterior restaurado — reinicie para concluir",
+  "update_quiet": "Esperar até nenhum jogo estar em execução",
+  "upd_deferred": "esperando até nenhum jogo estar em execução",
+  "upd_whats_new": "Novidades",
+  "upd_plugin_available": "Atualização do Deck Shelves disponível",
+  "action_update_plugin_now": "Atualizar o Deck Shelves agora"
 }

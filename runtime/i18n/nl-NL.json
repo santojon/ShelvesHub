@@ -62,5 +62,14 @@
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
   "action_restart_backend": "Backend opnieuw starten",
   "coop_receded_warning": "Coöperatieve modus gepauzeerd — conflict met de plugin-loader; draait deze sessie als co-existentie.",
-  "restart_confirm": "Tik nogmaals om opnieuw te starten"
+  "restart_confirm": "Tik nogmaals om opnieuw te starten",
+  "action_rollback_plugin": "Terug naar de vorige Deck Shelves",
+  "action_rollback_hub": "Terug naar de vorige ShelvesHub",
+  "rollback_confirm": "Tik nogmaals om terug te gaan",
+  "hub_rollback_staged": "Vorige ShelvesHub hersteld — herstart om te voltooien",
+  "update_quiet": "Wachten tot er geen game meer draait",
+  "upd_deferred": "wacht tot er geen game meer draait",
+  "upd_whats_new": "Wat is er nieuw",
+  "upd_plugin_available": "Deck Shelves-update beschikbaar",
+  "action_update_plugin_now": "Deck Shelves nu bijwerken"
 }

@@ -63,3 +63,13 @@ fn settle_waits_until_window_elapses() {
     assert!(!keep_settling(25, 25));
     assert!(!keep_settling(25, 30));
 }
+
+#[test]
+fn same_version_ignores_the_v_prefix_and_an_empty_hold() {
+    // A rollback hold is compared tag-to-version, so `v` must not matter.
+    assert!(same_version("v0.6.0", "0.6.0"));
+    assert!(same_version("0.6.0", "v0.6.0"));
+    assert!(same_version("v3.4.0-beta.1", "v3.4.0-beta.1"));
+    assert!(!same_version("v0.6.1", "v0.6.0"));
+    assert!(!same_version("v0.6.0", ""));
+}

@@ -1,0 +1,972 @@
+{
+  "ts": "2026-10-11_13-11-58",
+  "kind": "runtime-scenarios",
+  "os": "darwin",
+  "arch": "arm64",
+  "browser": "Chromium",
+  "passed": 11,
+  "failed": 0,
+  "total": 11,
+  "scenarios": [
+    {
+      "name": "coexist-fallback",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": false,
+        "owner": "decky",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config4\u25bcadv_sec_status11\u25bcShelvesHub \u00b7 v0.0.1",
+        "log": [
+          {
+            "t": 1791735097180,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791735097180,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
+          },
+          {
+            "t": 1791735097180,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735097180,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735097180,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791735097182,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 2,
+          "observers": 0,
+          "intervalTicks": 2,
+          "observerCbs": 0,
+          "live": {
+            "1": 250,
+            "3": 60000
+          }
+        },
+        "fallbackUi": {
+          "panel": true,
+          "sections": [
+            "sec-updates",
+            "sec-troubleshooting",
+            "sec-config",
+            "sec-status"
+          ],
+          "download": false,
+          "update": true,
+          "logs": false,
+          "disableHub": false,
+          "coexistNote": true,
+          "version": true,
+          "updateToggles": 1
+        },
+        "openHub": false
+      }
+    },
+    {
+      "name": "coexist-fallback-native",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": false,
+        "owner": "decky",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config4\u25bcadv_sec_status11\u25bcShelvesHub \u00b7 v0.0.1",
+        "log": [
+          {
+            "t": 1791735107308,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791735107308,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
+          },
+          {
+            "t": 1791735107308,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735107308,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735107309,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791735107310,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791735109076,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 265ms (8 steps)."
+          },
+          {
+            "t": 1791735109077,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM Focusable: not found."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 1,
+          "observers": 0,
+          "intervalTicks": 4,
+          "observerCbs": 0,
+          "live": {
+            "3": 60000
+          }
+        },
+        "fallbackUi": {
+          "panel": true,
+          "sections": [
+            "sec-updates",
+            "sec-troubleshooting",
+            "sec-config",
+            "sec-status"
+          ],
+          "download": false,
+          "update": true,
+          "logs": false,
+          "disableHub": false,
+          "coexistNote": true,
+          "version": true,
+          "updateToggles": 1
+        },
+        "openHub": false
+      }
+    },
+    {
+      "name": "coexist-idle",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": false,
+        "owner": "decky",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [
+          "deck-shelves"
+        ],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
+        "log": [
+          {
+            "t": 1791735111893,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791735111894,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
+          },
+          {
+            "t": 1791735111894,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735111894,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735111894,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM panel registered: deck-shelves (native)"
+          },
+          {
+            "t": 1791735111894,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791735111896,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791735113656,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 260ms (8 steps)."
+          },
+          {
+            "t": 1791735113656,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM Focusable: not found."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 0,
+          "observers": 0,
+          "intervalTicks": 4,
+          "observerCbs": 0,
+          "live": {}
+        },
+        "fallbackUi": null,
+        "openHub": true
+      }
+    },
+    {
+      "name": "coexist-late",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": false,
+        "owner": "decky",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [
+          "deck-shelves"
+        ],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
+        "log": [
+          {
+            "t": 1791735101646,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791735101647,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
+          },
+          {
+            "t": 1791735101647,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735101647,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735101647,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: re-pointed already-mounted consumer."
+          },
+          {
+            "t": 1791735101647,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM panel registered: deck-shelves (native)"
+          },
+          {
+            "t": 1791735101647,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791735101648,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 1,
+          "observers": 0,
+          "intervalTicks": 2,
+          "observerCbs": 0,
+          "live": {
+            "1": 250
+          }
+        },
+        "fallbackUi": null,
+        "openHub": true
+      }
+    },
+    {
+      "name": "coexist-mirror",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": false,
+        "owner": "decky",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [
+          "deck-shelves"
+        ],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
+        "log": [
+          {
+            "t": 1791735096125,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791735096125,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
+          },
+          {
+            "t": 1791735096125,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735096125,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735096125,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM panel registered: deck-shelves (native)"
+          },
+          {
+            "t": 1791735096125,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791735096128,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 1,
+          "observers": 0,
+          "intervalTicks": 2,
+          "observerCbs": 0,
+          "live": {
+            "1": 250
+          }
+        },
+        "fallbackUi": null,
+        "openHub": true
+      }
+    },
+    {
+      "name": "coexist-native",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": false,
+        "owner": "decky",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [
+          "deck-shelves"
+        ],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
+        "log": [
+          {
+            "t": 1791735102702,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791735102702,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
+          },
+          {
+            "t": 1791735102703,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735102703,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735102703,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM panel registered: deck-shelves (native)"
+          },
+          {
+            "t": 1791735102703,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791735102704,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791735104467,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 262ms (8 steps)."
+          },
+          {
+            "t": 1791735104468,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM Focusable: not found."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 0,
+          "observers": 0,
+          "intervalTicks": 4,
+          "observerCbs": 0,
+          "live": {}
+        },
+        "fallbackUi": null,
+        "openHub": true
+      }
+    },
+    {
+      "name": "coop-fallback",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config4\u25bcadv_sec_status10\u25bcShelvesHub \u00b7 v0.0.1",
+        "log": [
+          {
+            "t": 1791735117933,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791735117934,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 2 components."
+          },
+          {
+            "t": 1791735117934,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735117934,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735117934,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[definePlugin,QuickAccessTab] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791735117936,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 2,
+          "observers": 0,
+          "intervalTicks": 2,
+          "observerCbs": 0,
+          "live": {
+            "1": 250,
+            "3": 60000
+          }
+        },
+        "fallbackUi": {
+          "panel": true,
+          "sections": [
+            "sec-updates",
+            "sec-troubleshooting",
+            "sec-config",
+            "sec-status"
+          ],
+          "download": false,
+          "update": true,
+          "logs": false,
+          "disableHub": false,
+          "coexistNote": true,
+          "version": true,
+          "updateToggles": 1
+        },
+        "openHub": false
+      }
+    },
+    {
+      "name": "coop-mirror",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [
+          "deck-shelves"
+        ],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
+        "log": [
+          {
+            "t": 1791735117062,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791735117062,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 2 components."
+          },
+          {
+            "t": 1791735117063,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735117063,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735117063,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM panel registered: deck-shelves (native)"
+          },
+          {
+            "t": 1791735117063,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[definePlugin,QuickAccessTab] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791735117064,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 1,
+          "observers": 0,
+          "intervalTicks": 1,
+          "observerCbs": 0,
+          "live": {
+            "1": 250
+          }
+        },
+        "fallbackUi": null,
+        "openHub": true
+      }
+    },
+    {
+      "name": "sole-host",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config4\u25bcadv_sec_status10\u25bcShelvesHub \u00b7 v0.0.1",
+        "log": [
+          {
+            "t": 1791735098229,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735098229,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735098229,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
+          },
+          {
+            "t": 1791735098231,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791735098485,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 257ms (8 steps)."
+          },
+          {
+            "t": 1791735098742,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 3,
+          "observers": 0,
+          "intervalTicks": 4,
+          "observerCbs": 0,
+          "live": {
+            "1": 250,
+            "4": 500,
+            "5": 60000
+          }
+        },
+        "fallbackUi": {
+          "panel": true,
+          "sections": [
+            "sec-updates",
+            "sec-troubleshooting",
+            "sec-config",
+            "sec-status"
+          ],
+          "download": true,
+          "update": true,
+          "logs": false,
+          "disableHub": false,
+          "coexistNote": false,
+          "version": true,
+          "updateToggles": 1
+        },
+        "openHub": false
+      }
+    },
+    {
+      "name": "sole-host-fallback",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config4\u25bcadv_sec_status10\u25bcShelvesHub \u00b7 v0.0.1",
+        "log": [
+          {
+            "t": 1791735100609,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735100609,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735100609,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
+          },
+          {
+            "t": 1791735100610,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791735100863,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 255ms (8 steps)."
+          },
+          {
+            "t": 1791735101118,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 3,
+          "observers": 0,
+          "intervalTicks": 3,
+          "observerCbs": 0,
+          "live": {
+            "1": 250,
+            "4": 500,
+            "5": 60000
+          }
+        },
+        "fallbackUi": {
+          "panel": true,
+          "sections": [
+            "sec-updates",
+            "sec-troubleshooting",
+            "sec-config",
+            "sec-status"
+          ],
+          "download": true,
+          "update": true,
+          "logs": false,
+          "disableHub": false,
+          "coexistNote": false,
+          "version": true,
+          "updateToggles": 1
+        },
+        "openHub": false
+      }
+    },
+    {
+      "name": "sole-host-mirror",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [
+          "deck-shelves"
+        ],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
+        "log": [
+          {
+            "t": 1791735099571,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791735099571,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791735099571,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM panel registered: deck-shelves (native)"
+          },
+          {
+            "t": 1791735099571,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
+          },
+          {
+            "t": 1791735099572,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791735099827,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 256ms (8 steps)."
+          },
+          {
+            "t": 1791735100082,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 2,
+          "observers": 0,
+          "intervalTicks": 3,
+          "observerCbs": 0,
+          "live": {
+            "1": 250,
+            "4": 500
+          }
+        },
+        "fallbackUi": null,
+        "openHub": true
+      }
+    }
+  ]
+}

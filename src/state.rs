@@ -60,6 +60,59 @@ pub fn hub_update_staged() -> bool {
     HUB_UPDATE_STAGED.load(Ordering::Relaxed)
 }
 
+/// Set when the binary staged over the running one is a ROLLBACK to the previous
+/// ShelvesHub rather than a newer release, so the restart notice says so and the
+/// update check leaves it in place until the restart.
+static HUB_ROLLBACK_STAGED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_hub_rollback_staged(value: bool) {
+    HUB_ROLLBACK_STAGED.store(value, Ordering::Relaxed);
+}
+
+pub fn hub_rollback_staged() -> bool {
+    HUB_ROLLBACK_STAGED.load(Ordering::Relaxed)
+}
+
+/// Release notes of the pending ShelvesHub update, for the "what's new" preview
+/// on the hub screen. `None` = no pending update (or none published).
+static PENDING_HUB_NOTES: Mutex<Option<String>> = Mutex::new(None);
+
+pub fn set_pending_hub_notes(notes: Option<String>) {
+    if let Ok(mut slot) = PENDING_HUB_NOTES.lock() {
+        *slot = notes.filter(|n| !n.is_empty());
+    }
+}
+
+pub fn pending_hub_notes() -> Option<String> {
+    PENDING_HUB_NOTES.lock().ok().and_then(|s| s.clone())
+}
+
+/// A Deck Shelves release the hub would install but is holding back (quiet
+/// updates while a game runs), as `(tag, release notes)`. `None` = nothing pending.
+static PENDING_PLUGIN_UPDATE: Mutex<Option<(String, String)>> = Mutex::new(None);
+
+pub fn set_pending_plugin_update(update: Option<(String, String)>) {
+    if let Ok(mut slot) = PENDING_PLUGIN_UPDATE.lock() {
+        *slot = update;
+    }
+}
+
+pub fn pending_plugin_update() -> Option<(String, String)> {
+    PENDING_PLUGIN_UPDATE.lock().ok().and_then(|s| s.clone())
+}
+
+/// Whether the last automatic check held its downloads back because a game was
+/// running (quiet updates). Surfaced via `getConfig` for the status row.
+static UPDATE_DEFERRED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_update_deferred(value: bool) {
+    UPDATE_DEFERRED.store(value, Ordering::Relaxed);
+}
+
+pub fn update_deferred() -> bool {
+    UPDATE_DEFERRED.load(Ordering::Relaxed)
+}
+
 /// Wall-clock millis (since epoch) of the most recent update check, so the hub
 /// view can show "checked X ago". 0 = never checked this session.
 static LAST_UPDATE_CHECK_MS: AtomicU64 = AtomicU64::new(0);

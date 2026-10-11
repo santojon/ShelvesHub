@@ -236,7 +236,7 @@
       // null = still loading; then the full update-preference object mirrors the
       // store: the master switch, the per-target switches, and their beta
       // channels. Per-target switches default ON (see HubSettings::default).
-      const DEFAULT_UPD = { auto_update: false, auto_update_hub: true, hub_prerelease: false, auto_update_plugin: true, plugin_prerelease: false };
+      const DEFAULT_UPD = { auto_update: false, auto_update_hub: true, hub_prerelease: false, auto_update_plugin: true, plugin_prerelease: false, quiet_updates: true };
       const au = React.useState(null);
       const cfg = au[0], setCfg = au[1];
       // null = hub view; an array = the log viewer showing merged daemon+runtime lines.
@@ -305,7 +305,16 @@
         setArmedRestart(null);
         fn();
       }
-      function restartLabel(which, label) { return armedRestart === which ? I18N.t("restart_confirm") : label; }
+      function confirmLabel(which, label, key) { return armedRestart === which ? I18N.t(key) : label; }
+      function restartLabel(which, label) { return confirmLabel(which, label, "restart_confirm"); }
+      // Daemon-owned status fields (never user-edited), merged over the current config
+      // so a refresh never clobbers an in-flight optimistic toggle edit.
+      const STATUS_KEYS = ["pending_hub_update", "hub_update_staged", "hub_rollback_staged", "last_update_check_ms", "update_deferred", "pending_hub_notes", "pending_plugin_update", "pending_plugin_notes", "hub_previous_version", "bundle_rollback_available"];
+      function mergeStatus(prev, res) {
+        const base = prev || DEFAULT_UPD; const m = {}; for (const k in base) m[k] = base[k];
+        for (let i = 0; i < STATUS_KEYS.length; i++) { const k = STATUS_KEYS[i]; if (k in res) m[k] = res[k]; }
+        return m;
+      }
       // Manual "Check now": ask the daemon to run an update check immediately and
       // fold the refreshed status (pending version, staged flag, last-check age)
       // back into the config — so the user doesn't wait for the 30-minute cycle.
@@ -316,13 +325,7 @@
           setBusy(null);
           const res = r && r.ok && r.result && typeof r.result === "object" ? r.result : null;
           if (!res) return;
-          setCfg(function (prev) {
-            const base = prev || DEFAULT_UPD; const m = {}; for (const k in base) m[k] = base[k];
-            m.pending_hub_update = res.pending_hub_update;
-            m.hub_update_staged = res.hub_update_staged;
-            m.last_update_check_ms = res.last_update_check_ms;
-            return m;
-          });
+          setCfg(function (prev) { return mergeStatus(prev, res); });
         }, function () { setBusy(null); });
       }
       // Compact relative age from "ms since last check" (null when never checked).
@@ -390,13 +393,7 @@
           hostRpc("getConfig").then(function (r) {
             if (!alive || !(r && r.ok && r.result && typeof r.result === "object")) return;
             const res = r.result;
-            setCfg(function (prev) {
-              const base = prev || DEFAULT_UPD; const m = {}; for (const k in base) m[k] = base[k];
-              m.pending_hub_update = res.pending_hub_update;
-              m.hub_update_staged = res.hub_update_staged;
-              m.last_update_check_ms = res.last_update_check_ms;
-              return m;
-            });
+            setCfg(function (prev) { return mergeStatus(prev, res); });
           }, function () {});
         }
         const iv = setInterval(refresh, 60000);
@@ -471,22 +468,59 @@
       function hubUpdateNotice() {
         const ver = uc.pending_hub_update;
         if (typeof ver !== "string" || !ver) return null;
+        const staged = uc.hub_update_staged === true;
         /* Once the update has been downloaded and staged over the binary, the
            wording shifts from "restart to update" to "downloaded — restart to
            finish" (a relaunching service applies it on its own, so this only ever
-           shows for a manually-run daemon). */
-        const label = uc.hub_update_staged === true ? "hub_update_staged" : "hub_update_restart";
+           shows for a manually-run daemon). A staged rollback says so; a release
+           merely held back by quiet updates has no restart to offer (status row). */
+        if (!staged && uc.update_deferred === true) return null;
+        const label = uc.hub_rollback_staged === true ? "hub_rollback_staged" : (staged ? "hub_update_staged" : "hub_update_restart");
         return h("div", { key: "hubupd", style: { padding: "10px 14px 8px" } },
           bannerButton("hub-update", restartLabel("hub", I18N.t(label) + " (" + ver + ")"), function () { armRestart("hub", doRestartDaemonOnly); }));
+      }
+      // Release notes of a pending update, as a collapsed "What's new" section so the
+      // user can read what changes before it applies. Headings/bullets flattened to lines.
+      function whatsNewSection(id, ver, notes) {
+        if (typeof notes !== "string" || !notes) return null;
+        const lines = notes.split("\n").map(function (l) { return l.replace(/^#+\s*/, "").replace(/^\s*[-*]\s+/, "• "); });
+        return h(HubCollapsible, { key: id, id: id, title: I18N.t("upd_whats_new") + " (" + ver + ")", initialOpen: false },
+          [h("div", { key: "n", "data-fb": id + "-notes", style: { padding: "4px 16px 8px", fontSize: "12px", lineHeight: "1.4", color: "rgba(255,255,255,0.75)", whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: "220px", overflowY: "auto" } }, lines.join("\n"))]);
+      }
+      // A Deck Shelves release held back by quiet updates: offer to apply it now.
+      function pluginUpdateNotice() {
+        const ver = uc.pending_plugin_update;
+        if (typeof ver !== "string" || !ver) return null;
+        return h("div", { key: "plugupd", style: { padding: "0 16px 8px" } },
+          bannerButton("plugin-update", I18N.t("action_update_plugin_now") + " (" + ver + ")", function () { if (!busy) run("download", "populateBundle"); }));
+      }
+      // Everything about updates above the action lists: the restart notice, the
+      // status row, and the "what's new" previews of what a pending update brings.
+      function updateNotices() {
+        const out = [];
+        const notice = hubUpdateNotice();
+        if (notice) out.push(h("div", { key: "nw", style: { padding: "0 16px" } }, notice));
+        if (on) out.push(updateStatusRow());
+        if (uc.pending_hub_update) out.push(whatsNewSection("whatsnew-hub", uc.pending_hub_update, uc.pending_hub_notes));
+        if (uc.pending_plugin_update && !(coexist || COOP)) out.push(pluginUpdateNotice(), whatsNewSection("whatsnew-plugin", uc.pending_plugin_update, uc.pending_plugin_notes));
+        return out.filter(Boolean);
+      }
+      // "vX available" for the hub first, else a held-back Deck Shelves release, else up to date.
+      function statusLine() {
+        const hub = (typeof uc.pending_hub_update === "string" && uc.pending_hub_update) ? uc.pending_hub_update : null;
+        const plugin = (typeof uc.pending_plugin_update === "string" && uc.pending_plugin_update) ? uc.pending_plugin_update : null;
+        if (hub) return { pending: true, text: I18N.t("upd_available") + " (" + hub + ")" };
+        if (plugin) return { pending: true, text: I18N.t("upd_plugin_available") + " (" + plugin + ")" };
+        return { pending: false, text: I18N.t("upd_uptodate") };
       }
       // Always-visible update status (only while auto-update is on, since that's
       // when the daemon checks): a dot + "up to date"/"vX available", the last-check
       // age, and a "Check now" button that forces an immediate check.
       function updateStatusRow() {
-        const pending = (typeof uc.pending_hub_update === "string" && uc.pending_hub_update) ? uc.pending_hub_update : null;
+        const line = statusLine(), pending = line.pending, statusText = line.text;
         const ago = agoText(uc.last_update_check_ms);
-        const checkedText = I18N.t("upd_last_checked") + ": " + (ago || I18N.t("upd_never_checked"));
-        const statusText = pending ? (I18N.t("upd_available") + " (" + pending + ")") : I18N.t("upd_uptodate");
+        const deferred = uc.update_deferred === true ? " · " + I18N.t("upd_deferred") : "";
+        const checkedText = I18N.t("upd_last_checked") + ": " + (ago || I18N.t("upd_never_checked")) + deferred;
         const checking = busy === "checkupd";
         const subStyle = { fontSize: "11px", color: "rgba(255,255,255,0.55)", lineHeight: "1.3", marginTop: "1px" };
         return h("div", { key: "upd-status", style: { display: "flex", alignItems: "center", gap: "10px", padding: "2px 16px 8px" } }, [
@@ -546,9 +580,30 @@
       };
       // A flat, edge-to-edge action row (icon + label), same pattern as the other
       // rows so buttons and toggles read as one unified list.
+      function rowButton(id, iconKey, label, onClick) {
+        return clickable(onClick, { key: "act-" + id, "data-fb": id, focusClassName: "shelves-rowfocus", style: { display: "flex", alignItems: "center", gap: "10px", minHeight: "40px", width: "100%", boxSizing: "border-box", padding: "6px 16px", border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontSize: "13px", opacity: (busy && busy !== id) ? 0.5 : 1 } },
+          [fbIcon(iconKey), h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left" } }, label)]);
+      }
       function actionRow(id, iconKey, labelKey, method) {
-        return clickable(function () { if (!busy) run(id, method); }, { key: "act-" + id, "data-fb": id, focusClassName: "shelves-rowfocus", style: { display: "flex", alignItems: "center", gap: "10px", minHeight: "40px", width: "100%", boxSizing: "border-box", padding: "6px 16px", border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontSize: "13px", opacity: (busy && busy !== id) ? 0.5 : 1 } },
-          [fbIcon(iconKey), h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left" } }, I18N.t(labelKey))]);
+        return rowButton(id, iconKey, I18N.t(labelKey), function () { if (!busy) run(id, method); });
+      }
+      // Two-tap "go back" (same arming as the restart buttons): the first tap arms
+      // the row, the second runs the rollback.
+      function rollbackRow(id, label, method) {
+        return rowButton(id, "back", confirmLabel(id, label, "rollback_confirm"), function () { armRestart(id, function () { run(id, method); }); });
+      }
+      // "Go back" rows, only while a previous copy exists and differs from what runs.
+      function rollbackRows(pluginToo) {
+        const rows = [];
+        const prevTag = typeof uc.bundle_prev_tag === "string" ? uc.bundle_prev_tag : "";
+        if (pluginToo && uc.bundle_rollback_available === true && prevTag !== uc.bundle_tag) {
+          rows.push(rollbackRow("rollback-plugin", I18N.t("action_rollback_plugin") + (prevTag ? " (" + prevTag + ")" : ""), "rollbackBundle"));
+        }
+        const prevVer = uc.hub_previous_version;
+        if (typeof prevVer === "string" && prevVer && prevVer !== uc.version) {
+          rows.push(rollbackRow("rollback-hub", I18N.t("action_rollback_hub") + " (" + prevVer + ")", "rollbackHub"));
+        }
+        return rows;
       }
       // The whole panel body as top-level collapsible sections (no "Advanced"
       // wrapper) in the plugin's flat QAM style: Updates, Troubleshooting,
@@ -568,13 +623,15 @@
           upd = [
             h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere")),
           ];
-          upd = upd.concat(updRows(["auto_update", "auto_update_hub", "hub_prerelease"]));
+          upd = upd.concat(updRows(["auto_update", "auto_update_hub", "hub_prerelease", "quiet_updates"]));
           upd.push(actionRow("update", "update", "action_update_hub", "selfUpdate"));
+          upd = upd.concat(rollbackRows(false));
           updCount = upd.length;
         } else {
           upd = updRows().slice();
           upd.push(actionRow("download", "download", "action_download", "populateBundle"));
           upd.push(actionRow("update", "update", "action_update_hub", "selfUpdate"));
+          upd = upd.concat(rollbackRows(true));
           updCount = upd.length;
         }
         sections.push(h(HubCollapsible, { key: "sec-upd", id: "sec-updates", title: I18N.t("sec_updates"), count: updCount, initialOpen: true }, upd));
@@ -639,10 +696,16 @@
         );
         return h(HubCollapsible, { key: "sec-st", id: "sec-status", title: I18N.t("adv_sec_status"), count: status.length }, status);
       }
+      // Full re-read of the config (after an action that changes what the rows show).
+      function refreshCfg() {
+        hostRpc("getConfig").then(function (r) {
+          if (r && r.ok && r.result && typeof r.result === "object") setCfg(r.result);
+        }, function () {});
+      }
       function run(id, method) {
         if (method === "getLogs") { viewLogs(); return; }
         setBusy(id);
-        hostRpc(method).then(function () { setBusy(null); }, function () { setBusy(null); });
+        hostRpc(method).then(function () { setBusy(null); if (id.indexOf("rollback") === 0) refreshCfg(); }, function () { setBusy(null); });
       }
       // Persist one update preference. The master goes through setAutoUpdate
       // (kept for back-compat); the nested switches through setUpdatePref. The
@@ -668,6 +731,7 @@
         { key: "hub_prerelease",     labelKey: "update_beta",        depth: 2, visible: function () { return on && uc.auto_update_hub === true; } },
         { key: "auto_update_plugin", labelKey: "update_plugin",      depth: 1, visible: function () { return on; } },
         { key: "plugin_prerelease",  labelKey: "update_beta",        depth: 2, visible: function () { return on && uc.auto_update_plugin === true; } },
+        { key: "quiet_updates",      labelKey: "update_quiet",       depth: 1, visible: function () { return on; } },
       ];
       function updSwitch(checked) {
         return h("span", { key: "sw", style: { flex: "0 0 auto", width: "38px", height: "22px", borderRadius: "11px", position: "relative", background: checked ? "#1a9fff" : "rgba(255,255,255,0.25)" } },
@@ -785,9 +849,7 @@
           : h("div", { key: "title", style: { fontSize: "18px", fontWeight: "700", padding: "6px 16px 4px" } }, I18N.t("hub_title"));
         const body = [titleRow];
         if (rcDirty) body.push(restartBanner());
-        const notice = hubUpdateNotice();
-        if (notice) body.push(h("div", { key: "nw", style: { padding: "0 16px" } }, notice));
-        if (on) body.push(updateStatusRow());
+        Array.prototype.push.apply(body, updateNotices());
         if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
         const out = body.concat(buildSections(useNative, TF));
         if (logs !== null) out.push(buildLogView());

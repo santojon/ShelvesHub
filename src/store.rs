@@ -48,6 +48,19 @@ pub struct HubSettings {
     /// every tick). Not user-facing.
     #[serde(default)]
     pub bundle_tag: String,
+    /// The tag of the bundle kept as `.prev` by the last swap (what a rollback
+    /// restores). Empty until a swap has happened.
+    pub bundle_prev_tag: String,
+    /// A Deck Shelves release the user rolled back from: the auto-update check
+    /// leaves it alone until a newer release is published or the user updates by
+    /// hand. Empty = no hold.
+    pub bundle_hold_tag: String,
+    /// The same hold for the hub's own release after a hub rollback.
+    pub hub_hold_tag: String,
+    /// Quiet updates: an automatic check never downloads or swaps while a game
+    /// is running — it waits for a later tick. A manual "Check now" still goes
+    /// ahead.
+    pub quiet_updates: bool,
     /// Catch-all for keys written by a newer daemon — preserved verbatim across a
     /// load→save so a version-skewed downgrade can't drop them. Not read directly.
     #[serde(flatten)]
@@ -65,6 +78,10 @@ impl Default for HubSettings {
             auto_update_plugin: true,
             plugin_prerelease: false,
             bundle_tag: String::new(),
+            bundle_prev_tag: String::new(),
+            bundle_hold_tag: String::new(),
+            hub_hold_tag: String::new(),
+            quiet_updates: true,
             extra: serde_json::Map::new(),
         }
     }

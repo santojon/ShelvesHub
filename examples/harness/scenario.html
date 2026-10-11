@@ -18,12 +18,18 @@
           "coexist-native": { coexist: true, pluginPanel: true, nativeUi: true },
           "coexist-fallback-native": { coexist: true, pluginPanel: false, nativeUi: true },
           "coexist-idle": { coexist: true, pluginPanel: true, nativeUi: true },
+          // Cooperative: a loader is present AND ownership is forced to ShelvesHub
+          // (SHELVES_FORCE_OWNER=shelveshub) — the host is published, the UI borrowed.
+          "coop-mirror": { coexist: true, pluginPanel: true, forceOwner: true },
+          "coop-fallback": { coexist: true, pluginPanel: false, forceOwner: true },
         };
         window.__HARNESS__ = map[sc] || map["coexist-mirror"];
         // Native-component rendering is gated behind this runtime flag on-device
         // (see nativeUiOn()); scenarios that provide native mocks opt in here so
         // the harness exercises the native render path.
         if (window.__HARNESS__.nativeUi) window.__SHELVES_NATIVE_UI__ = true;
+        // What the daemon stamps before injecting under a forced owner.
+        if (window.__HARNESS__.forceOwner) window.__SHELVES_FORCE_OWNER__ = "shelveshub";
         window.__HARNESS_SCENARIO__ = sc;
         window.__HARNESS_READY__ = false;
         window.__HARNESS_ERRORS__ = [];
@@ -69,7 +75,7 @@
         var RC = {
           cef_host: "127.0.0.1", cef_port: 8080, rpc_addr: "127.0.0.1:60123",
           interval_secs: 30, owner_settle_secs: 0, native_qam: true, prerelease: false,
-          force_owner: false, recover_cmd: "", bundle_path: "/harness/bundle.js",
+          force_owner: !!window.__HARNESS__.forceOwner, recover_cmd: "", bundle_path: "/harness/bundle.js",
           backend: "", version: "0.0.0-harness", loader_possible: true,
           editable: ["native_qam", "prerelease", "owner_settle_secs", "interval_secs", "force_owner", "recover_cmd"],
           paused: false, pending_hub_update: null, hub_update_staged: false,

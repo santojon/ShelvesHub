@@ -62,5 +62,14 @@
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
   "action_restart_backend": "Uruchom ponownie backend",
   "coop_receded_warning": "Tryb współpracy wstrzymany — konflikt z loaderem wtyczek; w tej sesji działa jako współistnienie.",
-  "restart_confirm": "Dotknij ponownie, aby uruchomić ponownie"
+  "restart_confirm": "Dotknij ponownie, aby uruchomić ponownie",
+  "action_rollback_plugin": "Wróć do poprzedniej wersji Deck Shelves",
+  "action_rollback_hub": "Wróć do poprzedniej wersji ShelvesHub",
+  "rollback_confirm": "Dotknij ponownie, aby wrócić",
+  "hub_rollback_staged": "Przywrócono poprzednią wersję ShelvesHub — uruchom ponownie, aby zakończyć",
+  "update_quiet": "Czekaj, aż żadna gra nie będzie uruchomiona",
+  "upd_deferred": "czeka, aż żadna gra nie będzie uruchomiona",
+  "upd_whats_new": "Co nowego",
+  "upd_plugin_available": "Dostępna aktualizacja Deck Shelves",
+  "action_update_plugin_now": "Zaktualizuj Deck Shelves teraz"
 }

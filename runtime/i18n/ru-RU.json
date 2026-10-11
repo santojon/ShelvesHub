@@ -62,5 +62,14 @@
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
   "action_restart_backend": "Перезапустить бэкенд",
   "coop_receded_warning": "Кооперативный режим приостановлен — конфликт с загрузчиком плагинов; в этой сессии работает как сосуществование.",
-  "restart_confirm": "Нажмите ещё раз для перезапуска"
+  "restart_confirm": "Нажмите ещё раз для перезапуска",
+  "action_rollback_plugin": "Вернуться к предыдущей версии Deck Shelves",
+  "action_rollback_hub": "Вернуться к предыдущей версии ShelvesHub",
+  "rollback_confirm": "Нажмите ещё раз, чтобы вернуться",
+  "hub_rollback_staged": "Предыдущая версия ShelvesHub восстановлена — перезапустите, чтобы завершить",
+  "update_quiet": "Ждать, пока не будет запущенных игр",
+  "upd_deferred": "ожидание, пока не будет запущенных игр",
+  "upd_whats_new": "Что нового",
+  "upd_plugin_available": "Доступно обновление Deck Shelves",
+  "action_update_plugin_now": "Обновить Deck Shelves сейчас"
 }

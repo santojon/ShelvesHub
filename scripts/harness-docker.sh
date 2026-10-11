@@ -8,6 +8,7 @@
 #   scripts/harness-docker.sh                 # host architecture
 #   PLATFORM=linux/arm64 scripts/harness-docker.sh   # emulated arm64 (needs QEMU/buildx)
 #   BASE_IMAGE=rust:1-slim-bookworm scripts/harness-docker.sh  # pin/override the base
+#   QA_EVIDENCE=1 scripts/harness-docker.sh   # also write site/reports/qa/evidence/*.json
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,10 +43,16 @@ else
   echo "[i] No Deck Shelves checkout ($DS_ROOT) — plugin-under-host probes will skip."
 fi
 
+# QA-lab evidence lands in the mounted repo (one record per step + the scenario
+# reports), under site/reports/qa/evidence/ — see docs/qa-lab.md.
+EVIDENCE_ARGS=()
+[[ "${QA_EVIDENCE:-0}" == "1" ]] && EVIDENCE_ARGS=(-e QA_EVIDENCE_DIR=/work/site/reports/qa/evidence)
+
 echo "[i] Running the harness in a container…"
 docker run --rm ${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} \
   -v "$ROOT":/work \
   -v shelveshub-harness-target:/work/target \
   -v shelveshub-harness-cargo:/usr/local/cargo/registry \
   ${PLUGIN_ARGS[@]+"${PLUGIN_ARGS[@]}"} \
+  ${EVIDENCE_ARGS[@]+"${EVIDENCE_ARGS[@]}"} \
   "$IMAGE"

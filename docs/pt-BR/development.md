@@ -66,6 +66,10 @@ Deck Linux — no Windows, rode-as via WSL / Git Bash.
 | **Steam local (Big Picture real)** | `pnpm local:run` | O daemon como **host único** injetando no Steam Big Picture *desta máquina* — o caminho real de desktop no macOS/Windows/Linux. |
 | **Steam Deck (via SSH)** | `pnpm deck:deploy` | O caminho completo no dispositivo (binário compilado de forma cruzada, serviço systemd, coexistência com um carregador de plugins). |
 
+Para as execuções em contêiner por arquitetura, a evidência estruturada que elas deixam
+e as células que só um dispositivo real consegue fechar, veja o
+[laboratório de QA](qa-lab.md) (`pnpm qa:matrix`).
+
 **O Steam local** é o análogo de desktop mais próximo dos testes no dispositivo. Ele precisa
 que o Steam esteja aberto com a depuração remota CEF e o Big Picture ativo:
 

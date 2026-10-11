@@ -337,11 +337,74 @@ fn record_bundle_tag(prerelease: bool) {
     let Some(cfg_path) = crate::state::hub_config_path() else {
         return;
     };
+    // The swap kept the old copy as `.prev`; its tag follows it. A download the
+    // user asked for also lifts any hold left by a rollback.
     let mut s = crate::store::load(cfg_path);
-    if s.bundle_tag != tag {
-        s.bundle_tag = tag;
-        let _ = crate::store::save(cfg_path, &s);
-    }
+    s.bundle_prev_tag = std::mem::replace(&mut s.bundle_tag, tag);
+    s.bundle_hold_tag.clear();
+    let _ = crate::store::save(cfg_path, &s);
+    state::set_pending_plugin_update(None);
+}
+
+/// After a bundle rollback: the recorded tags swap places and the undone release
+/// is held back from auto-update. Returns the tag now live (empty when unknown).
+fn hold_rolled_back_bundle() -> String {
+    let Some(cfg_path) = crate::state::hub_config_path() else {
+        return String::new();
+    };
+    let mut s = crate::store::load(cfg_path);
+    s.bundle_hold_tag = s.bundle_tag.clone();
+    std::mem::swap(&mut s.bundle_tag, &mut s.bundle_prev_tag);
+    let _ = crate::store::save(cfg_path, &s);
+    state::set_pending_plugin_update(None);
+    s.bundle_tag
+}
+
+/// Exit after the response flushes, so a relaunching service manager brings the
+/// daemon back on the binary staged over this one.
+fn exit_after_flush(reason: &'static str) {
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        log_info("rpc", reason);
+        std::process::exit(0);
+    });
+}
+
+/// The update/rollback state the hub screen reads alongside the settings.
+fn insert_update_state(obj: &mut serde_json::Map<String, Value>) {
+    let plugin_pending = state::pending_plugin_update();
+    let rollback_available = state::populate_config()
+        .is_some_and(|(path, _)| crate::populate::bundle_rollback_available(path));
+    obj.insert(
+        "hub_rollback_staged".to_string(),
+        Value::Bool(state::hub_rollback_staged()),
+    );
+    obj.insert(
+        "pending_hub_notes".to_string(),
+        state::pending_hub_notes().map_or(Value::Null, Value::String),
+    );
+    obj.insert(
+        "pending_plugin_update".to_string(),
+        plugin_pending
+            .as_ref()
+            .map_or(Value::Null, |(tag, _)| Value::String(tag.clone())),
+    );
+    obj.insert(
+        "pending_plugin_notes".to_string(),
+        plugin_pending.map_or(Value::Null, |(_, notes)| Value::String(notes)),
+    );
+    obj.insert(
+        "update_deferred".to_string(),
+        Value::Bool(state::update_deferred()),
+    );
+    obj.insert(
+        "hub_previous_version".to_string(),
+        crate::populate::hub_previous_version().map_or(Value::Null, Value::String),
+    );
+    obj.insert(
+        "bundle_rollback_available".to_string(),
+        Value::Bool(rollback_available),
+    );
 }
 
 fn dispatch(body: &str) -> String {
@@ -501,12 +564,63 @@ fn dispatch(body: &str) -> String {
                             "last_update_check_ms".to_string(),
                             state::millis_since_update_check().map_or(Value::Null, Value::from),
                         );
+                        insert_update_state(obj);
                     }
                     ok(v.to_string())
                 }
                 Err(e) => err(&format!("serialize config: {e}")),
             },
             None => err("hub config path not configured"),
+        },
+        // Undo the last Deck Shelves swap: the `.prev` copy becomes live again (the
+        // loop's on-disk watch hot-swaps it in) and the undone release is held back
+        // from auto-update until a newer one is published.
+        Some("rollbackBundle") => match state::populate_config() {
+            Some((path, _)) => match crate::populate::rollback_bundle(path) {
+                Ok(()) => {
+                    let tag = hold_rolled_back_bundle();
+                    log_info("rpc", &format!("Rolled Deck Shelves back to {tag:?}."));
+                    ok(format!(
+                        r#"{{"rolled_back":true,"tag":{}}}"#,
+                        Value::String(tag)
+                    ))
+                }
+                Err(e) => err(&e),
+            },
+            None => err("bundle path not configured"),
+        },
+        // Undo the last hub update: restore the `previous/` snapshot (runtime +
+        // assets, and the binary staged like an update) and hold the undone release
+        // back from auto-update. Restarts under a relaunching service manager;
+        // otherwise the "restart to finish" notice stands.
+        Some("rollbackHub") => match crate::populate::rollback_hub() {
+            Ok(version) => {
+                if let Some(cfg_path) = state::hub_config_path() {
+                    let mut s = crate::store::load(cfg_path);
+                    s.hub_hold_tag = env!("CARGO_PKG_VERSION").to_string();
+                    let _ = crate::store::save(cfg_path, &s);
+                }
+                state::set_hub_update_staged(true);
+                state::set_hub_rollback_staged(true);
+                state::set_pending_hub_update(Some(version.clone()));
+                state::set_pending_hub_notes(None);
+                let restarting = crate::populate::under_relaunching_service();
+                log_info(
+                    "rpc",
+                    &format!("Hub rollback to {version} staged (restarting={restarting})."),
+                );
+                if restarting {
+                    exit_after_flush("Restarting to apply hub rollback.");
+                }
+                ok(format!(
+                    r#"{{"rolled_back":true,"restarting":{restarting},"version":{}}}"#,
+                    Value::String(version)
+                ))
+            }
+            Err(e) => {
+                log_error("rpc", &format!("rollbackHub failed: {e}"));
+                err(&e)
+            }
         },
         Some("setAutoUpdate") => match state::hub_config_path() {
             Some(path) => {
@@ -567,6 +681,10 @@ fn dispatch(body: &str) -> String {
                     }
                     Some("plugin_prerelease") => {
                         settings.plugin_prerelease = value;
+                        true
+                    }
+                    Some("quiet_updates") => {
+                        settings.quiet_updates = value;
                         true
                     }
                     _ => false,
@@ -796,7 +914,16 @@ fn dispatch(body: &str) -> String {
                 .unwrap_or(false);
             match crate::populate::apply_hub_update(prerelease) {
                 Ok(tag) => {
+                    // An update the user asked for lifts the hold a rollback left.
+                    if let Some(cfg_path) = state::hub_config_path() {
+                        let mut s = crate::store::load(cfg_path);
+                        if !s.hub_hold_tag.is_empty() {
+                            s.hub_hold_tag.clear();
+                            let _ = crate::store::save(cfg_path, &s);
+                        }
+                    }
                     state::set_hub_update_staged(true);
+                    state::set_hub_rollback_staged(false);
                     state::set_pending_hub_update(Some(tag.clone()));
                     let restarting = crate::populate::under_relaunching_service();
                     log_info(
@@ -804,14 +931,9 @@ fn dispatch(body: &str) -> String {
                         &format!("Hub self-update {tag} staged (restarting={restarting})."),
                     );
                     if restarting {
-                        // Exit after the response flushes so the service manager
-                        // relaunches into the staged binary. The renderer keeps the
-                        // current runtime until the new daemon re-injects.
-                        std::thread::spawn(|| {
-                            std::thread::sleep(std::time::Duration::from_millis(1500));
-                            log_info("rpc", "Restarting to apply hub update.");
-                            std::process::exit(0);
-                        });
+                        // The renderer keeps the current runtime until the new
+                        // daemon re-injects.
+                        exit_after_flush("Restarting to apply hub update.");
                     }
                     ok(format!(
                         r#"{{"updated":true,"restarting":{restarting},"version":"{}","tag":"{}"}}"#,
@@ -833,11 +955,12 @@ fn dispatch(body: &str) -> String {
             let pending = state::pending_hub_update().map_or(Value::Null, Value::String);
             let last_ms = state::millis_since_update_check().map_or(Value::Null, Value::from);
             ok(format!(
-                r#"{{"ran":{},"pending_hub_update":{},"hub_update_staged":{},"last_update_check_ms":{}}}"#,
+                r#"{{"ran":{},"pending_hub_update":{},"hub_update_staged":{},"last_update_check_ms":{},"update_deferred":{}}}"#,
                 ran,
                 pending,
                 state::hub_update_staged(),
-                last_ms
+                last_ms,
+                state::update_deferred()
             ))
         }
         // Restart the daemon so pending config-file edits (interval, native_qam,

@@ -62,5 +62,14 @@
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
   "action_restart_backend": "백엔드 다시 시작",
   "coop_receded_warning": "협조 모드 일시 중지 — 플러그인 로더와 충돌하여 이번 세션은 공존 모드로 실행됩니다.",
-  "restart_confirm": "다시 눌러 재시작"
+  "restart_confirm": "다시 눌러 재시작",
+  "action_rollback_plugin": "이전 Deck Shelves로 되돌리기",
+  "action_rollback_hub": "이전 ShelvesHub로 되돌리기",
+  "rollback_confirm": "되돌리려면 다시 탭하세요",
+  "hub_rollback_staged": "이전 ShelvesHub 복원됨 — 완료하려면 다시 시작하세요",
+  "update_quiet": "실행 중인 게임이 없을 때까지 기다리기",
+  "upd_deferred": "실행 중인 게임이 없을 때까지 대기 중",
+  "upd_whats_new": "새로운 기능",
+  "upd_plugin_available": "Deck Shelves 업데이트 사용 가능",
+  "action_update_plugin_now": "지금 Deck Shelves 업데이트"
 }

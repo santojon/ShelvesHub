@@ -73,6 +73,16 @@ fn rejects_unknown_method() {
 }
 
 #[test]
+fn rollback_hub_without_a_snapshot_is_refused() {
+    // The test binary has no `previous/` snapshot beside it — nothing is staged.
+    assert_eq!(
+        dispatch(r#"{"method":"rollbackHub"}"#),
+        r#"{"ok":false,"error":"no previous ShelvesHub to go back to"}"#
+    );
+    assert!(!state::hub_rollback_staged());
+}
+
+#[test]
 fn rejects_garbage() {
     assert_eq!(
         dispatch("not json"),

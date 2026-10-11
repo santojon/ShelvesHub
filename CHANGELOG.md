@@ -8,6 +8,34 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- **Go back to the previous version — for ShelvesHub and for Deck Shelves.** Every update now keeps
+  what it replaced: the Deck Shelves bundle as a `.prev` copy beside the live one, and the ShelvesHub
+  binary + injected runtime + assets as a `previous/` snapshot beside the binary. The tab's Updates
+  section gains two "Go back to the previous …" rows (two-tap confirm) that restore them offline — no
+  download — via the new `rollbackBundle` / `rollbackHub` RPC methods. A restored Deck Shelves is
+  hot-swapped in place like an update; a restored ShelvesHub is staged like a self-update and takes
+  effect on the next restart (automatic under a relaunching service manager). The release you went
+  back from is **held back** from automatic updates until a newer one is published, so a rollback is
+  not undone on the next check; updating by hand lifts the hold.
+- **What's new, before it lands.** The periodic check now records the release notes of a pending
+  ShelvesHub update (and of a held-back Deck Shelves update) and the tab shows them as a collapsed
+  "What's new (vX)" section under the update status, so you can read what changes before applying.
+- **Quiet updates.** A new "Wait until no game is running" switch (on by default, under Automatic
+  updates) makes the periodic check hold its downloads and swaps while Steam reports a running app;
+  it tries again on a later tick and the status row says "waiting until no game is running". A
+  manual "Check now" still goes ahead. A held-back Deck Shelves release shows an "Update Deck
+  Shelves now" button. `getConfig` reports `update_deferred`, `pending_plugin_update`,
+  `pending_hub_notes`, `hub_previous_version` and `bundle_rollback_available`; `setUpdatePref`
+  accepts `quiet_updates`.
+
+### Fixed
+- **A failed automatic Deck Shelves download can no longer damage the live bundle.** The periodic
+  update downloaded straight over the injected bundle and verified afterwards, so a truncated
+  download or a checksum mismatch left a broken (or deleted) file in place. It now downloads to a
+  temporary file, verifies size and `SHA256SUMS`, and only then swaps — the same tmp → verify →
+  rename path the manual update already used (which now also runs the checksum).
+
 ## [0.5.0] - 2026-10-10
 
 ### Added

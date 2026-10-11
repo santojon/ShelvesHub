@@ -215,7 +215,19 @@ jobs:
           token: ${{ secrets.SUBMIT_TOKEN || github.token }}
 
       - name: Simulation harness (Linux container)
-        run: DECK_SHELVES_ROOT="$GITHUB_WORKSPACE/.plugin-src" bash scripts/harness-docker.sh
+        run: QA_EVIDENCE=1 DECK_SHELVES_ROOT="$GITHUB_WORKSPACE/.plugin-src" bash scripts/harness-docker.sh
+
+      # QA-lab evidence (one record per step + the scenario reports) and the
+      # assembled matrix — see docs/qa-lab.md. Kept even when the harness fails.
+      - name: QA-lab evidence
+        if: always()
+        run: node scripts/ci/qa-matrix.mjs || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-evidence-amd64
+          path: site/reports/qa/
+          if-no-files-found: ignore
 
       # The same plugin probes on ARM64 (QEMU) — the coverage the plugin's own
       # x86_64 pytest can't give. Probes only (no Rust build), so it stays cheap.
@@ -303,4 +315,15 @@ jobs:
         env:
           PLATFORM: linux/arm64
           IMAGE: shelveshub-harness-arm64
+          QA_EVIDENCE: "1"
         run: bash scripts/harness-docker.sh
+
+      - name: QA-lab evidence
+        if: always()
+        run: node scripts/ci/qa-matrix.mjs || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-evidence-arm64
+          path: site/reports/qa/
+          if-no-files-found: ignore

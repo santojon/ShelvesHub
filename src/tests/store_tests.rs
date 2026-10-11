@@ -103,6 +103,31 @@ fn corrupt_primary_heals_from_backup() {
 }
 
 #[test]
+fn quiet_updates_default_on_and_rollback_fields_roundtrip() {
+    let path = scratch("rollback");
+    cleanup(&path);
+    assert!(HubSettings::default().quiet_updates);
+    let s = HubSettings {
+        bundle_tag: "v3.4.0".into(),
+        bundle_prev_tag: "v3.3.4".into(),
+        bundle_hold_tag: "v3.4.0".into(),
+        hub_hold_tag: "0.6.0".into(),
+        quiet_updates: false,
+        ..Default::default()
+    };
+    save(&path, &s).unwrap();
+    assert_eq!(load(&path), s);
+    // A file from before these fields existed loads with their defaults.
+    fs::write(&path, r#"{"auto_update":true}"#).unwrap();
+    let old = load(&path);
+    assert!(old.quiet_updates);
+    assert!(old.bundle_prev_tag.is_empty());
+    assert!(old.bundle_hold_tag.is_empty());
+    assert!(old.hub_hold_tag.is_empty());
+    cleanup(&path);
+}
+
+#[test]
 fn atomic_write_leaves_no_temp() {
     let path = scratch("atomic");
     cleanup(&path);

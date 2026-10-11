@@ -66,6 +66,9 @@ Linux Deck — on Windows run them under WSL / Git Bash.
 | **Local Steam (real Big Picture)** | `pnpm local:run` | The daemon as the **sole host** injecting into *this machine's* Steam Big Picture — the real desktop path on macOS/Windows/Linux. |
 | **Steam Deck (over SSH)** | `pnpm deck:deploy` | The full on-device path (cross-compiled binary, systemd service, coexist with a plugin loader). |
 
+For the per-architecture container runs, the structured evidence they leave and the
+cells only a real device can clear, see the [QA lab](qa-lab.md) (`pnpm qa:matrix`).
+
 **Local Steam** is the closest desktop analogue to on-device testing. It needs
 Steam launched with CEF remote debugging and Big Picture open:
 

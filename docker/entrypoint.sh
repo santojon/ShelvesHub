@@ -25,15 +25,23 @@ echo "== ShelvesHub Docker harness (mode: $MODE) =="
 echo "[i] $(cargo --version) · $("$BROWSER_BIN" --version 2>/dev/null) · $(uname -m)"
 
 FAIL=0
+# QA-lab evidence: with QA_EVIDENCE_DIR set, each step's verdict (pass / fail /
+# skipped) and the per-scenario reports are written there as JSON.
+EVIDENCE="${QA_EVIDENCE_DIR:-}"
+ARCH="$(uname -m)"
+S_SCEN=skipped S_INSTALL=skipped S_SMOKE=skipped S_PLUGIN=skipped
+[[ -n "$EVIDENCE" ]] && mkdir -p "$EVIDENCE"
 
 # ── 1. Runtime scenario harness ─────────────────────────────────────────────
 if [[ "$MODE" == "all" || "$MODE" == "scenarios" ]]; then
 echo ""
 echo "[scenarios] Runtime scenarios (scripts/harness.sh)…"
-if HARNESS_NO_SANDBOX=1 HEADLESS=1 BROWSER="$BROWSER_BIN" bash scripts/harness.sh; then
+if HARNESS_JSON="${EVIDENCE:+$EVIDENCE/scenarios-$ARCH.json}" HARNESS_NO_SANDBOX=1 HEADLESS=1 BROWSER="$BROWSER_BIN" bash scripts/harness.sh; then
   echo "[ok] runtime scenarios passed"
+  S_SCEN=pass
 else
   echo "[X] runtime scenarios failed"
+  S_SCEN=fail
   FAIL=1
 fi
 fi
@@ -44,8 +52,10 @@ echo ""
 echo "[install] Install / uninstall lifecycle…"
 if bash docker/install-scenario.sh; then
   echo "[ok] install/uninstall lifecycle passed"
+  S_INSTALL=pass
 else
   echo "[X] install/uninstall lifecycle failed"
+  S_INSTALL=fail
   FAIL=1
 fi
 fi
@@ -93,9 +103,11 @@ daemon_smoke() {
 }
 if daemon_smoke; then
   echo "[ok] daemon injected into the headless renderer"
+  S_SMOKE=pass
 else
   echo "[X] daemon injection smoke failed"
   echo "---- daemon log (tail) ----"; tail -n 20 /tmp/shelveshub-daemon.log 2>/dev/null || true
+  S_SMOKE=fail
   FAIL=1
 fi
 fi
@@ -109,10 +121,21 @@ echo ""
 echo "[plugin] Deck Shelves backend probes under the host (cross-OS, fail-soft)…"
 if python3 docker/plugin-probes.py; then
   echo "[ok] plugin backend probes fail-soft on $(uname -m)"
+  # A clean skip (no plugin checkout) is not a pass — the evidence says so.
+  if [[ -d "${DECK_SHELVES_ROOT:-/nonexistent}/src/backend" ]]; then S_PLUGIN=pass; fi
 else
   echo "[X] plugin backend probes failed"
+  S_PLUGIN=fail
   FAIL=1
 fi
+fi
+
+if [[ -n "$EVIDENCE" ]]; then
+  OVERALL=PASS; [[ "$FAIL" -eq 0 ]] || OVERALL=FAIL
+  printf '{\n  "ts": "%s",\n  "kind": "container",\n  "os": "linux",\n  "arch": "%s",\n  "mode": "%s",\n  "overall": "%s",\n  "steps": { "scenarios": "%s", "install": "%s", "smoke": "%s", "plugin": "%s" }\n}\n' \
+    "$(date +%Y-%m-%d_%H-%M-%S)" "$ARCH" "$MODE" "$OVERALL" "$S_SCEN" "$S_INSTALL" "$S_SMOKE" "$S_PLUGIN" \
+    >"$EVIDENCE/container-$ARCH.json"
+  echo "[i] Evidence written to $EVIDENCE/container-$ARCH.json"
 fi
 
 echo ""

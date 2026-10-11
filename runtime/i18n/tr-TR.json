@@ -62,5 +62,14 @@
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
   "action_restart_backend": "Arka ucu yeniden başlat",
   "coop_receded_warning": "İşbirlikçi mod duraklatıldı — eklenti yükleyiciyle çakışıyordu; bu oturumda birlikte çalışma olarak çalışıyor.",
-  "restart_confirm": "Yeniden başlatmak için tekrar dokun"
+  "restart_confirm": "Yeniden başlatmak için tekrar dokun",
+  "action_rollback_plugin": "Önceki Deck Shelves sürümüne dön",
+  "action_rollback_hub": "Önceki ShelvesHub sürümüne dön",
+  "rollback_confirm": "Geri dönmek için tekrar dokunun",
+  "hub_rollback_staged": "Önceki ShelvesHub geri yüklendi — bitirmek için yeniden başlatın",
+  "update_quiet": "Hiçbir oyun çalışmayana kadar bekle",
+  "upd_deferred": "hiçbir oyun çalışmayana kadar bekleniyor",
+  "upd_whats_new": "Yenilikler",
+  "upd_plugin_available": "Deck Shelves güncellemesi mevcut",
+  "action_update_plugin_now": "Deck Shelves'i şimdi güncelle"
 }

@@ -62,5 +62,14 @@
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
   "action_restart_backend": "重启后端",
   "coop_receded_warning": "协作模式已暂停 — 与插件加载器冲突；本次会话以共存模式运行。",
-  "restart_confirm": "再次点按以重启"
+  "restart_confirm": "再次点按以重启",
+  "action_rollback_plugin": "回退到上一个 Deck Shelves",
+  "action_rollback_hub": "回退到上一个 ShelvesHub",
+  "rollback_confirm": "再次点按以回退",
+  "hub_rollback_staged": "已恢复上一个 ShelvesHub — 重启以完成",
+  "update_quiet": "等到没有游戏运行时再更新",
+  "upd_deferred": "等待没有游戏运行",
+  "upd_whats_new": "更新内容",
+  "upd_plugin_available": "Deck Shelves 有可用更新",
+  "action_update_plugin_now": "立即更新 Deck Shelves"
 }

@@ -296,6 +296,72 @@ fn copy_into(src: &Path, dest: &Path) -> Result<(), String> {
         .map_err(|e| format!("copy {} -> {}: {e}", src.display(), dest.display()))
 }
 
+/// Where the bundle that was live before the last swap is kept (`<bundle>.prev`,
+/// beside it), so an update can be undone without a download.
+pub fn bundle_previous_path(dest: &Path) -> PathBuf {
+    let mut name = dest.file_name().unwrap_or_default().to_os_string();
+    name.push(".prev");
+    dest.with_file_name(name)
+}
+
+/// Whether a previous bundle is available to go back to.
+pub fn bundle_rollback_available(dest: &Path) -> bool {
+    is_real_bundle(&bundle_previous_path(dest))
+}
+
+/// Move a fully downloaded + verified bundle into place: the current live copy
+/// (if real) becomes `.prev`, then `tmp` is renamed over `dest`. Both renames are
+/// within one directory, so the live path never holds a partial file.
+fn swap_bundle_in(tmp: &Path, dest: &Path) -> Result<(), String> {
+    if is_real_bundle(dest) {
+        let prev = bundle_previous_path(dest);
+        let _ = fs::remove_file(&prev);
+        if let Err(e) = fs::rename(dest, &prev) {
+            log_warning(
+                "populate",
+                &format!("could not keep the previous bundle for rollback: {e}"),
+            );
+        }
+    }
+    fs::rename(tmp, dest).map_err(|e| {
+        let _ = fs::remove_file(tmp);
+        format!("swap bundle into place: {e}")
+    })
+}
+
+/// Go back to the bundle that was live before the last swap: `.prev` becomes the
+/// live bundle and the current one becomes `.prev`, so the step can be undone
+/// again. The loop's on-disk watch hot-swaps the restored file on its next tick.
+pub fn rollback_bundle(dest: &Path) -> Result<(), String> {
+    let prev = bundle_previous_path(dest);
+    if !is_real_bundle(&prev) {
+        return Err("no previous Deck Shelves bundle to go back to".to_string());
+    }
+    let parked = dest.with_file_name(".bundle.rollback.tmp");
+    let _ = fs::remove_file(&parked);
+    let had_current = dest.exists();
+    if had_current {
+        fs::rename(dest, &parked).map_err(|e| format!("park current bundle: {e}"))?;
+    }
+    if let Err(e) = fs::rename(&prev, dest) {
+        if had_current {
+            let _ = fs::rename(&parked, dest);
+        }
+        return Err(format!("restore previous bundle: {e}"));
+    }
+    if had_current {
+        if let Err(e) = fs::rename(&parked, &prev) {
+            let _ = fs::remove_file(&parked);
+            log_warning(
+                "populate",
+                &format!("could not keep the undone bundle: {e}"),
+            );
+        }
+    }
+    log_info("populate", "Rolled the bundle back to the previous copy.");
+    Ok(())
+}
+
 /// Resolve the newest release's `*.iife.js` asset and download it to `dest`. When
 /// `prerelease` is set, pre-release releases are considered (newest overall);
 /// otherwise only the latest stable release.
@@ -313,14 +379,16 @@ fn download_latest_iife(dest: &Path, prerelease: bool) -> Result<String, String>
     if let Some(dir) = dest.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
     }
-    curl_download(&url, dest)?;
-    if !is_real_bundle(dest) {
-        return Err(format!(
-            "downloaded file at {} is too small",
-            dest.display()
-        ));
+    // Download beside the live bundle, verify, THEN swap — the live copy is never
+    // touched by a failed or truncated download.
+    let tmp = dest.with_file_name(".bundle.download.tmp");
+    curl_download(&url, &tmp)?;
+    if !is_real_bundle(&tmp) {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("downloaded file from {url} is too small"));
     }
-    verify_plugin_asset_against_sums(&url, dest)?;
+    verify_plugin_asset_against_sums(&url, &tmp)?;
+    swap_bundle_in(&tmp, dest)?;
     log_info("populate", &format!("Downloaded bundle from {url}"));
     Ok(url)
 }
@@ -351,11 +419,18 @@ fn find_iife_asset_url(release_json: &str) -> Option<String> {
 /// selection so the stored tag matches what gets installed. `None` on a network
 /// or parse miss, which the caller treats as "no change" (never a spurious update).
 pub fn latest_release_tag(prerelease: bool) -> Option<String> {
-    if prerelease {
-        newest_release_tag_in_releases(&curl_text(RELEASES_ALL_URL).ok()?)
+    latest_release_info(prerelease).map(|(tag, _)| tag)
+}
+
+/// The tag AND the release notes (`body`) of the release `latest_release_tag`
+/// selects, so the host screen can show what changes before an update lands.
+pub fn latest_release_info(prerelease: bool) -> Option<(String, String)> {
+    let release = if prerelease {
+        newest_release_in_releases(&curl_text(RELEASES_ALL_URL).ok()?)?
     } else {
-        release_tag(&serde_json::from_str(&curl_text(RELEASES_LATEST_URL).ok()?).ok()?)
-    }
+        serde_json::from_str(&curl_text(RELEASES_LATEST_URL).ok()?).ok()?
+    };
+    Some((release_tag(&release)?, release_notes(&release)))
 }
 
 fn release_tag(release: &serde_json::Value) -> Option<String> {
@@ -366,17 +441,38 @@ fn release_tag(release: &serde_json::Value) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn newest_release_tag_in_releases(releases_json: &str) -> Option<String> {
-    let releases: serde_json::Value = serde_json::from_str(releases_json).ok()?;
-    for release in releases.as_array()? {
-        if release.get("draft").and_then(serde_json::Value::as_bool) == Some(true) {
-            continue; // never install from a draft
-        }
-        if iife_asset_url(release).is_some() {
-            return release_tag(release);
-        }
+/// Longest release-notes preview the host screen shows (characters).
+const RELEASE_NOTES_PREVIEW_CHARS: usize = 1500;
+
+/// The release's `body` trimmed and capped for an on-screen preview (empty when
+/// the release has none). Markdown is left as-is; the screen renders plain lines.
+fn release_notes(release: &serde_json::Value) -> String {
+    let body = release
+        .get("body")
+        .and_then(|b| b.as_str())
+        .unwrap_or("")
+        .replace("\r\n", "\n");
+    let body = body.trim();
+    if body.chars().count() <= RELEASE_NOTES_PREVIEW_CHARS {
+        return body.to_string();
     }
-    None
+    let mut cut: String = body.chars().take(RELEASE_NOTES_PREVIEW_CHARS).collect();
+    cut.push('…');
+    cut
+}
+
+/// The newest non-draft release carrying an `*.iife.js` asset (the API returns
+/// releases newest first), so pre-releases are considered.
+fn newest_release_in_releases(releases_json: &str) -> Option<serde_json::Value> {
+    let releases: serde_json::Value = serde_json::from_str(releases_json).ok()?;
+    releases
+        .as_array()?
+        .iter()
+        .find(|r| {
+            r.get("draft").and_then(serde_json::Value::as_bool) != Some(true)
+                && iife_asset_url(r).is_some()
+        })
+        .cloned()
 }
 
 /// The `tag_name` of the newest ShelvesHub release for this channel — the hub
@@ -388,6 +484,13 @@ pub fn latest_hub_release_tag(prerelease: bool) -> Option<String> {
     } else {
         release_tag(&serde_json::from_str(&curl_text(HUB_RELEASES_LATEST_URL).ok()?).ok()?)
     }
+}
+
+/// The tag AND the release notes of the newest ShelvesHub release for this
+/// channel (the same selection `apply_hub_update` installs from).
+pub fn latest_hub_release_info(prerelease: bool) -> Option<(String, String)> {
+    let release = latest_hub_release(prerelease).ok()?;
+    Some((release_tag(&release)?, release_notes(&release)))
 }
 
 fn newest_hub_release_tag(releases_json: &str) -> Option<String> {
@@ -747,10 +850,103 @@ pub fn cleanup_stale_update_artifacts() {
     if let Some(name) = exe.file_name().and_then(|s| s.to_str()) {
         let _ = fs::remove_file(exe.with_file_name(format!("{name}.new")));
     }
+    if let Some(dir) = exe.parent() {
+        let _ = fs::remove_dir_all(dir.join(HUB_PREVIOUS_STAGING));
+    }
     #[cfg(windows)]
     {
         let _ = fs::remove_file(exe.with_extension("old"));
     }
+}
+
+/// Snapshot of the install set (binary + `runtime/` + `assets/` + a `VERSION`
+/// marker) taken right before a hub update swaps a new one in, kept beside the
+/// binary so the update can be undone offline. Staging name = the snapshot of
+/// the set being left during a rollback, until it becomes the new `previous`.
+const HUB_PREVIOUS_DIR: &str = "previous";
+const HUB_PREVIOUS_STAGING: &str = "previous.tmp";
+
+fn hub_previous_dir(exe: &Path) -> Option<PathBuf> {
+    exe.parent().map(|d| d.join(HUB_PREVIOUS_DIR))
+}
+
+/// Copy the set that is currently installed beside `exe` into `into`.
+fn snapshot_hub_install(exe: &Path, into: &Path, version: &str) -> Result<(), String> {
+    let Some(install_dir) = exe.parent() else {
+        return Err("install dir unknown".to_string());
+    };
+    let _ = fs::remove_dir_all(into);
+    fs::create_dir_all(into).map_err(|e| format!("create {}: {e}", into.display()))?;
+    copy_into(exe, &into.join(hub_binary_name()))?;
+    for sub in ["runtime", "assets"] {
+        let from = install_dir.join(sub);
+        if from.is_dir() {
+            copy_dir_recursive(&from, &into.join(sub))?;
+        }
+    }
+    fs::write(into.join("VERSION"), version).map_err(|e| format!("write VERSION: {e}"))
+}
+
+/// The version held in a previous-install snapshot, when its binary is usable.
+fn snapshot_version(dir: &Path) -> Option<String> {
+    let bin = dir.join(hub_binary_name());
+    let head = fs::read(&bin).ok()?;
+    if head.len() < REAL_BUNDLE_MIN_BYTES as usize || !looks_like_executable(&head) {
+        return None;
+    }
+    let v = fs::read_to_string(dir.join("VERSION")).ok()?;
+    let v = v.trim();
+    (!v.is_empty()).then(|| v.to_string())
+}
+
+/// The ShelvesHub version a rollback would restore, if a snapshot is available.
+pub fn hub_previous_version() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    snapshot_version(&hub_previous_dir(&exe)?)
+}
+
+/// Go back to the previously installed ShelvesHub: restore its `runtime/` +
+/// `assets/`, then stage its binary over the running one (same swap as an update,
+/// so it takes effect on the next restart). The set being left is snapshotted
+/// first, so the rollback itself can be undone. Returns the restored version.
+pub fn rollback_hub() -> Result<String, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("locate running binary: {e}"))?;
+    rollback_hub_at(&exe, env!("CARGO_PKG_VERSION"))
+}
+
+fn rollback_hub_at(exe: &Path, running_version: &str) -> Result<String, String> {
+    let install_dir = exe
+        .parent()
+        .ok_or_else(|| "install dir unknown".to_string())?;
+    let prev = install_dir.join(HUB_PREVIOUS_DIR);
+    let version = snapshot_version(&prev)
+        .ok_or_else(|| "no previous ShelvesHub to go back to".to_string())?;
+    let staging = install_dir.join(HUB_PREVIOUS_STAGING);
+    snapshot_hub_install(exe, &staging, running_version)?;
+    for sub in ["runtime", "assets"] {
+        let from = prev.join(sub);
+        if from.is_dir() {
+            copy_dir_recursive(&from, &install_dir.join(sub))
+                .map_err(|e| format!("restore {sub}: {e}"))?;
+        }
+    }
+    stage_binary_swap(&prev.join(hub_binary_name()), exe)?;
+    let _ = fs::remove_dir_all(&prev);
+    if let Err(e) = fs::rename(&staging, &prev) {
+        log_warning(
+            "populate",
+            &format!("could not keep the undone install: {e}"),
+        );
+        let _ = fs::remove_dir_all(&staging);
+    }
+    log_info(
+        "populate",
+        &format!(
+            "ShelvesHub {version} restored over {} (restart to apply).",
+            exe.display()
+        ),
+    );
+    Ok(version)
 }
 
 /// Whether the daemon is running under a service manager that will relaunch it
@@ -1018,6 +1214,18 @@ pub fn apply_hub_update(prerelease: bool) -> Result<String, String> {
         ));
     }
 
+    // Keep the set being replaced (binary + runtime + assets) as `previous/` so
+    // the update can be undone offline — unless an earlier update is already
+    // staged over the binary, in which case the running set is no longer on disk.
+    if !crate::state::hub_update_staged() {
+        if let Some(prev) = hub_previous_dir(&exe) {
+            if let Err(e) = snapshot_hub_install(&exe, &prev, env!("CARGO_PKG_VERSION")) {
+                log_warning("populate", &format!("rollback snapshot skipped: {e}"));
+                let _ = fs::remove_dir_all(&prev);
+            }
+        }
+    }
+
     // Refresh the injected runtime (and boot assets) from the SAME package before
     // swapping the binary: a new binary and the old runtime can be incompatible
     // (e.g. the new binary requires the per-boot RPC token the old runtime never
@@ -1178,7 +1386,8 @@ pub fn apply_update(
             "downloaded update looks truncated/placeholder: {url}"
         ));
     }
-    fs::rename(&tmp, dest).map_err(|e| format!("swap update into place: {e}"))?;
+    verify_plugin_asset_against_sums(url, &tmp)?;
+    swap_bundle_in(&tmp, dest)?;
     log_info("populate", &format!("Applied plugin update from {url}"));
     Ok(url.to_string())
 }

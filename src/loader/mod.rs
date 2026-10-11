@@ -403,7 +403,7 @@ pub fn run(mut config: Config) {
             last_update_check = Some(Instant::now());
             // Single-flight: skip if a manual checkUpdates is mid-download.
             if state::try_begin_update_check() {
-                auto_update_check(&config, hosting, cooperative);
+                auto_update_check(&config, hosting, cooperative, false);
                 state::end_update_check();
             }
         }
@@ -446,13 +446,20 @@ pub fn run(mut config: Config) {
 /// own binary stays current even while coexisting. Best-effort: any network/parse
 /// miss is a silent no-op until the next check, and a working bundle is never
 /// replaced unless a genuinely different release tag is published.
-fn auto_update_check(config: &Config, hosting: bool, cooperative: bool) {
+fn auto_update_check(config: &Config, hosting: bool, cooperative: bool, manual: bool) {
     state::mark_update_checked_now();
     let mut settings = crate::store::load(&config.hub_config_path);
     if !settings.auto_update {
         state::set_pending_hub_update(None); // master off — clear any stale notice
+        state::set_pending_plugin_update(None);
+        state::set_update_deferred(false);
         return;
     }
+    // Quiet updates: an automatic tick never downloads or swaps while a game is
+    // running — it records what is pending and tries again next tick. A manual
+    // "Check now" is the user's call and goes ahead.
+    let deferred = settings.quiet_updates && !manual && game_running(config);
+    state::set_update_deferred(deferred);
     // ── Plugin bundle: download + swap + reload on a newer release. ──
     // In plain cooperative mode the loader owns the on-disk copy, so a hub swap is
     // deferred (lockstep guard) unless the cooperative-bundle protocol is enabled.
@@ -460,56 +467,90 @@ fn auto_update_check(config: &Config, hosting: bool, cooperative: bool) {
         && settings.auto_update_plugin
         && coop_safety::coop_plugin_swap_allowed(cooperative, config.coop_bundle)
     {
-        if let Some(latest) = populate::latest_release_tag(config.prerelease) {
-            // Apply when we don't yet know what's installed (seed the tag) OR the
-            // latest on the channel is strictly newer by SEMVER — never a downgrade
-            // (so a newer beta is not replaced by an older stable on a channel switch,
-            // and a same-core stable DOES supersede its beta).
-            let apply =
-                settings.bundle_tag.is_empty() || version_is_newer(&latest, &settings.bundle_tag);
-            if apply && latest != settings.bundle_tag {
-                log_info(
-                    "update",
-                    &format!(
-                        "Deck Shelves update available (installed \"{}\" → latest \"{latest}\") — applying.",
-                        settings.bundle_tag
-                    ),
-                );
-                match populate::update_from_release(&config.bundle_path, config.prerelease) {
-                    Ok(url) => {
-                        settings.bundle_tag = latest;
-                        if let Err(e) = crate::store::save(&config.hub_config_path, &settings) {
-                            log_warning(
-                                "update",
-                                &format!("applied update but could not record tag: {e}"),
-                            );
-                        }
-                        log_info(
-                            "update",
-                            &format!(
-                                "Applied Deck Shelves update from {url}; hot-swapping in place."
-                            ),
-                        );
-                        // No renderer reload: the download changed the bundle file,
-                        // and the loop's on-disk watch hot-swaps it in place (clears
-                        // the marker → the next tick re-injects the new bundle). See
-                        // the bundle-mtime watch in `run`.
-                    }
-                    Err(e) => log_warning("update", &format!("update download failed: {e}")),
-                }
-            }
-        }
+        check_plugin_update(config, &mut settings, deferred);
     }
     // ── Hub itself: detect a newer release, stage its binary over ours in place
     //    (populate::apply_hub_update), and record a "restart to finish" notice —
     //    the staged binary launches on the next restart. ──
     if settings.auto_update_hub {
-        check_hub_update(settings.hub_prerelease);
+        check_hub_update(&settings.hub_hold_tag, settings.hub_prerelease, deferred);
     } else {
         state::set_pending_hub_update(None);
         state::set_hub_update_staged(false);
     }
 }
+
+/// The plugin-bundle half of the check. Applies when we don't yet know what's
+/// installed (seed the tag) OR the latest on the channel is strictly newer by
+/// SEMVER — never a downgrade (so a newer beta is not replaced by an older stable
+/// on a channel switch, and a same-core stable DOES supersede its beta). A
+/// release the user rolled back from is left alone until a newer one appears.
+fn check_plugin_update(config: &Config, settings: &mut crate::store::HubSettings, deferred: bool) {
+    let Some((latest, notes)) = populate::latest_release_info(config.prerelease) else {
+        return;
+    };
+    let apply = settings.bundle_tag.is_empty() || version_is_newer(&latest, &settings.bundle_tag);
+    if !apply || latest == settings.bundle_tag || same_version(&latest, &settings.bundle_hold_tag) {
+        state::set_pending_plugin_update(None);
+        return;
+    }
+    if deferred {
+        log_info(
+            "update",
+            &format!("Deck Shelves {latest} available — waiting until no game is running."),
+        );
+        state::set_pending_plugin_update(Some((latest, notes)));
+        return;
+    }
+    log_info(
+        "update",
+        &format!(
+            "Deck Shelves update available (installed \"{}\" → latest \"{latest}\") — applying.",
+            settings.bundle_tag
+        ),
+    );
+    match populate::update_from_release(&config.bundle_path, config.prerelease) {
+        Ok(url) => {
+            settings.bundle_prev_tag = std::mem::replace(&mut settings.bundle_tag, latest);
+            settings.bundle_hold_tag.clear();
+            if let Err(e) = crate::store::save(&config.hub_config_path, settings) {
+                log_warning(
+                    "update",
+                    &format!("applied update but could not record tag: {e}"),
+                );
+            }
+            state::set_pending_plugin_update(None);
+            log_info(
+                "update",
+                &format!("Applied Deck Shelves update from {url}; hot-swapping in place."),
+            );
+            // No renderer reload: the download changed the bundle file, and the
+            // loop's on-disk watch hot-swaps it in place (clears the marker → the
+            // next tick re-injects the new bundle). See the bundle-mtime watch in `run`.
+        }
+        Err(e) => log_warning("update", &format!("update download failed: {e}")),
+    }
+}
+
+/// Whether Steam reports a running app — the quiet-updates gate. Fail-open: a
+/// probe miss counts as "no game", so a dead probe never blocks updates for good.
+fn game_running(config: &Config) -> bool {
+    let Ok(mut client) = CdpClient::connect_renderer(
+        &config.cef_host,
+        config.cef_port,
+        config.target_filter.as_deref(),
+    ) else {
+        return false;
+    };
+    client
+        .evaluate(RUNNING_APPS_PROBE)
+        .ok()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+const RUNNING_APPS_PROBE: &str = "(function(){ try { var a = window.SteamUIStore && \
+     window.SteamUIStore.RunningApps; return !!(a && a.length); } catch (e) { return false; } })()";
 
 /// Manual "Check now" entry point for the RPC server: runs one update check
 /// against the stashed daemon config, using the current injected state as the
@@ -524,7 +565,7 @@ pub(crate) fn run_update_check_now() -> bool {
     }
     // Manual check: a hosted bundle (`is_injected`) means sole/owner today, so
     // cooperative is false here; the cooperative-bundle track revisits this path.
-    auto_update_check(config, state::is_injected(), false);
+    auto_update_check(config, state::is_injected(), false, true);
     state::end_update_check();
     true
 }
@@ -534,20 +575,35 @@ pub(crate) fn run_update_check_now() -> bool {
 /// file swap that takes effect on the next restart). Records the version so the
 /// hub screen shows a "restart to finish" notice. Staging runs ONCE per version
 /// (guarded by the staged flag) so the periodic re-check never re-downloads.
-fn check_hub_update(prerelease: bool) {
-    let Some(latest) = populate::latest_hub_release_tag(prerelease) else {
+fn check_hub_update(hold: &str, prerelease: bool, deferred: bool) {
+    // A staged rollback stays put until the restart that applies it.
+    if state::hub_rollback_staged() {
+        return;
+    }
+    let Some((latest, notes)) = populate::latest_hub_release_info(prerelease) else {
         return; // network/parse miss — leave any existing notice as-is
     };
     let current = env!("CARGO_PKG_VERSION");
-    if !version_is_newer(&latest, current) {
+    if !version_is_newer(&latest, current) || same_version(&latest, hold) {
         state::set_pending_hub_update(None);
+        state::set_pending_hub_notes(None);
         state::set_hub_update_staged(false);
         return;
     }
+    state::set_pending_hub_notes(Some(notes));
     // Already downloaded this version over the running binary — nothing to do
     // until the user restarts (which launches the staged binary).
     if state::hub_update_staged() && state::pending_hub_update().as_deref() == Some(latest.as_str())
     {
+        return;
+    }
+    if deferred {
+        log_info(
+            "update",
+            &format!("ShelvesHub {latest} available — waiting until no game is running."),
+        );
+        state::set_pending_hub_update(Some(latest));
+        state::set_hub_update_staged(false);
         return;
     }
     match populate::apply_hub_update(prerelease) {
@@ -585,6 +641,13 @@ fn version_is_newer(latest: &str, current: &str) -> bool {
         (Some(l), Some(c)) => semver_precedence(&l, &c) == Ordering::Greater,
         _ => false,
     }
+}
+
+/// Whether a release tag names the held-back version (a `v` prefix is optional on
+/// either side, since tags carry it and the running version doesn't). An empty
+/// hold never matches.
+fn same_version(tag: &str, hold: &str) -> bool {
+    !hold.is_empty() && tag.trim_start_matches('v') == hold.trim_start_matches('v')
 }
 
 /// (major, minor, patch) + the dot-separated pre-release identifiers (empty = a

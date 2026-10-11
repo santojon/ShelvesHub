@@ -83,6 +83,7 @@
     "site:shots:hub": "bash scripts/site/capture-hub-screenshots.sh",
     "harness": "bash scripts/harness.sh",
     "harness:docker": "bash scripts/harness-docker.sh",
+    "qa:matrix": "bash scripts/qa-matrix.sh",
     "clean": "cargo clean"
   },
   "devDependencies": {

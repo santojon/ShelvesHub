@@ -313,10 +313,111 @@ fn newest_release_tag_matches_the_newest_iife_release() {
         {"draft":false,"tag_name":"v3.3.0-beta.1","assets":[{"name":"index.iife.js","browser_download_url":"https://x/beta.iife.js"}]},
         {"draft":false,"tag_name":"v3.2.1","assets":[{"name":"index.iife.js","browser_download_url":"https://x/stable.iife.js"}]}
     ]"#;
+    let newest = newest_release_in_releases(json).unwrap();
+    assert_eq!(release_tag(&newest).as_deref(), Some("v3.3.0-beta.1"));
+}
+
+#[test]
+fn release_notes_are_trimmed_normalized_and_capped() {
+    let short: serde_json::Value =
+        serde_json::from_str(r#"{"body":"\r\n## What's new\r\n- a fix\r\n"}"#).unwrap();
+    assert_eq!(release_notes(&short), "## What's new\n- a fix");
+    let none: serde_json::Value = serde_json::from_str(r#"{"tag_name":"v1"}"#).unwrap();
+    assert_eq!(release_notes(&none), "");
+    let long = serde_json::json!({ "body": "x".repeat(RELEASE_NOTES_PREVIEW_CHARS + 50) });
+    let notes = release_notes(&long);
+    assert_eq!(notes.chars().count(), RELEASE_NOTES_PREVIEW_CHARS + 1);
+    assert!(notes.ends_with('…'));
+}
+
+#[test]
+fn bundle_swap_keeps_previous_copy_and_rollback_restores_it() {
+    let dir = std::env::temp_dir().join(format!("shelveshub-rollback-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let dest = dir.join("index.js");
+    let old = vec![b'A'; REAL_BUNDLE_MIN_BYTES as usize + 1];
+    let new = vec![b'B'; REAL_BUNDLE_MIN_BYTES as usize + 1];
+    fs::write(&dest, &old).unwrap();
+    let tmp = dir.join(".bundle.download.tmp");
+    fs::write(&tmp, &new).unwrap();
+
+    swap_bundle_in(&tmp, &dest).unwrap();
+    assert_eq!(fs::read(&dest).unwrap(), new);
+    assert!(!tmp.exists());
+    assert!(bundle_rollback_available(&dest));
+    assert_eq!(fs::read(bundle_previous_path(&dest)).unwrap(), old);
+
+    // Going back restores the old copy and keeps the undone one as `.prev`.
+    rollback_bundle(&dest).unwrap();
+    assert_eq!(fs::read(&dest).unwrap(), old);
+    assert_eq!(fs::read(bundle_previous_path(&dest)).unwrap(), new);
+    assert!(!dir.join(".bundle.rollback.tmp").exists());
+
+    // A placeholder-sized `.prev` is not a rollback candidate.
+    fs::write(bundle_previous_path(&dest), b"tiny").unwrap();
+    assert!(!bundle_rollback_available(&dest));
+    assert!(rollback_bundle(&dest).is_err());
+    assert_eq!(fs::read(&dest).unwrap(), old);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hub_rollback_restores_the_snapshot_and_keeps_the_undone_set() {
+    let dir = std::env::temp_dir().join(format!("shelveshub-hubrollback-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(dir.join("runtime")).unwrap();
+    let exe = dir.join(hub_binary_name());
+    // A "previous" set: a real-looking binary of the old version + its runtime.
+    let prev = dir.join(HUB_PREVIOUS_DIR);
+    fs::create_dir_all(prev.join("runtime")).unwrap();
+    let mut old_bin = fake_exe_head();
+    old_bin.resize(REAL_BUNDLE_MIN_BYTES as usize + 8, b'o');
+    fs::write(prev.join(hub_binary_name()), &old_bin).unwrap();
+    fs::write(prev.join("runtime").join("host.js"), b"old runtime").unwrap();
+    fs::write(prev.join("VERSION"), "0.5.0\n").unwrap();
+    assert_eq!(snapshot_version(&prev).as_deref(), Some("0.5.0"));
+    // The current (newer) set on disk.
+    let mut new_bin = fake_exe_head();
+    new_bin.resize(REAL_BUNDLE_MIN_BYTES as usize + 8, b'n');
+    fs::write(&exe, &new_bin).unwrap();
+    fs::write(dir.join("runtime").join("host.js"), b"new runtime").unwrap();
+
+    assert_eq!(rollback_hub_at(&exe, "0.6.0").unwrap(), "0.5.0");
+    assert_eq!(fs::read(&exe).unwrap(), old_bin);
     assert_eq!(
-        newest_release_tag_in_releases(json).as_deref(),
-        Some("v3.3.0-beta.1")
+        fs::read(dir.join("runtime").join("host.js")).unwrap(),
+        b"old runtime"
     );
+    // The set that was left is now the snapshot, so the step can be undone again.
+    assert_eq!(snapshot_version(&prev).as_deref(), Some("0.6.0"));
+    assert_eq!(fs::read(prev.join(hub_binary_name())).unwrap(), new_bin);
+    assert!(!dir.join(HUB_PREVIOUS_STAGING).exists());
+
+    // Without a snapshot there is nothing to go back to.
+    fs::remove_dir_all(&prev).unwrap();
+    assert!(rollback_hub_at(&exe, "0.5.0").is_err());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// The executable magic for the compile target (what `looks_like_executable` accepts).
+fn fake_exe_head() -> Vec<u8> {
+    #[cfg(target_os = "windows")]
+    {
+        fake_pe(pe_machine_for_arch(std::env::consts::ARCH).unwrap())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        fake_elf(elf_machine_for_arch(std::env::consts::ARCH).unwrap())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        vec![0xcf, 0xfa, 0xed, 0xfe]
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        vec![0x7F, b'E', b'L', b'F', 0, 0]
+    }
 }
 
 #[test]

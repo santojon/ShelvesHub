@@ -10,6 +10,21 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **Volte uma versão quando uma atualização dá problema.** As atualizações agora guardam o
+  ShelvesHub anterior e o Deck Shelves anterior, e a seção Atualizações da aba tem linhas "Voltar ao
+  … anterior" (toque duas vezes) que os restauram em segundos, sem download. A versão que você
+  deixou fica retida das atualizações automáticas até sair uma mais nova, então o retorno permanece
+  até você decidir o contrário.
+- **Veja as novidades antes de aplicar.** Quando há uma atualização pendente, a aba mostra as notas
+  de lançamento numa seção recolhida "Novidades".
+- **Atualizações silenciosas.** Por padrão, as atualizações automáticas agora esperam até nenhum
+  jogo estar em execução antes de baixar ou trocar qualquer coisa (desligue em Atualizações
+  automáticas). "Verificar agora" continua atualizando na hora, e uma versão retida do Deck Shelves
+  ganha um botão "Atualizar agora".
+- **Downloads automáticos mais seguros.** Um download do Deck Shelves que falha ou não bate com o
+  checksum não deixa mais um pacote quebrado no lugar — ele é verificado antes de substituir
+  qualquer coisa.
+
 ## [0.5.0] - 2026-10-10
 
 - **O botão "reiniciar para aplicar uma atualização" agora sempre reinicia.** Em alguns setups ele

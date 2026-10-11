@@ -62,5 +62,14 @@
   "cfg_desktop_ui_sub": "Also show shelves in the plain desktop client, not only Big Picture",
   "action_restart_backend": "Restart backend",
   "coop_receded_warning": "Cooperative mode paused — it kept conflicting with the plugin loader; running as coexistence this session.",
-  "restart_confirm": "Tap again to restart"
+  "restart_confirm": "Tap again to restart",
+  "action_rollback_plugin": "Go back to the previous Deck Shelves",
+  "action_rollback_hub": "Go back to the previous ShelvesHub",
+  "rollback_confirm": "Tap again to go back",
+  "hub_rollback_staged": "Previous ShelvesHub restored — restart to finish",
+  "update_quiet": "Wait until no game is running",
+  "upd_deferred": "waiting until no game is running",
+  "upd_whats_new": "What's new",
+  "upd_plugin_available": "Deck Shelves update available",
+  "action_update_plugin_now": "Update Deck Shelves now"
 }
