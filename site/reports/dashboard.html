@@ -13,24 +13,36 @@
     .dash-head h1 { margin: 0; font-size: 24px; }
     .dash-head .muted { color: var(--fg-dim); font-size: 13px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 20px 0 8px; }
+    .grid.charts { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
     .card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--card-shadow); padding: 16px 18px; }
     .card .k { color: var(--fg-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
     .card .v { font-size: 28px; font-weight: 700; margin-top: 6px; line-height: 1.1; }
     .card .s { color: var(--fg-dim); font-size: 12px; margin-top: 4px; }
     .card .v.accent { color: var(--accent); }
+    .card .v.ok { color: #15a34a; }
+    .card .v.bad { color: #dc2626; }
     section h2 { font-size: 15px; margin: 28px 0 10px; }
+    section h2 small { color: var(--fg-dim); font-weight: 400; font-size: 12px; margin-left: 6px; }
     .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
     .row:last-child { border-bottom: 0; }
-    .row .lbl { flex: 1; }
-    .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-dim); }
+    .row .lbl { flex: 1; min-width: 0; }
+    .row .sub { color: var(--fg-dim); font-size: 12px; }
+    .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-dim); white-space: nowrap; }
     .pill.ok { color: #15a34a; border-color: rgba(21,163,74,.4); }
+    .pill.bad { color: #dc2626; border-color: rgba(220,38,38,.4); }
+    .pill.warn { color: #d97706; border-color: rgba(217,119,6,.4); }
     .note { color: var(--fg-dim); font-size: 12px; margin-top: 24px; line-height: 1.5; }
     a.back { color: var(--accent); text-decoration: none; font-size: 13px; }
     .chart-cap { color: var(--fg-dim); font-size: 11px; margin-top: 8px; }
     .chart-empty { color: var(--fg-dim); font-size: 13px; }
     .bar { flex: 0 0 45%; height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
     .bar-fill { display: block; height: 100%; background: var(--accent); }
+    .bar-fill.amber { background: #f59e0b; }
     .bar-num { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--fg-dim); font-size: 13px; min-width: 48px; text-align: right; }
+    table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.mini th, table.mini td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    table.mini th { color: var(--fg-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    table.mini td.num { text-align: right; font-variant-numeric: tabular-nums; }
     /* Chart internals */
     .chart { position: relative; }
     .chart svg { display: block; width: 100%; }
@@ -48,7 +60,7 @@
     <div class="dash-head">
       <div>
         <h1>ShelvesHub · Dashboard</h1>
-        <div class="muted"><a class="back" href="../">← ShelvesHub</a> · usage &amp; release status</div>
+        <div class="muted"><a class="back" href="../">← ShelvesHub</a> · usage, quality and release status</div>
       </div>
       <div><a class="back" href="index.html">All reports →</a> <span class="muted" id="updated">—</span></div>
     </div>
@@ -58,6 +70,8 @@
       <div class="card"><div class="k">GitHub downloads</div><div class="v" id="downloads">—</div><div class="s">all releases, cumulative</div></div>
       <div class="card"><div class="k">Views (14d)</div><div class="v" id="views">—</div><div class="s">repository traffic</div></div>
       <div class="card"><div class="k">Clones (14d)</div><div class="v" id="clones">—</div><div class="s">repository traffic</div></div>
+      <div class="card"><div class="k">Latest quality run</div><div class="v" id="q-overall">—</div><div class="s" id="q-overall-sub">gates passed</div></div>
+      <div class="card"><div class="k">Run duration</div><div class="v" id="q-duration">—</div><div class="s" id="q-duration-sub">latest recorded run</div></div>
     </div>
 
     <section>
@@ -66,39 +80,107 @@
     </section>
 
     <section>
-      <h2>By release</h2>
+      <h2>Repository traffic <small>14-day rolling windows, one point per weekly snapshot</small></h2>
+      <div class="grid charts">
+        <div class="card"><div class="k">Views (14d)</div><div class="chart" id="tr-views"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Clones (14d)</div><div class="chart" id="tr-clones"><div class="chart-empty">Loading…</div></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>By release <small><span id="rel-split">—</span></small></h2>
       <div class="card"><div id="by-release">—</div></div>
     </section>
 
     <section>
-      <h2>Platform coverage</h2>
-      <div class="card">
-        <div class="row"><span class="lbl">SteamOS (Steam Deck)</span><span class="pill ok">shipped</span></div>
-        <div class="row"><span class="lbl">Linux</span><span class="pill ok">shipped</span></div>
-        <div class="row"><span class="lbl">macOS (Intel + Apple Silicon)</span><span class="pill ok">shipped</span></div>
-        <div class="row"><span class="lbl">Windows</span><span class="pill">CI-built · install test pending</span></div>
+      <h2>Platform coverage <small>from the QA matrix: what each platform's evidence actually proves</small></h2>
+      <div class="card"><div id="qa-matrix">Loading…</div></div>
+    </section>
+
+    <section>
+      <h2>Quality gates <small>latest recorded run</small></h2>
+      <div class="card"><div id="gates">—</div></div>
+    </section>
+
+    <section>
+      <h2>Run health <small>every recorded run, oldest to newest</small></h2>
+      <div class="grid charts">
+        <div class="card"><div class="k">Gates passed per run (%)</div><div class="chart" id="q-passrate"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Total run duration (s) — lower is better</div><div class="chart" id="q-total-duration"><div class="chart-empty">Loading…</div></div></div>
       </div>
     </section>
 
     <section>
-      <h2>Quality gates</h2>
-      <div class="card">
-        <div class="row"><span class="lbl"><code>cargo test</code></span><span class="pill ok">passing</span></div>
-        <div class="row"><span class="lbl"><code>cargo clippy -D warnings</code></span><span class="pill ok">clean</span></div>
-        <div class="row"><span class="lbl"><code>cargo fmt --check</code></span><span class="pill ok">clean</span></div>
-        <div class="row"><span class="lbl"><code>cargo audit</code></span><span class="pill ok">0 advisories</span></div>
-        <div class="row"><span class="lbl">Docker simulation harness</span><span class="pill ok">green</span></div>
+      <h2>Tests</h2>
+      <div class="grid charts">
+        <div class="card"><div class="k">Rust unit tests — count (coverage growth)</div><div class="chart" id="q-tests"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Rust unit tests — pass rate (%)</div><div class="chart" id="q-tests-rate"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Runtime scenarios (harness) — count</div><div class="chart" id="q-harness"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Runtime scenarios — pass rate (%)</div><div class="chart" id="q-harness-rate"><div class="chart-empty">Loading…</div></div></div>
       </div>
     </section>
 
     <section>
-      <h2>Quality trend</h2>
+      <h2>Lint &amp; debt <small>lower is better</small></h2>
+      <div class="grid charts">
+        <div class="card"><div class="k">ESLint problems per run (errors + warnings)</div><div class="chart" id="q-eslint"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Clippy warnings per run</div><div class="chart" id="q-clippy"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Lint suppressions (baseline debt)</div><div class="chart" id="q-suppressions"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Complexity debt — sum of scores over the limit</div><div class="chart" id="q-cx-level"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Worst single complexity</div><div class="chart" id="q-cx-max"><div class="chart-empty">Loading…</div></div></div>
+      </div>
+      <div class="grid charts">
+        <div class="card"><div class="k">Suppressions by rule (latest)</div><div id="q-supp-rules">—</div></div>
+        <div class="card"><div class="k">ESLint problems by rule (latest)</div><div id="q-eslint-rules">—</div></div>
+        <div class="card"><div class="k">Functions over the complexity limit (latest)</div><div id="q-cx-top">—</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Code size <small>blank and comment-only lines excluded</small></h2>
+      <div class="grid charts">
+        <div class="card"><div class="k">Injected runtime (JS) — code lines</div><div class="chart" id="q-runtime-lines"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Service (Rust) — code lines</div><div class="chart" id="q-rust-lines"><div class="chart-empty">Loading…</div></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Docs &amp; localization <small>latest recorded run</small></h2>
       <div class="grid">
-        <div class="card"><div class="k">Rust unit tests</div><div class="chart" id="q-tests"><div class="chart-empty">Loading…</div></div></div>
-        <div class="card"><div class="k">JS runtime tests (harness scenarios)</div><div class="chart" id="q-harness"><div class="chart-empty">Loading…</div></div></div>
-        <div class="card"><div class="k">Lint suppressions (lower is better)</div><div class="chart" id="q-suppressions"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Locales</div><div class="v" id="d-locales">—</div><div class="s" id="d-parity">key parity</div></div>
+        <div class="card"><div class="k">Keys per locale</div><div class="v" id="d-keys">—</div><div class="s">host tab strings</div></div>
+        <div class="card"><div class="k">Docs paired EN ↔ pt-BR</div><div class="v" id="d-pairs">—</div><div class="s" id="d-unpaired">—</div></div>
+        <div class="card"><div class="k">QA cells tested</div><div class="v" id="d-qa">—</div><div class="s" id="d-qa-sub">—</div></div>
       </div>
-      <div class="card"><div class="k">Suppressions by rule (latest)</div><div id="q-supp-rules">—</div></div>
+      <div class="grid charts">
+        <div class="card"><div class="k">Translated keys over time</div><div class="chart" id="q-keys"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">QA matrix cells tested over time</div><div class="chart" id="q-qa"><div class="chart-empty">Loading…</div></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Step durations <small>how long each gate takes, latest run and over time</small></h2>
+      <div class="grid charts">
+        <div class="card"><div class="k">Latest run, by step (ms)</div><div id="q-steps">—</div></div>
+        <div class="card"><div class="k">Rust tests + clippy (s) over time</div><div class="chart" id="q-dur-rust"><div class="chart-empty">Loading…</div></div></div>
+        <div class="card"><div class="k">Runtime harness (s) over time</div><div class="chart" id="q-dur-harness"><div class="chart-empty">Loading…</div></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Validation steps <small>from runs recorded by <code>pnpm validate</code> / the CI flow</small></h2>
+      <div class="grid charts">
+        <div class="card"><div class="k">Pass rate per step — aggregated across runs</div><div id="q-step-rates">—</div></div>
+        <div class="card"><div class="k">Step durations — average across runs (ms)</div><div id="q-step-avg">—</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Results by scope</h2>
+      <div class="grid charts">
+        <div class="card"><div id="q-scopes">—</div></div>
+        <div class="card"><div class="k">Overall distribution</div><div id="q-dist">—</div></div>
+      </div>
     </section>
 
     <p class="note">
@@ -106,8 +188,13 @@
       <b>Ops · Site stats</b> workflow), which appends one dated row per run to
       <code>site/reports/stats/history.json</code>. The downloads trend is anchored at each
       release date (v0.1.0 starts the series at zero) and grows as snapshots accrue; hover a
-      point for its date and cumulative total. Quality-gate rows reflect the CI gate on the
-      default branch.
+      point for its date and total. Quality runs come from <code>site/reports/runs.json</code>
+      (the <b>Ops · Quality reports</b> workflow and local <code>pnpm report</code> runs):
+      each records the gates (Rust tests, clippy, rustfmt, ESLint, the runtime harness, cargo
+      audit), lint and complexity debt, code size, the QA matrix, localization and docs
+      pairing, and how long each step took. Platform coverage reads the QA matrix the lab
+      assembles (<code>site/reports/qa/matrix.json</code>). Charts need at least two runs
+      carrying a signal before they draw.
     </p>
   </div>
 
@@ -120,6 +207,11 @@
         return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
       };
       var set = function (id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+      var setClass = function (id, cls) { var el = document.getElementById(id); if (el) el.className = cls; };
+      function esc(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+      function pct(a, b) { return b > 0 ? Math.round((a / b) * 1000) / 10 : null; }
 
       fetch("../stats/summary.json", { cache: "no-store" })
         .then(function (r) { return r.ok ? r.json() : null; })
@@ -136,14 +228,13 @@
 
       // ── Shared floating tooltip for every chart point ────────────────────
       var tip = document.getElementById("chart-tip");
-      // Build the tooltip from text nodes (never innerHTML) so chart-point
-      // attribute values can't be reinterpreted as HTML.
-      function showTip(valText, dateText, x, y) {
+      // Built from text nodes (never innerHTML) so attribute values can't be reinterpreted as HTML.
+      function showTip(valText, unit, dateText, x, y) {
         tip.textContent = "";
         var b = document.createElement("b");
         b.textContent = valText;
         tip.appendChild(b);
-        tip.appendChild(document.createTextNode(" downloads"));
+        tip.appendChild(document.createTextNode(" " + unit));
         tip.appendChild(document.createElement("br"));
         tip.appendChild(document.createTextNode(dateText));
         tip.classList.add("show");
@@ -152,49 +243,52 @@
         tip.style.top = Math.max(8, y - r.height - 12) + "px";
       }
       function hideTip() { tip.classList.remove("show"); }
+      function delegateTips(host, unit) {
+        host.addEventListener("mousemove", function (e) {
+          var c = e.target && e.target.getAttribute && e.target.getAttribute("data-pt") !== null ? e.target : null;
+          if (!c) { hideTip(); return; }
+          var box = c.getBoundingClientRect();
+          showTip(c.getAttribute("data-val"), unit, c.getAttribute("data-date"), box.left + box.width / 2, box.top);
+        });
+        host.addEventListener("mouseleave", hideTip);
+      }
 
-      // ── Downloads-over-time trend: area + line, hoverable points, and a
-      // dashed version marker at each release date. Self-contained SVG. ──
-      function trendChart(rows, releases) {
-        rows = (rows || []).filter(function (r) { return r && r.date; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-        var host = document.getElementById("dl-trend");
+      // ── A dated series as area + line with hoverable points; release markers optional. ──
+      function trendChart(hostId, rows, key, unit, releases) {
+        rows = (rows || []).filter(function (r) { return r && r.date && r[key] != null; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+        var host = document.getElementById(hostId);
+        if (!host) return;
         if (rows.length < 2) { host.innerHTML = '<div class="chart-empty">Not enough history yet — populated as weekly snapshots accrue.</div>'; return; }
         var w = 640, h = 180, padX = 14, padTop = 22, padBot = 24, n = rows.length;
-        var vals = rows.map(function (r) { return +r.downloads || 0; });
+        var vals = rows.map(function (r) { return +r[key] || 0; });
         var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals), span = (max - min) || 1;
         var X = function (i) { return padX + (i / (n - 1)) * (w - 2 * padX); };
         var Y = function (v) { return h - padBot - ((v - min) / span) * (h - padTop - padBot); };
         var pts = rows.map(function (r, i) { return X(i).toFixed(1) + "," + Y(vals[i]).toFixed(1); }).join(" ");
-
-        var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Downloads over time">';
-        // Version markers at dates that match a release.
+        var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="' + esc(unit) + ' over time">';
         var relByDate = {};
         (releases || []).forEach(function (r) { if (r && r.date && r.tag) relByDate[r.date] = r.tag; });
         rows.forEach(function (r, i) {
           if (!relByDate[r.date]) return;
           var x = X(i).toFixed(1);
           svg += '<line class="vmark" x1="' + x + '" y1="' + padTop + '" x2="' + x + '" y2="' + (h - padBot) + '"/>';
-          svg += '<text class="vlabel" x="' + x + '" y="' + (padTop - 8) + '" text-anchor="middle">' + relByDate[r.date] + '</text>';
+          svg += '<text class="vlabel" x="' + x + '" y="' + (padTop - 8) + '" text-anchor="middle">' + esc(relByDate[r.date]) + '</text>';
         });
-        // Area + line.
         svg += '<polygon points="' + padX + ',' + (h - padBot) + ' ' + pts + ' ' + (w - padX) + ',' + (h - padBot) + '" style="fill:var(--accent);opacity:.12"/>';
         svg += '<polyline points="' + pts + '" style="fill:none;stroke:var(--accent);stroke-width:2"/>';
-        // Hoverable points (data on each circle; tooltip is delegated below).
         rows.forEach(function (r, i) {
-          svg += '<circle class="pt" data-pt cx="' + X(i).toFixed(1) + '" cy="' + Y(vals[i]).toFixed(1) + '" r="3.5" data-date="' + r.date + '" data-val="' + vals[i] + '"/>';
+          svg += '<circle class="pt" data-pt cx="' + X(i).toFixed(1) + '" cy="' + Y(vals[i]).toFixed(1) + '" r="3.5" data-date="' + esc(r.date) + '" data-val="' + vals[i] + '"/>';
         });
-        svg += '</svg><div class="chart-cap">' + rows[0].date + ' → ' + rows[n - 1].date + ' · latest ' + fmt(vals[n - 1]) + ' cumulative downloads</div>';
+        svg += '</svg><div class="chart-cap">' + esc(rows[0].date) + ' → ' + esc(rows[n - 1].date) + ' · latest ' + fmt(vals[n - 1]) + ' ' + esc(unit) + '</div>';
         host.innerHTML = svg;
+        delegateTips(host, unit);
+      }
 
-        // Delegated tooltip: works for every point, including re-rendered ones.
-        host.addEventListener("mousemove", function (e) {
-          var c = e.target && e.target.getAttribute && e.target.getAttribute("data-pt") !== null ? e.target : null;
-          if (!c) { hideTip(); return; }
-          var box = c.getBoundingClientRect();
-          showTip(c.getAttribute("data-val"), c.getAttribute("data-date"),
-            box.left + box.width / 2, box.top);
-        });
-        host.addEventListener("mouseleave", hideTip);
+      function barRow(label, sub, value, max, amber) {
+        var p = Math.round(((+value || 0) / (max || 1)) * 100);
+        return '<div class="row"><span class="lbl">' + label + (sub ? ' <span class="sub">· ' + sub + '</span>' : '') + '</span>'
+          + '<span class="bar"><span class="bar-fill' + (amber ? ' amber' : '') + '" style="width:' + p + '%"></span></span>'
+          + '<span class="bar-num">' + fmt(+value || 0) + '</span></div>';
       }
 
       function releaseBars(rels) {
@@ -202,29 +296,79 @@
         if (!rels.length) return "No releases yet.";
         var max = Math.max.apply(null, rels.map(function (r) { return +r.downloads || 0; })) || 1;
         return rels.slice().reverse().map(function (r) {
-          var pct = Math.round(((+r.downloads || 0) / max) * 100);
-          return '<div class="row"><span class="lbl">' + r.tag + (r.date ? ' <span style="color:var(--fg-dim);font-size:12px">· ' + r.date + '</span>' : '') + '</span>'
-            + '<span class="bar"><span class="bar-fill" style="width:' + pct + '%"></span></span>'
-            + '<span class="bar-num">' + fmt(+r.downloads || 0) + '</span></div>';
+          var pre = /-/.test(r.tag);
+          return barRow(esc(r.tag) + (pre ? ' <span class="pill warn">pre-release</span>' : ''), r.date ? esc(r.date) : '', r.downloads, max, pre);
         }).join("");
       }
+      function releaseSplit(rels) {
+        var stable = 0, pre = 0;
+        (rels || []).forEach(function (r) { if (/-/.test(r.tag || "")) pre += +r.downloads || 0; else stable += +r.downloads || 0; });
+        return fmt(stable) + " stable · " + fmt(pre) + " pre-release downloads";
+      }
 
-      // Load the history + releases together so the trend can annotate release dates.
       Promise.all([
         fetch("stats/history.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
         fetch("../stats/releases.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
       ]).then(function (res) {
         var history = res[0] || [], releases = res[1] || [];
-        trendChart(history, releases);
+        trendChart("dl-trend", history, "downloads", "downloads", releases);
+        trendChart("tr-views", history, "views14d", "views (14d)");
+        trendChart("tr-clones", history, "clones14d", "clones (14d)");
         var br = document.getElementById("by-release");
         if (br) br.innerHTML = releaseBars(releases);
+        set("rel-split", releaseSplit(releases));
       });
 
-      // ── Quality trend: Rust tests + lint suppressions across recorded runs ──
-      function esc(s) {
-        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      // ── Platform coverage: the QA matrix the lab assembles. ───────────────
+      function statusPill(status) {
+        var cls = status === "tested" ? "ok" : (status === "blocked" || status === "not-run" ? "bad" : (status === "partial" ? "warn" : ""));
+        return '<span class="pill ' + cls + '">' + esc(status || "—") + '</span>';
       }
-      function qLineChart(hostId, runs, pick, color) {
+      function evidenceText(cell) {
+        var ev = (cell.evidence || [])[0];
+        if (!ev) return cell.note ? esc(cell.note) : "no evidence yet";
+        var what = ev.scenarios ? "scenarios " + esc(ev.scenarios) : (ev.steps ? Object.keys(ev.steps).map(function (k) { return esc(k) + " " + esc(ev.steps[k]); }).join(", ") : "");
+        return esc(String(ev.ts || "").slice(0, 10)) + (what ? " · " + what : "");
+      }
+      fetch("qa/matrix.json", { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+        .then(function (m) {
+          var host = document.getElementById("qa-matrix");
+          if (!host) return;
+          if (!m || !m.cells || !m.cells.length) { host.innerHTML = '<div class="chart-empty">No QA matrix assembled yet (run the lab\'s matrix).</div>'; return; }
+          host.innerHTML = m.cells.map(function (c) {
+            return '<div class="row"><span class="lbl">' + esc(c.platform) + ' <span class="sub">· ' + esc(c.kind) + '</span><br><span class="sub">' + evidenceText(c) + '</span></span>' + statusPill(c.status) + '</div>';
+          }).join("") + '<div class="chart-cap">assembled ' + esc(String(m.ts || "").slice(0, 10)) + (m.overall ? ' · overall ' + esc(m.overall) : '') + '</div>';
+        });
+
+      // ── Quality runs: gates, trends, debt, size, docs, durations, scopes. ──
+      function gateRows(r) {
+        var g = [];
+        var row = function (label, state, detail) { g.push({ label: label, state: state, detail: detail }); };
+        row("cargo test", r.tests ? r.tests.failed === 0 : null, r.tests ? r.tests.passed + "/" + r.tests.total + " passed" : "not measured");
+        row("cargo clippy -D warnings", r.clippy ? r.clippy.clean : null, r.clippy ? (r.clippy.clean ? "clean" : r.clippy.warnings + " warnings, " + r.clippy.errors + " errors") : "not measured");
+        row("cargo fmt --check", r.fmt ? r.fmt.clean : null, r.fmt ? (r.fmt.clean ? "clean" : "needs formatting") : "not measured");
+        row("eslint", r.eslint ? r.eslint.errors === 0 : null, r.eslint ? r.eslint.errors + " errors, " + r.eslint.warnings + " warnings" : "not measured");
+        row("runtime harness", r.harness ? r.harness.failed === 0 : null, r.harness ? r.harness.passed + "/" + r.harness.total + " scenarios" : "not measured");
+        row("cargo audit", r.audit ? r.audit.clean : null, r.audit ? r.audit.vulnerabilities + " advisories" : "not measured");
+        return g;
+      }
+      function gatesPassed(r) {
+        var g = gateRows(r).filter(function (x) { return x.state !== null; });
+        return { passed: g.filter(function (x) { return x.state; }).length, total: g.length };
+      }
+      function renderGates(latest) {
+        var host = document.getElementById("gates");
+        if (!host) return;
+        if (!latest) { host.innerHTML = '<div class="chart-empty">No runs recorded yet.</div>'; return; }
+        host.innerHTML = gateRows(latest).map(function (g) {
+          var pill = g.state === null ? '<span class="pill">—</span>' : (g.state ? '<span class="pill ok">passing</span>' : '<span class="pill bad">failing</span>');
+          return '<div class="row"><span class="lbl"><code>' + esc(g.label) + '</code> <span class="sub">· ' + esc(g.detail) + '</span></span>' + pill + '</div>';
+        }).join("") + '<div class="chart-cap">' + esc((latest.version ? "v" + latest.version : "") + " · " + latest.scope + " · " + String(latest.ts).slice(0, 10)) + '</div>';
+      }
+
+      function qLineChart(hostId, runs, pick, color, unit) {
         var host = document.getElementById(hostId);
         if (!host) return;
         var rows = runs.map(function (r) {
@@ -241,35 +385,154 @@
         var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" style="width:100%;height:180px">';
         svg += '<polyline fill="none" stroke="' + color + '" stroke-width="2" points="' + pts + '"/>';
         rows.forEach(function (x, i) {
-          svg += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(vals[i]).toFixed(1) + '" r="3.5" fill="' + color + '"><title>' + esc(vals[i] + " — " + x.label + " (" + x.date + ")") + '</title></circle>';
+          svg += '<circle class="pt" data-pt cx="' + X(i).toFixed(1) + '" cy="' + Y(vals[i]).toFixed(1) + '" r="3.5" style="stroke:' + color + '" data-date="' + esc(x.label + " (" + x.date + ")") + '" data-val="' + vals[i] + '"/>';
         });
         svg += '<text x="4" y="' + (padTop + 4) + '" fill="#94a3b8" font-size="10">' + max + '</text>';
         svg += '<text x="4" y="' + (h - padBot) + '" fill="#94a3b8" font-size="10">' + min + '</text>';
-        svg += '</svg>';
+        svg += '</svg><div class="chart-cap">' + rows.length + ' runs · latest ' + esc(String(vals[vals.length - 1])) + ' ' + esc(unit || "") + '</div>';
         host.innerHTML = svg;
+        delegateTips(host, unit || "");
       }
-      function qRuleBars(latest) {
-        var host = document.getElementById("q-supp-rules");
+
+      function ruleBars(hostId, byRule, emptyText, amber) {
+        var host = document.getElementById(hostId);
         if (!host) return;
-        var br = (latest && latest.suppressions && latest.suppressions.byRule) || {};
-        var entries = Object.keys(br).map(function (k) { return [k, br[k]]; }).sort(function (a, b) { return b[1] - a[1]; });
-        if (!entries.length) { host.innerHTML = '<div class="chart-empty">No suppressions — all clean.</div>'; return; }
+        var entries = Object.keys(byRule || {}).map(function (k) { return [k, byRule[k]]; }).sort(function (a, b) { return b[1] - a[1]; });
+        if (!entries.length) { host.innerHTML = '<div class="chart-empty">' + emptyText + '</div>'; return; }
         var max = Math.max.apply(null, entries.map(function (e) { return e[1]; })) || 1;
-        host.innerHTML = entries.map(function (e) {
-          var pct = Math.round((e[1] / max) * 100);
-          return '<div class="row"><span class="lbl"><code>' + esc(e[0]) + '</code></span><span class="s">' + (+e[1]) + '</span></div>'
-            + '<div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin:2px 0 8px"><div style="height:6px;width:' + pct + '%;background:#f59e0b;border-radius:3px"></div></div>';
-        }).join("");
+        host.innerHTML = entries.slice(0, 12).map(function (e) { return barRow('<code>' + esc(e[0]) + '</code>', '', e[1], max, amber); }).join("");
       }
+      function complexityTop(latest) {
+        var host = document.getElementById("q-cx-top");
+        if (!host) return;
+        var cx = latest && latest.complexity;
+        if (!cx) { host.innerHTML = '<div class="chart-empty">Not measured yet.</div>'; return; }
+        if (!cx.top || !cx.top.length) { host.innerHTML = '<div class="chart-empty">None — every runtime function is within the limit.</div>'; return; }
+        host.innerHTML = cx.top.map(function (t) {
+          return '<div class="row"><span class="lbl"><code>' + esc(t.fn) + '</code> <span class="sub">· ' + esc(t.file) + ':' + esc(t.line) + '</span></span><span class="pill warn">' + esc(t.score) + '</span></div>';
+        }).join("") + '<div class="chart-cap">debt level ' + esc(cx.level) + ' across ' + esc(cx.count) + ' function(s)</div>';
+      }
+      function stepBars(latest) {
+        var host = document.getElementById("q-steps");
+        if (!host) return;
+        var d = latest && latest.durations;
+        if (!d) { host.innerHTML = '<div class="chart-empty">Not measured yet.</div>'; return; }
+        var steps = Object.keys(d).filter(function (k) { return k !== "total"; }).sort(function (a, b) { return d[b] - d[a]; });
+        var max = Math.max.apply(null, steps.map(function (k) { return d[k]; })) || 1;
+        host.innerHTML = steps.map(function (k) { return barRow(esc(k), '', d[k], max); }).join("") + '<div class="chart-cap">total ' + esc(d.total) + ' ms</div>';
+      }
+      // Per-step aggregates over every run that recorded steps: pass rate and mean duration.
+      function stepAggregates(runs) {
+        var by = {};
+        runs.forEach(function (r) {
+          (r.steps || []).forEach(function (s) {
+            var a = by[s.key] || (by[s.key] = { label: s.label, runs: 0, pass: 0, ms: 0, timed: 0 });
+            if (s.status === "skip") return;
+            a.runs++;
+            if (s.status === "pass") a.pass++;
+            if (s.durationMs > 0) { a.ms += s.durationMs; a.timed++; }
+          });
+        });
+        return Object.keys(by).map(function (k) { var a = by[k]; return { key: k, label: a.label, runs: a.runs, rate: pct(a.pass, a.runs), avgMs: a.timed ? Math.round(a.ms / a.timed) : null }; });
+      }
+      function stepSections(runs) {
+        var rates = document.getElementById("q-step-rates"), avg = document.getElementById("q-step-avg");
+        var steps = stepAggregates(runs).filter(function (s) { return s.runs > 0; });
+        if (!steps.length) {
+          var none = '<div class="chart-empty">No runs with recorded steps yet — run <code>pnpm validate</code>.</div>';
+          if (rates) rates.innerHTML = none;
+          if (avg) avg.innerHTML = none;
+          return;
+        }
+        if (rates) rates.innerHTML = steps.map(function (s) { return barRow(esc(s.label), s.runs + " run" + (s.runs === 1 ? "" : "s"), s.rate == null ? 0 : s.rate, 100, s.rate != null && s.rate < 100); }).join("");
+        var timed = steps.filter(function (s) { return s.avgMs != null; }).sort(function (a, b) { return b.avgMs - a.avgMs; });
+        var max = Math.max.apply(null, timed.map(function (s) { return s.avgMs; })) || 1;
+        if (avg) avg.innerHTML = timed.map(function (s) { return barRow(esc(s.label), '', s.avgMs, max); }).join("") || '<div class="chart-empty">No timed steps yet.</div>';
+      }
+      function scopesTable(runs) {
+        var host = document.getElementById("q-scopes");
+        if (!host) return;
+        var by = {};
+        runs.forEach(function (r) {
+          var s = by[r.scope] || (by[r.scope] = { runs: 0, pass: 0, last: "" });
+          s.runs++;
+          if (r.overall === "PASS") s.pass++;
+          s.last = String(r.ts).slice(0, 10);
+        });
+        var keys = Object.keys(by);
+        if (!keys.length) { host.innerHTML = '<div class="chart-empty">No runs recorded yet.</div>'; return; }
+        host.innerHTML = '<table class="mini"><tr><th>Scope</th><th class="num">Runs</th><th class="num">Pass</th><th class="num">Pass %</th><th>Last</th></tr>' + keys.map(function (k) {
+          var s = by[k];
+          return '<tr><td>' + esc(k) + '</td><td class="num">' + s.runs + '</td><td class="num">' + s.pass + '</td><td class="num">' + (pct(s.pass, s.runs) == null ? "—" : pct(s.pass, s.runs) + "%") + '</td><td>' + esc(s.last) + '</td></tr>';
+        }).join("") + '</table>';
+      }
+      function distribution(runs) {
+        var host = document.getElementById("q-dist");
+        if (!host) return;
+        var pass = runs.filter(function (r) { return r.overall === "PASS"; }).length, fail = runs.length - pass;
+        if (!runs.length) { host.innerHTML = '<div class="chart-empty">No runs recorded yet.</div>'; return; }
+        host.innerHTML = barRow('PASS', '', pass, runs.length) + barRow('FAIL', '', fail, runs.length, true)
+          + '<div class="chart-cap">' + runs.length + ' runs · ' + (pct(pass, runs.length) == null ? "—" : pct(pass, runs.length) + "% passing") + '</div>';
+      }
+      function docsCards(latest) {
+        var d = latest && latest.docs, q = latest && latest.qa;
+        if (d) {
+          set("d-locales", String(d.locales));
+          set("d-parity", d.keyParity ? "every locale carries the same keys" : "key parity broken");
+          set("d-keys", String(d.keys));
+          set("d-pairs", String(d.docPairs));
+          set("d-unpaired", d.docsUnpaired ? d.docsUnpaired + " doc(s) without a pt-BR pair" : "every doc has its pt-BR pair");
+        }
+        if (q) {
+          var tested = (q.byStatus && q.byStatus.tested) || 0;
+          set("d-qa", tested + "/" + q.cells);
+          set("d-qa-sub", Object.keys(q.byStatus || {}).map(function (k) { return k + " " + q.byStatus[k]; }).join(" · "));
+        }
+      }
+      function headCards(latest) {
+        if (!latest) return;
+        var g = gatesPassed(latest);
+        set("q-overall", latest.overall || "—");
+        setClass("q-overall", "v " + (latest.overall === "PASS" ? "ok" : "bad"));
+        set("q-overall-sub", g.passed + "/" + g.total + " gates · " + (latest.version ? "v" + latest.version + " · " : "") + latest.scope + " · " + String(latest.ts).slice(0, 10));
+        var d = latest.durations;
+        set("q-duration", d && d.total != null ? (d.total / 1000).toFixed(1) + " s" : "—");
+        set("q-duration-sub", d && d.harness != null ? "harness " + (d.harness / 1000).toFixed(1) + " s of it" : "latest recorded run");
+      }
+
       fetch("runs.json", { cache: "no-store" })
         .then(function (r) { return r.ok ? r.json() : []; })
         .catch(function () { return []; })
         .then(function (runs) {
           runs = (runs || []).slice().sort(function (a, b) { return String(a.ts) < String(b.ts) ? -1 : 1; });
-          qLineChart("q-tests", runs, function (r) { return r.tests && r.tests.passed; }, "#4ade80");
-          qLineChart("q-harness", runs, function (r) { return r.harness && r.harness.passed; }, "#38bdf8");
-          qLineChart("q-suppressions", runs, function (r) { return r.suppressions && r.suppressions.total; }, "#f59e0b");
-          qRuleBars(runs[runs.length - 1]);
+          var latest = runs[runs.length - 1];
+          headCards(latest);
+          renderGates(latest);
+          qLineChart("q-passrate", runs, function (r) { var g = gatesPassed(r); return pct(g.passed, g.total); }, "#4ade80", "% of gates");
+          qLineChart("q-total-duration", runs, function (r) { return r.durations && r.durations.total != null ? Math.round(r.durations.total / 100) / 10 : null; }, "#38bdf8", "s");
+          qLineChart("q-tests", runs, function (r) { return r.tests && r.tests.passed; }, "#4ade80", "tests");
+          qLineChart("q-tests-rate", runs, function (r) { return r.tests ? pct(r.tests.passed, r.tests.total) : null; }, "#4ade80", "%");
+          qLineChart("q-harness", runs, function (r) { return r.harness && r.harness.passed; }, "#38bdf8", "scenarios");
+          qLineChart("q-harness-rate", runs, function (r) { return r.harness ? pct(r.harness.passed, r.harness.total) : null; }, "#38bdf8", "%");
+          qLineChart("q-eslint", runs, function (r) { return r.eslint && r.eslint.problems; }, "#f59e0b", "problems");
+          qLineChart("q-clippy", runs, function (r) { return r.clippy && r.clippy.warnings; }, "#f59e0b", "warnings");
+          qLineChart("q-suppressions", runs, function (r) { return r.suppressions && r.suppressions.total; }, "#f59e0b", "suppressions");
+          qLineChart("q-cx-level", runs, function (r) { return r.complexity && r.complexity.level; }, "#f97316", "debt");
+          qLineChart("q-cx-max", runs, function (r) { return r.complexity && r.complexity.max; }, "#f97316", "complexity");
+          qLineChart("q-runtime-lines", runs, function (r) { return r.runtimeCodeLines; }, "#a78bfa", "lines");
+          qLineChart("q-rust-lines", runs, function (r) { return r.rustCodeLines && r.rustCodeLines.total; }, "#a78bfa", "lines");
+          qLineChart("q-keys", runs, function (r) { return r.docs && r.docs.keys; }, "#22d3ee", "keys");
+          qLineChart("q-qa", runs, function (r) { return r.qa && r.qa.byStatus ? (r.qa.byStatus.tested || 0) : null; }, "#22d3ee", "cells tested");
+          qLineChart("q-dur-rust", runs, function (r) { var d = r.durations; return d && d.tests != null ? Math.round(((d.tests || 0) + (d.clippy || 0)) / 100) / 10 : null; }, "#38bdf8", "s");
+          qLineChart("q-dur-harness", runs, function (r) { var d = r.durations; return d && d.harness != null ? Math.round(d.harness / 100) / 10 : null; }, "#38bdf8", "s");
+          ruleBars("q-supp-rules", latest && latest.suppressions && latest.suppressions.byRule, "No suppressions — all clean.", true);
+          ruleBars("q-eslint-rules", latest && latest.eslint && latest.eslint.byRule, "No problems — all clean.", true);
+          complexityTop(latest);
+          stepBars(latest);
+          docsCards(latest);
+          stepSections(runs);
+          scopesTable(runs);
+          distribution(runs);
         });
     })();
   </script>

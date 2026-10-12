@@ -83,5 +83,9 @@
   "notice_plugin_updated": "Deck Shelves actualizado a {version}",
   "notice_plugin_rolled_back": "Deck Shelves de vuelta en {version}",
   "notice_coop_receded": "Modo cooperativo en pausa — funcionando como coexistencia en esta sesión",
-  "notice_recovered": "La interfaz de Steam se cayó — ShelvesHub la reinició"
+  "notice_recovered": "La interfaz de Steam se cayó — ShelvesHub la reinició",
+  "cfg_config_sync": "Sincronizar ajustes entre dispositivos",
+  "cfg_config_sync_sub": "Mantiene estos ajustes iguales en todos tus dispositivos a través de tu cuenta de Steam",
+  "notice_sync_applied": "Ajustes sincronizados desde otro dispositivo",
+  "notice_sync_restart": "Ajustes sincronizados desde otro dispositivo — reinicia para aplicar"
 }

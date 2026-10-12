@@ -14,6 +14,9 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   `coop_bundle` ligada, o ShelvesHub roda a própria cópia do Deck Shelves mesmo com um loader de
   plugins presente e a posse forçada em uso, então as atualizações do plugin chegam pelo hub ali
   também. Desligada por padrão até ser validada num dispositivo.
+- **A posse forçada não cai mais em "sole" depois de um reinício.** O hub agora espera o loader de
+  plugins aparecer antes de hospedar, então um Deck com um loader de plugins e posse forçada cai no
+  modo cooperativo como esperado.
 - **Volte uma versão quando uma atualização dá problema.** As atualizações agora guardam o
   ShelvesHub anterior e o Deck Shelves anterior, e a seção Atualizações da aba tem linhas "Voltar ao
   … anterior" (toque duas vezes) que os restauram em segundos, sem download. A versão que você
@@ -30,7 +33,12 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   qualquer coisa.
 - **Logs abrem ao lado da aba, em altura total.** "Ver logs" agora alarga o menu de Acesso Rápido e
   mostra o fluxo de logs num painel ao lado da visão do ShelvesHub (como a lista de amigos faz),
-  em vez de uma caixinha abaixo dos botões. B fecha.
+  em vez de uma caixinha abaixo dos botões. O painel tem duas abas, Logs e Notificações, com
+  ícones ao lado do título ShelvesHub para abrir qualquer uma; ele também abre como o painel
+  lateral do próprio plugin — aperte direita duas vezes no controle na borda direita da visão do
+  hub (esquerda para fora dele fecha) — ou pelo teclado com seta direita duas vezes,
+  Ctrl+Shift+L ou Ctrl+Shift+N. LB / RB alternam as abas dentro dele, B fecha, e cada
+  notificação mostra a marca do remetente como no toast do Steam.
 - **As notificações agora têm a cara e o comportamento das do Steam.** As notificações que este
   host mostra — as do Deck Shelves também — passam pelo sistema de notificações do próprio Steam:
   o som e a posição do Steam, overlay em jogo, uma entrada na aba Notificações, o visual do próprio
@@ -39,8 +47,23 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 - **O ShelvesHub conta o que fez.** Uma notificação quando o ShelvesHub volta atualizado (ou
   revertido), quando uma atualização foi baixada e espera um reinício, quando o Deck Shelves foi
   atualizado ou revertido, quando o modo cooperativo se pausou, e quando a interface do Steam
-  colapsou e o ShelvesHub a reiniciou. A aba também guarda as últimas notificações numa nova
-  seção "Notificações".
+  colapsou e o ShelvesHub a reiniciou. A aba Notificações do painel lateral guarda as últimas,
+  com um contador de não lidas no ícone.
+- **Suas configurações do ShelvesHub vão com você entre dispositivos.** Os interruptores de
+  atualização, atualizações silenciosas, notificações do Steam e a animação de inicialização
+  agora sincronizam pela sua conta Steam: mude um no Deck e o Mac adota (e vice-versa), vencendo
+  a mudança mais recente de cada configuração. Portas, caminhos, posse e afins continuam por
+  dispositivo. Um dispositivo sincronizando pela primeira vez adota o que já está lá.
+  "Sincronizar configurações entre dispositivos" na seção Configuração da aba desliga; Status
+  mostra quando a última sincronização rodou.
+- **Um dashboard de relatórios mais completo.** O dashboard do site do projeto agora mostra cada
+  verificação de qualidade por rodada, contagens e taxas de aprovação dos testes, dívida de lint
+  e de complexidade, tamanho do código, docs e localização, quanto tempo cada etapa leva, tráfego
+  do repositório e uma divisão de downloads estável vs pré-release, e lê a cobertura de
+  plataformas da matriz de QA.
+- **Contagem de visitas no site, respeitando a privacidade e desligada por padrão.** O site pode
+  contar visitas com um contador gratuito e sem cookies, e diz isso no rodapé; só ativa quando um
+  código de site é definido, e nunca roda dentro do ShelvesHub nem do Deck Shelves.
 
 ## [0.5.0] - 2026-10-10
 

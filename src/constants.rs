@@ -29,6 +29,9 @@ pub mod timers {
     pub const READ_TIMEOUT: Duration = Duration::from_secs(15);
     /// How often the daemon checks for a newer release while settled.
     pub const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+    /// How often the hub's own settings are settled against the roaming copy
+    /// while settled (a local change triggers a round on the next tick).
+    pub const SYNC_INTERVAL: Duration = Duration::from_secs(5 * 60);
     /// Idle re-poll cadence while WE host the bundle (sole/owner).
     pub const SOLE_IDLE: Duration = Duration::from_secs(5);
     /// Fast re-poll cadence: cold start and desktop stand-down, so a return to

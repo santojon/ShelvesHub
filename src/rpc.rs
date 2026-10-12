@@ -652,6 +652,7 @@ fn dispatch(body: &str) -> String {
                 match crate::store::save(path, &settings) {
                     Ok(()) => {
                         log_info("rpc", &format!("Auto-update set to {enabled}."));
+                        state::request_sync();
                         match serde_json::to_string(&settings) {
                             Ok(json) => ok(json),
                             Err(e) => err(&format!("serialize config: {e}")),
@@ -710,6 +711,41 @@ fn dispatch(body: &str) -> String {
                 match crate::store::save(path, &settings) {
                     Ok(()) => {
                         log_info("rpc", &format!("Update pref {key:?} set to {value}."));
+                        state::request_sync();
+                        match serde_json::to_string(&settings) {
+                            Ok(json) => ok(json),
+                            Err(e) => err(&format!("serialize config: {e}")),
+                        }
+                    }
+                    Err(e) => {
+                        log_error("rpc", &format!("save config failed: {e}"));
+                        err(&format!("save config: {e}"))
+                    }
+                }
+            }
+            None => err("hub config path not configured"),
+        },
+        // Whether the hub's own settings follow the Steam account across devices
+        // (see `sync`). Args: a bool, or `{ enabled }`. Turning it on syncs on the
+        // next settled tick.
+        Some("setConfigSync") => match state::hub_config_path() {
+            Some(path) => {
+                let enabled = parsed
+                    .as_ref()
+                    .and_then(|v| v.get("args"))
+                    .and_then(|a| {
+                        a.as_bool()
+                            .or_else(|| a.get("enabled").and_then(Value::as_bool))
+                    })
+                    .unwrap_or(false);
+                let mut settings = crate::store::load(path);
+                settings.config_sync = enabled;
+                match crate::store::save(path, &settings) {
+                    Ok(()) => {
+                        log_info("rpc", &format!("Settings sync set to {enabled}."));
+                        if enabled {
+                            state::request_sync();
+                        }
                         match serde_json::to_string(&settings) {
                             Ok(json) => ok(json),
                             Err(e) => err(&format!("serialize config: {e}")),
@@ -792,6 +828,7 @@ fn dispatch(body: &str) -> String {
                         }
                     }
                     log_info("rpc", &format!("Boot movie set to {enabled}."));
+                    state::request_sync();
                     ok(format!(r#"{{"boot_movie":{enabled}}}"#))
                 }
                 Err(e) => {
@@ -810,6 +847,22 @@ fn dispatch(body: &str) -> String {
                     serde_json::json!(EDITABLE_CONFIG_KEYS),
                 );
                 obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
+                // The config file's current values for the synced toggles (edited
+                // here or synced from another device) are what the next start
+                // applies — the hub screen shows those, with a restart note.
+                let mut restart_pending = false;
+                if let Some(file) = state::config_file_path()
+                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                {
+                    for key in crate::sync::CONFIG_KEYS {
+                        if let Some(v) = file.get(key) {
+                            restart_pending |= crate::sync::needs_restart(key, v);
+                            obj.insert(key.to_string(), v.clone());
+                        }
+                    }
+                }
+                obj.insert("restart_pending".to_string(), Value::Bool(restart_pending));
                 // Live boot-animation state (toggled without a restart) overrides
                 // the boot snapshot so the hub screen echoes the current on/off.
                 obj.insert(
@@ -883,6 +936,9 @@ fn dispatch(body: &str) -> String {
                         "rpc",
                         &format!("Config file updated: {key} (restart to apply)."),
                     );
+                    if crate::sync::CONFIG_KEYS.contains(&key) {
+                        state::request_sync();
+                    }
                     ok(r#"{"ok":true,"restartRequired":true}"#.to_string())
                 }
                 Err(e) => {

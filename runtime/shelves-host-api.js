@@ -42,8 +42,11 @@
   function notifyEmit() {
     for (let i = 0; i < notifyListeners.length; i++) { try { notifyListeners[i](); } catch (e) {} }
   }
-  function notifyRecord(title, body) {
-    notifyRing.unshift({ id: ++notifySeq, title: String(title || ""), body: String(body || ""), ts: Date.now(), read: false });
+  // `extra` carries what the sender passed with it: `logo` / `icon` (React elements or an SVG
+  // string) and `source` ("hub" for the host's own), so the center shows the same marks.
+  function notifyRecord(title, body, extra) {
+    const e = extra || {};
+    notifyRing.unshift({ id: ++notifySeq, title: String(title || ""), body: String(body || ""), ts: Date.now(), read: false, logo: e.logo, icon: e.icon, source: e.source });
     if (notifyRing.length > NOTIFY_CAP) notifyRing.length = NOTIFY_CAP;
     notifyEmit();
   }
@@ -150,7 +153,7 @@
         this.send(opts.title || "", opts.body || "", opts.durationMs, { logo: opts.logo, icon: opts.icon, source: opts.source });
       },
       send: function (title, body, durationMs, extra) {
-        notifyRecord(title, body);
+        notifyRecord(title, body, extra);
         // Steam's own pipeline (sound, tray, Steam chrome); when it is not up the
         // entry still lives in the hub view's Notifications section.
         let shown = false;

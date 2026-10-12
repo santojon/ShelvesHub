@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-11_13-12-38",
+  "ts": "2026-10-12_04-28-36",
   "version": "0.5.0",
   "overall": "PASS",
   "cells": [
@@ -9,9 +9,27 @@
       "arch": "x86_64",
       "kind": "container",
       "proves": "host build, install/uninstall lifecycle, RPC, daemon injection into a headless Chromium, runtime scenarios, plugin backend probes",
-      "status": "not-run",
-      "ts": null,
-      "evidence": []
+      "status": "tested",
+      "ts": "2026-10-12_07-27-00",
+      "evidence": [
+        {
+          "file": "evidence/container-x86_64.json",
+          "ts": "2026-10-12_07-27-00",
+          "kind": "container",
+          "steps": {
+            "scenarios": "pass",
+            "install": "pass",
+            "smoke": "pass",
+            "plugin": "pass"
+          }
+        },
+        {
+          "file": "evidence/scenarios-x86_64.json",
+          "ts": "2026-10-12_07-26-52",
+          "kind": "runtime-scenarios",
+          "scenarios": "13/13"
+        }
+      ]
     },
     {
       "id": "linux-aarch64-container",
@@ -19,9 +37,27 @@
       "arch": "aarch64",
       "kind": "container (QEMU)",
       "proves": "host build, install/uninstall lifecycle, RPC, daemon injection into a headless Chromium, runtime scenarios, plugin backend probes",
-      "status": "not-run",
-      "ts": null,
-      "evidence": []
+      "status": "tested",
+      "ts": "2026-10-12_07-28-07",
+      "evidence": [
+        {
+          "file": "evidence/container-aarch64.json",
+          "ts": "2026-10-12_07-28-07",
+          "kind": "container",
+          "steps": {
+            "scenarios": "pass",
+            "install": "pass",
+            "smoke": "pass",
+            "plugin": "pass"
+          }
+        },
+        {
+          "file": "evidence/scenarios-aarch64.json",
+          "ts": "2026-10-12_07-28-05",
+          "kind": "runtime-scenarios",
+          "scenarios": "13/13"
+        }
+      ]
     },
     {
       "id": "host-harness",
@@ -30,13 +66,13 @@
       "kind": "host harness",
       "proves": "runtime scenarios (native tab, coexistence, sole host, cooperative, fallback panel, idle cost) in a headless Chromium",
       "status": "tested",
-      "ts": "2026-10-11_13-11-58",
+      "ts": "2026-10-12_04-28-36",
       "evidence": [
         {
           "file": "evidence/scenarios-host-darwin-arm64.json",
-          "ts": "2026-10-11_13-11-58",
+          "ts": "2026-10-12_04-28-36",
           "kind": "runtime-scenarios",
-          "scenarios": "11/11"
+          "scenarios": "13/13"
         }
       ]
     },

@@ -18,6 +18,7 @@ pub mod report;
 pub mod rpc;
 pub mod state;
 pub mod store;
+pub mod sync;
 
 /// Version of the `HostApi` contract this loader implements. **Derived** at build
 /// time from the shared `@deck-shelves/host` contract (`host/dist/index.d.ts`) via

@@ -188,6 +188,39 @@ See [debugging.md](debugging.md) for the `shelves-devtools` CDP tool, the local
 debug harness (`scripts/local-debug.sh`), and the on-Deck SSH workflow
 (`scripts/deck-deploy.sh`, `scripts/deck-tunnel.sh`).
 
+## Quality reports and the dashboard
+
+`pnpm validate` runs every CI gate as a recorded step — rustfmt, clippy, the Rust tests,
+`cargo audit` (skipped when not installed), ESLint, the runtime's complexity debt, JavaScript
+syntax, data files + localization parity, the one-click launchers, the shipped-text rule and
+the runtime harness (skipped without a Chromium-family browser); `--docker` and `--qa` add the
+container harness and the QA matrix, `--no-cargo` skips the Rust gates. Each step's status,
+duration and log tail go into `site/reports/<scope>/<timestamp>.json` and a page
+(`<timestamp>.html`, every step expandable), the scope's `index.html` lists its history, and
+`site/reports/runs.json` feeds the dashboard. `pnpm validate:ci` is what the **Ops · Quality
+reports** workflow runs (scope `release` on a release, else `ci`). `pnpm report` (add
+`--harness` to include the runtime scenarios, `--no-cargo` to skip the Rust gates) records the
+same signals without step logs. Each run records: the gates (`cargo test`, clippy, `cargo fmt
+--check`, ESLint, the runtime harness, `cargo audit` when installed) with an overall PASS/FAIL
+that also fails on any failed step; ESLint problems by rule and the
+suppression baseline; the complexity debt of the shipped runtime (sum of the scores of every
+function over the limit, their count and the worst one, measured with
+`scripts/ci/complexity.eslint.config.mjs`); code lines of the runtime and of the service;
+the QA matrix cells by status; locales, key parity and EN ↔ pt-BR doc pairs; and how long
+each step took. The **Ops · Quality reports** workflow records a `ci` run on every push to
+the default branch and a `release` run on each release; usage numbers (downloads, traffic)
+come from **Ops · Site stats**. A chart only draws once two runs carry its signal.
+
+## Site analytics
+
+The project site can count page views with a free, privacy-first counter — no cookies, no
+personal data, no consent banner. It is off until a site code is set: create a GoatCounter
+site, put its code in `site/analytics.json` (`"code": "<name>"`, the `<name>` in
+`<name>.goatcounter.com`) and rebuild; `scripts/build-site.mjs` then injects the counter into
+every page's `<head>` and a one-line notice (with a link to the public stats page when
+`publicStats` is on) into the landing and features footers, in both languages. An empty code
+strips both again. The counter is never shipped inside the host or the plugin — only the site.
+
 ## CI
 
 The CI workflow (`.github/workflows/ci.yml`) runs `cargo check`, `cargo test`, and `cargo clippy -- -D warnings` on every push and pull request. Build artifacts are generated on PR merge and on tag push. See `.github/workflows/` for the full workflow definitions.

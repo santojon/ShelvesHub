@@ -83,5 +83,9 @@
   "notice_plugin_updated": "Deck Shelves {version} sürümüne güncellendi",
   "notice_plugin_rolled_back": "Deck Shelves yeniden {version} sürümünde",
   "notice_coop_receded": "İşbirliği modu duraklatıldı — bu oturumda birlikte çalışma olarak sürüyor",
-  "notice_recovered": "Steam arayüzü çöktü — ShelvesHub onu yeniden başlattı"
+  "notice_recovered": "Steam arayüzü çöktü — ShelvesHub onu yeniden başlattı",
+  "cfg_config_sync": "Ayarları cihazlar arasında eşitle",
+  "cfg_config_sync_sub": "Bu ayarları Steam hesabın üzerinden her cihazda aynı tutar",
+  "notice_sync_applied": "Ayarlar başka bir cihazdan eşitlendi",
+  "notice_sync_restart": "Ayarlar başka bir cihazdan eşitlendi — uygulamak için yeniden başlatın"
 }

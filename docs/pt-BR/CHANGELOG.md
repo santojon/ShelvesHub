@@ -24,6 +24,13 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   `runtime/shelves-host-qam.js`). Decisão com testes unitários; ainda falta validar num
   dispositivo sob force com uma release mais nova do plugin antes de documentar a opção como
   suportada.
+- **A posse forçada espera o loader de plugins antes de hospedar.** Logo após um reinício do daemon
+  ou da Steam, os globais do loader chegam alguns segundos depois do renderer, então o primeiro
+  tick de injeção com `force_owner` não via loader nenhum e tomava o caminho de host único (a aba
+  mostrava "sole" ao lado de um loader ativo, e a cópia do loader tinha que se retirar depois). Um
+  renderer sem dono sob force agora aguarda até 20 s (ou o `owner_settle_secs` configurado, o que
+  for maior) por um loader antes de hospedar; uma máquina com force ligado e sem loader algum só
+  paga isso uma vez por renderer (`src/loader/mod.rs`, com testes unitários).
 - **Voltar à versão anterior — do ShelvesHub e do Deck Shelves.** Toda atualização agora guarda o
   que substituiu: o pacote do Deck Shelves como uma cópia `.prev` ao lado do ativo, e o binário do
   ShelvesHub + runtime injetado + assets como um snapshot `previous/` ao lado do binário. A seção
@@ -52,7 +59,20 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   altura total ao lado da visão do ShelvesHub, dimensionado pelo menu ao vivo. O foco do controle
   entra nele, B / o controle de voltar o fecham (o menu volta a estreitar), e ele se recolhe sozinho
   quando o menu some, para um menu reaberto nunca voltar largo e vazio. Runtime:
-  `runtime/shelves-host-sidecar.js`.
+  `runtime/shelves-host-sidecar.js`. O painel tem duas abas, **Logs** e **Notificações** (a
+  central de notificações veio para cá do corpo da visão do hub, com contador de não lidas);
+  ícones ao lado do título ShelvesHub o abrem em qualquer uma das abas, e ele também abre sem
+  ponteiro: um segundo D-pad direita no focável mais à direita da visão do hub (o gesto do
+  próprio plugin, lido do fluxo de entrada de controle do Steam e registrado só enquanto a visão
+  do hub está montada), com D-pad esquerda para fora do painel fechando-o; no teclado, um
+  segundo ArrowRight, Ctrl+Shift+L (logs) ou Ctrl+Shift+N (notificações). Dentro do painel os
+  bumpers alternam entre as abas (LB / RB); o foco pousa na aba ativa ao abrir. As linhas de
+  notificação mostram a marca do remetente (o logo com que o toast foi enviado, ou o padrão do
+  host / do Deck Shelves) e o ícone por tipo ao lado do título, como nos toasts do Steam. É
+  dimensionado pelo painel alargado do menu como o sidecar do plugin (o painel de conteúdo da
+  própria aba nunca alarga, o que o travava em 280 px) e fixo na viewport do menu, ancorado ao
+  painel de conteúdo da aba, então não desliza mais junto quando o foco do controle rola a coluna
+  da visão do hub por baixo dele.
 - **As notificações passam pelo pipeline de notificações do próprio Steam.** Em host único, as
   notificações que este host mostra — os toasts do Deck Shelves roteados por ele e, agora, as do
   próprio ShelvesHub — são despachadas pelo próprio Steam, como acontece sob um carregador de
@@ -66,8 +86,8 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   desenhado por nós foi removido: `native_notifications` vem ligado por padrão (o arquivo de config,
   `SHELVES_NATIVE_NOTIFICATIONS=0` ou o interruptor "Notificações do Steam" na seção Configuração
   da aba desligam), e quando o pipeline está desligado ou não consegue instalar, a notificação só
-  chega à nova seção "Notificações" da visão do hub (as últimas 20, mais recentes primeiro, linha
-  de limpar), com o motivo no log.
+  chega à aba "Notificações" do sidecar (as últimas 20, mais recentes primeiro, um controle de
+  limpar), com o motivo no log.
 - **Notificações do próprio ShelvesHub.** O host agora avisa, com a própria marca, quando: o
   ShelvesHub voltou numa versão nova (ou numa anterior, após um rollback); uma atualização do
   ShelvesHub foi baixada e espera um reinício; o Deck Shelves foi atualizado ou revertido; o modo
@@ -79,6 +99,61 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   `host.notifications.toast`, e `source: "hub"` marca uma notificação do host. `host.notifications`
   ganha `mode` / `list` / `unread` / `markRead` / `clear` / `subscribe` (extras do host, não
   métodos do contrato).
+- **As configurações do próprio hub sincronizam entre dispositivos pelo Steam.** O daemon mantém
+  um documento próprio, sob uma chave própria, no armazenamento roaming do Steam
+  (`shelveshub-settings-sync-v1`, o armazenamento que o Steam leva entre os dispositivos em que
+  uma conta entra); ele é o único escritor, então nenhuma release do plugin está envolvida. Só
+  intenção do usuário sincroniza: os interruptores de atualização (`auto_update`,
+  `auto_update_hub`, `hub_prerelease`, `auto_update_plugin`, `plugin_prerelease`,
+  `quiet_updates`) e os interruptores de Configuração (`native_notifications`, `boot_movie` e
+  `desktop_ui` onde existe um cliente desktop). Cada valor viaja com a hora da última mudança e
+  uma rodada guarda, por configuração, a mudança mais recente de qualquer dispositivo — dois
+  dispositivos editados de forma independente convergem em vez de se sobrescrever; em empate
+  vence a cópia compartilhada, então um dispositivo sincronizando pela primeira vez adota o que
+  já está lá (um valor que ele mesmo definiu leva um carimbo novo e vence). A operação local do
+  dispositivo (endpoints, caminhos, posse, intervalos, o comando de recuperação) nunca sai dele,
+  só booleanos de chaves conhecidas são aplicados, e chaves que uma release mais nova adiciona
+  passam intactas por uma mais antiga. Uma rodada roda no primeiro tick estável, a cada 5
+  minutos e no tick seguinte a uma mudança local; uma mudança adotada de outro dispositivo é
+  anunciada com uma notificação (com "reinicie para aplicar" quando o daemon só lê a chave na
+  inicialização — a aba então mostra o valor sincronizado com a nota de reinício). "Sincronizar
+  configurações entre dispositivos" na seção Configuração da aba (ligado por padrão;
+  `setConfigSync` por RPC; `config_sync` no store do hub) desliga por dispositivo; a seção Status
+  mostra quando a última rodada rodou (`src/sync.rs`, merge com testes unitários).
+- **O dashboard de relatórios mostra muito mais da saúde do projeto.** Cada rodada de qualidade
+  agora registra, além dos testes Rust, do clippy e da linha de base de supressões: `cargo fmt
+  --check`, problemas do ESLint (por regra), o harness do runtime, `cargo audit` quando
+  instalado, a dívida de complexidade do runtime distribuído (soma das pontuações acima do
+  limite, quantidade, pior função, maiores ofensoras — `scripts/ci/complexity.eslint.config.mjs`),
+  linhas de código do runtime e do serviço, as células da matriz de QA por status, locales com
+  paridade de chaves e pares de docs EN ↔ pt-BR, e quanto tempo cada etapa levou; o PASS/FAIL
+  geral agora cobre as seis verificações. O dashboard (`site/reports/dashboard.html`) ganhou
+  seções correspondentes: cartões da rodada e da duração, verificações aprovadas por rodada,
+  duração total, contagens e taxas de aprovação dos testes, tendências de lint e dívida com
+  listas por regra e por função, tamanho do código, docs e localização, duração das etapas,
+  tráfego do repositório ao longo do tempo, uma divisão de downloads estável vs pré-release,
+  resultados por escopo e a distribuição geral — e a cobertura de plataformas agora lê a matriz
+  de QA em vez de linhas estáticas.
+- **Um fluxo validate que registra cada verificação como uma etapa, como o do plugin.**
+  `pnpm validate` (`scripts/validate.mjs`, executor de etapas em `scripts/ci/lib/harness.mjs`)
+  roda rustfmt, clippy, os testes Rust, `cargo audit` (pulado quando não está instalado),
+  ESLint, a dívida de complexidade do runtime, sintaxe JavaScript, arquivos de dados + paridade
+  de localização, os lançadores de um clique, a regra de texto publicado e o harness do runtime
+  (pulado sem navegador) — `--docker` / `--qa` acrescentam o harness em contêiner e a matriz de
+  QA — e grava o status, a duração e o fim do log de cada etapa em
+  `site/reports/<escopo>/<ts>.json` mais uma página (`<ts>.html`, cada etapa expansível, as que
+  falharam já abertas) e a página de histórico do escopo; a rodada também leva os sinais
+  analisados, então uma rodada alimenta o dashboard, que ganhou taxas de aprovação por etapa e
+  durações médias e liga cada rodada à sua página. O workflow **Ops · Quality reports** agora
+  roda `pnpm validate:ci` (escopo `release` numa release, senão `ci`); `pnpm report` continua
+  gravando só os sinais, e `scripts/ci/report.mjs --aggregate-only` regenera páginas, índices de
+  escopo e `runs.json` a partir dos arquivos de rodada.
+- **Contagem de visitas respeitando a privacidade no site do projeto, desligada até um código de
+  site ser definido.** `site/analytics.json` nomeia um contador gratuito e sem cookies
+  (GoatCounter); com o código definido, o `scripts/build-site.mjs` o injeta no `<head>` de toda
+  página e um aviso de uma linha (com o link das estatísticas públicas) nos rodapés da página
+  inicial e de funcionalidades, nos dois idiomas — um código vazio remove os dois. Nada disso
+  vai dentro do host nem do plugin.
 
 ### Corrigido
 - **Os instaladores de um clique do SteamOS / Linux abriam um terminal que fechava na hora.** Os

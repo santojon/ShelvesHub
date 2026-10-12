@@ -88,8 +88,11 @@
             + ' — Rust ' + frac(top.tests) + ' · JS ' + frac(top.harness) + ' · ' + (top.suppressions ? top.suppressions.total : "—") + ' suppressions';
           body.innerHTML = runs.map(function (r) {
             var oc = r.overall === "PASS" ? "pass" : "fail";
+            var when = esc(String(r.ts).replace("_", " "));
+            // Runs recorded by the validate flow have a page with every step's log.
+            var cell = r.page ? '<a class="back" href="' + esc(r.page) + '">' + when + '</a>' : when;
             return '<tr>'
-              + '<td>' + esc(String(r.ts).replace("_", " ")) + '</td>'
+              + '<td>' + cell + '</td>'
               + '<td class="scope">' + esc(r.scope || "") + '</td>'
               + '<td>' + esc(r.version ? "v" + r.version : "—") + '</td>'
               + '<td><span class="pill ' + oc + '">' + esc(r.overall || "—") + '</span></td>'

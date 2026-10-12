@@ -83,5 +83,9 @@
   "notice_plugin_updated": "Deck Shelves 已更新到 {version}",
   "notice_plugin_rolled_back": "Deck Shelves 已回到 {version}",
   "notice_coop_receded": "协作模式已暂停 — 本次会话以共存模式运行",
-  "notice_recovered": "Steam 界面崩溃了 — ShelvesHub 已将其重启"
+  "notice_recovered": "Steam 界面崩溃了 — ShelvesHub 已将其重启",
+  "cfg_config_sync": "跨设备同步设置",
+  "cfg_config_sync_sub": "通过你的 Steam 账户，让这些设置在所有设备上保持一致",
+  "notice_sync_applied": "已从另一台设备同步设置",
+  "notice_sync_restart": "已从另一台设备同步设置 — 重启后生效"
 }

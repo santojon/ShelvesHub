@@ -83,5 +83,9 @@
   "notice_plugin_updated": "Deck Shelves bijgewerkt naar {version}",
   "notice_plugin_rolled_back": "Deck Shelves terug op {version}",
   "notice_coop_receded": "Coöperatieve modus gepauzeerd — deze sessie draait als coëxistentie",
-  "notice_recovered": "De Steam-interface is ingestort — ShelvesHub heeft hem herstart"
+  "notice_recovered": "De Steam-interface is ingestort — ShelvesHub heeft hem herstart",
+  "cfg_config_sync": "Instellingen synchroniseren tussen apparaten",
+  "cfg_config_sync_sub": "Houdt deze instellingen via je Steam-account op elk apparaat gelijk",
+  "notice_sync_applied": "Instellingen gesynchroniseerd vanaf een ander apparaat",
+  "notice_sync_restart": "Instellingen gesynchroniseerd vanaf een ander apparaat — herstart om toe te passen"
 }

@@ -14,6 +14,9 @@ is pushed — the notes below are picked up and published with the release.
   ShelvesHub runs its own copy of Deck Shelves even when a plugin loader is present and forced
   ownership is in use, so plugin updates arrive through the hub there too. Off by default until it
   has been validated on a device.
+- **Forced ownership no longer flips to "sole" after a restart.** The hub now waits for the plugin
+  loader to show up before hosting, so a Deck with a plugin loader and forced ownership lands in
+  cooperative mode as intended.
 - **Go back a version when an update misbehaves.** Updates now keep the previous ShelvesHub and the
   previous Deck Shelves around, and the tab's Updates section has "Go back to the previous …" rows
   (tap twice) that restore them in seconds, no download needed. The version you left is held back
@@ -27,7 +30,11 @@ is pushed — the notes below are picked up and published with the release.
   no longer leave a broken bundle in place — it is verified before it replaces anything.
 - **Logs open beside the tab, full height.** "View logs" now widens the Quick Access menu and shows
   the log stream in a panel next to the ShelvesHub view (like the friends list does), instead of a
-  small box under the buttons. B closes it.
+  small box under the buttons. The panel has two tabs, Logs and Notifications, with icons beside
+  the ShelvesHub title to open either; it also opens like the plugin's own side panel — press
+  right twice on the gamepad at the right edge of the hub view (left out of it closes) — or from
+  a keyboard with a double right arrow, Ctrl+Shift+L or Ctrl+Shift+N. LB / RB switch tabs inside
+  it, B closes it, and each notification shows its sender's mark like the Steam toast did.
 - **Notifications now look and behave like Steam's.** The notifications this host shows — Deck
   Shelves' too — go through Steam's own notification system: Steam's sound, position and in-game
   overlay, an entry in the Notifications tab, Steam's own look, each sender with its own mark.
@@ -35,8 +42,21 @@ is pushed — the notes below are picked up and published with the release.
 - **ShelvesHub tells you what it did.** A notification when ShelvesHub comes back updated (or
   rolled back), when an update is downloaded and waits for a restart, when Deck Shelves was
   updated or rolled back, when cooperative mode paused itself, and when the Steam interface
-  collapsed and ShelvesHub restarted it. The tab also keeps the last notifications in a new
-  "Notifications" section.
+  collapsed and ShelvesHub restarted it. The side panel's Notifications tab keeps the last ones,
+  with an unread badge on its icon.
+- **Your ShelvesHub settings follow you between devices.** The update switches, quiet updates,
+  Steam notifications and the boot animation now sync through your Steam account: change one
+  on the Deck and the Mac picks it up (and the other way round), the most recent change winning
+  for each setting. Ports, paths, ownership and the like stay per device. A device syncing for
+  the first time takes over what is already there. "Sync settings across devices" in the tab's
+  Configuration section turns it off; Status shows when the last sync ran.
+- **A fuller reports dashboard.** The project site's dashboard now charts every quality gate
+  per run, test counts and pass rates, lint and complexity debt, code size, docs and
+  localization, how long each step takes, repository traffic and a stable vs pre-release
+  download split, and reads platform coverage from the QA matrix.
+- **Site page counting, privacy-first and off by default.** The site can count page views with
+  a free, cookie-less counter and says so in its footer; it only activates once a site code is
+  set, and never runs inside ShelvesHub or Deck Shelves.
 
 ## [0.5.0] - 2026-10-10
 

@@ -60,14 +60,14 @@ jobs:
         id: chrome
         uses: browser-actions/setup-chrome@v1
 
-      - name: Generate quality report
+      # Every gate as a recorded step (status, duration, log tail) + the parsed
+      # signals: site/reports/<scope>/<ts>.json and .html.
+      - name: Validate and record the run
         env:
           BROWSER: ${{ steps.chrome.outputs.chrome-path }}
           HARNESS_NO_SANDBOX: '1'
-        run: |
-          SCOPE=ci
-          [ "${{ github.event_name }}" = "release" ] && SCOPE=release
-          node scripts/ci/report.mjs --scope "$SCOPE" --harness
+          REPORT_SCOPE: ${{ github.event_name == 'release' && 'release' || 'ci' }}
+        run: node scripts/validate.mjs --ci
 
       - name: Commit snapshot
         env:
@@ -82,7 +82,9 @@ jobs:
           # Instead, carry ONLY the new timestamped run file and re-apply it onto the
           # latest main, then rebuild the aggregate there — the commit's parent is
           # main, so it never conflicts with other work.
-          REL="$(git status --porcelain site/reports | sed -n 's/^?? //p' | head -1)"
+          # The run's JSON carries everything; the aggregate step regenerates its
+          # page, the scope index and runs.json on top of main.
+          REL="$(git status --porcelain site/reports | sed -n 's/^?? //p' | grep '\.json$' | grep -v runs.json | head -1)"
           if [ -z "$REL" ]; then
             echo "No new report file."
             exit 0

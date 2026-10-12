@@ -130,6 +130,33 @@ fn quiet_updates_default_on_and_rollback_fields_roundtrip() {
 }
 
 #[test]
+fn settings_sync_defaults_on_and_bookkeeping_roundtrips() {
+    let path = scratch("sync");
+    cleanup(&path);
+    let d = HubSettings::default();
+    assert!(d.config_sync);
+    assert_eq!(d.sync_last_at, 0);
+    let s = HubSettings {
+        config_sync: false,
+        sync_base: [("auto_update".to_string(), serde_json::Value::Bool(true))]
+            .into_iter()
+            .collect(),
+        sync_stamps: [("auto_update".to_string(), 42u64)].into_iter().collect(),
+        sync_last_at: 1_700_000_000_000,
+        ..Default::default()
+    };
+    save(&path, &s).unwrap();
+    assert_eq!(load(&path), s);
+    // A file from before sync existed loads with sync on and nothing recorded.
+    fs::write(&path, r#"{"auto_update":true}"#).unwrap();
+    let old = load(&path);
+    assert!(old.config_sync);
+    assert!(old.sync_base.is_empty());
+    assert!(old.sync_stamps.is_empty());
+    cleanup(&path);
+}
+
+#[test]
 fn atomic_write_leaves_no_temp() {
     let path = scratch("atomic");
     cleanup(&path);

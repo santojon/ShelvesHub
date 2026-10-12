@@ -82,8 +82,11 @@ enum Tick {
 use crate::constants::defaults::COLLAPSE_HALT_THRESHOLD;
 /// Confirmed collapse episodes while forced before auto-safe-mode recedes force.
 const COOP_RECEDE_STRIKES: u32 = 2;
+/// Under forced ownership, how long an unclaimed renderer waits for a plugin
+/// loader to show up before we host it ourselves (see `settle_window`).
+const FORCE_LOADER_SETTLE_SECS: u64 = 20;
 use crate::constants::timers::{
-    COOP_BUNDLE_FAST_WINDOW, FAST_POLL, SOLE_IDLE, UPDATE_CHECK_INTERVAL,
+    COOP_BUNDLE_FAST_WINDOW, FAST_POLL, SOLE_IDLE, SYNC_INTERVAL, UPDATE_CHECK_INTERVAL,
 };
 
 pub fn run(mut config: Config) {
@@ -148,6 +151,9 @@ pub fn run(mut config: Config) {
     // Throttle for the auto-update check (see auto_update_check): first check runs
     // on the first Active tick, then at most once per UPDATE_CHECK_INTERVAL.
     let mut last_update_check: Option<Instant> = None;
+    // Throttle for the settings sync: the first settled tick, then every
+    // SYNC_INTERVAL, plus the next tick after a local change (state::request_sync).
+    let mut last_sync: Option<Instant> = None;
     // Tracks the troubleshooting pause so the transition INTO paused reloads once.
     let mut was_paused = false;
     // Tracks the experimental desktop-UI stand-down (inject only on the gamepad /
@@ -412,6 +418,11 @@ pub fn run(mut config: Config) {
         // it is in place — ours (Active) or the coexist tab's.
         if settled {
             deliver_host_notices(&config);
+            if state::take_sync_request() || last_sync.is_none_or(|t| t.elapsed() >= SYNC_INTERVAL)
+            {
+                last_sync = Some(Instant::now());
+                crate::sync::run(&config);
+            }
         }
 
         // Periodically check for updates (throttled, best-effort) regardless of
@@ -990,11 +1001,26 @@ fn tick(
     // owner-mode NOW would hijack that pending claim (the fast-tick failure mode).
     // Settle: wait up to `owner_settle_secs` for a claim to appear before hosting.
     // Default 0 disables the wait — a sole host boots immediately.
-    if owner.is_empty() && !config.force_owner && config.owner_settle_secs > 0 {
+    //
+    // Forced ownership with NO loader detected yet is the same race from the other
+    // side: force only makes sense next to a loader, and right after a Steam (or
+    // daemon) restart the loader's globals land a few seconds after the renderer.
+    // Hosting now would take the sole path and leave the loader's copy to stand
+    // down later ("sole" instead of "cooperative"). Wait a bounded window for the
+    // loader before hosting; a machine with force on and no loader at all only
+    // pays this once per renderer.
+    if owner.is_empty() {
         let now = Instant::now();
         let since = *empty_since.get_or_insert(now);
         let waited = now.duration_since(since).as_secs();
-        if keep_settling(config.owner_settle_secs, waited) {
+        let window = settle_window(config.force_owner, loader_present, config.owner_settle_secs);
+        if keep_settling(window, waited) {
+            if waited == 0 && config.force_owner {
+                log_info(
+                    "loader",
+                    &format!("Forced ownership — waiting up to {window}s for a plugin loader before hosting."),
+                );
+            }
             return Ok(Tick::Settling(waited));
         }
     }
@@ -1212,6 +1238,21 @@ pub fn may_inject(owner: &str, force: bool) -> bool {
 /// which point the renderer is treated as a true sole host.
 fn keep_settling(settle_secs: u64, waited_secs: u64) -> bool {
     settle_secs > 0 && waited_secs < settle_secs
+}
+
+/// How long an unclaimed renderer waits before we host it. Not forced: the
+/// configured `owner_settle_secs` (0 = never). Forced with a loader already
+/// present: nothing — the cooperative branch handles it before we get here.
+/// Forced with no loader yet: at least `FORCE_LOADER_SETTLE_SECS`, so the
+/// loader's late globals turn the tick cooperative instead of sole.
+fn settle_window(force_owner: bool, loader_present: bool, owner_settle_secs: u64) -> u64 {
+    if !force_owner {
+        return owner_settle_secs;
+    }
+    if loader_present {
+        return 0;
+    }
+    owner_settle_secs.max(FORCE_LOADER_SETTLE_SECS)
 }
 
 /// Evaluate the host runtime (`window.__SHELVES_HOST__`) in the renderer. The

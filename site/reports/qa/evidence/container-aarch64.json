@@ -1,0 +1,9 @@
+{
+  "ts": "2026-10-12_07-28-07",
+  "kind": "container",
+  "os": "linux",
+  "arch": "aarch64",
+  "mode": "all",
+  "overall": "PASS",
+  "steps": { "scenarios": "pass", "install": "pass", "smoke": "pass", "plugin": "pass" }
+}

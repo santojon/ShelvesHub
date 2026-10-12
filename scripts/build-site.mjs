@@ -159,6 +159,54 @@ function injectFeaturesList(page, itemsHtml) {
   return page.replace(/(<ul class="features-list">)[\s\S]*?(<\/ul>)/, `$1\n${itemsHtml}\n        $2`);
 }
 
+/* Site analytics (site/analytics.json): a privacy-first page-view counter — no cookies,
+   no personal data, no consent banner — injected into every page's <head> at build
+   time when a site code is set, plus a one-line notice in the landing/features footers.
+   Markers make the step idempotent; an empty code strips both again. */
+const ANALYTICS_MARK = ["<!-- analytics -->", "<!-- /analytics -->"];
+const NOTICE_MARK = ["<!-- analytics-notice -->", "<!-- /analytics-notice -->"];
+const ANALYTICS_PAGES = ["index.html", "features.html", "reports/index.html", "reports/dashboard.html"];
+
+function analyticsConfig(site) {
+  try {
+    return JSON.parse(read(join(site, "analytics.json")));
+  } catch {
+    return null;
+  }
+}
+
+function analyticsSnippet(cfg) {
+  if (!cfg || cfg.provider !== "goatcounter" || !/^[a-z0-9-]+$/i.test(cfg.code || "")) return "";
+  return `<script data-goatcounter="https://${cfg.code}.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>`;
+}
+
+function analyticsNotice(cfg) {
+  if (!analyticsSnippet(cfg)) return "";
+  const stats = cfg.publicStats ? `https://${cfg.code}.goatcounter.com` : "";
+  const en = `Page views are counted without cookies or personal data (GoatCounter)${stats ? ` · <a href="${stats}">public stats</a>` : ""}.`;
+  const pt = `As visitas são contadas sem cookies nem dados pessoais (GoatCounter)${stats ? ` · <a href="${stats}">estatísticas públicas</a>` : ""}.`;
+  return `<p class="foot-bottom analytics-note" data-lang-variant="en">${en}</p><p class="foot-bottom analytics-note" data-lang-variant="pt">${pt}</p>`;
+}
+
+// Replace (or strip) a marked block, re-inserting it right before the anchor.
+function replaceBlock(page, marks, body, anchorRe) {
+  const stripped = page.replace(new RegExp(`\\s*${marks[0]}[\\s\\S]*?${marks[1]}`), "");
+  return body ? stripped.replace(anchorRe, `${marks[0]}${body}${marks[1]}\n$&`) : stripped;
+}
+
+function injectAnalytics(site) {
+  const cfg = analyticsConfig(site);
+  const snippet = analyticsSnippet(cfg);
+  for (const rel of ANALYTICS_PAGES) {
+    const p = join(site, rel);
+    if (!existsSync(p)) continue;
+    let page = replaceBlock(read(p), ANALYTICS_MARK, snippet, /<\/head>/);
+    if (/class="foot-bottom"/.test(page)) page = replaceBlock(page, NOTICE_MARK, analyticsNotice(cfg), /<\/footer>/);
+    writeFileSync(p, page, "utf8");
+  }
+  console.log(`[build-site] analytics: ${snippet ? `on (${cfg.provider})` : "off (no site code in site/analytics.json)"}`);
+}
+
 function main() {
   const rootDir = root();
   const site = join(rootDir, "site");
@@ -201,6 +249,7 @@ function main() {
     }
   }
 
+  injectAnalytics(site);
   return 0;
 }
 

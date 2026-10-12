@@ -96,14 +96,42 @@ The host's notifications — Deck Shelves' toasts and ShelvesHub's own notices �
 Steam's own notification system (Steam's toast, sound, in-game overlay, an entry in its
 Notifications tab). That wraps Steam's toast renderer, so it only installs on a sole host,
 on the React version it was written against, and after a pre-flight check; beside a plugin
-loader the host's notices use the loader's toaster instead. The hub view always keeps the
-last notifications in its "Notifications" section. `native_notifications` (on by default;
-`false` in the config file, `SHELVES_NATIVE_NOTIFICATIONS=0` per service, or the "Steam
-notifications" switch in the tab's Configuration section) turns the Steam path off — then
-notifications only reach that section. When the path cannot install, the reason is in the
+loader the host's notices use the loader's toaster instead. The side panel beside the hub view
+keeps the last notifications in its Notifications tab (the bell by the title, or Ctrl+Shift+N).
+`native_notifications` (on by default; `false` in the config file,
+`SHELVES_NATIVE_NOTIFICATIONS=0` per service, or the "Steam notifications" switch in the tab's
+Configuration section) turns the Steam path off — then notifications only reach that tab.
+When the path cannot install, the reason is in the
 log (`native toasts: …`); from the Steam debug console,
 `__SHELVES_HOST__.notifications.mode()` answers `active`, `pending`, `failed` or `off`. If it
 ever misbehaves, turn the setting off and restart the service.
+
+## Settings sync
+
+The hub's own settings follow the Steam account: the update switches (automatic updates, the
+per-target switches and channels, quiet updates) and the Configuration toggles (Steam
+notifications, the boot animation, and the desktop-client toggle where it exists) are kept in
+one document under the hub's own key in Steam's roaming storage, and settled on the first
+settled tick, every 5 minutes, and right after a change in the tab. For each setting the most
+recent change wins; on a tie the shared copy wins, so a device syncing for the first time takes
+over what is already there — a setting you changed on that device before its first sync keeps
+a fresh stamp and wins instead. Nothing device-local syncs (endpoints, paths, ownership,
+intervals, the recovery command, the update bookkeeping), and only booleans for known keys are
+ever applied.
+
+- **A setting changed by itself** — another device changed it; the notification "Settings
+  synced from another device" says so. Change it back and that becomes the newest value
+  everywhere.
+- **"Restart to apply" after a sync** — Steam notifications and the desktop-client toggle are
+  read at start-up; the tab shows the synced value with its restart note until then.
+- **Nothing syncs** — check the Status row "Sync settings across devices" (`off`, `—` for never,
+  or an age). The log says `settings sync off: …` once when Steam's roaming storage is not
+  reachable in this renderer, and `roaming copy not written` when a write did not read back.
+  Steam carries the document between devices on its own schedule (sign-in, exit); a device that
+  is running picks a change up within a few minutes of Steam fetching it.
+- **Keep a device on its own settings** — turn "Sync settings across devices" off in that
+  device's Configuration section (`setConfigSync` over RPC, `config_sync` in the hub's store);
+  the switch itself never syncs.
 
 ## Reading the log
 

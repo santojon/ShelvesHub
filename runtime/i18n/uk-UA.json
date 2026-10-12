@@ -83,5 +83,9 @@
   "notice_plugin_updated": "Deck Shelves оновлено до {version}",
   "notice_plugin_rolled_back": "Deck Shelves знову на {version}",
   "notice_coop_receded": "Кооперативний режим призупинено — у цій сесії працює співіснування",
-  "notice_recovered": "Інтерфейс Steam обвалився — ShelvesHub перезапустив його"
+  "notice_recovered": "Інтерфейс Steam обвалився — ShelvesHub перезапустив його",
+  "cfg_config_sync": "Синхронізувати налаштування між пристроями",
+  "cfg_config_sync_sub": "Зберігає ці налаштування однаковими на всіх пристроях через ваш обліковий запис Steam",
+  "notice_sync_applied": "Налаштування синхронізовано з іншого пристрою",
+  "notice_sync_restart": "Налаштування синхронізовано з іншого пристрою — перезапустіть, щоб застосувати"
 }

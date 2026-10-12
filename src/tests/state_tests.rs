@@ -32,14 +32,14 @@ fn host_notices_queue_drains_in_order_and_requeues_at_the_front() {
     drain_host_notices();
     push_host_notice("notice_a", serde_json::json!({ "version": "1" }));
     push_host_notice("notice_b", serde_json::json!({}));
-    let batch = drain_host_notices();
-    assert_eq!(batch.len(), 2);
-    assert_eq!(batch[0].0, "notice_a");
-    assert_eq!(batch[0].1["version"], "1");
+    let taken = drain_host_notices();
+    assert_eq!(taken.len(), 2);
+    assert_eq!(taken[0].0, "notice_a");
+    assert_eq!(taken[0].1["version"], "1");
     assert!(drain_host_notices().is_empty());
-    // A batch the renderer could not take goes back ahead of anything newer.
+    // Notices the renderer could not take go back ahead of anything newer.
     push_host_notice("notice_c", serde_json::json!({}));
-    requeue_host_notices(batch);
+    requeue_host_notices(taken);
     let again = drain_host_notices();
     assert_eq!(
         again.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),

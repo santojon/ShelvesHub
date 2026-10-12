@@ -83,5 +83,9 @@
   "notice_plugin_updated": "Deck Shelves を {version} に更新しました",
   "notice_plugin_rolled_back": "Deck Shelves を {version} に戻しました",
   "notice_coop_receded": "協調モードを一時停止しました — このセッションは共存で動作します",
-  "notice_recovered": "Steam のインターフェースが落ちたため、ShelvesHub が再起動しました"
+  "notice_recovered": "Steam のインターフェースが落ちたため、ShelvesHub が再起動しました",
+  "cfg_config_sync": "デバイス間で設定を同期",
+  "cfg_config_sync_sub": "Steam アカウントを通じて、すべてのデバイスでこれらの設定を同じに保ちます",
+  "notice_sync_applied": "別のデバイスから設定を同期しました",
+  "notice_sync_restart": "別のデバイスから設定を同期しました — 適用するには再起動してください"
 }

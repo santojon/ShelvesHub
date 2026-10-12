@@ -259,7 +259,7 @@
       host.notifications.send(title, body, undefined, { source: "hub" });
       return true;
     }
-    notifyRecord(title, body);
+    notifyRecord(title, body, { source: "hub" });
     const t = borrowedToaster();
     if (!t) return false;
     const logo = h("div", { style: { width: "40px", height: "40px" }, dangerouslySetInnerHTML: { __html: HUB_LOGO_SVG } });

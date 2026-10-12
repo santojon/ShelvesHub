@@ -136,39 +136,10 @@
         body: JSON.stringify({ method: method, args: args == null ? null : args }),
       }).then(function (r) { return r.json(); });
     }
-    // Shown in OUR tab when no panel is registered (the bundle could not come up). Host-branded
-    // and self-contained (plain elements + inline SVG, no dependency on the discovered Steam UI,
-    // which may be part of what failed), strings via I18N; actions call the daemon over RPC.
-    const FALLBACK_ICONS = {
-      download: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>',
-      update: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>',
-      logs: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>',
-      auto: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
-      back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
-      refresh: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
-      trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>',
-      // Tintable ShelvesHub mark: three books on a shelf over a hub node, single-
-      // colour (currentColor). Three bigger books (vs the 4-book draft) + the hub
-      // (the ShelvesHub identity), tuned to still read at 16px.
-      hub: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="2.6" width="3.7" height="11.8" rx="0.7"/><rect x="9.5" y="1" width="3.7" height="13.4" rx="0.7"/><rect x="14" y="3.4" width="3.7" height="11" rx="0.7" transform="rotate(-12 15.85 14.4)"/><rect x="3.3" y="14.4" width="17.4" height="2.1" rx="0.9"/><circle cx="12" cy="19.2" r="1.6"/><circle cx="8.6" cy="22.3" r="1"/><circle cx="12" cy="22.8" r="1"/><circle cx="15.4" cy="22.3" r="1"/><path d="M12 20.5 L9 21.9 M12 20.8 L12 21.9 M12 20.5 L15 21.9" stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round"/></svg>',
-    };
-    function fbIcon(name) {
-      return h("span", {
-        key: "i",
-        style: { display: "inline-flex", flex: "0 0 16px", width: "16px", height: "16px", opacity: 0.9 },
-        dangerouslySetInnerHTML: { __html: FALLBACK_ICONS[name] },
-      });
-    }
-    // A gamepad-focusable clickable: Steam's Focusable (onActivate fires on A and pointer) once
-    // discovered, else a plain <button>. Focusable adds the native focus ring via focusClassName
-    // ("shelves-gpfocus"); the CSS is rendered INTO the panel (PanelSlot) so it reaches the QAM doc.
-    function clickable(onAct, extra, kids) {
-      const props = focusableComp
-        ? { onActivate: onAct, focusClassName: "shelves-gpfocus" }
-        : { onClick: onAct };
-      if (extra) for (const k in extra) props[k] = extra[k];
-      return React.createElement.apply(React, [focusableComp || "button", props].concat(kids || []));
-    }
+    /* Shown in OUR tab when no panel is registered (the bundle could not come up). Host-branded
+       and self-contained (plain elements + inline SVG, no dependency on the discovered Steam UI,
+       which may be part of what failed), strings via I18N; actions call the daemon over RPC.
+       The icons and the focusable `clickable` it is built from live in shelves-host-sidecar.js. */
     // Plugin-style collapsible section (chevron header + persisted open state +
     // separator + content), mirroring the plugin's CollapsibleSection so the hub's
     // Advanced area reads the same. Its own component so each section keeps state.
@@ -229,6 +200,20 @@
       const legacy = !!(owner && owner !== "shelveshub" && !dsVersion);
       return { owner: owner, label: ownerLabel(owner), dsVersion: dsVersion, legacy: legacy };
     }
+    // Another host's bundle owns the renderer (the owner global names it, not us).
+    function foreignOwnerPresent() {
+      try { const o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; }
+    }
+    function coopBundleOn() {
+      try { return SHELVES_CFG.coopBundle === true; } catch (e) { return false; }
+    }
+    /* Whether the loader's copy of the plugin is the one that runs here (so its
+       updates are the loader's business): plain coexistence, or cooperative
+       ownership without the cooperative-bundle protocol (daemon `coop_bundle`),
+       under which the hub hosts and updates its OWN copy and the surface returns. */
+    function loaderManagesPluginHere(coexist) {
+      return coexist || (COOP && !coopBundleOn());
+    }
     function FallbackPanel(props) {
       const onBack = props && props.onBack;
       const st = React.useState(null);
@@ -236,12 +221,21 @@
       // null = still loading; then the full update-preference object mirrors the
       // store: the master switch, the per-target switches, and their beta
       // channels. Per-target switches default ON (see HubSettings::default).
-      const DEFAULT_UPD = { auto_update: false, auto_update_hub: true, hub_prerelease: false, auto_update_plugin: true, plugin_prerelease: false, quiet_updates: true };
+      const DEFAULT_UPD = { auto_update: false, auto_update_hub: true, hub_prerelease: false, auto_update_plugin: true, plugin_prerelease: false, quiet_updates: true, config_sync: true };
       const au = React.useState(null);
       const cfg = au[0], setCfg = au[1];
-      // null = hub view; an array = the log viewer showing merged daemon+runtime lines.
+      // null = not fetched; an array = the merged daemon+runtime log lines for the Logs tab.
       const lg = React.useState(null);
       const logs = lg[0], setLogs = lg[1];
+      // The sidecar's open tab (null = closed); the last one opened is what the D-pad and
+      // keyboard gestures reopen. The gesture hook reads `gestureApi.current` (refreshed per render).
+      const sd = React.useState(null);
+      const sideTab = sd[0], setSideTab = sd[1];
+      const lastTabRef = React.useRef(SIDE_TAB_LOGS);
+      const openSeqRef = React.useRef(0);
+      const titleRef = React.useRef(null);
+      const gestureApi = React.useRef({ seq: 0, isOpen: function () { return false; }, open: function () {}, close: function () {}, tabFor: function () { return SIDE_TAB_LOGS; } });
+      useSidecarGestures(titleRef, gestureApi);
       // Advanced section: `rc` holds the runtime-config mirror (getRuntimeConfig),
       // fetched once on mount; `rcDirty` flags an edit this session so a "restart
       // to apply" note shows. The collapsible open state lives in HubCollapsible.
@@ -255,19 +249,20 @@
       const coex = cxS[0], setCoex = cxS[1];
       const arS = React.useState(null);
       const armedRestart = arS[0], setArmedRestart = arS[1];
-      // Notification center mirror: re-render on arrival/clear; opening the hub
-      // view counts as having seen what was there.
+      // Notification center mirror: re-render on arrival/clear (the unread badge); entries
+      // count as seen when the Notifications tab is left.
       const nt = React.useState(0);
       const setNotifTick = nt[1];
       React.useEffect(function () {
         let alive = true;
         hostRpc("getRuntimeConfig").then(function (r) {
-          if (alive && r && r.ok && r.result && typeof r.result === "object") setRc(r.result);
+          if (!alive || !(r && r.ok && r.result && typeof r.result === "object")) return;
+          setRc(r.result);
+          if (r.result.restart_pending === true) setRcDirty(true);
         }, function () {});
         hostRpc("getDiagnostics").then(function (r) {
           if (alive && r && r.ok && r.result && r.result.coexistence) setCoex(r.result.coexistence);
         }, function () {});
-        host.notifications.markRead();
         const unsub = host.notifications.subscribe(function () { setNotifTick(function (n) { return n + 1; }); });
         return function () { alive = false; unsub(); };
       }, []);
@@ -315,7 +310,7 @@
       function restartLabel(which, label) { return confirmLabel(which, label, "restart_confirm"); }
       // Daemon-owned status fields (never user-edited), merged over the current config
       // so a refresh never clobbers an in-flight optimistic toggle edit.
-      const STATUS_KEYS = ["pending_hub_update", "hub_update_staged", "hub_rollback_staged", "last_update_check_ms", "update_deferred", "pending_hub_notes", "pending_plugin_update", "pending_plugin_notes", "hub_previous_version", "bundle_rollback_available"];
+      const STATUS_KEYS = ["pending_hub_update", "hub_update_staged", "hub_rollback_staged", "last_update_check_ms", "update_deferred", "pending_hub_notes", "pending_plugin_update", "pending_plugin_notes", "hub_previous_version", "bundle_rollback_available", "sync_last_at"];
       function mergeStatus(prev, res) {
         const base = prev || DEFAULT_UPD; const m = {}; for (const k in base) m[k] = base[k];
         for (let i = 0; i < STATUS_KEYS.length; i++) { const k = STATUS_KEYS[i]; if (k in res) m[k] = res[k]; }
@@ -402,17 +397,17 @@
           if (doc && doc.removeEventListener) doc.removeEventListener("visibilitychange", refresh);
         };
       }, []);
-      // While the log viewer is open, poll getLogs so new lines appear live (like
+      // While the Logs tab is open, poll getLogs so new lines appear live (like
       // the plugin's log view) instead of a one-time snapshot.
       React.useEffect(function () {
-        if (logs === null) return undefined;
+        if (sideTab !== SIDE_TAB_LOGS) return undefined;
         const iv = setInterval(function () {
           hostRpc("getLogs", 200).then(function (r) {
             if (r && r.ok && Array.isArray(r.result)) setLogs(r.result);
           }, function () {});
         }, 1500);
         return function () { clearInterval(iv); };
-      }, [logs === null]);
+      }, [sideTab === SIDE_TAB_LOGS]);
       // Effective config for this render (defaults while still loading).
       const uc = cfg || DEFAULT_UPD;
       const on = uc.auto_update === true;
@@ -421,12 +416,8 @@
          and auto-update toggles are hidden and a note points at the loader.
          COOPERATIVE (a loader present but WE forced ownership) means the hub owns
          + manages updates → not coexist; COOP is reliable, the owner can lag. */
-      const coexist = !COOP && (function () { try { const o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; } })();
-      /* Cooperative-bundle protocol on (daemon `coop_bundle`): the hub hosts and
-         updates its OWN copy of the plugin even though a loader is present, so
-         the plugin update surface belongs here again. */
-      const coopBundle = COOP && (function () { try { return SHELVES_CFG.coopBundle === true; } catch (e) { return false; } })();
-      const loaderManagesPlugin = coexist || (COOP && !coopBundle);
+      const coexist = !COOP && foreignOwnerPresent();
+      const loaderManagesPlugin = loaderManagesPluginHere(coexist);
       /* B (CANCEL) handling: a plain onCancel/onCancelButton is NOT enough — the
          QAM router still navigates the tab away. We must ABSORB the button-down
          (preventDefault + stopImmediatePropagation on the event AND its inner
@@ -443,25 +434,61 @@
           } catch (e) { return false; }
         };
       }
-      const backToHub = function () { setLogs(null); };
+      // Leaving the Notifications tab counts as having seen what it listed.
+      function leaveNotifTab() { if (sideTab === SIDE_TAB_NOTIF) host.notifications.markRead(); }
+      /* Buttons while focus is inside the sidecar: B (2) closes it, the bumpers (LB 5 / RB 6)
+         move between its tabs. Absorbed like B elsewhere, so the QAM router and Steam's own
+         bumper handling never see them. */
+      const SIDE_TABS = [SIDE_TAB_LOGS, SIDE_TAB_NOTIF];
+      function absorbGamepadEvent(evt, d) {
+        try { evt.preventDefault(); evt.stopImmediatePropagation(); } catch (e) {}
+        try { const inner = d.event; if (inner) { inner.preventDefault(); inner.stopImmediatePropagation(); } } catch (e) {}
+      }
+      function nextSideTab(forward) {
+        const i = SIDE_TABS.indexOf(sideTab);
+        return SIDE_TABS[(i + (forward ? 1 : SIDE_TABS.length - 1)) % SIDE_TABS.length];
+      }
+      function sidecarButtonDown(evt) {
+        const d = evt && evt.detail;
+        const btn = d && d.button;
+        if (btn !== 2 && btn !== 5 && btn !== 6) return false;
+        absorbGamepadEvent(evt, d);
+        if (btn === 2) backToHub(); else openSide(nextSideTab(btn === 6));
+        return true;
+      }
+      const backToHub = function () { leaveNotifTab(); setSideTab(null); setLogs(null); };
+      // Open the sidecar on a tab (or switch to it); the Logs tab fetches on first open.
+      function openSide(tab) {
+        if (tab !== SIDE_TAB_NOTIF) leaveNotifTab();
+        lastTabRef.current = tab;
+        openSeqRef.current += 1;
+        setSideTab(tab);
+        if (tab === SIDE_TAB_LOGS && logs === null) viewLogs();
+      }
+      gestureApi.current = {
+        seq: openSeqRef.current,
+        isOpen: function () { return sideTab !== null; },
+        open: openSide,
+        close: backToHub,
+        tabFor: function (el) { return (el && el.getAttribute && el.getAttribute("data-fb") === "open-notif") ? SIDE_TAB_NOTIF : lastTabRef.current; },
+      };
       /* B follows the CURRENT context, not always "back to Deck Shelves":
-         inside the expanded log panel B collapses it back to the hub screen;
-         otherwise (opened from the editor) B returns to Deck Shelves. When
-         neither applies (standalone hub, logs closed) B falls through to close
-         the tab as usual. */
-      const contextualBack = (logs !== null) ? backToHub : (onBack || null);
-      // Root wrapper for the hub view: when there is a contextual back action,
-      // wrap in a Focusable that absorbs B and runs it instead of letting the
-      // QAM router navigate the tab away.
+         inside the sidecar B collapses it back to the hub screen; otherwise
+         (opened from the editor) B returns to Deck Shelves. When neither applies
+         (standalone hub, sidecar closed) B falls through to close the tab as usual. */
+      const contextualBack = (sideTab !== null) ? backToHub : (onBack || null);
+      /* Root wrapper for the hub view: always the same element type (a Focusable once
+         discovered), so opening the sidecar never remounts the whole view and loses the
+         gamepad focus; with a contextual back action it absorbs B and runs it instead of
+         letting the QAM router navigate the tab away. */
       function panelRoot(baseProps, kids) {
-        const useFocus = !!(contextualBack && focusableComp);
         const props = {};
         for (const k in baseProps) props[k] = baseProps[k];
-        if (useFocus) {
+        if (contextualBack && focusableComp) {
           props.onButtonDown = makeBackButtonDown(contextualBack);
           props.onCancel = function () { try { contextualBack(); } catch (e) {} };
         }
-        return React.createElement.apply(React, [useFocus ? focusableComp : "div", props].concat(kids));
+        return React.createElement.apply(React, [focusableComp || "div", props].concat(kids));
       }
       // "Restart to update" notice: shown when the daemon has detected a newer
       // ShelvesHub release it can't self-replace in place yet (getConfig reports
@@ -617,11 +644,11 @@
            - ShelvesHub self-update remains available even in coexistence, so the
              daemon can update itself independently of the plugin's owner. */
         let upd, updCount;
-        // Cooperative counts as "loader manages the plugin" for updates: the
-        // loader's copy is the one that runs, so hide the plugin update toggles
-        // (keep the hub self-update) — the hub won't swap the loader's on-disk copy.
-        // With the cooperative-bundle protocol on, the hub's own copy runs and
-        // the plugin update surface comes back.
+        /* Cooperative counts as "loader manages the plugin" for updates: the loader's
+           copy is the one that runs, so hide the plugin update toggles (keep the hub
+           self-update) — the hub won't swap the loader's on-disk copy. With the
+           cooperative-bundle protocol on, the hub's own copy runs and the plugin
+           update surface comes back. */
         if (loaderManagesPlugin) {
           upd = [
             h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere")),
@@ -647,24 +674,14 @@
           if (rc.paused === true) trouble.push(h("div", { key: "pn", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_paused")));
         }
         sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: trouble.length }, trouble));
-        sections.push(buildNotificationsSection());
         if (rc) { sections.push(buildConfigSection()); sections.push(buildStatusSection()); }
         return sections;
-      }
-      // Notification center: the notifications this host showed, newest first, with a clear row.
-      function buildNotificationsSection() {
-        const items = host.notifications.list();
-        const rows = items.length
-          ? items.map(function (n) { return notifRow(n, "nt-" + n.id); })
-          : [h("div", { key: "empty", style: { opacity: 0.6, fontSize: "13px", padding: "8px 16px" } }, I18N.t("notif_empty"))];
-        if (items.length) rows.push(rowButton("notif-clear", "trash", I18N.t("logs_clear"), function () { host.notifications.clear(); }));
-        return h(HubCollapsible, { key: "sec-nt", id: "sec-notifications", title: I18N.t("sec_notifications"), count: items.length }, rows);
       }
       // Config section (rc present). Only genuine operational config — `native_qam` and
       // `prerelease` are intentionally NOT surfaced; ownership knobs show only where a loader
       // can share the renderer, the desktop-inject toggle only where a desktop client exists.
       function buildConfigSection() {
-        const conf = [];
+        const conf = [advToggleRow("cfg-config_sync", I18N.t("cfg_config_sync"), I18N.t("cfg_config_sync_sub"), uc.config_sync !== false, function (v) { applyPref("config_sync", v); })];
         if (rc.loader_possible) {
           conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), I18N.t("cfg_force_owner_sub"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
           conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
@@ -688,6 +705,11 @@
         if (cx && cx.forceReceded) w.push(h("div", { key: "coopreceded", style: amber }, I18N.t("coop_receded_warning")));
         return w;
       }
+      // When the settings last met the roaming copy: off, never ("—"), or an age.
+      function syncAge() {
+        if (uc.config_sync === false) return "off";
+        return uc.sync_last_at > 0 ? (agoText(Date.now() - uc.sync_last_at) || "—") : "—";
+      }
       // Read-only Status readout (rc present): mode + key config + the warnings above.
       function buildStatusSection() {
         const onOff = function (v) { return v ? "on" : "off"; };
@@ -699,6 +721,7 @@
           advRoRow("dsver", I18N.t("cfg_ds_version"), hd.dsVersion || "—"),
         ].concat(statusWarnings(hd, coex));
         if (!rc.loader_possible) status.push(advRoRow("force", I18N.t("cfg_force_owner"), onOff(rc.force_owner)));
+        status.push(advRoRow("sync", I18N.t("cfg_config_sync"), syncAge()));
         status.push(
           advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),
           advRoRow("rpc", I18N.t("cfg_rpc"), rc.rpc_addr || ""),
@@ -717,19 +740,21 @@
         }, function () {});
       }
       function run(id, method) {
-        if (method === "getLogs") { viewLogs(); return; }
+        if (method === "getLogs") { openSide(SIDE_TAB_LOGS); return; }
         setBusy(id);
         hostRpc(method).then(function () { setBusy(null); if (id.indexOf("rollback") === 0) refreshCfg(); }, function () { setBusy(null); });
       }
-      // Persist one update preference. The master goes through setAutoUpdate
-      // (kept for back-compat); the nested switches through setUpdatePref. The
-      // UI updates optimistically and reconciles with the store's echo.
+      // The RPC for one store switch: the master and the sync switch take a bare
+      // bool on their own methods; the nested update switches go through setUpdatePref.
+      const PREF_METHODS = { auto_update: "setAutoUpdate", config_sync: "setConfigSync" };
+      // Persist one store switch. The UI updates optimistically and reconciles
+      // with the store's echo.
       function applyPref(key, next) {
         if (busy) return;
         const optimistic = {}; for (const k in uc) optimistic[k] = uc[k]; optimistic[key] = next;
         setCfg(optimistic); setBusy("upd");
-        const method = key === "auto_update" ? "setAutoUpdate" : "setUpdatePref";
-        const args = key === "auto_update" ? next : { key: key, value: next };
+        const method = PREF_METHODS[key] || "setUpdatePref";
+        const args = PREF_METHODS[key] ? next : { key: key, value: next };
         hostRpc(method, args).then(function (r) {
           setBusy(null);
           if (r && r.ok && r.result && typeof r.result === "object") setCfg(r.result);
@@ -768,12 +793,13 @@
         });
       }
 
-      /* ── Log viewer ── merged daemon + runtime lines (getLogs), each parsed
-         from `[LEVEL] [ts] [scope] msg` into a badged row (level colour + scope),
-         so it reads like the plugin's Advanced → Logs. Newest first, scrollable.
-         Rendered inline below the hub actions (an expandable panel that keeps the
-         ShelvesHub screen visible); the gamepad reaches it in the normal nav flow. */
-      function buildLogView() {
+      /* ── Sidecar body ── a header (back, the Logs | Notifications tabs, the active
+         tab's controls) over the tab's list: merged daemon + runtime log lines (getLogs)
+         parsed from `[LEVEL] [ts] [scope] msg` into badged rows (level colour + scope),
+         newest first, like the plugin's Advanced → Logs; or the notification center.
+         Beside the hub view, which stays visible; the gamepad walks it in the normal flow. */
+      function buildSidecarView() {
+        const isLogs = sideTab === SIDE_TAB_LOGS;
         const parseLine = function (line) {
           const m = /^\[(\w+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+([\s\S]*)$/.exec(String(line));
           return m ? { level: m[1].toUpperCase(), ts: m[2], scope: m[3], msg: m[4] }
@@ -802,11 +828,13 @@
             : { key: "l" + i, style: rowStyle, "data-fb": "log-row" };
           return React.createElement.apply(React, [focusableComp || "div", props].concat(kids));
         };
-        const rows = logs.length
-          ? logs.slice().reverse().map(logRow)
-          : [h("div", { key: "empty", style: { opacity: 0.6, fontSize: "13px", padding: "8px 16px" } }, I18N.t("logs_empty"))];
-        // Header controls in a HORIZONTAL Focusable row (back / refresh / clear) so
-        // the gamepad walks them left-to-right, not top-to-bottom.
+        const logRows = function () {
+          return (logs || []).length
+            ? logs.slice().reverse().map(logRow)
+            : [h("div", { key: "empty", style: { opacity: 0.6, fontSize: "13px", padding: "8px 16px" } }, I18N.t("logs_empty"))];
+        };
+        // Header controls in a HORIZONTAL Focusable row (back / tabs / refresh / clear)
+        // so the gamepad walks them left-to-right, not top-to-bottom.
         const ctrlBtn = function (key, onAct, label, extraStyle, title) {
           const base = { display: "inline-flex", alignItems: "center", justifyContent: "center", height: "32px", padding: "0 10px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", cursor: "pointer", border: "none", color: "#fff", fontSize: "12px" };
           if (extraStyle) for (const s in extraStyle) base[s] = extraStyle[s];
@@ -819,10 +847,12 @@
         const iconBtnStyle = { width: "36px", padding: "0" };
         const ctrls = [
           ctrlBtn("back", backToHub, [fbIcon("back")], iconBtnStyle, I18N.t("action_back")),
-          h("div", { key: "ttl", style: { fontSize: "16px", fontWeight: "700", flex: "1 1 auto" } }, I18N.t("logs_title")),
-          ctrlBtn("refresh", function () { viewLogs(); }, [fbIcon("refresh")], iconBtnStyle, I18N.t("logs_refresh")),
-          ctrlBtn("clear", function () { clearLogs(); }, [fbIcon("trash")], iconBtnStyle, I18N.t("logs_clear")),
+          sidecarTab(SIDE_TAB_LOGS, I18N.t("logs_title"), isLogs, function () { openSide(SIDE_TAB_LOGS); }, 0),
+          sidecarTab(SIDE_TAB_NOTIF, I18N.t("sec_notifications"), !isLogs, function () { openSide(SIDE_TAB_NOTIF); }, host.notifications.unread()),
+          h("div", { key: "sp", style: { flex: "1 1 auto" } }),
         ];
+        if (isLogs) ctrls.push(ctrlBtn("refresh", function () { viewLogs(); }, [fbIcon("refresh")], iconBtnStyle, I18N.t("logs_refresh")));
+        ctrls.push(ctrlBtn("clear", isLogs ? clearLogs : function () { host.notifications.clear(); }, [fbIcon("trash")], iconBtnStyle, I18N.t("logs_clear")));
         const header = React.createElement.apply(React, [
           focusableComp || "div",
           focusableComp
@@ -835,10 +865,12 @@
            own scroll, bounded by the sidecar's height. */
         const listStyle = { flex: "1 1 auto", minHeight: "0", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1px" };
         const listProps = focusableComp
-          ? { "flow-children": "vertical", onButtonDown: makeBackButtonDown(backToHub), onCancel: backToHub, style: listStyle }
+          ? { "flow-children": "vertical", onButtonDown: sidecarButtonDown, onCancel: backToHub, style: listStyle }
           : { style: listStyle };
-        const list = React.createElement.apply(React, [focusableComp || "div", listProps].concat(rows));
-        return h("div", { key: "logs-view", style: { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: "0", paddingTop: "8px" }, "data-fb": "logs-view" },
+        const list = isLogs
+          ? React.createElement.apply(React, [focusableComp || "div", listProps].concat(logRows()))
+          : notificationsList(listProps);
+        return h("div", { key: "side-view", style: { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: "0", paddingTop: "8px" }, "data-fb": isLogs ? "logs-view" : "notif-view" },
           header,
           h("div", { key: "gap", style: { height: "8px" } }),
           list);
@@ -855,13 +887,21 @@
          the panel edges while content stays aligned (the plugin's QAM pattern). */
       const TF = UI.ToggleField;
       const useNative = nativeUiOn() && !!TF;
+      // The title row: back (when opened from the editor), the title, and the Logs /
+      // Notifications icons that open the sidecar on that tab — one horizontal focus row.
+      function buildTitleRow() {
+        const kids = [];
+        if (onBack) kids.push(clickable(onBack, { key: "back", "data-fb": "back", title: I18N.t("action_back"), focusClassName: "shelves-gpfocus", style: { flex: "0 0 auto", width: "28px", height: "28px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" } }, [fbIcon("back")]));
+        kids.push(h("div", { key: "tt", ref: titleRef, style: { fontSize: "18px", fontWeight: "700", flex: "1 1 auto", minWidth: "0" } }, I18N.t("hub_title")));
+        kids.push(titleIconButton("open-logs", "logs", I18N.t("action_logs"), function () { openSide(SIDE_TAB_LOGS); }, 0));
+        kids.push(titleIconButton("open-notif", "bell", I18N.t("sec_notifications"), function () { openSide(SIDE_TAB_NOTIF); }, host.notifications.unread()));
+        const st = { display: "flex", alignItems: "center", gap: "8px", padding: "4px 16px 8px" };
+        return focusableComp
+          ? h(focusableComp, { key: "title", "flow-children": "horizontal", style: st }, kids)
+          : h("div", { key: "title", style: st }, kids);
+      }
       function buildBody() {
-        const titleRow = onBack
-          ? h("div", { key: "title", style: { display: "flex", alignItems: "center", gap: "8px", padding: "4px 16px 8px" } },
-              clickable(onBack, { "data-fb": "back", title: I18N.t("action_back"), focusClassName: "shelves-gpfocus", style: { flex: "0 0 auto", width: "28px", height: "28px", border: "none", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" } }, [fbIcon("back")]),
-              h("div", { style: { fontSize: "18px", fontWeight: "700" } }, I18N.t("hub_title")))
-          : h("div", { key: "title", style: { fontSize: "18px", fontWeight: "700", padding: "6px 16px 4px" } }, I18N.t("hub_title"));
-        const body = [titleRow];
+        const body = [buildTitleRow()];
         if (rcDirty) body.push(restartBanner());
         Array.prototype.push.apply(body, updateNotices());
         if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
@@ -869,11 +909,11 @@
         out.push(hubVersionFooter(uc.version));
         return out;
       }
-      // The log viewer opens as a sidecar beside the hub view (the menu widens); B,
-      // the back control or the menu hiding closes it.
+      // The sidecar opens beside the hub view (the menu widens) on the Logs or the
+      // Notifications tab; B, the back control or the menu hiding closes it.
       const rootKids = buildBody();
-      if (logs !== null) rootKids.push(h(Sidecar.Panel, { key: "sidecar", onClose: backToHub, onButtonDown: makeBackButtonDown(backToHub) }, buildLogView()));
-      return panelRoot({ className: "shelves-hub-root", "data-shelves-expanded": logs !== null ? "1" : "0", style: { padding: "8px 0 0" }, "data-fb-panel": "1" }, rootKids);
+      if (sideTab !== null) rootKids.push(h(Sidecar.Panel, { key: "sidecar", onClose: backToHub, onButtonDown: sidecarButtonDown }, buildSidecarView()));
+      return panelRoot({ className: "shelves-hub-root", "data-shelves-expanded": sideTab !== null ? "1" : "0", style: { padding: "8px 0 0" }, "data-fb-panel": "1" }, rootKids);
     }
     // Our tab: the plugin's editor when present, plus a ShelvesHub row pinned at
     // the end that opens the host's hub view (the same actions as the fallback) —

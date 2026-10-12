@@ -22,6 +22,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   (`src/loader/mod.rs`, `src/loader/coop_safety.rs`, `runtime/shelves-host-api.js`,
   `runtime/shelves-host-qam.js`). Unit-tested decision; still to be validated on a device under
   force with a newer plugin release before the option is documented as supported.
+- **Forced ownership waits for the plugin loader before hosting.** Right after a daemon or Steam
+  restart the loader's globals land a few seconds after the renderer, so the first injection tick
+  under `force_owner` saw no loader and took the sole-host path (the tab read "sole" next to an
+  active loader, and the loader's copy had to stand down afterwards). An unclaimed renderer under
+  force now settles for up to 20 s (or the configured `owner_settle_secs`, whichever is longer)
+  for a loader to appear before hosting; a machine with force on and no loader at all only pays
+  that once per renderer (`src/loader/mod.rs`, unit-tested).
 - **Go back to the previous version — for ShelvesHub and for Deck Shelves.** Every update now keeps
   what it replaced: the Deck Shelves bundle as a `.prev` copy beside the live one, and the ShelvesHub
   binary + injected runtime + assets as a `previous/` snapshot beside the binary. The tab's Updates
@@ -48,6 +55,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   the ShelvesHub view, sized from the live menu. Gamepad focus moves into it, B / the back
   control close it (the menu narrows again), and it collapses by itself when the menu hides so a
   reopened menu never comes back wide and empty. Runtime: `runtime/shelves-host-sidecar.js`.
+  The panel has two tabs, **Logs** and **Notifications** (the notification center moved here
+  from the hub view's body, with an unread badge); icons beside the ShelvesHub title open it on
+  either tab, and it also opens without a pointer: a second D-pad right on the rightmost
+  focusable of the hub view (the plugin's own gesture, read from Steam's controller input stream
+  and registered only while the hub view is mounted), with D-pad left out of the panel closing
+  it; on a keyboard, a second ArrowRight, Ctrl+Shift+L (logs) or Ctrl+Shift+N (notifications).
+  Inside the panel the bumpers move between its tabs (LB / RB); focus lands on the active tab
+  when it opens. Notification rows show the sender's mark (the logo the toast was sent with, or
+  the host's / Deck Shelves' default) and the per-type icon beside the title, as the Steam toasts
+  do. It is sized to the menu's widened panel like the plugin's sidecar (the tab's own content
+  panel never widens, which had capped it at 280 px) and fixed to the menu's viewport, anchored
+  to the tab's content panel, so it no longer slides along when the gamepad focus scrolls the
+  hub view's column under it.
 - **Notifications go through Steam's own notification pipeline.** On a sole host the
   notifications this host shows — Deck Shelves' toasts routed through it, and now ShelvesHub's
   own — are dispatched by Steam itself, the way they are under a plugin loader: Steam's toast
@@ -60,8 +80,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   settled. The former self-rendered toast card is gone: `native_notifications` is on by default
   (config file, `SHELVES_NATIVE_NOTIFICATIONS=0`, or the "Steam notifications" switch in the tab's
   Configuration section turn it off), and when the pipeline is off or cannot install, a
-  notification only reaches the hub view's new "Notifications" section (the last 20, newest
-  first, clear row), with the reason in the log.
+  notification only reaches the sidecar's "Notifications" tab (the last 20, newest first, a
+  clear control), with the reason in the log.
 - **ShelvesHub's own notifications.** The host now tells you, with its own mark, when: ShelvesHub
   came back on a new version (or back on an older one after a rollback); a ShelvesHub update was
   downloaded and waits for a restart; Deck Shelves was updated or rolled back; cooperative mode
@@ -72,6 +92,55 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   per-type `icon` (React elements) through `host.notifications.toast`, and `source: "hub"` marks
   a host notification. `host.notifications` gains `mode` / `list` / `unread` / `markRead` /
   `clear` / `subscribe` (host extras, not contract methods).
+- **The hub's own settings sync across devices through Steam.** The daemon keeps one document
+  of its own under its own key in Steam's roaming storage (`shelveshub-settings-sync-v1`, the
+  storage Steam carries between the devices an account signs in on); it is the only writer, so
+  no plugin release is involved. What syncs is user intent only: the update switches
+  (`auto_update`, `auto_update_hub`, `hub_prerelease`, `auto_update_plugin`, `plugin_prerelease`,
+  `quiet_updates`) and the Configuration toggles (`native_notifications`, `boot_movie`, and
+  `desktop_ui` where a desktop client exists). Each value travels with the time it last changed
+  and a round keeps, per setting, the most recent change from any device — two devices edited
+  independently converge instead of overwriting each other; on an equal stamp the shared copy
+  wins, so a device syncing for the first time takes over what is already there (a value it had
+  set itself keeps a fresh stamp and wins instead). Device-local operation (endpoints, paths,
+  ownership, intervals, the recovery command) never leaves the device, only booleans for known
+  keys are ever applied, and keys a newer release adds are carried through by an older one. A
+  round runs on the first settled tick, every 5 minutes, and on the tick after a local change;
+  a change taken from another device is announced with a notification (with "restart to apply"
+  when the daemon only reads the key at start-up — the tab then shows the synced value with its
+  restart note). "Sync settings across devices" in the tab's Configuration section (on by
+  default; `setConfigSync` over RPC; `config_sync` in the hub's store) turns it off per device;
+  the Status section shows when the last round ran (`src/sync.rs`, unit-tested merge).
+- **The reports dashboard charts much more of the project's health.** Every quality run now
+  records, besides the Rust tests, clippy and the suppression baseline: `cargo fmt --check`,
+  ESLint problems (by rule), the runtime harness, `cargo audit` when installed, the complexity
+  debt of the shipped runtime (sum of the scores over the limit, count, worst function, top
+  offenders — `scripts/ci/complexity.eslint.config.mjs`), code lines of the runtime and of the
+  service, the QA matrix cells by status, locales with key parity and EN ↔ pt-BR doc pairs, and
+  how long each step took; the overall PASS/FAIL now covers all six gates. The dashboard
+  (`site/reports/dashboard.html`) grew matching sections: quality run and duration cards, gates
+  passed per run, total duration, test counts and pass rates, lint and debt trends with
+  per-rule and per-function lists, code size, docs and localization, step durations, repository
+  traffic over time, a stable vs pre-release download split, results by scope and the overall
+  distribution — and its platform coverage now reads the QA matrix instead of static rows.
+- **A validate flow that records every gate as a step, like the plugin's.** `pnpm validate`
+  (`scripts/validate.mjs`, step runner in `scripts/ci/lib/harness.mjs`) runs rustfmt, clippy,
+  the Rust tests, `cargo audit` (skipped when not installed), ESLint, the runtime's complexity
+  debt, JavaScript syntax, data files + localization parity, the one-click launchers, the
+  shipped-text rule and the runtime harness (skipped without a browser) — `--docker` / `--qa`
+  add the container harness and the QA matrix — and writes each step's status, duration and
+  log tail into `site/reports/<scope>/<ts>.json` plus a page (`<ts>.html`, every step
+  expandable, failed ones open) and the scope's history page; the run also carries the parsed
+  signals, so one run feeds the dashboard, which gained per-step pass rates and average
+  durations and links each run to its page. The **Ops · Quality reports** workflow now runs
+  `pnpm validate:ci` (scope `release` on a release, else `ci`); `pnpm report` keeps recording
+  the signals alone, and `scripts/ci/report.mjs --aggregate-only` regenerates pages, scope
+  indexes and `runs.json` from the run files.
+- **Privacy-first page counting for the project site, off until a site code is set.**
+  `site/analytics.json` names a free, cookie-less counter (GoatCounter); when its code is set,
+  `scripts/build-site.mjs` injects it into every page's `<head>` and a one-line notice (with
+  the public stats link) into the landing and features footers in both languages — an empty
+  code strips both. Nothing of this ships inside the host or the plugin.
 
 ### Fixed
 - **The SteamOS / Linux one-click launchers opened a terminal that closed at once.** The

@@ -26,6 +26,9 @@
           // notification center (toast → hub view → Steam's Notifications tab).
           "sole-host-sidecar": { coexist: false, pluginPanel: false },
           "sole-host-notify": { coexist: false, pluginPanel: false, nativeNotifications: true },
+          // The sidecar opened without a pointer: two D-pad rights on the rightmost
+          // focusable (the controller input stream), then a keyboard shortcut.
+          "sole-host-gesture": { coexist: false, pluginPanel: false },
         };
         window.__HARNESS__ = map[sc] || map["coexist-mirror"];
         // Native-component rendering is gated behind this runtime flag on-device

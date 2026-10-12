@@ -189,6 +189,41 @@ Veja [debugging.md](debugging.md) para a ferramenta CDP `shelves-devtools`, o am
 de depuração local (`scripts/local-debug.sh`), e o fluxo via SSH no Deck
 (`scripts/deck-deploy.sh`, `scripts/deck-tunnel.sh`).
 
+## Relatórios de qualidade e o dashboard
+
+`pnpm validate` roda toda verificação do CI como uma etapa registrada — rustfmt, clippy, os
+testes Rust, `cargo audit` (pulado quando não está instalado), ESLint, a dívida de complexidade
+do runtime, sintaxe JavaScript, arquivos de dados + paridade de localização, os lançadores de um
+clique, a regra de texto publicado e o harness do runtime (pulado sem um navegador da família
+Chromium); `--docker` e `--qa` acrescentam o harness em contêiner e a matriz de QA, `--no-cargo`
+pula as verificações Rust. O status, a duração e o fim do log de cada etapa vão para
+`site/reports/<escopo>/<timestamp>.json` e para uma página (`<timestamp>.html`, cada etapa
+expansível), o `index.html` do escopo lista o histórico, e `site/reports/runs.json` alimenta o
+dashboard. `pnpm validate:ci` é o que o workflow **Ops · Quality reports** roda (escopo
+`release` numa release, senão `ci`). `pnpm report` (adicione `--harness` para incluir os
+cenários do runtime, `--no-cargo` para pular as verificações Rust) grava os mesmos sinais sem
+os logs das etapas. Cada rodada registra: as verificações (`cargo test`, clippy, `cargo fmt
+--check`, ESLint, o harness do runtime, `cargo audit` quando instalado) com um PASS/FAIL geral
+que também falha com qualquer etapa falhando; os problemas do ESLint por regra e a linha de base de
+supressões; a dívida de complexidade do runtime distribuído (soma das pontuações de toda
+função acima do limite, quantas são e a pior, medida com
+`scripts/ci/complexity.eslint.config.mjs`); linhas de código do runtime e do serviço; as
+células da matriz de QA por status; locales, paridade de chaves e pares de docs EN ↔ pt-BR; e
+quanto tempo cada etapa levou. O workflow **Ops · Quality reports** grava uma rodada `ci` a cada
+push na branch principal e uma rodada `release` a cada release; os números de uso (downloads,
+tráfego) vêm do **Ops · Site stats**. Um gráfico só desenha quando duas rodadas trazem o sinal.
+
+## Analytics do site
+
+O site do projeto pode contar visitas com um contador gratuito e que respeita a privacidade —
+sem cookies, sem dados pessoais, sem banner de consentimento. Fica desligado até um código de
+site ser definido: crie um site no GoatCounter, coloque o código em `site/analytics.json`
+(`"code": "<nome>"`, o `<nome>` de `<nome>.goatcounter.com`) e reconstrua; o
+`scripts/build-site.mjs` então injeta o contador no `<head>` de toda página e um aviso de uma
+linha (com link para a página pública de estatísticas quando `publicStats` está ligado) nos
+rodapés da página inicial e de funcionalidades, nos dois idiomas. Um código vazio remove os
+dois de novo. O contador nunca vai dentro do host nem do plugin — só no site.
+
 ## CI
 
 O fluxo de CI (`.github/workflows/ci.yml`) roda `cargo check`, `cargo test`, e `cargo clippy -- -D warnings` a cada push e pull request. Artefatos de build são gerados quando um PR é mesclado e quando uma tag é enviada. Veja `.github/workflows/` para a definição completa dos fluxos.

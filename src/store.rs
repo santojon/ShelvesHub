@@ -64,6 +64,15 @@ pub struct HubSettings {
     /// The version that ran last. A different running version at start-up means
     /// an update (or a rollback) landed, and the user is told once.
     pub last_run_version: String,
+    /// Whether the hub's own settings follow the Steam account across devices
+    /// (see `sync`). On by default; device-local, never synced itself.
+    pub config_sync: bool,
+    /// Sync bookkeeping: the synced values as of the last round (to tell a local
+    /// change apart), the per-key change stamps, and when the last round ran
+    /// (ms since the epoch; 0 = never). Not user-facing.
+    pub sync_base: serde_json::Map<String, serde_json::Value>,
+    pub sync_stamps: std::collections::BTreeMap<String, u64>,
+    pub sync_last_at: u64,
     /// Catch-all for keys written by a newer daemon — preserved verbatim across a
     /// load→save so a version-skewed downgrade can't drop them. Not read directly.
     #[serde(flatten)]
@@ -86,6 +95,10 @@ impl Default for HubSettings {
             hub_hold_tag: String::new(),
             quiet_updates: true,
             last_run_version: String::new(),
+            config_sync: true,
+            sync_base: serde_json::Map::new(),
+            sync_stamps: std::collections::BTreeMap::new(),
+            sync_last_at: 0,
             extra: serde_json::Map::new(),
         }
     }

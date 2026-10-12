@@ -146,6 +146,19 @@ pub fn requeue_host_notices(items: Vec<(String, serde_json::Value)>) {
     }
 }
 
+/// Set by the RPC handlers when a synced setting changed here, so the loop runs a
+/// sync round on the next settled tick instead of waiting for the periodic one.
+static SYNC_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+pub fn request_sync() {
+    SYNC_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+/// Take the pending request (true at most once per request).
+pub fn take_sync_request() -> bool {
+    SYNC_REQUESTED.swap(false, Ordering::Relaxed)
+}
+
 /// Wall-clock millis (since epoch) of the most recent update check, so the hub
 /// view can show "checked X ago". 0 = never checked this session.
 static LAST_UPDATE_CHECK_MS: AtomicU64 = AtomicU64::new(0);

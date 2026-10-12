@@ -145,14 +145,21 @@ mod desktop {
         }
     }
 
-    pub fn run() {
-        #[allow(unused_mut)]
+    // macOS: an accessory app (menu bar only, no Dock icon); elsewhere the default loop.
+    #[cfg(target_os = "macos")]
+    fn build_event_loop() -> tao::event_loop::EventLoop<()> {
+        use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
         let mut event_loop = EventLoopBuilder::new().build();
-        #[cfg(target_os = "macos")]
-        {
-            use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
-            event_loop.set_activation_policy(ActivationPolicy::Accessory);
-        }
+        event_loop.set_activation_policy(ActivationPolicy::Accessory);
+        event_loop
+    }
+    #[cfg(not(target_os = "macos"))]
+    fn build_event_loop() -> tao::event_loop::EventLoop<()> {
+        EventLoopBuilder::new().build()
+    }
+
+    pub fn run() {
+        let event_loop = build_event_loop();
 
         let menu = Menu::new();
         let header = MenuItem::new("ShelvesHub", false, None);

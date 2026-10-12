@@ -93,12 +93,11 @@
       { key: 6, tab: "Help", panel: h("div", null, "help") },
     ];
   }
-  // eslint-disable-next-line no-unused-vars
-  function QuickAccessMenuBrowserView(props) {
+  // Rendered by React with props it ignores (the mock's tab list is fixed).
+  function QuickAccessMenuBrowserView() {
     return h(TabList, { tabs: steamTabs() });
   }
-  // eslint-disable-next-line no-unused-vars
-  function QuickAccessMenuEmbedded(props) {
+  function QuickAccessMenuEmbedded() {
     return h(TabList, { tabs: steamTabs() });
   }
   // React.memo-shaped with a writable `.type`, what the runtime wraps via afterPatch(bv, "type", …).
@@ -222,6 +221,16 @@
       WindowStore: { GamepadUIMainWindowInstance: { m_MenuStore: menuStore } },
     };
   })();
+
+  // Steam's controller input stream (the hub sidecar's D-pad gesture registers on
+  // it); the harness drives the callback through `__HARNESS_PAD__`.
+  window.SteamClient = window.SteamClient || {};
+  window.SteamClient.Input = {
+    RegisterForControllerInputMessages: function (cb) {
+      window.__HARNESS_PAD__ = cb;
+      return { unregister: function () { if (window.__HARNESS_PAD__ === cb) window.__HARNESS_PAD__ = null; } };
+    },
+  };
 
   // ── Coexistence: a foreign loader (DFL) present ───────────────────────────
   if (S.coexist) {

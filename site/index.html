@@ -186,10 +186,10 @@
       <div class="rel-head">
         <span class="ver-chip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-6.2-6.2a2 2 0 0 1-.6-1.4V5a2 2 0 0 1 2-2h5a2 2 0 0 1 1.4.6l6.4 6.4a2 2 0 0 1 0 2.8z"/><path d="M7.5 7.5h.01"/></svg>
-          <span data-rn-version>v0.2.0</span>
+          <span data-rn-version>v0.5.0</span>
         </span>
         <h2 data-i18n="releases.h2">What's New</h2>
-        <p class="date"><span data-i18n="releases.latest">Latest release</span> · <span data-rn-date>September 25, 2026</span></p>
+        <p class="date"><span data-i18n="releases.latest">Latest release</span> · <span data-rn-date>October 10, 2026</span></p>
         <div class="rel-links">
           <a class="btn" href="https://github.com/santojon/ShelvesHub/blob/main/RELEASE_NOTES.md"><span data-i18n="releases.notes">Release notes</span></a>
           <a class="btn" href="https://github.com/santojon/ShelvesHub/releases"><span data-i18n="releases.older">Older releases</span></a>
@@ -197,36 +197,36 @@
       </div>
       <ul class="rn-list" data-rn-list>
           <li data-lang-variant="en">
-            <b>Runs on Intel Macs now, not just Apple Silicon</b>
-            <p>The macOS download is a universal build, so ShelvesHub launches natively on any Mac.</p>
+            <b>The "restart to apply an update" button now always restarts</b>
+            <p>On some setups it could do nothing; now it reliably restarts ShelvesHub (relaunching itself if needed) so a downloaded update actually takes effect — and it asks for a quick confirm (tap again) first.</p>
           </li>
           <li data-lang-variant="en">
-            <b>Optional boot animation</b>
-            <p>Turn it on to play a short Deck Shelves startup animation when the Steam gamepad UI launches — it uses Steam's own startup-movie feature.</p>
+            <b>Cooperative mode protects itself</b>
+            <p>If you force ShelvesHub to host Deck Shelves while a plugin loader is installed and that keeps making the Steam screen go black, ShelvesHub now backs off to plain coexistence for the session instead of…</p>
           </li>
           <li data-lang-variant="en">
-            <b>Shelves stay in the gamepad UI (experimental desktop toggle)</b>
-            <p>On macOS and Windows the host now hosts your shelves only while Steam's gamepad / Big Picture UI is on screen, not in the plain desktop client where they don't belong.</p>
+            <b>Optional desktop tray icon — tick one box in the installer</b>
+            <p>The installer now has an off-by-default option to add a small menu-bar / system-tray app showing whether ShelvesHub is hosting, with quick actions (pause/resume, restart the service, restart the data backend).</p>
           </li>
           <li data-lang-variant="en">
-            <b>Automatic black-screen recovery</b>
-            <p>If the Steam interface ever collapses, the host now runs a recovery step made for your system — restarting the Steam Deck's Gaming Mode session, or bringing Steam back into Big Picture on macOS and Windows.</p>
+            <b>Restart the data backend without restarting everything</b>
+            <p>If the data backend gets stuck, the tab's Troubleshooting section now has a "Restart backend" button that restarts only it — your shelves and hosting keep running.</p>
           </li>
           <li data-lang-variant="pt">
-            <b>Agora roda em Macs com Intel também, não só em Apple Silicon</b>
-            <p>O download para macOS é uma build universal, então o ShelvesHub inicia nativamente em qualquer Mac.</p>
+            <b>O botão "reiniciar para aplicar uma atualização" agora sempre reinicia</b>
+            <p>Em alguns setups ele podia não fazer nada; agora reinicia o ShelvesHub de forma confiável (relançando a si mesmo se preciso) pra uma atualização baixada realmente entrar — e pede uma confirmação rápida…</p>
           </li>
           <li data-lang-variant="pt">
-            <b>Animação de inicialização opcional</b>
-            <p>Ative para reproduzir uma animação curta de inicialização do Deck Shelves quando a interface do Steam com gamepad for iniciada — usa o próprio recurso de vídeo de inicialização do Steam.</p>
+            <b>O modo cooperativo se protege</b>
+            <p>Se você forçar o ShelvesHub a hospedar o Deck Shelves com um loader de plugins instalado e isso ficar deixando a tela do Steam preta, o ShelvesHub agora recua pra coexistência simples pela sessão em vez de…</p>
           </li>
           <li data-lang-variant="pt">
-            <b>As prateleiras ficam na interface com gamepad (interruptor experimental para desktop)</b>
-            <p>No macOS e no Windows, o host agora hospeda suas prateleiras apenas enquanto a interface com gamepad / Big Picture do Steam está em tela, e não no cliente desktop comum, onde elas não fazem sentido.</p>
+            <b>Ícone de tray no desktop opcional — marque uma caixa no instalador</b>
+            <p>O instalador agora tem uma opção desligada por padrão pra adicionar um pequeno app de barra de menu / tray que mostra se o ShelvesHub está hospedando, com ações rápidas (pausar/retomar, reiniciar o serviço,…</p>
           </li>
           <li data-lang-variant="pt">
-            <b>Recuperação automática de tela preta</b>
-            <p>Se a interface do Steam alguma vez colapsar, o host agora executa um passo de recuperação feito para o seu sistema — reiniciando a sessão do Modo de Jogo do Steam Deck, ou trazendo o Steam de volta ao Big…</p>
+            <b>Reinicie o backend de dados sem reiniciar tudo</b>
+            <p>Se o backend de dados travar, a seção Solução de problemas da aba agora tem um botão "Reiniciar backend" que reinicia só ele — as suas shelves e a hospedagem seguem rodando.</p>
           </li>
       </ul>
     </div>
@@ -309,7 +309,7 @@
       <hr class="foot-rule">
       <p class="foot-bottom" data-i18n="footer.copy">© 2026 ShelvesHub · MIT-licensed · built by Jonathan Santos</p>
     </div>
-  </footer>
+</footer>
 
   <script>
     /* ── i18n + fresh-release CTA ──────────────────────────────────────────

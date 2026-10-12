@@ -48,6 +48,20 @@ fn force_overrides_foreign_owner() {
 }
 
 #[test]
+fn forced_ownership_waits_for_a_loader_before_hosting() {
+    // Not forced: the configured window as before (0 = never settle).
+    assert_eq!(settle_window(false, false, 0), 0);
+    assert_eq!(settle_window(false, false, 5), 5);
+    assert_eq!(settle_window(false, true, 5), 5);
+    // Forced, loader already there: the cooperative branch owns it — no wait.
+    assert_eq!(settle_window(true, true, 5), 0);
+    // Forced, no loader yet: at least the loader window, never shorter than the configured one.
+    assert_eq!(settle_window(true, false, 0), FORCE_LOADER_SETTLE_SECS);
+    assert_eq!(settle_window(true, false, 5), FORCE_LOADER_SETTLE_SECS);
+    assert_eq!(settle_window(true, false, 60), 60);
+}
+
+#[test]
 fn settle_disabled_by_default() {
     // `owner_settle_secs == 0` (the default) never settles — a sole host boots
     // immediately.
