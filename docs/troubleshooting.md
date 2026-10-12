@@ -90,6 +90,21 @@ To **disable** auto-recovery (pause only, and just log the hint), set it to `off
 The native Quick Access tab is controlled by `native_qam` (or `SHELVES_NATIVE_QAM=1`
 per service). Set it to `false` to fall back to the on-screen panel.
 
+## Notifications
+
+The host's notifications — Deck Shelves' toasts and ShelvesHub's own notices — go through
+Steam's own notification system (Steam's toast, sound, in-game overlay, an entry in its
+Notifications tab). That wraps Steam's toast renderer, so it only installs on a sole host,
+on the React version it was written against, and after a pre-flight check; beside a plugin
+loader the host's notices use the loader's toaster instead. The hub view always keeps the
+last notifications in its "Notifications" section. `native_notifications` (on by default;
+`false` in the config file, `SHELVES_NATIVE_NOTIFICATIONS=0` per service, or the "Steam
+notifications" switch in the tab's Configuration section) turns the Steam path off — then
+notifications only reach that section. When the path cannot install, the reason is in the
+log (`native toasts: …`); from the Steam debug console,
+`__SHELVES_HOST__.notifications.mode()` answers `active`, `pending`, `failed` or `off`. If it
+ever misbehaves, turn the setting off and restart the service.
+
 ## Reading the log
 
 ```

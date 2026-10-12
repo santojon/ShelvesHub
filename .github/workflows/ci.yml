@@ -128,6 +128,25 @@ jobs:
       - name: Runtime JavaScript syntax
         run: node --check runtime/shelves-host.js
 
+      # The one-click launchers' `Exec` lines run through the desktop-entry parser
+      # BEFORE any shell: a `$`, a backtick or a `%` in there is pre-expanded (to
+      # nothing) and the terminal closes at once. Keep them shell-free, and keep the
+      # command they hand to bash syntactically valid.
+      - name: Validate one-click launchers (.desktop Exec lines)
+        run: |
+          set -e
+          for f in installer/SteamOS/*.desktop installer/Linux/*.desktop; do
+            exec_line="$(grep '^Exec=' "$f" | sed 's/^Exec=//')"
+            case "$exec_line" in
+              *'$'*|*'`'*|*'%'*) echo "::error file=$f::Exec must not contain \$, backticks or % (desktop-entry pre-expansion)"; exit 1 ;;
+            esac
+            case "$exec_line" in
+              'bash -c "'*'"') inner="${exec_line#bash -c \"}"; inner="${inner%\"}"; bash -n -c "$inner" || { echo "::error file=$f::inner command does not parse"; exit 1; } ;;
+              *) echo "::error file=$f::Exec must be: bash -c \"...\""; exit 1 ;;
+            esac
+            echo "$f: OK"
+          done
+
       - name: Validate JSON data files (i18n + shipped config)
         run: |
           python3 - <<'PY'

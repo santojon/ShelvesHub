@@ -71,5 +71,17 @@
   "upd_deferred": "실행 중인 게임이 없을 때까지 대기 중",
   "upd_whats_new": "새로운 기능",
   "upd_plugin_available": "Deck Shelves 업데이트 사용 가능",
-  "action_update_plugin_now": "지금 Deck Shelves 업데이트"
+  "action_update_plugin_now": "지금 Deck Shelves 업데이트",
+  "sec_notifications": "알림",
+  "notif_empty": "아직 알림이 없습니다.",
+  "cfg_native_notifications": "Steam 알림",
+  "cfg_native_notifications_sub": "이 호스트의 알림을 Steam 알림으로 표시 (끄면 허브 화면에만 표시)",
+  "notice_hub_updated": "ShelvesHub가 {version}(으)로 업데이트됨",
+  "notice_hub_reverted": "ShelvesHub가 {version}(으)로 되돌아감",
+  "notice_hub_staged": "ShelvesHub {version} 다운로드됨 — 완료하려면 다시 시작하세요",
+  "notice_hub_restored": "ShelvesHub {version} 복원됨 — 완료하려면 다시 시작하세요",
+  "notice_plugin_updated": "Deck Shelves가 {version}(으)로 업데이트됨",
+  "notice_plugin_rolled_back": "Deck Shelves가 {version}(으)로 되돌아감",
+  "notice_coop_receded": "협력 모드 일시 중지됨 — 이번 세션은 공존 모드로 실행",
+  "notice_recovered": "Steam 인터페이스가 멈춰 ShelvesHub가 다시 시작했습니다"
 }

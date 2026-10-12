@@ -61,6 +61,9 @@ pub struct HubSettings {
     /// is running — it waits for a later tick. A manual "Check now" still goes
     /// ahead.
     pub quiet_updates: bool,
+    /// The version that ran last. A different running version at start-up means
+    /// an update (or a rollback) landed, and the user is told once.
+    pub last_run_version: String,
     /// Catch-all for keys written by a newer daemon — preserved verbatim across a
     /// load→save so a version-skewed downgrade can't drop them. Not read directly.
     #[serde(flatten)]
@@ -82,6 +85,7 @@ impl Default for HubSettings {
             bundle_hold_tag: String::new(),
             hub_hold_tag: String::new(),
             quiet_updates: true,
+            last_run_version: String::new(),
             extra: serde_json::Map::new(),
         }
     }

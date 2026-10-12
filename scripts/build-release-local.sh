@@ -91,6 +91,11 @@ fi
 echo "== one-click installers =="
 cp installer/SteamOS/shelveshub.desktop  "$OUT/shelveshub.desktop"
 cp installer/Linux/shelveshub.desktop    "$OUT/shelveshub-linux.desktop"
+# The standalone scripts the launchers (and `bash <(curl …)`) fetch by name.
+cp installer/SteamOS/install.sh          "$OUT/install-steamos.sh"
+cp installer/SteamOS/uninstall.sh        "$OUT/uninstall-steamos.sh"
+cp installer/Linux/install.sh            "$OUT/install-linux.sh"
+cp installer/Linux/uninstall.sh          "$OUT/uninstall-linux.sh"
 cp installer/macOS/install-mac.command   "$OUT/install-mac.command"   2>/dev/null || true
 cp installer/Windows/install-windows.bat "$OUT/install-windows.bat"   2>/dev/null || true
 echo "  [ok]   launchers copied"

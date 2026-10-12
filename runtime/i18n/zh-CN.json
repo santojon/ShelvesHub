@@ -71,5 +71,17 @@
   "upd_deferred": "等待没有游戏运行",
   "upd_whats_new": "更新内容",
   "upd_plugin_available": "Deck Shelves 有可用更新",
-  "action_update_plugin_now": "立即更新 Deck Shelves"
+  "action_update_plugin_now": "立即更新 Deck Shelves",
+  "sec_notifications": "通知",
+  "notif_empty": "还没有通知。",
+  "cfg_native_notifications": "Steam 通知",
+  "cfg_native_notifications_sub": "将此主机的通知显示为 Steam 通知（关闭：仅在中枢视图中显示）",
+  "notice_hub_updated": "ShelvesHub 已更新到 {version}",
+  "notice_hub_reverted": "ShelvesHub 已回到 {version}",
+  "notice_hub_staged": "ShelvesHub {version} 已下载 — 重启以完成",
+  "notice_hub_restored": "ShelvesHub {version} 已恢复 — 重启以完成",
+  "notice_plugin_updated": "Deck Shelves 已更新到 {version}",
+  "notice_plugin_rolled_back": "Deck Shelves 已回到 {version}",
+  "notice_coop_receded": "协作模式已暂停 — 本次会话以共存模式运行",
+  "notice_recovered": "Steam 界面崩溃了 — ShelvesHub 已将其重启"
 }

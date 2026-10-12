@@ -9,7 +9,7 @@
 
 [![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
 [![Release](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml)
-[![Tests](https://img.shields.io/badge/cargo%20test-39%20passed-brightgreen?logo=rust&logoColor=white)](src/)
+[![Tests](https://img.shields.io/badge/cargo%20test-80%20passed-brightgreen?logo=rust&logoColor=white)](src/)
 [![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-SteamOS%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-purple?logo=steamdeck&logoColor=white)](https://github.com/ValveSoftware/SteamOS)
 [![Downloads](https://img.shields.io/github/downloads/santojon/ShelvesHub/total.svg?label=downloads&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
@@ -81,7 +81,8 @@ The service also **keeps itself and the bundle current**: with automatic updates
 - **Gamepad UI aware** — by default it hosts only while the gamepad / Big Picture UI is on screen; an experimental toggle (macOS / Windows) also injects into the plain desktop client.
 - **Restart to apply, in one click** — changing a setting that needs a restart surfaces a button that restarts the host and Steam together so the change takes effect.
 - **Editable safe configuration** — a curated subset of the operational config is editable in the tab, with a read-only status readout of the effective values.
-- **Merged log viewer** — host + runtime in one gamepad-navigable, colour-coded stream, newest first, with a refresh control; B takes you back.
+- **Merged log viewer, as a sidecar** — host + runtime in one gamepad-navigable, colour-coded stream, newest first, with a refresh control; it opens beside the tab (the menu widens, like Steam's friends list) and B takes you back.
+- **Notifications through Steam's own system** — the host's notifications (Deck Shelves' and ShelvesHub's own, each with its mark) are Steam toasts with an entry in Steam's Notifications tab; ShelvesHub tells you when it updated, rolled back, paused cooperative mode or restarted a collapsed Steam interface. The tab keeps the last ones in a "Notifications" section.
 - **Disable until restart** — a troubleshooting switch stands the host down until the next service restart without uninstalling anything.
 - **One shared contract** — the `@deck-shelves/host` API defines what the host provides, so one Deck Shelves build runs under this host or under a plugin loader unchanged.
 - **Localized** — the host tab is translated into 19 languages.

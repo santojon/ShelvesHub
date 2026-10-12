@@ -78,6 +78,21 @@ automaticamente, defina o comando para sua plataforma — por exemplo, em um Ste
 A aba nativa de Acesso Rápido é controlada por `native_qam` (ou `SHELVES_NATIVE_QAM=1`
 por serviço). Defina como `false` para usar o painel na tela como alternativa.
 
+## Notificações
+
+As notificações do host — os toasts do Deck Shelves e os avisos do próprio ShelvesHub — passam
+pelo sistema de notificações do próprio Steam (o toast, o som, o overlay em jogo e uma entrada na
+aba Notificações do Steam). Isso envolve o renderer de toast do Steam, então só instala em host
+único, na versão de React para a qual foi escrito, e depois de uma verificação de pré-voo; ao lado
+de um carregador de plugins, os avisos do host usam o toaster do carregador. A visão do hub sempre
+guarda as últimas notificações na sua seção "Notificações". `native_notifications` (ligado por
+padrão; `false` no arquivo de config, `SHELVES_NATIVE_NOTIFICATIONS=0` por serviço, ou o
+interruptor "Notificações do Steam" na seção Configuração da aba) desliga o caminho pelo Steam —
+aí as notificações só chegam a essa seção. Quando o caminho não consegue instalar, o motivo está
+no log (`native toasts: …`); pelo console de depuração do Steam,
+`__SHELVES_HOST__.notifications.mode()` responde `active`, `pending`, `failed` ou `off`. Se algum
+dia se comportar mal, desligue a opção e reinicie o serviço.
+
 ## Lendo o log
 
 ```

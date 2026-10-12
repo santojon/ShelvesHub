@@ -34,6 +34,9 @@ pub mod timers {
     /// Fast re-poll cadence: cold start and desktop stand-down, so a return to
     /// Big Picture is noticed within a couple of seconds.
     pub const FAST_POLL: Duration = Duration::from_secs(2);
+    /// How long a cooperative tick keeps the fast cadence waiting for the
+    /// loader's copy to publish the cooperative-bundle defer signal.
+    pub const COOP_BUNDLE_FAST_WINDOW: Duration = Duration::from_secs(120);
 }
 
 /// Default values and fixed limits.

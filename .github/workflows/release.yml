@@ -24,6 +24,10 @@ jobs:
             oneclick_name: shelveshub.desktop
             oneclick_uninstall_src: uninstall.desktop
             oneclick_uninstall_name: uninstall-shelveshub.desktop
+            # The standalone scripts the launchers (and `bash <(curl …)`) fetch by
+            # name — uploaded from this x86_64 entry only (artifact names must be unique).
+            script_name: install-steamos.sh
+            uninstall_script_name: uninstall-steamos.sh
 
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
@@ -34,6 +38,8 @@ jobs:
             oneclick_name: shelveshub-linux.desktop
             oneclick_uninstall_src: uninstall.desktop
             oneclick_uninstall_name: uninstall-shelveshub-linux.desktop
+            script_name: install-linux.sh
+            uninstall_script_name: uninstall-linux.sh
 
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
@@ -239,6 +245,28 @@ jobs:
         with:
           name: ${{ matrix.oneclick_uninstall_name }}
           path: ${{ matrix.oneclick_uninstall_name }}
+
+      # The standalone installer / uninstaller scripts as release assets, so the
+      # one-click launchers (and a plain `bash <(curl …)`) can fetch them by name.
+      - name: Prepare standalone scripts (Linux)
+        if: matrix.script_name != ''
+        run: |
+          cp ${{ matrix.installer_dir }}/install.sh ${{ matrix.script_name }}
+          cp ${{ matrix.installer_dir }}/uninstall.sh ${{ matrix.uninstall_script_name }}
+
+      - name: Upload standalone installer script
+        if: matrix.script_name != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.script_name }}
+          path: ${{ matrix.script_name }}
+
+      - name: Upload standalone uninstaller script
+        if: matrix.script_name != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.uninstall_script_name }}
+          path: ${{ matrix.uninstall_script_name }}
 
       # ── GUI installers with the app icon (clickable) ────────────────────────
       - name: Build macOS installer app

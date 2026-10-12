@@ -113,6 +113,39 @@ pub fn update_deferred() -> bool {
     UPDATE_DEFERRED.load(Ordering::Relaxed)
 }
 
+/// Host notices for the user — queued by the daemon (an update applied, a rollback
+/// staged, a recovery run, …) and handed to the renderer runtime on the next settled
+/// tick as (i18n key, params); the runtime words and shows them. Bounded.
+static HOST_NOTICES: Mutex<Vec<(String, serde_json::Value)>> = Mutex::new(Vec::new());
+const HOST_NOTICES_CAP: usize = 20;
+
+pub fn push_host_notice(key: &str, params: serde_json::Value) {
+    if let Ok(mut q) = HOST_NOTICES.lock() {
+        if q.len() >= HOST_NOTICES_CAP {
+            q.remove(0);
+        }
+        q.push((key.to_string(), params));
+    }
+}
+
+/// Take every queued notice (empty when none).
+pub fn drain_host_notices() -> Vec<(String, serde_json::Value)> {
+    HOST_NOTICES
+        .lock()
+        .map(|mut q| std::mem::take(&mut *q))
+        .unwrap_or_default()
+}
+
+/// Put undelivered notices back at the front (the renderer could not take them this tick).
+pub fn requeue_host_notices(items: Vec<(String, serde_json::Value)>) {
+    if let Ok(mut q) = HOST_NOTICES.lock() {
+        let mut rest = std::mem::take(&mut *q);
+        *q = items;
+        q.append(&mut rest);
+        q.truncate(HOST_NOTICES_CAP);
+    }
+}
+
 /// Wall-clock millis (since epoch) of the most recent update check, so the hub
 /// view can show "checked X ago". 0 = never checked this session.
 static LAST_UPDATE_CHECK_MS: AtomicU64 = AtomicU64::new(0);

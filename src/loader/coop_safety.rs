@@ -73,6 +73,15 @@ pub fn coop_plugin_swap_allowed(cooperative: bool, coop_bundle: bool) -> bool {
     !cooperative || coop_bundle
 }
 
+/// Cooperative-bundle hand-over. The hub hosts its OWN copy of the bundle under
+/// force only when the protocol is on AND the loader's copy has published the
+/// defer signal (it saw our `coopBundle` capability and a bundle at least as new
+/// as itself, and handed the loader a placeholder). Without the signal the
+/// loader's copy is the one running and injecting ours would double-mount.
+pub fn coop_bundle_turn(cooperative: bool, coop_bundle: bool, defer_pending: bool) -> bool {
+    cooperative && coop_bundle && defer_pending
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,6 +126,22 @@ mod tests {
         let mut s = CoopSafety::new(true, 0);
         assert!(s.collapse_while_forced()); // threshold clamped to 1 → recede now
         assert!(s.receded());
+    }
+
+    #[test]
+    fn coop_bundle_turn_needs_force_flag_and_the_defer_signal() {
+        assert!(coop_bundle_turn(true, true, true));
+        assert!(!coop_bundle_turn(true, true, false)); // loader copy still running
+        assert!(!coop_bundle_turn(true, false, true)); // protocol off: never host under force
+        assert!(!coop_bundle_turn(false, true, true)); // not cooperative: the sole-host path applies
+    }
+
+    #[test]
+    fn plugin_swap_allowed_matrix() {
+        assert!(coop_plugin_swap_allowed(false, false));
+        assert!(coop_plugin_swap_allowed(false, true));
+        assert!(!coop_plugin_swap_allowed(true, false));
+        assert!(coop_plugin_swap_allowed(true, true));
     }
 
     #[test]

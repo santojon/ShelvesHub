@@ -9,8 +9,13 @@ O ShelvesHub roda como um serviço em segundo plano e injeta o pacote do Deck Sh
 ### Um clique
 
 1. Baixe `shelveshub.desktop` da [última versão](https://github.com/santojon/ShelvesHub/releases/latest).
-2. No Modo Desktop, dê duplo clique no arquivo. Um terminal se abre e roda o instalador automaticamente.
+2. No Modo Desktop, dê duplo clique no arquivo (se o sistema perguntar se deve executar um
+   lançador baixado, escolha *Continuar*). Um terminal se abre, busca o script instalador e o
+   roda; ele fica aberto até você pressionar Enter, para dar para ler qualquer mensagem.
 3. O instalador baixa o pacote, instala em `~/.local/share/shelveshub` e registra um serviço systemd em nível de usuário. Não requer sudo.
+
+O mesmo instalador roda de um terminal sem o lançador:
+`bash <(curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/install-steamos.sh)`.
 
 ### A partir do pacote
 

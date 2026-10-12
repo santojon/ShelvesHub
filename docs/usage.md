@@ -11,8 +11,13 @@ ShelvesHub runs as a background service and injects the Deck Shelves bundle into
 ### One-click
 
 1. Download `shelveshub.desktop` from the [latest release](https://github.com/santojon/ShelvesHub/releases/latest).
-2. In Desktop Mode, double-click the file. A terminal opens and runs the installer automatically.
+2. In Desktop Mode, double-click the file (if the system asks whether to run a downloaded
+   launcher, choose *Continue*). A terminal opens, fetches the installer script and runs it;
+   it stays open until you press Enter, so any message can be read.
 3. The installer downloads the package, installs to `~/.local/share/shelveshub`, and registers a user-level systemd service. No sudo required.
+
+The same installer runs from a terminal without the launcher:
+`bash <(curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/install-steamos.sh)`.
 
 ### From package
 

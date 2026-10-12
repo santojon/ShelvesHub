@@ -22,6 +22,10 @@
           // (SHELVES_FORCE_OWNER=shelveshub) — the host is published, the UI borrowed.
           "coop-mirror": { coexist: true, pluginPanel: true, forceOwner: true },
           "coop-fallback": { coexist: true, pluginPanel: false, forceOwner: true },
+          // Hub view interactions: the log sidecar (menu widening) and the
+          // notification center (toast → hub view → Steam's Notifications tab).
+          "sole-host-sidecar": { coexist: false, pluginPanel: false },
+          "sole-host-notify": { coexist: false, pluginPanel: false, nativeNotifications: true },
         };
         window.__HARNESS__ = map[sc] || map["coexist-mirror"];
         // Native-component rendering is gated behind this runtime flag on-device
@@ -30,6 +34,11 @@
         if (window.__HARNESS__.nativeUi) window.__SHELVES_NATIVE_UI__ = true;
         // What the daemon stamps before injecting under a forced owner.
         if (window.__HARNESS__.forceOwner) window.__SHELVES_FORCE_OWNER__ = "shelveshub";
+        if (window.__HARNESS__.nativeNotifications) window.__SHELVES_NATIVE_NOTIFICATIONS__ = true;
+        // The menu-widening protocol goes to the QAM document's opener; capture it
+        // here so the sidecar scenario can assert the messages.
+        window.__HARNESS_COMPOSITOR__ = [];
+        try { window.opener = { postMessage: function (m) { window.__HARNESS_COMPOSITOR__.push(m && m.message); } }; } catch (e) {}
         window.__HARNESS_SCENARIO__ = sc;
         window.__HARNESS_READY__ = false;
         window.__HARNESS_ERRORS__ = [];

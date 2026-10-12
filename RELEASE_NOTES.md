@@ -10,6 +10,10 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **Groundwork for plugin auto-update in cooperative mode.** With the new `coop_bundle` option on,
+  ShelvesHub runs its own copy of Deck Shelves even when a plugin loader is present and forced
+  ownership is in use, so plugin updates arrive through the hub there too. Off by default until it
+  has been validated on a device.
 - **Go back a version when an update misbehaves.** Updates now keep the previous ShelvesHub and the
   previous Deck Shelves around, and the tab's Updates section has "Go back to the previous …" rows
   (tap twice) that restore them in seconds, no download needed. The version you left is held back
@@ -21,6 +25,18 @@ is pushed — the notes below are picked up and published with the release.
   updates right away, and a held-back Deck Shelves release gets an "Update now" button.
 - **Safer automatic downloads.** A Deck Shelves download that fails or doesn't match its checksum can
   no longer leave a broken bundle in place — it is verified before it replaces anything.
+- **Logs open beside the tab, full height.** "View logs" now widens the Quick Access menu and shows
+  the log stream in a panel next to the ShelvesHub view (like the friends list does), instead of a
+  small box under the buttons. B closes it.
+- **Notifications now look and behave like Steam's.** The notifications this host shows — Deck
+  Shelves' too — go through Steam's own notification system: Steam's sound, position and in-game
+  overlay, an entry in the Notifications tab, Steam's own look, each sender with its own mark.
+  The old toast card is gone; "Steam notifications" in Configuration turns the whole thing off.
+- **ShelvesHub tells you what it did.** A notification when ShelvesHub comes back updated (or
+  rolled back), when an update is downloaded and waits for a restart, when Deck Shelves was
+  updated or rolled back, when cooperative mode paused itself, and when the Steam interface
+  collapsed and ShelvesHub restarted it. The tab also keeps the last notifications in a new
+  "Notifications" section.
 
 ## [0.5.0] - 2026-10-10
 

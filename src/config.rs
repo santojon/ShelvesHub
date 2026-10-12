@@ -67,6 +67,10 @@ pub struct Config {
     /// wrong there. When true (`SHELVES_DESKTOP_UI=1`), inject in the desktop
     /// client too.
     pub desktop_ui: bool,
+    /// When true (the default; `SHELVES_NATIVE_NOTIFICATIONS=0` turns it off), the
+    /// runtime shows the host's notifications — its own and the hosted plugin's —
+    /// through Steam's own notification pipeline. Off: they only reach the hub view.
+    pub native_notifications: bool,
     /// Shell command run once when the loader detects the Steam UI windows have
     /// collapsed (a black screen where only `SharedJSContext` survives). By default
     /// (unset or empty) this is the per-platform official recovery
@@ -175,6 +179,12 @@ impl Config {
             coop_bundle: cfg_bool(&file, "SHELVES_COOP_BUNDLE", "coop_bundle"),
             native_qam: cfg_bool(&file, "SHELVES_NATIVE_QAM", "native_qam"),
             desktop_ui: cfg_bool(&file, "SHELVES_DESKTOP_UI", "desktop_ui"),
+            native_notifications: cfg_bool_default(
+                &file,
+                "SHELVES_NATIVE_NOTIFICATIONS",
+                "native_notifications",
+                true,
+            ),
             recover_cmd: resolve_recover_cmd(env::var("SHELVES_RECOVER_CMD").ok().or_else(|| {
                 file.get("recover_cmd")
                     .and_then(Value::as_str)

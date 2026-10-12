@@ -71,5 +71,17 @@
   "upd_deferred": "czeka, aż żadna gra nie będzie uruchomiona",
   "upd_whats_new": "Co nowego",
   "upd_plugin_available": "Dostępna aktualizacja Deck Shelves",
-  "action_update_plugin_now": "Zaktualizuj Deck Shelves teraz"
+  "action_update_plugin_now": "Zaktualizuj Deck Shelves teraz",
+  "sec_notifications": "Powiadomienia",
+  "notif_empty": "Brak powiadomień.",
+  "cfg_native_notifications": "Powiadomienia Steam",
+  "cfg_native_notifications_sub": "Pokazuj powiadomienia tego hosta jako powiadomienia Steam (wyłączone: tylko w widoku huba)",
+  "notice_hub_updated": "ShelvesHub zaktualizowany do {version}",
+  "notice_hub_reverted": "ShelvesHub z powrotem w wersji {version}",
+  "notice_hub_staged": "Pobrano ShelvesHub {version} — uruchom ponownie, aby zakończyć",
+  "notice_hub_restored": "Przywrócono ShelvesHub {version} — uruchom ponownie, aby zakończyć",
+  "notice_plugin_updated": "Deck Shelves zaktualizowany do {version}",
+  "notice_plugin_rolled_back": "Deck Shelves z powrotem w wersji {version}",
+  "notice_coop_receded": "Tryb kooperacyjny wstrzymany — w tej sesji działa koegzystencja",
+  "notice_recovered": "Interfejs Steam się zawiesił — ShelvesHub uruchomił go ponownie"
 }

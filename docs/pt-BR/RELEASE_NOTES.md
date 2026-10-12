@@ -10,6 +10,10 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **Base para a atualização automática do plugin no modo cooperativo.** Com a nova opção
+  `coop_bundle` ligada, o ShelvesHub roda a própria cópia do Deck Shelves mesmo com um loader de
+  plugins presente e a posse forçada em uso, então as atualizações do plugin chegam pelo hub ali
+  também. Desligada por padrão até ser validada num dispositivo.
 - **Volte uma versão quando uma atualização dá problema.** As atualizações agora guardam o
   ShelvesHub anterior e o Deck Shelves anterior, e a seção Atualizações da aba tem linhas "Voltar ao
   … anterior" (toque duas vezes) que os restauram em segundos, sem download. A versão que você
@@ -24,6 +28,19 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 - **Downloads automáticos mais seguros.** Um download do Deck Shelves que falha ou não bate com o
   checksum não deixa mais um pacote quebrado no lugar — ele é verificado antes de substituir
   qualquer coisa.
+- **Logs abrem ao lado da aba, em altura total.** "Ver logs" agora alarga o menu de Acesso Rápido e
+  mostra o fluxo de logs num painel ao lado da visão do ShelvesHub (como a lista de amigos faz),
+  em vez de uma caixinha abaixo dos botões. B fecha.
+- **As notificações agora têm a cara e o comportamento das do Steam.** As notificações que este
+  host mostra — as do Deck Shelves também — passam pelo sistema de notificações do próprio Steam:
+  o som e a posição do Steam, overlay em jogo, uma entrada na aba Notificações, o visual do próprio
+  Steam, cada remetente com a própria marca. O antigo card de toast se foi; "Notificações do
+  Steam" em Configuração desliga tudo.
+- **O ShelvesHub conta o que fez.** Uma notificação quando o ShelvesHub volta atualizado (ou
+  revertido), quando uma atualização foi baixada e espera um reinício, quando o Deck Shelves foi
+  atualizado ou revertido, quando o modo cooperativo se pausou, e quando a interface do Steam
+  colapsou e o ShelvesHub a reiniciou. A aba também guarda as últimas notificações numa nova
+  seção "Notificações".
 
 ## [0.5.0] - 2026-10-10
 

@@ -9,6 +9,21 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **Protocolo de bundle cooperativo, lado do hub (`coop_bundle`, desligado por padrão).** Com um
+  loader de plugins presente e o ShelvesHub forçado como dono, o hub agora consegue rodar e
+  atualizar a PRÓPRIA cópia do plugin em vez de deixar a cópia do loader no comando: o handshake
+  anuncia `coopBundle` (contrato 1.4.0) quando a opção está ligada; um plugin que entende isso
+  compara versões, se retira e publica um sinal de passagem no renderer; o loop de injeção do
+  daemon vê esse sinal no tick seguinte (cadência rápida enquanto espera, limitada a dois minutos
+  para que um plugin antigo que nunca se retira não mantenha o loop ocupado), limpa qualquer
+  marcador antigo de "cópia do host iniciada" e injeta o bundle do hub no runtime já presente — a
+  partir daí o tick é "hospedando", então a atualização automática do plugin, a troca a quente
+  após um download novo e as linhas de atualização do plugin na aba passam a valer também no modo
+  cooperativo. Um plugin anterior ao protocolo mantém o comportamento de hoje
+  (`src/loader/mod.rs`, `src/loader/coop_safety.rs`, `runtime/shelves-host-api.js`,
+  `runtime/shelves-host-qam.js`). Decisão com testes unitários; ainda falta validar num
+  dispositivo sob force com uma release mais nova do plugin antes de documentar a opção como
+  suportada.
 - **Voltar à versão anterior — do ShelvesHub e do Deck Shelves.** Toda atualização agora guarda o
   que substituiu: o pacote do Deck Shelves como uma cópia `.prev` ao lado do ativo, e o binário do
   ShelvesHub + runtime injetado + assets como um snapshot `previous/` ao lado do binário. A seção
@@ -31,7 +46,51 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   `getConfig` reporta `update_deferred`, `pending_plugin_update`, `pending_hub_notes`,
   `hub_previous_version` e `bundle_rollback_available`; `setUpdatePref` aceita `quiet_updates`.
 
+- **O visualizador de logs agora é um sidecar ao lado da visão do hub.** "Ver logs" não espreme
+  mais o fluxo numa caixa de 300 px abaixo das ações: ele alarga o menu de Acesso Rápido — a mesma
+  mensagem de compositor que a lista de amigos do próprio Steam usa — e mostra o fluxo de logs em
+  altura total ao lado da visão do ShelvesHub, dimensionado pelo menu ao vivo. O foco do controle
+  entra nele, B / o controle de voltar o fecham (o menu volta a estreitar), e ele se recolhe sozinho
+  quando o menu some, para um menu reaberto nunca voltar largo e vazio. Runtime:
+  `runtime/shelves-host-sidecar.js`.
+- **As notificações passam pelo pipeline de notificações do próprio Steam.** Em host único, as
+  notificações que este host mostra — os toasts do Deck Shelves roteados por ele e, agora, as do
+  próprio ShelvesHub — são despachadas pelo próprio Steam, como acontece sob um carregador de
+  plugins: o toast do Steam (som, duração, posição, overlay em jogo), uma entrada na bandeja de
+  Notificações, o chrome de toast do próprio Steam (moldura, título, horário, corpo) via
+  `runtime/shelves-host-toast.js`. Para isso o host envolve o renderer de toast do Steam, então só
+  instala em host único (ao lado de um carregador, o toaster do próprio carregador é usado para os
+  avisos do host), só na versão de React para a qual foi escrito, e só depois de uma execução de
+  pré-voo do renderer passar. Notificações enviadas nos primeiros segundos após o Steam iniciar
+  (os avisos de boot do Deck Shelves) ficam retidas até o pipeline assentar. O antigo card de toast
+  desenhado por nós foi removido: `native_notifications` vem ligado por padrão (o arquivo de config,
+  `SHELVES_NATIVE_NOTIFICATIONS=0` ou o interruptor "Notificações do Steam" na seção Configuração
+  da aba desligam), e quando o pipeline está desligado ou não consegue instalar, a notificação só
+  chega à nova seção "Notificações" da visão do hub (as últimas 20, mais recentes primeiro, linha
+  de limpar), com o motivo no log.
+- **Notificações do próprio ShelvesHub.** O host agora avisa, com a própria marca, quando: o
+  ShelvesHub voltou numa versão nova (ou numa anterior, após um rollback); uma atualização do
+  ShelvesHub foi baixada e espera um reinício; o Deck Shelves foi atualizado ou revertido; o modo
+  cooperativo se pausou; a interface do Steam colapsou e o ShelvesHub a reiniciou. Enfileiradas
+  pelo serviço e redigidas pelo runtime no idioma da aba (19 locales). Cada remetente tem seu
+  próprio logo na mesma linguagem visual: os toasts do Deck Shelves levam a marca colorida do
+  próprio plugin e os do host levam uma marca do ShelvesHub (livros sobre um nó de hub); um
+  remetente pode passar seu próprio `logo` e um `icon` por tipo (elementos React) por
+  `host.notifications.toast`, e `source: "hub"` marca uma notificação do host. `host.notifications`
+  ganha `mode` / `list` / `unread` / `markRead` / `clear` / `subscribe` (extras do host, não
+  métodos do contrato).
+
 ### Corrigido
+- **Os instaladores de um clique do SteamOS / Linux abriam um terminal que fechava na hora.** Os
+  arquivos `.desktop` levavam toda a lógica de instalação na linha `Exec`, com variáveis de shell
+  (`$T`, `$A`, `$(uname -m)`) dentro das aspas. Um lançador de entradas desktop passa essa linha pelo
+  shell do sistema antes de o `bash` vê-la, então as variáveis viravam vazio — o comando virava um
+  erro de sintaxe do bash (`case  in …`) e a janela sumia antes de dar para ler qualquer mensagem
+  ("o konsole fecha imediatamente"). Os lançadores agora delegam ao instalador standalone / ao
+  desinstalador instalado, sem nenhuma expansão de shell na entrada (mesma detecção de arquitetura,
+  checksum e log de antes, feitos pelo script), e mantêm o terminal aberto com um "Pressione Enter
+  para fechar" aconteça o que acontecer. A CI agora rejeita um lançador cujo `Exec` contenha `$`,
+  crase ou `%`, e verifica a sintaxe do comando que ele entrega ao bash.
 - **Um download automático do Deck Shelves que falha não danifica mais o pacote ativo.** A
   atualização periódica baixava direto por cima do pacote injetado e verificava depois, então um
   download truncado ou uma divergência de checksum deixava um arquivo quebrado (ou apagado) no lugar.

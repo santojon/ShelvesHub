@@ -71,5 +71,17 @@
   "upd_deferred": "wacht tot er geen game meer draait",
   "upd_whats_new": "Wat is er nieuw",
   "upd_plugin_available": "Deck Shelves-update beschikbaar",
-  "action_update_plugin_now": "Deck Shelves nu bijwerken"
+  "action_update_plugin_now": "Deck Shelves nu bijwerken",
+  "sec_notifications": "Meldingen",
+  "notif_empty": "Nog geen meldingen.",
+  "cfg_native_notifications": "Steam-meldingen",
+  "cfg_native_notifications_sub": "De meldingen van deze host als Steam-meldingen tonen (uit: alleen in de hub-weergave)",
+  "notice_hub_updated": "ShelvesHub bijgewerkt naar {version}",
+  "notice_hub_reverted": "ShelvesHub terug op {version}",
+  "notice_hub_staged": "ShelvesHub {version} gedownload — herstart om te voltooien",
+  "notice_hub_restored": "ShelvesHub {version} hersteld — herstart om te voltooien",
+  "notice_plugin_updated": "Deck Shelves bijgewerkt naar {version}",
+  "notice_plugin_rolled_back": "Deck Shelves terug op {version}",
+  "notice_coop_receded": "Coöperatieve modus gepauzeerd — deze sessie draait als coëxistentie",
+  "notice_recovered": "De Steam-interface is ingestort — ShelvesHub heeft hem herstart"
 }

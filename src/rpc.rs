@@ -27,13 +27,14 @@ use crate::state;
 /// NOT here: it runs through a shell on a UI-collapse event, so letting the RPC
 /// (reachable by any local caller) set it would be arbitrary code execution — it
 /// is file/env only.
-const EDITABLE_CONFIG_KEYS: [&str; 6] = [
+const EDITABLE_CONFIG_KEYS: [&str; 7] = [
     "native_qam",
     "prerelease",
     "owner_settle_secs",
     "interval_secs",
     "force_owner",
     "desktop_ui",
+    "native_notifications",
 ];
 
 /// The ONLY method names proxied to the Python backend — the Deck Shelves plugin's
@@ -344,6 +345,10 @@ fn record_bundle_tag(prerelease: bool) {
     s.bundle_hold_tag.clear();
     let _ = crate::store::save(cfg_path, &s);
     state::set_pending_plugin_update(None);
+    state::push_host_notice(
+        "notice_plugin_updated",
+        serde_json::json!({ "version": s.bundle_tag }),
+    );
 }
 
 /// After a bundle rollback: the recorded tags swap places and the undone release
@@ -580,6 +585,10 @@ fn dispatch(body: &str) -> String {
                 Ok(()) => {
                     let tag = hold_rolled_back_bundle();
                     log_info("rpc", &format!("Rolled Deck Shelves back to {tag:?}."));
+                    state::push_host_notice(
+                        "notice_plugin_rolled_back",
+                        serde_json::json!({ "version": tag }),
+                    );
                     ok(format!(
                         r#"{{"rolled_back":true,"tag":{}}}"#,
                         Value::String(tag)
@@ -610,7 +619,13 @@ fn dispatch(body: &str) -> String {
                     &format!("Hub rollback to {version} staged (restarting={restarting})."),
                 );
                 if restarting {
+                    // The next start notices the version change and tells the user.
                     exit_after_flush("Restarting to apply hub rollback.");
+                } else {
+                    state::push_host_notice(
+                        "notice_hub_restored",
+                        serde_json::json!({ "version": version }),
+                    );
                 }
                 ok(format!(
                     r#"{{"rolled_back":true,"restarting":{restarting},"version":{}}}"#,
@@ -832,9 +847,11 @@ fn dispatch(body: &str) -> String {
                 other => return err(&format!("refused config key (not editable): {other:?}")),
             };
             let coerced = match key {
-                "native_qam" | "prerelease" | "force_owner" | "desktop_ui" => {
-                    value.as_bool().map(Value::Bool)
-                }
+                "native_qam"
+                | "prerelease"
+                | "force_owner"
+                | "desktop_ui"
+                | "native_notifications" => value.as_bool().map(Value::Bool),
                 "owner_settle_secs" | "interval_secs" => value.as_u64().map(Value::from),
                 "recover_cmd" => match &value {
                     Value::Null => Some(Value::Null),
@@ -932,8 +949,13 @@ fn dispatch(body: &str) -> String {
                     );
                     if restarting {
                         // The renderer keeps the current runtime until the new
-                        // daemon re-injects.
+                        // daemon re-injects; the next start tells the user.
                         exit_after_flush("Restarting to apply hub update.");
+                    } else {
+                        state::push_host_notice(
+                            "notice_hub_staged",
+                            serde_json::json!({ "version": tag }),
+                        );
                     }
                     ok(format!(
                         r#"{{"updated":true,"restarting":{restarting},"version":"{}","tag":"{}"}}"#,

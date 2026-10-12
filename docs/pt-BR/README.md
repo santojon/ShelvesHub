@@ -9,7 +9,7 @@
 
 [![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
 [![Release](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml)
-[![Tests](https://img.shields.io/badge/cargo%20test-39%20passed-brightgreen?logo=rust&logoColor=white)](src/)
+[![Tests](https://img.shields.io/badge/cargo%20test-80%20passed-brightgreen?logo=rust&logoColor=white)](src/)
 [![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-SteamOS%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-purple?logo=steamdeck&logoColor=white)](https://github.com/ValveSoftware/SteamOS)
 [![Downloads](https://img.shields.io/github/downloads/santojon/ShelvesHub/total.svg?label=downloads&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
@@ -81,7 +81,8 @@ O serviço também **se mantém atualizado, junto com o pacote**: com as atualiz
 - **Ciente da Gamepad UI** — por padrão só hospeda enquanto a interface de controle / Big Picture está em tela; um interruptor experimental (macOS / Windows) também injeta no cliente desktop normal.
 - **Reiniciar para aplicar, em um clique** — mudar uma configuração que exige reinício mostra um botão que reinicia o host e o Steam juntos para que a mudança tenha efeito.
 - **Configuração segura editável** — um subconjunto selecionado da configuração operacional é editável na aba, com uma leitura somente-leitura dos valores efetivos.
-- **Visualizador de logs combinado** — host + runtime em um único fluxo navegável por controle, colorido por categoria, mais recentes primeiro, com um controle de atualizar; B leva de volta.
+- **Visualizador de logs combinado, como sidecar** — host + runtime em um único fluxo navegável por controle, colorido por categoria, mais recentes primeiro, com um controle de atualizar; abre ao lado da aba (o menu alarga, como a lista de amigos do Steam) e B leva de volta.
+- **Notificações pelo sistema do próprio Steam** — as notificações do host (as do Deck Shelves e as do próprio ShelvesHub, cada uma com sua marca) são toasts do Steam com entrada na aba Notificações; o ShelvesHub avisa quando atualizou, reverteu, pausou o modo cooperativo ou reiniciou uma interface do Steam colapsada. A aba guarda as últimas numa seção "Notificações".
 - **Desativar até reiniciar** — um interruptor de solução de problemas desativa o host até o próximo reinício do serviço, sem desinstalar nada.
 - **Um contrato compartilhado** — a API `@deck-shelves/host` define o que o host fornece, então uma build do Deck Shelves roda sob este host ou sob um carregador de plugins sem alteração.
 - **Localizado** — a aba do host está traduzida em 19 idiomas.

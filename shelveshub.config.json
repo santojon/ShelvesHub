@@ -31,6 +31,9 @@
   "// desktop_ui": "Experimental: also inject while the plain desktop Steam client is on screen (not just the gamepad / Big Picture UI). false = host only in Big Picture. Can also be set per-service via SHELVES_DESKTOP_UI=1.",
   "desktop_ui": false,
 
+  "// native_notifications": "Show this host's notifications (ShelvesHub's own and the Deck Shelves toasts it hosts) through Steam's own notification pipeline — Steam's toast, sound, in-game overlay and an entry in its Notifications tab. true is the default; false = they only reach the hub view's Notifications section. Can also be set per-service via SHELVES_NATIVE_NOTIFICATIONS=0.",
+  "native_notifications": true,
+
   "// recover_cmd": "Shell command run ONCE if the daemon detects the Steam UI collapsed (a black screen where only SharedJSContext survives). Empty or absent = the per-platform OFFICIAL recovery (on a Steam Deck, 'systemctl --user restart steam-launcher.service'). Set a custom command to override it, or 'off' to disable auto-recovery (pause injection and log the hint only).",
   "recover_cmd": "",
 

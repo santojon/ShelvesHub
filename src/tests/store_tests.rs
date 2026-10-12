@@ -113,6 +113,7 @@ fn quiet_updates_default_on_and_rollback_fields_roundtrip() {
         bundle_hold_tag: "v3.4.0".into(),
         hub_hold_tag: "0.6.0".into(),
         quiet_updates: false,
+        last_run_version: "0.5.0".into(),
         ..Default::default()
     };
     save(&path, &s).unwrap();
@@ -121,6 +122,7 @@ fn quiet_updates_default_on_and_rollback_fields_roundtrip() {
     fs::write(&path, r#"{"auto_update":true}"#).unwrap();
     let old = load(&path);
     assert!(old.quiet_updates);
+    assert!(old.last_run_version.is_empty());
     assert!(old.bundle_prev_tag.is_empty());
     assert!(old.bundle_hold_tag.is_empty());
     assert!(old.hub_hold_tag.is_empty());

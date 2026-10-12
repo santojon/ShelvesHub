@@ -38,9 +38,18 @@ pub const OWNER_KIND: &str = "shelveshub";
 /// Renderer global stamped before injection when ownership is forced, so the
 /// other host's adapter can stand down cooperatively.
 pub const FORCE_OWNER_GLOBAL: &str = "window.__SHELVES_FORCE_OWNER__";
+/// Renderer global the loader's Deck Shelves copy sets when it stands down for
+/// the cooperative-bundle protocol (it saw `coopBundle` + a bundle at least as
+/// new as itself); the daemon then hosts its own copy.
+pub const DEFER_GLOBAL: &str = "window.__DECK_SHELVES_DEFER_TO_HOST__";
+/// Renderer global the host-hosted copy sets on boot so the deferring loader
+/// copy knows it arrived (and does not fall back to booting itself).
+pub const HOST_BUNDLE_BOOTED_GLOBAL: &str = "window.__DECK_SHELVES_HOST_BUNDLE_BOOTED__";
 /// Renderer global that opts the injected runtime into the native Quick
 /// Access tab path (`SHELVES_NATIVE_QAM=1`). Read once at runtime boot.
 pub const NATIVE_QAM_GLOBAL: &str = "window.__SHELVES_NATIVE_QAM__";
+/// Opt-in: the runtime also lists the host's notifications in Steam's Notifications tab.
+pub const NATIVE_NOTIFICATIONS_GLOBAL: &str = "window.__SHELVES_NATIVE_NOTIFICATIONS__";
 
 // The bundle reads `host.ui.*` at boot to render. On a sole host the runtime's
 // UI discovery is CHUNKED (async — it yields so it never stalls the main thread),
@@ -73,7 +82,9 @@ enum Tick {
 use crate::constants::defaults::COLLAPSE_HALT_THRESHOLD;
 /// Confirmed collapse episodes while forced before auto-safe-mode recedes force.
 const COOP_RECEDE_STRIKES: u32 = 2;
-use crate::constants::timers::{FAST_POLL, SOLE_IDLE, UPDATE_CHECK_INTERVAL};
+use crate::constants::timers::{
+    COOP_BUNDLE_FAST_WINDOW, FAST_POLL, SOLE_IDLE, UPDATE_CHECK_INTERVAL,
+};
 
 pub fn run(mut config: Config) {
     // Obtain the bundle before anything else: the sole-host case (no loader, no
@@ -155,6 +166,9 @@ pub fn run(mut config: Config) {
     // coexist. `coexist_config` holds the force-cleared config once that happens;
     // until then ticks use the real `config`.
     let mut coop = CoopSafety::new(config.coop_safe_mode, COOP_RECEDE_STRIKES);
+    // When the cooperative tick first settled without our bundle (see the sleep
+    // cadence below).
+    let mut coop_wait_since: Option<Instant> = None;
     let mut coexist_config: Option<Config> = None;
 
     loop {
@@ -252,6 +266,7 @@ pub fn run(mut config: Config) {
                     c.force_owner = false;
                     coexist_config = Some(c);
                     state::set_coop_receded(true);
+                    state::push_host_notice("notice_coop_receded", serde_json::json!({}));
                 }
             }
             thread::sleep(interval);
@@ -343,6 +358,7 @@ pub fn run(mut config: Config) {
             c.force_owner = false;
             coexist_config = Some(c);
             state::set_coop_receded(true);
+            state::push_host_notice("notice_coop_receded", serde_json::json!({}));
         }
         // We host the bundle ourselves (sole/owner) only on Active — NOT coexist,
         // where the plugin loader owns its own copy and must not be touched.
@@ -392,6 +408,12 @@ pub fn run(mut config: Config) {
             }
         }
 
+        // Host notices (an update landed, a recovery ran, …) go to the runtime once
+        // it is in place — ours (Active) or the coexist tab's.
+        if settled {
+            deliver_host_notices(&config);
+        }
+
         // Periodically check for updates (throttled, best-effort) regardless of
         // whether the tick settled — the network and GitHub don't depend on the
         // renderer, so a coexist tick that never settles (or a transient probe
@@ -433,7 +455,21 @@ pub fn run(mut config: Config) {
         } else {
             interval
         };
-        thread::sleep(if settled && !swap_pending { idle } else { fast });
+        // Cooperative-bundle hand-over: the loader's copy falls back to booting
+        // itself if our copy does not land within its window, so poll fast while
+        // cooperative and not yet hosting — bounded, so an older plugin that never
+        // defers does not keep the daemon on the fast cadence for the session.
+        let coop_bundle_wait = config.coop_bundle
+            && cooperative
+            && coop_wait_since.get_or_insert_with(Instant::now).elapsed() < COOP_BUNDLE_FAST_WINDOW;
+        if !cooperative {
+            coop_wait_since = None;
+        }
+        thread::sleep(if settled && !swap_pending && !coop_bundle_wait {
+            idle
+        } else {
+            fast
+        });
     }
 }
 
@@ -480,6 +516,62 @@ fn auto_update_check(config: &Config, hosting: bool, cooperative: bool, manual: 
     }
 }
 
+/// Hand the queued host notices to the runtime's `__SHELVES_NOTIFY__` (it words and
+/// shows them as the host's own notifications). One round-trip for all of them;
+/// when the runtime can't take them this tick, they go back to the queue.
+fn deliver_host_notices(config: &Config) {
+    let items = state::drain_host_notices();
+    if items.is_empty() {
+        return;
+    }
+    let payload = serde_json::Value::Array(
+        items
+            .iter()
+            .map(|(k, p)| serde_json::json!([k, p]))
+            .collect(),
+    );
+    let expr = format!(
+        "(function(b){{var f=window.__SHELVES_NOTIFY__;if(typeof f!==\"function\")return false;\
+         for(var i=0;i<b.length;i++){{try{{f(b[i][0],b[i][1]);}}catch(e){{}}}}return true;}})({payload})"
+    );
+    let delivered = CdpClient::connect_renderer(
+        &config.cef_host,
+        config.cef_port,
+        config.target_filter.as_deref(),
+    )
+    .and_then(|mut client| client.evaluate(&expr))
+    .map(|v| v.as_bool() == Some(true))
+    .unwrap_or(false);
+    if !delivered {
+        state::requeue_host_notices(items);
+    }
+}
+
+/// At start-up: a running version different from the last run means an update (or
+/// a rollback) landed — queue the notice and remember what runs now.
+pub fn note_version_change(hub_config_path: &Path) {
+    let running = env!("CARGO_PKG_VERSION");
+    let mut settings = crate::store::load(hub_config_path);
+    if settings.last_run_version == running {
+        return;
+    }
+    if !settings.last_run_version.is_empty() {
+        let key = if version_is_newer(running, &settings.last_run_version) {
+            "notice_hub_updated"
+        } else {
+            "notice_hub_reverted"
+        };
+        state::push_host_notice(key, serde_json::json!({ "version": running }));
+    }
+    settings.last_run_version = running.to_string();
+    if let Err(e) = crate::store::save(hub_config_path, &settings) {
+        log_warning(
+            "loader",
+            &format!("could not record the running version: {e}"),
+        );
+    }
+}
+
 /// The plugin-bundle half of the check. Applies when we don't yet know what's
 /// installed (seed the tag) OR the latest on the channel is strictly newer by
 /// SEMVER — never a downgrade (so a newer beta is not replaced by an older stable
@@ -520,6 +612,10 @@ fn check_plugin_update(config: &Config, settings: &mut crate::store::HubSettings
                 );
             }
             state::set_pending_plugin_update(None);
+            state::push_host_notice(
+                "notice_plugin_updated",
+                serde_json::json!({ "version": settings.bundle_tag }),
+            );
             log_info(
                 "update",
                 &format!("Applied Deck Shelves update from {url}; hot-swapping in place."),
@@ -612,6 +708,7 @@ fn check_hub_update(hold: &str, prerelease: bool, deferred: bool) {
                 "update",
                 &format!("ShelvesHub {tag} downloaded (running {current}) — restart to finish."),
             );
+            state::push_host_notice("notice_hub_staged", serde_json::json!({ "version": tag }));
             state::set_pending_hub_update(Some(tag));
             state::set_hub_update_staged(true);
         }
@@ -806,7 +903,11 @@ fn run_recovery(cmd: &str) {
         c
     };
     match command.spawn() {
-        Ok(_) => log_info("loader", &format!("Recovery command launched: {cmd}")),
+        Ok(_) => {
+            log_info("loader", &format!("Recovery command launched: {cmd}"));
+            // Told once the renderer is back, so the user knows why Steam restarted.
+            state::push_host_notice("notice_recovered", serde_json::json!({}));
+        }
         Err(e) => log_error("loader", &format!("Recovery command failed to launch: {e}")),
     }
 }
@@ -861,6 +962,14 @@ fn tick(
             return Ok(Tick::StoodDown(owner));
         }
         if probe_coexist_tab(&mut client)? {
+            // Cooperative-bundle protocol: the loader's copy saw our `coopBundle`
+            // capability and stood down (defer signal published) — host our own
+            // copy on the runtime that is already in place.
+            let defer_pending =
+                cooperative && config.coop_bundle && probe_defer_signal(&mut client)?;
+            if coop_safety::coop_bundle_turn(cooperative, config.coop_bundle, defer_pending) {
+                return inject_coop_bundle(&mut client, config);
+            }
             return Ok(Tick::CoexistTab(owner)); // host/tab already present
         }
         if cooperative {
@@ -868,6 +977,9 @@ fn tick(
         }
         if config.native_qam {
             stamp_native_qam(&mut client);
+        }
+        if config.native_notifications {
+            stamp_native_notifications(&mut client);
         }
         inject_host_runtime(&mut client, config);
         return Ok(Tick::CoexistTab(owner));
@@ -896,6 +1008,9 @@ fn tick(
     }
     if config.native_qam {
         stamp_native_qam(&mut client);
+    }
+    if config.native_notifications {
+        stamp_native_notifications(&mut client);
     }
 
     log_warning("loader", "Bundle not detected — injecting.");
@@ -968,6 +1083,14 @@ fn stamp_native_qam(client: &mut CdpClient) {
     }
 }
 
+/// Stamp the native-notifications opt-in global before the runtime evaluates.
+fn stamp_native_notifications(client: &mut CdpClient) {
+    match client.evaluate(&format!("{NATIVE_NOTIFICATIONS_GLOBAL} = true; true")) {
+        Ok(_) => log_info("loader", "Native notifications stamp set."),
+        Err(e) => log_warning("loader", &format!("Native notifications stamp failed: {e}")),
+    }
+}
+
 /// Stamp the force-owner global so a foreign adapter yields cooperatively.
 fn stamp_force_owner(client: &mut CdpClient) {
     let stamp = format!("{FORCE_OWNER_GLOBAL} = {OWNER_KIND:?}; true");
@@ -980,6 +1103,45 @@ fn stamp_force_owner(client: &mut CdpClient) {
 /// A foreign owner: the renderer is claimed by someone other than us.
 fn is_foreign_owner(owner: &str) -> bool {
     !owner.is_empty() && owner != OWNER_KIND
+}
+
+/// Whether the loader's Deck Shelves copy published the cooperative-bundle defer
+/// signal (it handed the loader a placeholder and waits for our copy).
+fn probe_defer_signal(client: &mut CdpClient) -> cdp::Result<bool> {
+    let expr = format!("!!({DEFER_GLOBAL})");
+    let value = client.evaluate(&expr)?;
+    Ok(value.as_bool().unwrap_or(false))
+}
+
+/// Host our own bundle copy under cooperative force (the runtime is already
+/// injected). A fresh copy announces itself through `HOST_BUNDLE_BOOTED_GLOBAL`;
+/// a stale announcement from a torn-down copy (hot-swap) is cleared first so the
+/// new copy's self-invoke is not skipped.
+fn inject_coop_bundle(client: &mut CdpClient, config: &Config) -> cdp::Result<Tick> {
+    let source = read_bundle(config)?;
+    if source.trim().is_empty() {
+        log_warning(
+            "loader",
+            &format!(
+                "Bundle {} is empty — cooperative hand-over skipped.",
+                config.bundle_path.display()
+            ),
+        );
+        return Ok(Tick::NotConfirmed);
+    }
+    let _ = client.evaluate(&format!("delete {HOST_BUNDLE_BOOTED_GLOBAL}; true"));
+    let gated = format!("{BUNDLE_GATE_PREFIX}{source}{BUNDLE_GATE_SUFFIX}");
+    inject_bundle(client, &gated, env!("CARGO_PKG_VERSION"))?;
+    state::mark_injected_now();
+    log_info(
+        "loader",
+        "Cooperative bundle: the loader's copy stood down — hosting our own copy.",
+    );
+    Ok(if probe_injected(client)? {
+        Tick::Active
+    } else {
+        Tick::NotConfirmed
+    })
 }
 
 /// True when a gamepad / Big Picture window is actually on screen — not just
@@ -1122,6 +1284,7 @@ pub(super) fn config_stamp(config: &Config) -> String {
         "rpcToken": state::rpc_token(),
         "device": crate::config::detected_device(),
         "bundleVersion": bundle_version,
+        "coopBundle": config.coop_bundle,
     });
     format!("window.__SHELVES_CONFIG__ = {obj};\n")
 }
@@ -1129,8 +1292,13 @@ pub(super) fn config_stamp(config: &Config) -> String {
 /// The runtime fragments concatenated AFTER the base `shelves-host.js`, in this
 /// order. They share one closure with the base (see shelves-host.js); the split
 /// only keeps each source file bounded. Order matters — `-api` uses the QAM host
-/// defined in `-qam`.
-const HOST_RUNTIME_PARTS: &[&str] = &["shelves-host-qam.js", "shelves-host-api.js"];
+/// defined in `-qam`; `-sidecar` and `-toast` are only referenced at render / send time.
+const HOST_RUNTIME_PARTS: &[&str] = &[
+    "shelves-host-qam.js",
+    "shelves-host-api.js",
+    "shelves-host-sidecar.js",
+    "shelves-host-toast.js",
+];
 
 /// Read the host runtime as ONE injectable script. The runtime source is split
 /// across `shelves-host.js` and the `HOST_RUNTIME_PARTS` siblings (so each source

@@ -14,6 +14,8 @@
       "../../runtime/shelves-host.js",
       "../../runtime/shelves-host-qam.js",
       "../../runtime/shelves-host-api.js",
+      "../../runtime/shelves-host-sidecar.js",
+      "../../runtime/shelves-host-toast.js",
     ];
     return Promise.all(
       files.map(function (f) {

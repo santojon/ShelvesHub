@@ -9,6 +9,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- **Cooperative-bundle protocol, hub side (`coop_bundle`, off by default).** With a plugin loader
+  present and ShelvesHub forced as the owner, the hub can now run and update its OWN copy of the
+  plugin instead of leaving the loader's copy in charge: the handshake advertises `coopBundle`
+  (contract 1.4.0) when the option is on; a plugin that understands it compares versions, stands
+  down and publishes a hand-over signal in the renderer; the daemon's injection loop sees that
+  signal on the next tick (fast cadence while waiting, bounded to two minutes so an older plugin
+  that never defers does not keep the loop busy), clears any stale "host copy booted" marker and
+  injects the hub's bundle on the runtime already in place — from then on the tick is "hosting",
+  so the plugin auto-update, the hot-swap on a new download and the tab's plugin update rows all
+  apply in cooperative mode too. A plugin that predates the protocol keeps today's behavior
+  (`src/loader/mod.rs`, `src/loader/coop_safety.rs`, `runtime/shelves-host-api.js`,
+  `runtime/shelves-host-qam.js`). Unit-tested decision; still to be validated on a device under
+  force with a newer plugin release before the option is documented as supported.
 - **Go back to the previous version — for ShelvesHub and for Deck Shelves.** Every update now keeps
   what it replaced: the Deck Shelves bundle as a `.prev` copy beside the live one, and the ShelvesHub
   binary + injected runtime + assets as a `previous/` snapshot beside the binary. The tab's Updates
@@ -29,7 +42,48 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   `pending_hub_notes`, `hub_previous_version` and `bundle_rollback_available`; `setUpdatePref`
   accepts `quiet_updates`.
 
+- **The log viewer is now a sidecar beside the hub view.** "View logs" no longer squeezes the
+  stream into a 300 px box under the actions: it widens the Quick Access menu — the same
+  compositor message Steam's own friends list uses — and shows the full-height log stream beside
+  the ShelvesHub view, sized from the live menu. Gamepad focus moves into it, B / the back
+  control close it (the menu narrows again), and it collapses by itself when the menu hides so a
+  reopened menu never comes back wide and empty. Runtime: `runtime/shelves-host-sidecar.js`.
+- **Notifications go through Steam's own notification pipeline.** On a sole host the
+  notifications this host shows — Deck Shelves' toasts routed through it, and now ShelvesHub's
+  own — are dispatched by Steam itself, the way they are under a plugin loader: Steam's toast
+  (sound, duration, position, in-game overlay), an entry in its Notifications tray, Steam's own
+  toast chrome (frame, title, timestamp, body) via `runtime/shelves-host-toast.js`. The host wraps
+  Steam's toast renderer for that, so it installs only on a sole host (beside a loader, the
+  loader's own toaster is used for the host's notices), only on the React version it was written
+  against, and only after a pre-flight run of the renderer passes. Notifications sent during the
+  first seconds after a Steam start (Deck Shelves' boot notices) are held until the pipeline has
+  settled. The former self-rendered toast card is gone: `native_notifications` is on by default
+  (config file, `SHELVES_NATIVE_NOTIFICATIONS=0`, or the "Steam notifications" switch in the tab's
+  Configuration section turn it off), and when the pipeline is off or cannot install, a
+  notification only reaches the hub view's new "Notifications" section (the last 20, newest
+  first, clear row), with the reason in the log.
+- **ShelvesHub's own notifications.** The host now tells you, with its own mark, when: ShelvesHub
+  came back on a new version (or back on an older one after a rollback); a ShelvesHub update was
+  downloaded and waits for a restart; Deck Shelves was updated or rolled back; cooperative mode
+  paused itself; the Steam interface collapsed and ShelvesHub restarted it. Queued by the service
+  and worded by the runtime in the tab's language (19 locales). Each sender has its own logo in
+  the same visual language: Deck Shelves' toasts carry the plugin's own coloured mark and the
+  host's carry a ShelvesHub mark (books over a hub node); a sender may pass its own `logo` and a
+  per-type `icon` (React elements) through `host.notifications.toast`, and `source: "hub"` marks
+  a host notification. `host.notifications` gains `mode` / `list` / `unread` / `markRead` /
+  `clear` / `subscribe` (host extras, not contract methods).
+
 ### Fixed
+- **The SteamOS / Linux one-click launchers opened a terminal that closed at once.** The
+  `.desktop` files carried the whole install logic in their `Exec` line, with shell variables
+  (`$T`, `$A`, `$(uname -m)`) inside the quotes. A desktop-entry launcher runs that line through
+  the system shell before `bash` ever sees it, so the variables were expanded to nothing — the
+  command became a bash syntax error (`case  in …`) and the window vanished before a message could
+  be read ("the konsole crashes immediately"). The launchers now hand off to the standalone
+  installer / the installed uninstaller with no shell expansion in the entry (same architecture
+  detection, checksum and log as before, done by the script), and keep the terminal open with a
+  "Press Enter to close" prompt whatever happens. CI now rejects a launcher whose `Exec` contains
+  `$`, a backtick or `%`, and parses the command it hands to bash.
 - **A failed automatic Deck Shelves download can no longer damage the live bundle.** The periodic
   update downloaded straight over the injected bundle and verified afterwards, so a truncated
   download or a checksum mismatch left a broken (or deleted) file in place. It now downloads to a

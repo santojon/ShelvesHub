@@ -71,5 +71,17 @@
   "upd_deferred": "hiçbir oyun çalışmayana kadar bekleniyor",
   "upd_whats_new": "Yenilikler",
   "upd_plugin_available": "Deck Shelves güncellemesi mevcut",
-  "action_update_plugin_now": "Deck Shelves'i şimdi güncelle"
+  "action_update_plugin_now": "Deck Shelves'i şimdi güncelle",
+  "sec_notifications": "Bildirimler",
+  "notif_empty": "Henüz bildirim yok.",
+  "cfg_native_notifications": "Steam bildirimleri",
+  "cfg_native_notifications_sub": "Bu ana makinenin bildirimlerini Steam bildirimi olarak göster (kapalı: yalnızca merkez görünümünde)",
+  "notice_hub_updated": "ShelvesHub {version} sürümüne güncellendi",
+  "notice_hub_reverted": "ShelvesHub yeniden {version} sürümünde",
+  "notice_hub_staged": "ShelvesHub {version} indirildi — bitirmek için yeniden başlatın",
+  "notice_hub_restored": "ShelvesHub {version} geri yüklendi — bitirmek için yeniden başlatın",
+  "notice_plugin_updated": "Deck Shelves {version} sürümüne güncellendi",
+  "notice_plugin_rolled_back": "Deck Shelves yeniden {version} sürümünde",
+  "notice_coop_receded": "İşbirliği modu duraklatıldı — bu oturumda birlikte çalışma olarak sürüyor",
+  "notice_recovered": "Steam arayüzü çöktü — ShelvesHub onu yeniden başlattı"
 }

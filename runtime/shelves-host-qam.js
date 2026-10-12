@@ -255,6 +255,10 @@
       const coex = cxS[0], setCoex = cxS[1];
       const arS = React.useState(null);
       const armedRestart = arS[0], setArmedRestart = arS[1];
+      // Notification center mirror: re-render on arrival/clear; opening the hub
+      // view counts as having seen what was there.
+      const nt = React.useState(0);
+      const setNotifTick = nt[1];
       React.useEffect(function () {
         let alive = true;
         hostRpc("getRuntimeConfig").then(function (r) {
@@ -263,7 +267,9 @@
         hostRpc("getDiagnostics").then(function (r) {
           if (alive && r && r.ok && r.result && r.result.coexistence) setCoex(r.result.coexistence);
         }, function () {});
-        return function () { alive = false; };
+        host.notifications.markRead();
+        const unsub = host.notifications.subscribe(function () { setNotifTick(function (n) { return n + 1; }); });
+        return function () { alive = false; unsub(); };
       }, []);
       function mergeRc(patch) { const n = {}; if (rc) for (const k in rc) n[k] = rc[k]; for (const p in patch) n[p] = patch[p]; setRc(n); }
       function applyPaused(v) { mergeRc({ paused: v }); hostRpc("setHostingPaused", v).then(function () {}, function () {}); }
@@ -327,16 +333,6 @@
           if (!res) return;
           setCfg(function (prev) { return mergeStatus(prev, res); });
         }, function () { setBusy(null); });
-      }
-      // Compact relative age from "ms since last check" (null when never checked).
-      function agoText(ms) {
-        if (typeof ms !== "number" || ms < 0) return null;
-        if (ms < 60000) return I18N.t("upd_just_now");
-        const mins = Math.floor(ms / 60000);
-        if (mins < 60) return mins + "m";
-        const hrs = Math.floor(mins / 60);
-        if (hrs < 24) return hrs + "h";
-        return Math.floor(hrs / 24) + "d";
       }
       /* Same pattern as the pinned "ShelvesHub" button (native DialogButton when
          available, else the subtle inset row) — matched colour and alignment.
@@ -426,6 +422,11 @@
          COOPERATIVE (a loader present but WE forced ownership) means the hub owns
          + manages updates → not coexist; COOP is reliable, the owner can lag. */
       const coexist = !COOP && (function () { try { const o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; } })();
+      /* Cooperative-bundle protocol on (daemon `coop_bundle`): the hub hosts and
+         updates its OWN copy of the plugin even though a loader is present, so
+         the plugin update surface belongs here again. */
+      const coopBundle = COOP && (function () { try { return SHELVES_CFG.coopBundle === true; } catch (e) { return false; } })();
+      const loaderManagesPlugin = coexist || (COOP && !coopBundle);
       /* B (CANCEL) handling: a plain onCancel/onCancelButton is NOT enough — the
          QAM router still navigates the tab away. We must ABSORB the button-down
          (preventDefault + stopImmediatePropagation on the event AND its inner
@@ -502,7 +503,7 @@
         if (notice) out.push(h("div", { key: "nw", style: { padding: "0 16px" } }, notice));
         if (on) out.push(updateStatusRow());
         if (uc.pending_hub_update) out.push(whatsNewSection("whatsnew-hub", uc.pending_hub_update, uc.pending_hub_notes));
-        if (uc.pending_plugin_update && !(coexist || COOP)) out.push(pluginUpdateNotice(), whatsNewSection("whatsnew-plugin", uc.pending_plugin_update, uc.pending_plugin_notes));
+        if (uc.pending_plugin_update && !loaderManagesPlugin) out.push(pluginUpdateNotice(), whatsNewSection("whatsnew-plugin", uc.pending_plugin_update, uc.pending_plugin_notes));
         return out.filter(Boolean);
       }
       // "vX available" for the hub first, else a held-back Deck Shelves release, else up to date.
@@ -619,7 +620,9 @@
         // Cooperative counts as "loader manages the plugin" for updates: the
         // loader's copy is the one that runs, so hide the plugin update toggles
         // (keep the hub self-update) — the hub won't swap the loader's on-disk copy.
-        if (coexist || COOP) {
+        // With the cooperative-bundle protocol on, the hub's own copy runs and
+        // the plugin update surface comes back.
+        if (loaderManagesPlugin) {
           upd = [
             h("div", { key: "cx", "data-fb": "updates-note", style: { padding: "8px 16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" } }, I18N.t("updates_managed_elsewhere")),
           ];
@@ -644,8 +647,18 @@
           if (rc.paused === true) trouble.push(h("div", { key: "pn", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_paused")));
         }
         sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: trouble.length }, trouble));
+        sections.push(buildNotificationsSection());
         if (rc) { sections.push(buildConfigSection()); sections.push(buildStatusSection()); }
         return sections;
+      }
+      // Notification center: the notifications this host showed, newest first, with a clear row.
+      function buildNotificationsSection() {
+        const items = host.notifications.list();
+        const rows = items.length
+          ? items.map(function (n) { return notifRow(n, "nt-" + n.id); })
+          : [h("div", { key: "empty", style: { opacity: 0.6, fontSize: "13px", padding: "8px 16px" } }, I18N.t("notif_empty"))];
+        if (items.length) rows.push(rowButton("notif-clear", "trash", I18N.t("logs_clear"), function () { host.notifications.clear(); }));
+        return h(HubCollapsible, { key: "sec-nt", id: "sec-notifications", title: I18N.t("sec_notifications"), count: items.length }, rows);
       }
       // Config section (rc present). Only genuine operational config — `native_qam` and
       // `prerelease` are intentionally NOT surfaced; ownership knobs show only where a loader
@@ -657,6 +670,7 @@
           conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
         }
         conf.push(advToggleRow("cfg-boot_movie", I18N.t("cfg_boot_movie"), I18N.t("cfg_boot_movie_sub"), rc.boot_movie === true, applyBootMovie));
+        conf.push(advToggleRow("cfg-native_notifications", I18N.t("cfg_native_notifications"), I18N.t("cfg_native_notifications_sub"), rc.native_notifications === true, function (v) { applyCfg("native_notifications", v); }));
         if (!rc.loader_possible) {
           conf.push(advToggleRow("cfg-desktop_ui", I18N.t("cfg_desktop_ui"), I18N.t("cfg_desktop_ui_sub"), rc.desktop_ui === true, function (v) { applyCfg("desktop_ui", v); }));
         }
@@ -815,16 +829,16 @@
             ? { "flow-children": "horizontal", style: { display: "flex", alignItems: "center", gap: "8px", flex: "0 0 auto", padding: "0 16px 8px" } }
             : { style: { display: "flex", alignItems: "center", gap: "8px", padding: "0 16px 8px" } },
         ].concat(ctrls));
-        /* Inline, expandable list kept BELOW the hub actions (which stay visible —
-           the ShelvesHub screen is preserved). A vertical Focusable so the gamepad
-           walks the rows in the normal flow (no click needed to focus) and B
-           (onButtonDown) collapses it back. Capped height with its own scroll so it
-           never grows the panel unbounded. */
+        /* The list fills the sidecar beside the hub view (which stays visible). A
+           vertical Focusable so the gamepad walks the rows in the normal flow (no
+           click needed to focus) and B (onButtonDown) collapses the sidecar. Its
+           own scroll, bounded by the sidecar's height. */
+        const listStyle = { flex: "1 1 auto", minHeight: "0", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1px" };
         const listProps = focusableComp
-          ? { "flow-children": "vertical", onButtonDown: makeBackButtonDown(backToHub), onCancel: backToHub, style: { maxHeight: "300px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1px" } }
-          : { style: { maxHeight: "300px", overflowY: "auto" } };
+          ? { "flow-children": "vertical", onButtonDown: makeBackButtonDown(backToHub), onCancel: backToHub, style: listStyle }
+          : { style: listStyle };
         const list = React.createElement.apply(React, [focusableComp || "div", listProps].concat(rows));
-        return h("div", { key: "logs-view", style: { marginTop: "12px", paddingTop: "12px", borderTop: "1px solid rgba(255,255,255,0.12)" }, "data-fb": "logs-view" },
+        return h("div", { key: "logs-view", style: { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: "0", paddingTop: "8px" }, "data-fb": "logs-view" },
           header,
           h("div", { key: "gap", style: { height: "8px" } }),
           list);
@@ -852,11 +866,14 @@
         Array.prototype.push.apply(body, updateNotices());
         if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
         const out = body.concat(buildSections(useNative, TF));
-        if (logs !== null) out.push(buildLogView());
         out.push(hubVersionFooter(uc.version));
         return out;
       }
-      return panelRoot({ style: { padding: "8px 0 0" }, "data-fb-panel": "1" }, buildBody());
+      // The log viewer opens as a sidecar beside the hub view (the menu widens); B,
+      // the back control or the menu hiding closes it.
+      const rootKids = buildBody();
+      if (logs !== null) rootKids.push(h(Sidecar.Panel, { key: "sidecar", onClose: backToHub, onButtonDown: makeBackButtonDown(backToHub) }, buildLogView()));
+      return panelRoot({ className: "shelves-hub-root", "data-shelves-expanded": logs !== null ? "1" : "0", style: { padding: "8px 0 0" }, "data-fb-panel": "1" }, rootKids);
     }
     // Our tab: the plugin's editor when present, plus a ShelvesHub row pinned at
     // the end that opens the host's hub view (the same actions as the fallback) —
@@ -950,6 +967,7 @@
         // section headers and Advanced rows — not the button ring above.
         ".shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}";
       ringCss += fieldPaddingCss();
+      ringCss += Sidecar.css;
       const styleEl = h("style", { "data-shelves": "ring" }, ringCss);
       // Wrap the panel in Steam's Focusable so it joins gamepad-focus navigation
       // (the mirrored editor's controls and ours), the way a loader wraps its

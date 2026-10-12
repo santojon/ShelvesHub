@@ -3,78 +3,64 @@
 // closure; see shelves-host.js); not a standalone module.
 
 
-  /* Self-rendered toast for sole-host mode: this Steam build exposes no
-     SteamClient.Notifications.DisplayNotification, so the plugin's toasts (routed
-     here in sole mode) would silently drop. Render a small self-removing overlay
-     into the Big Picture window instead — no persistent timer, no scan. */
-  function bpWindowInstance() {
-    const ws = window.SteamUIStore && window.SteamUIStore.WindowStore;
-    if (!ws) return null;
-    if (ws.GamepadUIMainWindowInstance) return ws.GamepadUIMainWindowInstance;
-    return Array.isArray(ws.SteamUIWindows) ? ws.SteamUIWindows[0] : null;
+  /* Notification logos, one per sender, in the same visual language (coloured books on a
+     shelf, dark 2px outline, Steam blues): the Deck Shelves mark mirrors the plugin's own
+     icon (what its toasts carry under a loader); the ShelvesHub mark sets three books over a
+     hub node. Both fill whatever box the toast gives them. */
+  const SVG_HEAD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%" aria-hidden="true">';
+  const PLUGIN_LOGO_SVG = SVG_HEAD +
+    '<g transform="translate(-340.6,-224.7) scale(0.76)" stroke="#000" stroke-width="2" stroke-linejoin="round">' +
+    '<rect x="550" y="460" width="80" height="285" rx="8" ry="8" fill="#0080FF"/><rect x="551" y="500" width="79" height="25" fill="#0044B0" stroke="none"/>' +
+    '<rect x="645" y="500" width="75" height="245" rx="8" ry="8" fill="#0080FF"/><rect x="646" y="535" width="73" height="25" fill="#0044B0" stroke="none"/>' +
+    '<rect x="740" y="530" width="75" height="215" rx="8" ry="8" fill="#FFFFFF"/><rect x="741" y="570" width="73" height="25" fill="#D2D2D2" stroke="none"/>' +
+    '<rect x="840" y="470" width="75" height="275" rx="8" ry="8" fill="#FFFFFF"/><rect x="841" y="505" width="73" height="25" fill="#D2D2D2" stroke="none"/>' +
+    '<g transform="rotate(-15)"><rect x="750" y="750" width="60" height="225" rx="8" ry="8" fill="#0080FF"/><rect x="751" y="785" width="58" height="25" fill="#0044B0" stroke="none"/></g>' +
+    '<rect x="500" y="750" width="570" height="25" rx="8" ry="8" fill="#FFFFFF"/><rect x="530" y="780" width="25" height="25" rx="8" ry="8" fill="#FFFFFF"/><rect x="1020" y="780" width="25" height="25" rx="8" ry="8" fill="#FFFFFF"/>' +
+    '</g></svg>';
+  const HUB_LOGO_SVG = SVG_HEAD +
+    '<g stroke="#000" stroke-width="2" stroke-linejoin="round">' +
+    '<rect x="124" y="70" width="68" height="226" rx="8" ry="8" fill="#0080FF"/><rect x="125" y="104" width="66" height="22" fill="#0044B0" stroke="none"/>' +
+    '<rect x="206" y="104" width="64" height="192" rx="8" ry="8" fill="#FFFFFF"/><rect x="207" y="136" width="62" height="22" fill="#D2D2D2" stroke="none"/>' +
+    '<g transform="rotate(-15 318 296)"><rect x="292" y="118" width="54" height="178" rx="8" ry="8" fill="#0080FF"/><rect x="293" y="150" width="52" height="22" fill="#0044B0" stroke="none"/></g>' +
+    '<rect x="92" y="300" width="328" height="22" rx="8" ry="8" fill="#FFFFFF"/>' +
+    '<rect x="116" y="326" width="22" height="20" rx="8" ry="8" fill="#FFFFFF"/><rect x="374" y="326" width="22" height="20" rx="8" ry="8" fill="#FFFFFF"/>' +
+    '<path d="M256 410 L182 470 M256 410 L256 478 M256 410 L330 470" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>' +
+    '<circle cx="256" cy="410" r="34" fill="#0080FF"/>' +
+    '<circle cx="182" cy="470" r="16" fill="#FFFFFF"/><circle cx="256" cy="478" r="16" fill="#FFFFFF"/><circle cx="330" cy="470" r="16" fill="#FFFFFF"/>' +
+    '</g></svg>';
+  // The logo for a sender: the host's own notifications carry `source: "hub"`; everything
+  // else is the hosted plugin's.
+  function logoSvg(source) { return source === "hub" ? HUB_LOGO_SVG : PLUGIN_LOGO_SVG; }
+
+  /* Notification center: the last few notifications this host showed (title, body,
+     time, read flag), re-readable in the hub view. Newest first, bounded; listeners
+     re-render live. */
+  const NOTIFY_CAP = 20;
+  const notifyRing = [];
+  const notifyListeners = [];
+  let notifySeq = 0;
+  function notifyEmit() {
+    for (let i = 0; i < notifyListeners.length; i++) { try { notifyListeners[i](); } catch (e) {} }
   }
-  function hostToastDoc() {
-    try {
-      const inst = bpWindowInstance();
-      const d = inst && inst.BrowserWindow && inst.BrowserWindow.document;
-      if (d && d.body) return d;
-    } catch (e) {}
-    return (typeof document !== "undefined" && document.body) ? document : null;
+  function notifyRecord(title, body) {
+    notifyRing.unshift({ id: ++notifySeq, title: String(title || ""), body: String(body || ""), ts: Date.now(), read: false });
+    if (notifyRing.length > NOTIFY_CAP) notifyRing.length = NOTIFY_CAP;
+    notifyEmit();
   }
-  const TOAST_ICON =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
-    '<rect x="3.8" y="7.5" width="3.9" height="11.5" rx="0.8"/>' +
-    '<rect x="8.7" y="5" width="3.9" height="14" rx="0.8"/>' +
-    '<rect x="14" y="8" width="3.9" height="11" rx="0.8" transform="rotate(-13 15.95 19)"/>' +
-    '<rect x="2.4" y="19" width="19.2" height="2.5" rx="0.9"/></svg>';
-  function toastTextCol(doc, title, body) {
-    const col = doc.createElement("div");
-    col.style.cssText = "min-width:0;flex:1 1 auto;";
-    if (title) {
-      const t = doc.createElement("div");
-      t.textContent = title;
-      t.style.cssText = "font-weight:700;font-size:14px;margin-bottom:2px;";
-      col.appendChild(t);
-    }
-    if (body) {
-      const b = doc.createElement("div");
-      b.textContent = body;
-      b.style.cssText = "font-size:13px;line-height:1.35;color:#b8c2cc;word-break:break-word;";
-      col.appendChild(b);
-    }
-    return col;
+  function notifyUnread() {
+    let n = 0;
+    for (let i = 0; i < notifyRing.length; i++) if (!notifyRing[i].read) n++;
+    return n;
   }
-  // Steam/loader-style toast: top-right card (icon + text) that slides in and
-  // auto-dismisses, matching what a plugin loader renders — the reachable parity,
-  // since this Steam build has no native notification API to post into.
-  function showHostToast(title, body, durationMs) {
-    const doc = hostToastDoc();
-    if (!doc) return false;
-    let holder = doc.getElementById("shelveshub-toasts");
-    if (!holder) {
-      holder = doc.createElement("div");
-      holder.id = "shelveshub-toasts";
-      doc.body.appendChild(holder);
-    }
-    // Set every time (idempotent) so an in-place runtime swap re-styles a holder
-    // a previous version created.
-    holder.style.cssText = "position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:10px;pointer-events:none;font-family:'Motiva Sans','Segoe UI',sans-serif;";
-    const card = doc.createElement("div");
-    card.style.cssText = "display:flex;align-items:flex-start;gap:12px;min-width:300px;max-width:min(400px,60vw);background:rgba(23,29,37,.97);color:#e6edf3;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.55);backdrop-filter:blur(8px);opacity:0;transform:translateX(24px);transition:opacity .22s ease,transform .22s ease;";
-    const ic = doc.createElement("div");
-    ic.innerHTML = TOAST_ICON;
-    ic.style.cssText = "flex:0 0 auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:linear-gradient(135deg,#1a9fff,#0a63b8);color:#fff;padding:6px;box-sizing:border-box;";
-    card.appendChild(ic);
-    card.appendChild(toastTextCol(doc, title, body));
-    holder.appendChild(card);
-    const win = doc.defaultView || window;
-    win.requestAnimationFrame(function () { card.style.opacity = "1"; card.style.transform = "translateX(0)"; });
-    const ms = (typeof durationMs === "number" && durationMs > 0) ? durationMs : 5000;
-    win.setTimeout(function () {
-      card.style.opacity = "0"; card.style.transform = "translateX(24px)";
-      win.setTimeout(function () { try { card.remove(); } catch (e) {} }, 250);
-    }, ms);
-    return true;
+  function notifyMarkRead() {
+    let changed = false;
+    for (let i = 0; i < notifyRing.length; i++) if (!notifyRing[i].read) { notifyRing[i].read = true; changed = true; }
+    if (changed) notifyEmit();
+  }
+  function notifyClear() { notifyRing.length = 0; notifyEmit(); }
+  function notifySubscribe(fn) {
+    notifyListeners.push(fn);
+    return function () { const i = notifyListeners.indexOf(fn); if (i >= 0) notifyListeners.splice(i, 1); };
   }
 
   // ── HostApi assembly ──────────────────────────────────────────────────────
@@ -94,6 +80,10 @@
           selfUpdate: !COEXIST, // can install a PLUGIN update in place (see updates.canSelfInstall)
           nativeQam: nativeUiOn(),
           coexist: !!COEXIST,
+          // Cooperative-bundle protocol (daemon `coop_bundle`): under force this
+          // host runs its OWN copy of the bundle, so the loader's copy may stand
+          // down (contract 1.4.0 `coopBundle`).
+          coopBundle: SHELVES_CFG.coopBundle === true,
         },
       };
       // Additive (contract 1.4.0): device identity + the bundle version this host
@@ -152,13 +142,28 @@
       removePatch: function (path, patch) { return routerHook.removePatch(path, patch); },
     },
     notifications: {
-      toast: function (opts) { opts = opts || {}; this.send(opts.title || "", opts.body || "", opts.durationMs); },
-      send: function (title, body, durationMs) {
-        const N = window.SteamClient && window.SteamClient.Notifications;
-        try { if (N && typeof N.DisplayNotification === "function") { N.DisplayNotification(title, body); return; } } catch (e) {}
-        try { if (showHostToast(title, body, durationMs)) return; } catch (e) {}
-        log("notify:", title, "-", body);
+      /* `logo` / `icon` (React elements the sender renders — what the plugin sends a loader)
+         and `source` ("hub" for the host's own notifications) ride along; absent, the sender's
+         default logo is used. */
+      toast: function (opts) {
+        opts = opts || {};
+        this.send(opts.title || "", opts.body || "", opts.durationMs, { logo: opts.logo, icon: opts.icon, source: opts.source });
       },
+      send: function (title, body, durationMs, extra) {
+        notifyRecord(title, body);
+        // Steam's own pipeline (sound, tray, Steam chrome); when it is not up the
+        // entry still lives in the hub view's Notifications section.
+        let shown = false;
+        try { shown = NativeToasts.push(title, body, durationMs, extra || {}); } catch (e) {}
+        if (!shown) logWarn("NOTIFY", "kept in the hub view only: " + title + " - " + body);
+      },
+      // Host extras (not in the contract): the notification center behind the hub view.
+      mode: function () { return NativeToasts.state(); },
+      list: function () { return notifyRing.slice(); },
+      unread: notifyUnread,
+      markRead: notifyMarkRead,
+      clear: notifyClear,
+      subscribe: notifySubscribe,
     },
     platform: {
       getOSVersion: function () { return navigator.userAgent; },

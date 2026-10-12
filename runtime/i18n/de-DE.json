@@ -71,5 +71,17 @@
   "upd_deferred": "wartet, bis kein Spiel mehr läuft",
   "upd_whats_new": "Neuerungen",
   "upd_plugin_available": "Deck Shelves-Update verfügbar",
-  "action_update_plugin_now": "Deck Shelves jetzt aktualisieren"
+  "action_update_plugin_now": "Deck Shelves jetzt aktualisieren",
+  "sec_notifications": "Benachrichtigungen",
+  "notif_empty": "Noch keine Benachrichtigungen.",
+  "cfg_native_notifications": "Steam-Benachrichtigungen",
+  "cfg_native_notifications_sub": "Die Benachrichtigungen dieses Hosts als Steam-Benachrichtigungen zeigen (aus: nur in der Hub-Ansicht)",
+  "notice_hub_updated": "ShelvesHub auf {version} aktualisiert",
+  "notice_hub_reverted": "ShelvesHub wieder auf {version}",
+  "notice_hub_staged": "ShelvesHub {version} heruntergeladen — zum Abschließen neu starten",
+  "notice_hub_restored": "ShelvesHub {version} wiederhergestellt — zum Abschließen neu starten",
+  "notice_plugin_updated": "Deck Shelves auf {version} aktualisiert",
+  "notice_plugin_rolled_back": "Deck Shelves wieder auf {version}",
+  "notice_coop_receded": "Kooperativer Modus pausiert — in dieser Sitzung läuft Koexistenz",
+  "notice_recovered": "Die Steam-Oberfläche ist zusammengebrochen — ShelvesHub hat sie neu gestartet"
 }

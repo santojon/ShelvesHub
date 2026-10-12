@@ -50,6 +50,10 @@ fn main() {
     }
     config.prerelease = effective_prerelease;
 
+    // A different binary since the last run (an update, or a rollback) → the user is
+    // told once the renderer is there; the running version is remembered.
+    shelveshub::loader::note_version_change(&config.hub_config_path);
+
     // Obtain the Deck Shelves Python backend for a SOLE host (no plugin loader —
     // e.g. macOS/Windows) so the data RPCs work (settings persistence, online
     // wishlist/prices, launchers, device state), not just local shelves. Skipped
@@ -106,6 +110,7 @@ fn main() {
             "owner_settle_secs": config.owner_settle_secs,
             "native_qam": config.native_qam,
             "desktop_ui": config.desktop_ui,
+            "native_notifications": config.native_notifications,
             "boot_movie": config.boot_movie,
             "prerelease": config.prerelease,
             "force_owner": config.force_owner,

@@ -71,5 +71,17 @@
   "upd_deferred": "ゲームの終了を待っています",
   "upd_whats_new": "新機能",
   "upd_plugin_available": "Deck Shelves のアップデートがあります",
-  "action_update_plugin_now": "今すぐ Deck Shelves を更新"
+  "action_update_plugin_now": "今すぐ Deck Shelves を更新",
+  "sec_notifications": "通知",
+  "notif_empty": "まだ通知はありません。",
+  "cfg_native_notifications": "Steam の通知",
+  "cfg_native_notifications_sub": "このホストの通知を Steam の通知として表示します（オフ：ハブ画面のみ）",
+  "notice_hub_updated": "ShelvesHub を {version} に更新しました",
+  "notice_hub_reverted": "ShelvesHub を {version} に戻しました",
+  "notice_hub_staged": "ShelvesHub {version} をダウンロードしました — 再起動して完了",
+  "notice_hub_restored": "ShelvesHub {version} を復元しました — 再起動して完了",
+  "notice_plugin_updated": "Deck Shelves を {version} に更新しました",
+  "notice_plugin_rolled_back": "Deck Shelves を {version} に戻しました",
+  "notice_coop_receded": "協調モードを一時停止しました — このセッションは共存で動作します",
+  "notice_recovered": "Steam のインターフェースが落ちたため、ShelvesHub が再起動しました"
 }

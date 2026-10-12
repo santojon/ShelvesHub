@@ -71,5 +71,17 @@
   "upd_deferred": "очікування, поки не буде запущених ігор",
   "upd_whats_new": "Що нового",
   "upd_plugin_available": "Доступне оновлення Deck Shelves",
-  "action_update_plugin_now": "Оновити Deck Shelves зараз"
+  "action_update_plugin_now": "Оновити Deck Shelves зараз",
+  "sec_notifications": "Сповіщення",
+  "notif_empty": "Сповіщень поки немає.",
+  "cfg_native_notifications": "Сповіщення Steam",
+  "cfg_native_notifications_sub": "Показувати сповіщення цього хоста як сповіщення Steam (вимкнено: лише у поданні хаба)",
+  "notice_hub_updated": "ShelvesHub оновлено до {version}",
+  "notice_hub_reverted": "ShelvesHub знову на {version}",
+  "notice_hub_staged": "ShelvesHub {version} завантажено — перезапустіть, щоб завершити",
+  "notice_hub_restored": "ShelvesHub {version} відновлено — перезапустіть, щоб завершити",
+  "notice_plugin_updated": "Deck Shelves оновлено до {version}",
+  "notice_plugin_rolled_back": "Deck Shelves знову на {version}",
+  "notice_coop_receded": "Кооперативний режим призупинено — у цій сесії працює співіснування",
+  "notice_recovered": "Інтерфейс Steam обвалився — ShelvesHub перезапустив його"
 }

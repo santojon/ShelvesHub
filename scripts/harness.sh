@@ -18,6 +18,8 @@
 #   coexist-idle      — combined host settled → no permanent sub-1s poll / observer churn
 #   coop-mirror       — loader present + forced ownership → host published, panel mirrored
 #   coop-fallback     — same, no plugin panel → fallback with the plugin updates delegated
+#   sole-host-sidecar — "View logs" opens the sidecar (menu widened), back closes it (narrowed)
+#   sole-host-notify  — a toast → DOM toast + hub-view entry + Steam's Notifications tab entry
 #
 # Usage:  scripts/harness.sh            (headless)
 #         HEADLESS=0 scripts/harness.sh (show the browser window)
@@ -105,6 +107,9 @@ assert_for() {
     coexist-idle) echo 'var r=__HARNESS_REPORT__();var idle=r.idle||{observers:0,live:{}};var ms=Object.keys(idle.live||{}).map(function(k){return idle.live[k];});var minMs=ms.length?Math.min.apply(null,ms):Infinity;var ok=r.bridge&&r.shelvesTabPresent&&(idle.observers<=4)&&(minMs>=1000)&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify({idle:idle,minMs:(minMs===Infinity?"none":minMs),bridge:r.bridge,tab:r.shelvesTabPresent,errors:r.errors})' ;;
     coop-mirror)      echo 'var r=__HARNESS_REPORT__();var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.bridge&&r.qamOwner==="shelveshub"&&r.specs.indexOf("deck-shelves")>=0&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     coop-fallback)    echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var uiOk=!!(fu&&fu.panel&&fu.coexistNote&&!fu.download&&fu.update&&fu.updateToggles>=1&&fu.sections.indexOf("sec-updates")>=0&&fu.version);var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.specs.length===0&&r.shelvesTabPresent&&uiOk&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
+    # Interactions are async (RPC stub + React commits), so these return a Promise the eval awaits.
+    sole-host-sidecar) echo 'new Promise(function(res){var sec=document.querySelector("[data-fb=\"sec-sec-troubleshooting\"]");if(sec)sec.click();setTimeout(function(){var btn=document.querySelector("[data-fb=\"logs\"]");if(!btn)return res("FAIL no logs button");btn.click();setTimeout(function(){var side=document.querySelector("[data-fb=\"sidecar\"]");var root=document.querySelector(".shelves-hub-root");var expanded=!!(root&&root.getAttribute("data-shelves-expanded")==="1");var rows=document.querySelectorAll("[data-fb=\"sidecar\"] [data-fb=\"logs-view\"]").length;var m1=(window.__HARNESS_COMPOSITOR__||[]).slice();var back=document.querySelector("[data-fb=\"logs-back\"]");if(back)back.click();setTimeout(function(){var closed=!document.querySelector("[data-fb=\"sidecar\"]");var narrow=!!(root&&root.getAttribute("data-shelves-expanded")==="0");var m2=(window.__HARNESS_COMPOSITOR__||[]).slice();var errs=__HARNESS_REPORT__().errors;var ok=!!side&&expanded&&rows===1&&m1.indexOf("QamFriendsExpanded")>=0&&closed&&narrow&&m2[m2.length-1]==="QamFriendsHidden"&&errs.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify({side:!!side,expanded:expanded,rows:rows,msgs:m2,closed:closed,narrow:narrow,errors:errs}));},150);},300);},100);})' ;;
+    sole-host-notify) echo 'new Promise(function(res){var host=window.__SHELVES_HOST__;host.notifications.toast({title:"Hello",body:"World"});var notified=typeof window.__SHELVES_NOTIFY__==="function"&&window.__SHELVES_NOTIFY__("notice_recovered",{});setTimeout(function(){var sec=document.querySelector("[data-fb=\"sec-sec-notifications\"]");if(sec)sec.click();setTimeout(function(){var r=__HARNESS_REPORT__();var listed=host.notifications.list().length;var rowsInHub=document.querySelectorAll("[data-fb-panel] [data-fb=\"notif-row\"]").length;var mode=host.notifications.mode();var ok=listed===2&&notified===true&&!!sec&&rowsInHub===2&&mode==="failed"&&r.errors.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify({listed:listed,notified:notified,sec:!!sec,rowsInHub:rowsInHub,mode:mode,errors:r.errors}));},200);},200);})' ;;
   esac
 }
 
@@ -180,7 +185,7 @@ run_scenario() {
 
 echo "[i] Running scenarios…"
 FAILED=0
-for sc in coexist-mirror coexist-fallback sole-host sole-host-mirror sole-host-fallback coexist-late coexist-native coexist-fallback-native coexist-idle coop-mirror coop-fallback; do
+for sc in coexist-mirror coexist-fallback sole-host sole-host-mirror sole-host-fallback coexist-late coexist-native coexist-fallback-native coexist-idle coop-mirror coop-fallback sole-host-sidecar sole-host-notify; do
   run_scenario "$sc" || FAILED=$((FAILED + 1))
 done
 write_evidence
