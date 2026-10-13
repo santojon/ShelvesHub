@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-13_09-54-14",
+  "ts": "2026-10-13_11-01-18",
   "version": "0.5.0",
   "overall": "PASS",
   "cells": [
@@ -73,6 +73,29 @@
           "ts": "2026-10-13_09-54-14",
           "kind": "runtime-scenarios",
           "scenarios": "14/14"
+        }
+      ]
+    },
+    {
+      "id": "linux-aarch64-steam-container",
+      "platform": "Linux",
+      "arch": "aarch64",
+      "kind": "Steam client container",
+      "proves": "Valve's native ARM64 Steam client booting headless with its debug port, and — with a signed-in session — the daemon discovering it, injecting the runtime and the bundle, and the backend starting",
+      "status": "partial",
+      "ts": "2026-10-13_14-00-24",
+      "evidence": [
+        {
+          "file": "evidence/steam-container-aarch64.json",
+          "ts": "2026-10-13_14-00-24",
+          "kind": "steam-container",
+          "steps": {
+            "client-boot": "pass",
+            "login": "skipped",
+            "inject": "pass",
+            "backend": "pass",
+            "bundle-boot": "pass"
+          }
         }
       ]
     },

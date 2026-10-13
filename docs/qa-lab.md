@@ -57,6 +57,7 @@ needs a lab that is not available · **manual** — real hardware, human-run.
 | Linux | x86_64 | container | build, install lifecycle, RPC, injection smoke, runtime scenarios, plugin probes | from evidence (CI on every push) |
 | Linux | aarch64 | container (QEMU) | same as above, emulated | from evidence (CI on dispatch, or locally) |
 | this machine | host | host harness | runtime scenarios in a headless Chromium | from evidence |
+| Linux | aarch64 | Steam client container | Valve's native ARM64 Steam client, headless: boot, debug port, Big Picture windows, the daemon's gate, injection, backend and the bundle's boot; signed-in behaviour with a stored session | from evidence (`pnpm lab:steam-arm64`, arm64 Docker host) |
 | SteamOS | x86_64 | device | real Steam: inject, render, gamepad, coexistence, cooperative | **manual** — Steam Deck; `shelveshub status --report` + the deploy/soak scripts |
 | macOS | x86_64 / arm64 | device | sole host on this machine's Steam Big Picture | **manual** — `pnpm local:run` |
 | Windows | x86_64 | VM | host, install, logon task, RPC, update, recovery | **blocked** — no VM yet; CI covers build, unit tests and installer syntax. Real Steam needs real hardware |
@@ -67,6 +68,40 @@ needs a lab that is not available · **manual** — real hardware, human-run.
 `site/reports/qa/matrix.json` is the live version of this table; the fixed cells
 (`manual`, `blocked`) are stated in `scripts/ci/qa-matrix.mjs` and updated by hand
 when a lab comes online.
+
+## Steam ARM64 in a container
+
+Valve publishes a native ARM64 Linux Steam client — the one ARM handhelds and headsets run.
+`pnpm lab:steam-arm64` fetches its client package from Valve's own client manifest (SHA-256
+checked) into a named Docker volume, starts it headless on a virtual X display with software
+rendering and the debug port on, starts the hub's arm64 daemon against it with a real plugin
+bundle and the plugin's backend, and writes `evidence/steam-container-aarch64.json`. It needs an
+arm64 Docker host (Apple silicon runs it natively); under emulation the client is far too slow.
+
+What a run proves, without any account: the client boots on the image's library set (its first
+start moves itself to Valve's ARM channel and downloads about 650 MB into the volume; later
+starts reuse it), Big Picture's windows appear at the sign-in screen, the hub's own gamepad gate
+recognises them, the daemon injects the runtime and the bundle, the plugin's instance boots and
+the backend runs (`client-boot`, `inject`, `backend`, `bundle-boot`). The record also keeps the
+window titles, the client build and what the client reports about the platform (device type,
+CPU and GPU names). What needs a signed-in session: everything that depends on a library — the
+shelves on the Home, the plugin's data calls (`login`). Sign in once with
+`pnpm lab:steam-arm64 login` (a VNC server on `localhost:5900`, password `shelves` unless
+`LAB_VNC_PASSWORD` says otherwise), using a test account: the hub's settings sync is switched
+off in the lab, but the plugin's own sync would merge the lab's fresh settings into that
+account's. The session stays in the volume and every later run goes all the way. Without it the
+cell reads `partial` (a skipped step), never `tested`. The cell is on demand — it needs an arm64 Docker host — so its
+status shows in the matrix without deciding the matrix's overall verdict.
+
+The image carries what the client needs beyond a slim Debian: GTK 2 for its interface library,
+the vendor-neutral EGL, VA-API and OpenAL, and `lsof` — without `lsof` the interface never
+connects to the client process and no window is ever created. `STEAM_FLAGS` overrides the client
+flags (by default the ones the client runs with on ARM devices), `LAB_KEEP=1` keeps Steam up
+after the run for inspection over `localhost:8090`, and `LAB_DESKTOP_UI=1` lets the daemon
+inject into the desktop client as well.
+
+What it cannot prove: a GPU path, gamepad input, a device's own system image, power and sleep.
+Those stay with the device cells.
 
 ## Runtime scenarios
 
@@ -83,8 +118,10 @@ when a lab comes online.
 
 ## Device cells — evidence template
 
-A device run has no script to record it, so write it down the same way every time
-(a comment on the release, or a file next to the evidence):
+The full procedure — how to put a device in each ownership mode, which probes to run, the
+traps — is [Device validation](device-validation.md). A device run has no script to record it,
+so write it down the same way every time (a comment on the release, or a file next to the
+evidence):
 
 ```
 date / device / OS + Steam channel

@@ -86,6 +86,7 @@
     "site:shots:hub": "bash scripts/site/capture-hub-screenshots.sh",
     "harness": "bash scripts/harness.sh",
     "harness:docker": "bash scripts/harness-docker.sh",
+    "lab:steam-arm64": "bash scripts/steam-arm64-lab.sh",
     "qa:matrix": "bash scripts/qa-matrix.sh",
     "clean": "cargo clean"
   },

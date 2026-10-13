@@ -119,6 +119,7 @@ O ShelvesHub adiciona seu próprio painel de gerenciamento ao menu de Acesso Rá
 - [Desenvolvimento](docs/development.md) — construindo e trabalhando no ShelvesHub.
 - [Depuração e DevTools](docs/debugging.md) — a ferramenta CDP `shelves-devtools` e o fluxo de depuração.
 - [Solução de problemas](docs/troubleshooting.md) — conflitos de porta, coexistência e recuperação.
+- [Validação em dispositivo](device-validation.md) — o procedimento único para checar um dispositivo Steam de verdade, modo a modo, e como registrar.
 - [Vitrine e capturas de tela](docs/showcase.md) — o conjunto de capturas de tela e como ele é publicado.
 
 ---

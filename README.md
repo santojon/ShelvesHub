@@ -119,6 +119,7 @@ ShelvesHub adds its own management panel to the Steam Quick Access menu — the 
 - [Development](docs/development.md) — building and working on ShelvesHub.
 - [Debugging & DevTools](docs/debugging.md) — the `shelves-devtools` CDP tool and the debug workflow.
 - [Troubleshooting](docs/troubleshooting.md) — port conflicts, coexistence, and recovery.
+- [Device validation](docs/device-validation.md) — the one procedure for checking a real Steam device, mode by mode, and how to record it.
 - [Showcase & screenshots](docs/showcase.md) — the screenshot set and how it is published.
 
 ---

@@ -20,6 +20,7 @@ const AUTOMATED = [
   { id: "linux-x86_64-container", platform: "Linux", arch: "x86_64", kind: "container", files: ["container-x86_64", "scenarios-x86_64"], proves: CONTAINER_PROVES },
   { id: "linux-aarch64-container", platform: "Linux", arch: "aarch64", kind: "container (QEMU)", files: ["container-aarch64", "scenarios-aarch64"], proves: CONTAINER_PROVES },
   { id: "host-harness", platform: process.platform, arch: process.arch, kind: "host harness", files: ["scenarios-host-"], proves: "runtime scenarios (native tab, coexistence, sole host, cooperative, fallback panel, idle cost) in a headless Chromium" },
+  { id: "linux-aarch64-steam-container", platform: "Linux", arch: "aarch64", kind: "Steam client container", files: ["steam-container-aarch64"], gate: false, proves: "Valve's native ARM64 Steam client booting headless with its debug port, and — with a signed-in session — the daemon discovering it, injecting the runtime and the bundle, and the backend starting" },
 ];
 
 // Cells no automation can clear — a lab VM or real hardware. Stated here and in
@@ -77,7 +78,8 @@ function cargoVersion() {
 }
 
 function overallOf(cells) {
-  const auto = cells.filter((c) => AUTOMATED.some((a) => a.id === c.id));
+  // An on-demand lab (gate: false) shows its status without deciding the matrix.
+  const auto = cells.filter((c) => AUTOMATED.some((a) => a.id === c.id && a.gate !== false));
   if (auto.every((c) => c.status === "not-run")) return "NOT-RUN";
   return auto.some((c) => c.status === "partial") ? "PARTIAL" : "PASS";
 }

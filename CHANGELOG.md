@@ -9,6 +9,21 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- **A lab that runs Valve's native ARM64 Steam client in a container.** `pnpm lab:steam-arm64`
+  fetches the client from Valve's own client manifest (SHA-256 checked) into a named Docker
+  volume, starts it headless on a virtual display with the debug port on, runs the hub's arm64
+  daemon against it with a real plugin bundle and the plugin's backend, and records
+  `site/reports/qa/evidence/steam-container-aarch64.json`. On an Apple silicon Mac it showed, at
+  the sign-in screen and without any account: Big Picture's windows, the hub's own gamepad gate
+  recognising them, the runtime and the bundle injected in about 240 ms, the plugin booting and
+  the backend running. `pnpm lab:steam-arm64 login` opens a VNC session to sign in once (with a
+  test account) for the library-dependent half. The QA matrix shows it as its own cell without
+  letting it decide the matrix verdict, since it needs an arm64 Docker host
+  (`docker/steam-arm64/`, `scripts/steam-arm64-lab.sh`, `scripts/ci/qa-matrix.mjs`).
+- **One procedure for validating on a real device** (`docs/device-validation.md`, linked from the
+  README and the QA lab): what to prepare, how to identify the device, how to put it in each
+  ownership mode and confirm the mode, the checks with the exact commands and probes, how to
+  record the result so the QA matrix attaches it, and the traps met so far.
 - **Cooperative-bundle protocol, hub side (`coop_bundle`, off by default).** With a plugin loader
   present and ShelvesHub forced as the owner, the hub can now run and update its OWN copy of the
   plugin instead of leaving the loader's copy in charge: the handshake advertises `coopBundle`

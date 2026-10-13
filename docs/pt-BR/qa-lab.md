@@ -60,6 +60,7 @@ executado por uma pessoa.
 | Linux | x86_64 | contêiner | build, ciclo de instalação, RPC, smoke de injeção, cenários do runtime, sondas do plugin | pela evidência (CI a cada push) |
 | Linux | aarch64 | contêiner (QEMU) | o mesmo, emulado | pela evidência (CI por disparo, ou local) |
 | esta máquina | host | harness do host | cenários do runtime num Chromium headless | pela evidência |
+| Linux | aarch64 | contêiner do cliente Steam | o cliente Steam nativo ARM64 da Valve, sem tela: boot, porta de depuração, janelas do Big Picture, o portão do daemon, injeção, backend e o boot do bundle; comportamento com sessão autenticada com uma sessão guardada | pela evidência (`pnpm lab:steam-arm64`, host Docker arm64) |
 | SteamOS | x86_64 | dispositivo | Steam real: injeção, renderização, controle, coexistência, cooperativo | **manual** — Steam Deck; `shelveshub status --report` + os scripts de deploy/soak |
 | macOS | x86_64 / arm64 | dispositivo | host único no Steam Big Picture desta máquina | **manual** — `pnpm local:run` |
 | Windows | x86_64 | VM | host, instalação, tarefa de logon, RPC, atualização, recuperação | **blocked** — ainda sem VM; a CI cobre build, testes unitários e sintaxe do instalador. Steam real precisa de hardware real |
@@ -70,6 +71,41 @@ executado por uma pessoa.
 `site/reports/qa/matrix.json` é a versão viva desta tabela; as células fixas
 (`manual`, `blocked`) estão declaradas em `scripts/ci/qa-matrix.mjs` e são
 atualizadas à mão quando um laboratório fica disponível.
+
+## Steam ARM64 em contêiner
+
+A Valve publica um cliente Steam nativo para Linux ARM64 — o que handhelds e headsets ARM rodam.
+`pnpm lab:steam-arm64` busca o pacote do cliente a partir do manifesto de cliente da própria
+Valve (com checagem SHA-256) num volume Docker nomeado, o inicia sem tela num display X virtual
+com renderização por software e a porta de depuração ligada, inicia contra ele o daemon arm64 do
+hub com um bundle real do plugin e o backend do plugin, e grava
+`evidence/steam-container-aarch64.json`. Precisa de um host Docker arm64 (Apple silicon roda
+nativo); sob emulação o cliente fica lento demais.
+
+O que uma rodada prova, sem conta nenhuma: o cliente inicia com o conjunto de bibliotecas da
+imagem (a primeira partida o move para o canal ARM da Valve e baixa cerca de 650 MB no volume; as
+seguintes reaproveitam), as janelas do Big Picture aparecem na tela de login, o próprio portão de
+gamepad do hub as reconhece, o daemon injeta o runtime e o bundle, a instância do plugin inicia e
+o backend roda (`client-boot`, `inject`, `backend`, `bundle-boot`). O registro também guarda os
+títulos das janelas, o build do cliente e o que o cliente reporta sobre a plataforma (tipo de
+dispositivo, nomes de CPU e GPU). O que precisa de uma sessão autenticada: tudo que depende de uma
+biblioteca — as prateleiras na Home, as chamadas de dados do plugin (`login`). Faça login uma vez
+com `pnpm lab:steam-arm64 login` (um servidor VNC em `localhost:5900`, senha `shelves`, a menos
+que `LAB_VNC_PASSWORD` diga outra), usando uma conta de teste: a sincronização de configurações
+do hub fica desligada no lab, mas a sincronização do próprio plugin mesclaria as configurações
+novas do lab nas dessa conta. A sessão fica no volume e toda rodada seguinte vai até o fim. Sem
+ela a célula lê `partial` (um passo pulado), nunca `tested`. A célula é sob demanda — precisa de um host Docker arm64 — então o
+status dela aparece na matriz sem decidir o veredito geral da matriz.
+
+A imagem leva o que o cliente precisa além de um Debian enxuto: GTK 2 para a biblioteca de
+interface dele, o EGL neutro de fornecedor, VA-API e OpenAL, e o `lsof` — sem o `lsof` a
+interface nunca se conecta ao processo do cliente e nenhuma janela é criada. `STEAM_FLAGS`
+substitui as flags do cliente (por padrão as que o cliente usa em dispositivos ARM),
+`LAB_KEEP=1` mantém o Steam de pé depois da rodada para inspeção via `localhost:8090`, e
+`LAB_DESKTOP_UI=1` deixa o daemon injetar também no cliente desktop.
+
+O que não prova: um caminho de GPU, entrada de gamepad, a imagem de sistema de um dispositivo,
+energia e suspensão. Isso fica com as células de dispositivo.
 
 ## Cenários do runtime
 
@@ -85,6 +121,9 @@ atualizadas à mão quando um laboratório fica disponível.
 | `coop-fallback` | o mesmo, sem painel do plugin | painel de fallback com as atualizações do plugin delegadas (a cópia do carregador roda), host com dono |
 
 ## Células de dispositivo — modelo de evidência
+
+O procedimento completo — como colocar um dispositivo em cada modo de posse, quais sondas
+rodar, as armadilhas — está em [Validação em dispositivo](device-validation.md).
 
 Uma execução em dispositivo não tem script que a registre, então anote sempre do
 mesmo jeito (um comentário no lançamento, ou um arquivo ao lado da evidência):

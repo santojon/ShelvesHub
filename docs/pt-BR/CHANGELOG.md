@@ -9,6 +9,21 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **Um lab que roda o cliente Steam nativo ARM64 da Valve num contêiner.** `pnpm lab:steam-arm64`
+  busca o cliente a partir do manifesto de cliente da própria Valve (com checagem SHA-256) num
+  volume Docker nomeado, o inicia sem tela num display virtual com a porta de depuração ligada,
+  roda contra ele o daemon arm64 do hub com um bundle real do plugin e o backend do plugin, e grava
+  `site/reports/qa/evidence/steam-container-aarch64.json`. Num Mac com Apple silicon ele mostrou,
+  na tela de login e sem conta nenhuma: as janelas do Big Picture, o próprio portão de gamepad do
+  hub as reconhecendo, o runtime e o bundle injetados em cerca de 240 ms, o plugin iniciando e o
+  backend rodando. `pnpm lab:steam-arm64 login` abre uma sessão VNC para fazer login uma vez (com
+  uma conta de teste) para a metade que depende da biblioteca. A matriz de QA o mostra como célula
+  própria sem deixá-lo decidir o veredito da matriz, já que ele precisa de um host Docker arm64
+  (`docker/steam-arm64/`, `scripts/steam-arm64-lab.sh`, `scripts/ci/qa-matrix.mjs`).
+- **Um procedimento único para validar num dispositivo de verdade** (`docs/device-validation.md`,
+  linkado no README e no QA lab): o que preparar, como identificar o dispositivo, como colocá-lo
+  em cada modo de posse e confirmar o modo, as checagens com os comandos e sondas exatos, como
+  registrar o resultado para a matriz de QA anexá-lo, e as armadilhas encontradas até aqui.
 - **Protocolo de bundle cooperativo, lado do hub (`coop_bundle`, desligado por padrão).** Com um
   loader de plugins presente e o ShelvesHub forçado como dono, o hub agora consegue rodar e
   atualizar a PRÓPRIA cópia do plugin em vez de deixar a cópia do loader no comando: o handshake

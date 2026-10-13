@@ -1,0 +1,72 @@
+{
+  "ts": "2026-10-13_14-00-24",
+  "kind": "steam-container",
+  "os": "linux",
+  "arch": "aarch64",
+  "channel": "stable",
+  "client_manifest": "1788652215",
+  "flags": "-deckard -steamos3 -gamepadui -no-cef-sandbox -cef-disable-gpu -cef-disable-gpu-compositing",
+  "overall": "PASS",
+  "steps": {
+    "client-boot": "pass",
+    "login": "skipped",
+    "inject": "pass",
+    "backend": "pass",
+    "bundle-boot": "pass"
+  },
+  "gamepad_gate": true,
+  "targets": [
+    {
+      "title": "notificationtoasts_uid2",
+      "url": "about:blank?browserviewpopup=1&requestid=3&parentpopup=2&createflags=512",
+      "type": "page"
+    },
+    {
+      "title": "QuickAccess_uid2",
+      "url": "about:blank?browserviewpopup=1&requestid=2&parentpopup=2",
+      "type": "page"
+    },
+    {
+      "title": "MainMenu_uid2",
+      "url": "about:blank?browserviewpopup=1&requestid=1&parentpopup=2",
+      "type": "page"
+    },
+    {
+      "title": "Steam Big Picture Mode",
+      "url": "about:blank?createflags=6292754&minwidth=853&minheight=534&pid=0&browser=-1&browserType=3&useragent=Valve%20Steam%20Game",
+      "type": "page"
+    },
+    {
+      "title": "SharedJSContext",
+      "url": "https://steamloopback.host/routes/login",
+      "type": "page"
+    }
+  ],
+  "session": {
+    "signedIn": false,
+    "steamId": "set",
+    "route": "/routes/login"
+  },
+  "backend": {
+    "ok": true,
+    "result": {
+      "configured": true,
+      "running": true,
+      "python": "python3",
+      "python_available": true
+    }
+  },
+  "system_info": {
+    "sOSName": "Debian GNU/Linux 12 (bookworm)",
+    "sKernelVersion": "7.0.14-linuxkit",
+    "nSteamVersion": 1791328779,
+    "sSteamBuildDate": "Oct  6 2026 23:04:59",
+    "sSteamAPI": "SteamClient023",
+    "sCPUName": "Unknown",
+    "sVideoCardName": "Mesa/X.org llvmpipe (LLVM 15.0.6, 128 bits)",
+    "eGamingDeviceType": 541,
+    "bIsUnsupportedPrototypeHardware": false,
+    "eHardwareVariant_DoNotUse": 0
+  },
+  "missing_libraries": []
+}
