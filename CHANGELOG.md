@@ -20,8 +20,31 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   so the plugin auto-update, the hot-swap on a new download and the tab's plugin update rows all
   apply in cooperative mode too. A plugin that predates the protocol keeps today's behavior
   (`src/loader/mod.rs`, `src/loader/coop_safety.rs`, `runtime/shelves-host-api.js`,
-  `runtime/shelves-host-qam.js`). Unit-tested decision; still to be validated on a device under
-  force with a newer plugin release before the option is documented as supported.
+  `runtime/shelves-host-qam.js`). Validated on a Steam Deck next to a plugin loader (the cold-start
+  half is the next entry).
+- **The cooperative bundle now engages at a cold Steam start.** The loader boots its Deck Shelves
+  copy long before the hub's first injection tick (right after a restart the hub sees the usual
+  transient "collapse" and waits a full interval), so the live handshake alone never reached the
+  plugin in time and the hand-over never happened on a real device. The hub now leaves a standing
+  offer in the renderer's storage (`shelveshub-coop-bundle`: the bundle version it carries),
+  refreshed every tick while `coop_bundle` + `force_owner` are on and withdrawn once per renderer
+  session when either is off (the renderer's storage outlives a Steam restart); a Deck Shelves
+  that understands the offer (3.4.0 or newer) stands down on it at boot, and the
+  hub hosts its own copy in the same tick it injects the runtime — on the Deck the shelves were up
+  25 s after the Steam restart, one Home root, one owner. If the hub's copy never lands within 60 s
+  the loader's copy boots itself and stamps the offer; the hub then withholds it for a day (one
+  warning in the log) instead of repeating the wait at every start. The hub also keeps its copy
+  current while the loader's newer copy still runs, so the next offer carries the newer version
+  (`src/loader/mod.rs`).
+- **A plugin loader without Deck Shelves of its own no longer leaves the hub idle.** Beside a
+  loader that has other plugins but no Deck Shelves (nothing in its plugin list, nothing
+  installed in its plugins directory), the hub used to wait the owner-settle window and then
+  inject a bundle that never booted (the runtime stays tab-only next to a loader, and the bundle
+  only self-starts without one). It now hosts its own copy right away on the same cooperative
+  runtime the cooperative bundle uses — host published, the loader's UI borrowed, no scan —
+  announcing the hand-over itself, in either `force_owner` state; hot-swap and updates work as
+  when hosting alone. The log says "Plugin loader present without Deck Shelves of its own —
+  hosting our copy beside it." (`src/loader/mod.rs`, `src/populate.rs`).
 - **Forced ownership waits for the plugin loader before hosting.** Right after a daemon or Steam
   restart the loader's globals land a few seconds after the renderer, so the first injection tick
   under `force_owner` saw no loader and took the sole-host path (the tab read "sole" next to an
@@ -142,7 +165,51 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   the public stats link) into the landing and features footers in both languages — an empty
   code strips both. Nothing of this ships inside the host or the plugin.
 
+### Changed
+- **The settled-state log lines are written once per change, not every tick.** "Bundle active in
+  renderer." and "Coexisting with …" repeated on every tick — every 5 s while hosting — and buried
+  the journal and the hub's own log viewer. They now appear when the state changes (and again after
+  a Steam restart, a collapse, a pause or a desktop stand-down), so a day's journal reads as a
+  handful of transitions (`src/loader/mod.rs`). A settings-sync round that meets a Steam restart
+  now logs "round skipped … retrying" instead of "settings sync off" (`src/sync.rs`).
+- **The first injection after a Steam start no longer waits a full interval.** Steam creates
+  its shared context before its windows, so the first health check after a restart saw "no UI
+  windows" and treated it as a collapse: it paused for a whole `interval_secs` before the first
+  injection (25 s after the restart on a Deck with a 15 s interval, about 40 s with the shipped
+  30 s). A renderer whose windows have never been seen is now read as booting — polled every
+  2 s without counting a collapse strike, for at most 90 s — so the runtime and the bundle land
+  as soon as the windows are up. A renderer that had windows and lost them is still a
+  collapse, with the same recovery as before (`src/loader/mod.rs`).
+- **Under the cooperative bundle, a loader copy newer than the hub's triggers an update check
+  at once.** A newer loader copy ignores the stored offer, so the hub used to wait for the next
+  periodic check (up to 30 min) before its copy — and the offer — caught up. It now checks right
+  away, once per loader version seen, so the following Steam start already hands over
+  (`src/loader/mod.rs`, `src/state.rs`).
+
 ### Fixed
+- **The deploy matrix no longer ships a stale plugin bundle when the plugin build fails.** The plugin was built inside a command substitution, so a failed `build:release` was ignored and whatever bundle sat in the plugin's `dist/` went out as if freshly built; the build now runs first, at top level, and a failure aborts the deploy (`scripts/deploy-matrix.sh`).
+- **A plugin loader's Deck Shelves from before the coexistence protocol is no longer joined by a
+  second copy.** Such a copy (older than 3.3.1) never claims the renderer, so after the
+  owner-settle window the hub hosted its own bundle beside it — two instances mounted the home
+  twice and the Steam interface collapsed into the recovery restart (reported from a Deck as
+  "gaming mode crashing" right after installing). The daemon now reads the loader's plugin list,
+  and when it lists Deck Shelves without an ownership claim it keeps to its tab (log:
+  `Coexisting with "plugin loader (Deck Shelves <version>, no ownership claim …)"`) unless
+  `force_owner` is set on purpose (`src/loader/mod.rs`, unit-tested decision). The
+  troubleshooting guide gained the journal command that recovers the service log after an
+  uninstall and the cleanup for an install directory removed by hand.
+- **A fresh install no longer starts on a stale copy of Deck Shelves.** The repository (and so
+  every package) carried a real 4.6 MB bundle from an older release under `bundle/index.js`, and
+  the service keeps any real-looking bundle it finds — so a new install ran that old copy until
+  the first automatic update. The package ships the small placeholder again, which the service
+  replaces at start-up with a copy from an installed plugin loader or the newest release.
+- **Housekeeping from a repository sweep.** Two unreferenced functions removed
+  (`latest_hub_release_tag`, `may_inject`) along with the last lint suppressions (two
+  `eslint-disable` lines in the harness mock, one `#[allow]` in the tray); one `now_ms()` and one
+  config-file read/write pair replace five and three inline copies; `cfg_u16` no longer
+  truncates an out-of-range port; the renderer's diagnostic globals are documented
+  (`docs/debugging.md`); CI runs the shipped-text rule, launcher and data-file checks through
+  `pnpm validate --only …`; RPC dispatch gained tests for the config editor's refusals.
 - **The SteamOS / Linux one-click launchers opened a terminal that closed at once.** The
   `.desktop` files carried the whole install logic in their `Exec` line, with shell variables
   (`$T`, `$A`, `$(uname -m)`) inside the quotes. A desktop-entry launcher runs that line through

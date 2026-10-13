@@ -1,0 +1,37 @@
+{
+  "kind": "device",
+  "ts": "2026-10-12_11-45-00",
+  "version": "0.5.0",
+  "device": "Mac (Apple silicon) · Steam Big Picture · sole host (no plugin loader)",
+  "hub": "0.6.0 working tree (binary reports 0.5.0), installed under launchd",
+  "plugin": "Deck Shelves 3.3.4 build in the hub's bundle; the v3.3.4 release asset as the previous copy",
+  "steps": {
+    "cold-boot": "pass",
+    "route-away-back": "skipped",
+    "selection-retention": "skipped",
+    "hot-swap-teardown": "pass",
+    "sleep-wake": "skipped",
+    "host-restart": "pass",
+    "failed-hook": "skipped",
+    "rollback": "pass",
+    "settings-sync": "pass",
+    "notifications": "pass"
+  },
+  "checks": {
+    "cold_boot": "Steam restarted at 11:15:39: one transient window-less sighting, bundle active 11 s later; the daemon was still the 09:44 build then (the boot grace landed after it)",
+    "hot_swap_after_bundle_rollback": "rollbackBundle at 11:20:57 → 'Bundle changed on disk — hot-swapping in place' at 11:20:59 → bundle injected 11:21:02; the undo swapped back the same way. An earlier attempt at 11:11 did not swap because Steam was in the desktop client and the hub stood down (desktop_ui off) — by design",
+    "bundle_hold": "bundle_hold_tag kept through a manual checkUpdates, pending_plugin_update none",
+    "hub_rollback": "a previous/ snapshot (binary + runtime + assets + VERSION) restored by rollbackHub at 11:16:20, daemon restarted under launchd (new pid), hub_hold_tag set to the running version; the hold survived checkUpdates (verified on the Deck with the same code path)",
+    "host_restart": "launchd relaunch after the rollback and after restartService; the renderer kept its injection (marker) both times",
+    "settings_sync_deck_to_mac": "the Deck's document (09:47) reached the Mac only after the Mac's Steam restart (11:15); the next round took auto_update, boot_movie, hub_prerelease, plugin_prerelease from it (11:20:54) — the Mac's auto_update went false → true by last-writer-wins",
+    "settings_sync_fresh_device": "store reset to defaults with empty sync bookkeeping + daemon restart: the first round took auto_update, hub_prerelease, plugin_prerelease, quiet_updates from the cloud and wrote the roaming copy back (11:21:35); the real store was restored afterwards",
+    "notifications": "a hub notice sent through the runtime rendered as Steam's own toast (validated earlier the same day)",
+    "rpc_token_rotates_on_restart": "every daemon restart (rollback, restartService) issues a new per-boot RPC token — tooling must re-read it",
+    "sidecar_keyboard_shortcuts": "with the hub panel open in the Quick Access menu, real key events dispatched over CDP to the Big Picture window opened the sidecar on Ctrl+Shift+L and kept it open on Ctrl+Shift+N; the back control closed it. The double ArrowRight (and the D-pad gesture) needs the gamepad focus on the hub view's rightmost control first, which CDP could not establish — those stay hand checks"
+  },
+  "attribution": [
+    "no swap while stood down on the desktop client: host behaviour by design (desktop_ui off)",
+    "the Mac's auto_update flip: expected sync outcome (the Deck's first-round stamp was newer), not a host defect",
+    "propagation delay until a Steam restart: Steam UI (roaming storage), not host"
+  ]
+}

@@ -379,6 +379,27 @@ pub fn config_file_path() -> Option<PathBuf> {
         })
 }
 
+/// The config file as a JSON object (empty when absent, unreadable or invalid) —
+/// the read half of the read-merge-write every editor of the file does, so other
+/// keys (comments included) survive each edit.
+pub fn read_config_object(path: &std::path::Path) -> serde_json::Map<String, Value> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default()
+}
+
+/// Write the config file back, pretty-printed (the write half of read-merge-write).
+pub fn write_config_object(
+    path: &std::path::Path,
+    obj: &serde_json::Map<String, Value>,
+) -> std::io::Result<()> {
+    let out = serde_json::to_string_pretty(&Value::Object(obj.clone()))
+        .unwrap_or_else(|_| "{}".to_string());
+    std::fs::write(path, out)
+}
+
 /// Load the optional external config file (JSON): `SHELVES_CONFIG_FILE` if set,
 /// otherwise `<exe_dir>/shelveshub.config.json`. Absent / unreadable / invalid →
 /// an empty value, so every setting falls through to its env override or default.
@@ -405,7 +426,11 @@ fn cfg_u16(file: &Value, env_key: &str, json_key: &str, default: u16) -> u16 {
     env::var(env_key)
         .ok()
         .and_then(|s| s.parse().ok())
-        .or_else(|| file.get(json_key).and_then(Value::as_u64).map(|v| v as u16))
+        .or_else(|| {
+            file.get(json_key)
+                .and_then(Value::as_u64)
+                .and_then(|v| u16::try_from(v).ok())
+        })
         .unwrap_or(default)
 }
 

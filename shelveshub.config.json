@@ -16,7 +16,7 @@
   "// interval_secs": "Seconds between injection-loop ticks — how often the daemon looks for the Steam renderer and (re)injects the runtime + bundle. Lower = faster recovery after a Steam restart but slightly more idle CPU; higher = calmer. 30 is a good balance.",
   "interval_secs": 30,
 
-  "// owner_settle_secs": "When the renderer is present but UNCLAIMED, seconds to wait for another host (e.g. another plugin loader) to claim it before ShelvesHub hosts it itself. Default 25 is safe alongside another host (the primary setup) — a fast tick never hijacks a plugin the other host is about to load. Set 0 if ShelvesHub is the ONLY host, for an instant boot.",
+  "// owner_settle_secs": "When the renderer is present but UNCLAIMED, seconds to wait for another host (e.g. another plugin loader) to claim it before ShelvesHub hosts it itself. Default 25 is safe alongside another host (the primary setup) — a fast tick never hijacks a plugin the other host is about to load. Set 0 if ShelvesHub is the ONLY host, for an instant boot. A loader with no Deck Shelves of its own never waits.",
   "owner_settle_secs": 25,
 
   "// native_qam": "Show the native Steam Quick Access tab (real buttons/toggles). true is the default (sole mode uses the post-settle inject, which is collapse-safe); set false to disable it. Can also be forced per-service via SHELVES_NATIVE_QAM=1.",
@@ -27,6 +27,9 @@
 
   "// force_owner": "Claim renderer ownership even when another host is present, so the plugin selects ShelvesHub. Use only when you deliberately prefer ShelvesHub over another installed loader.",
   "force_owner": false,
+
+  "// coop_bundle": "Cooperative bundle (needs force_owner): next to a plugin loader, ShelvesHub runs and updates its OWN copy of Deck Shelves — the loader's copy (Deck Shelves 3.4.0 or newer) stands down at its next Steam start and its entry points at the ShelvesHub tab, so the plugin's updates come from the hub. The shelves then appear when the hub's first injection lands (keep interval_secs at 45 or below). false = the loader's copy stays in charge. Can also be set per-service via SHELVES_COOP_BUNDLE=1.",
+  "coop_bundle": false,
 
   "// desktop_ui": "Experimental: also inject while the plain desktop Steam client is on screen (not just the gamepad / Big Picture UI). false = host only in Big Picture. Can also be set per-service via SHELVES_DESKTOP_UI=1.",
   "desktop_ui": false,

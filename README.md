@@ -176,7 +176,7 @@ On Windows, the `setup.exe` shows a "Setup options" page of checkboxes for the s
 
 ## Uninstalling
 
-Each uninstaller stops and removes the background service and the install directory. Your Deck Shelves settings (shared with other hosts) are kept unless you pass `--purge`. A **one-click uninstaller** is published for each platform alongside the installer (double-click, like installing) — or use the commands below.
+Each uninstaller stops and removes the background service and the install directory. Removed the folder by hand on SteamOS / Linux? Disable the leftover unit too (`systemctl --user disable --now shelveshub`); the service log stays in the journal (`journalctl --user -u shelveshub`) for a bug report. Your Deck Shelves settings (shared with other hosts) are kept unless you pass `--purge`. A **one-click uninstaller** is published for each platform alongside the installer (double-click, like installing) — or use the commands below.
 
 | Platform | One-click | Or by hand |
 |---|---|---|

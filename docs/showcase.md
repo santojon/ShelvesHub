@@ -34,7 +34,7 @@ automatically (missing ones are simply skipped):
 
 | File | Shows |
 |---|---|
-| `home.png` | The Deck Shelves Home, hosted by ShelvesHub |
+| `home.png` → `home.webp` | The Deck Shelves Home, hosted by ShelvesHub (the site serves the WebP, a tenth of the PNG's size; the capture writes both) |
 | `qam-tab.png` | The native Quick Access tab (editor opens directly) |
 | `fallback.png` | The fallback panel — recovery actions + the log viewer |
 | `coexist.png` | Both tabs, coexisting with another host |

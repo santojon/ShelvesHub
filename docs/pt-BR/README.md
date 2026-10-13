@@ -176,7 +176,7 @@ No Windows, o `setup.exe` mostra uma página "Setup options" com checkboxes para
 
 ## Desinstalando
 
-Cada desinstalador para e remove o serviço em segundo plano e o diretório de instalação. Suas configurações do Deck Shelves (compartilhadas com outros hosts) são mantidas a menos que você use `--purge`. Um **desinstalador de um clique** é publicado para cada plataforma junto do instalador (duplo clique, como na instalação) — ou use os comandos abaixo.
+Cada desinstalador para e remove o serviço em segundo plano e o diretório de instalação. Removeu a pasta à mão no SteamOS / Linux? Desative também a unidade que ficou (`systemctl --user disable --now shelveshub`); o log do serviço continua no journal (`journalctl --user -u shelveshub`) para um relato de bug. Suas configurações do Deck Shelves (compartilhadas com outros hosts) são mantidas a menos que você use `--purge`. Um **desinstalador de um clique** é publicado para cada plataforma junto do instalador (duplo clique, como na instalação) — ou use os comandos abaixo.
 
 | Plataforma | Um clique | Ou manualmente |
 |---|---|---|

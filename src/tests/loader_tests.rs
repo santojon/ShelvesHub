@@ -5,9 +5,53 @@
 use super::*;
 
 #[test]
-fn injects_when_unclaimed_or_own() {
-    assert!(may_inject("", false));
-    assert!(may_inject(OWNER_KIND, false));
+fn a_loader_managed_copy_without_a_claim_is_never_joined_by_ours() {
+    // The loader lists Deck Shelves but nothing claimed the renderer: a copy from
+    // before the coexistence protocol — coexist with the tab only.
+    assert!(loader_manages_unclaimed_plugin("", false, Some("3.2.0")));
+    // Claimed renderers and forced ownership take their own paths.
+    assert!(!loader_manages_unclaimed_plugin(
+        OWNER_KIND,
+        false,
+        Some("3.2.0")
+    ));
+    assert!(!loader_manages_unclaimed_plugin(
+        "other-host",
+        false,
+        Some("3.2.0")
+    ));
+    assert!(!loader_manages_unclaimed_plugin("", true, Some("3.2.0")));
+    // A loader without Deck Shelves leaves the settle-then-host path alone.
+    assert!(!loader_manages_unclaimed_plugin("", false, None));
+}
+
+#[test]
+fn a_window_less_renderer_is_booting_only_while_young_and_never_seen_with_windows() {
+    assert!(booting(false, Duration::from_secs(10)));
+    assert!(!booting(true, Duration::from_secs(10))); // had windows: a real collapse
+    assert!(!booting(false, BOOT_GRACE)); // grace over: counts as a collapse again
+}
+
+#[test]
+fn hosting_beside_a_loader_needs_no_copy_listed_nor_installed_and_no_foreign_owner() {
+    assert!(hosts_beside_loader(true, "", None, || false));
+    assert!(hosts_beside_loader(true, OWNER_KIND, None, || false)); // ours (hot-swap)
+    assert!(!hosts_beside_loader(true, "", None, || true)); // installed, not loaded yet
+    assert!(!hosts_beside_loader(true, "", Some("3.3.4"), || false));
+    assert!(!hosts_beside_loader(true, "other-host", None, || false));
+    assert!(!hosts_beside_loader(false, "", None, || false)); // no loader: the sole path
+}
+
+#[test]
+fn coop_offer_scripts_carry_the_key_and_the_bundle_we_offer() {
+    let offer = coop_offer_script("v3.4.0", "0.6.0");
+    assert!(offer.contains(COOP_OFFER_KEY));
+    assert!(offer.contains("\"v3.4.0\""));
+    assert!(offer.contains("\"0.6.0\""));
+    assert!(offer.contains("fallbackAt"));
+    let withdraw = coop_offer_withdraw_script();
+    assert!(withdraw.contains(COOP_OFFER_KEY));
+    assert!(withdraw.contains("removeItem"));
 }
 
 #[test]
@@ -35,16 +79,6 @@ fn version_is_newer_uses_semver_precedence() {
     // Unparseable never prompts.
     assert!(!version_is_newer("not-a-version", "0.1.0"));
     assert!(!version_is_newer("v0.2.0", "garbage"));
-}
-
-#[test]
-fn stands_down_for_foreign_owner() {
-    assert!(!may_inject("other-host", false));
-}
-
-#[test]
-fn force_overrides_foreign_owner() {
-    assert!(may_inject("other-host", true));
 }
 
 #[test]

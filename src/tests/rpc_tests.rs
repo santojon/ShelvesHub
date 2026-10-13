@@ -89,3 +89,40 @@ fn rejects_garbage() {
         r#"{"ok":false,"error":"missing or invalid method"}"#
     );
 }
+
+#[test]
+fn config_editor_refuses_keys_outside_the_safe_subset() {
+    // recover_cmd and unknown keys never reach the config file, whatever the value.
+    for key in ["recover_cmd", "cef_port", "bundle_path", "nope"] {
+        let body =
+            format!(r#"{{"method":"setRuntimeConfig","args":{{"key":"{key}","value":true}}}}"#);
+        let out = dispatch(&body);
+        assert!(out.contains("refused config key"), "{key}: {out}");
+    }
+}
+
+#[test]
+fn config_editor_refuses_wrong_value_types() {
+    let out =
+        dispatch(r#"{"method":"setRuntimeConfig","args":{"key":"native_qam","value":"yes"}}"#);
+    assert!(out.contains("invalid value type"), "{out}");
+    let out =
+        dispatch(r#"{"method":"setRuntimeConfig","args":{"key":"interval_secs","value":-1}}"#);
+    assert!(out.contains("invalid value type"), "{out}");
+}
+
+#[test]
+fn update_pref_and_config_sync_need_a_known_key_and_a_store() {
+    // Without a configured store the handlers refuse rather than write anywhere.
+    let out =
+        dispatch(r#"{"method":"setUpdatePref","args":{"key":"quiet_updates","value":false}}"#);
+    assert!(
+        out.contains("hub config path not configured") || out.contains("unknown update pref"),
+        "{out}"
+    );
+    let out = dispatch(r#"{"method":"setConfigSync","args":true}"#);
+    assert!(
+        out.contains("hub config path not configured") || out.contains("config_sync"),
+        "{out}"
+    );
+}

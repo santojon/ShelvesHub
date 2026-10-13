@@ -10,10 +10,12 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
-- **Groundwork for plugin auto-update in cooperative mode.** With the new `coop_bundle` option on,
-  ShelvesHub runs its own copy of Deck Shelves even when a plugin loader is present and forced
-  ownership is in use, so plugin updates arrive through the hub there too. Off by default until it
-  has been validated on a device.
+- **Plugin auto-update in cooperative mode.** With the new `coop_bundle` option on (next to
+  `force_owner`), ShelvesHub runs and updates its own copy of Deck Shelves even when a plugin loader
+  is present: the loader's copy (Deck Shelves 3.4.0 or newer) stands down at the next Steam start
+  and its entry points at the ShelvesHub tab, and the shelves appear when the hub's first injection
+  lands (about 25 s after a restart on a Steam Deck). If the hub never shows up, the loader's copy
+  boots itself after a minute and the hub stops asking for a day. Off by default.
 - **Forced ownership no longer flips to "sole" after a restart.** The hub now waits for the plugin
   loader to show up before hosting, so a Deck with a plugin loader and forced ownership lands in
   cooperative mode as intended.

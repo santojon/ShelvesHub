@@ -193,6 +193,13 @@ request — warnings and errors always, and everything when verbose logging is o
 last entries in `window.__SHELVES_LOG__` (objects `{t, level, scope, msg}`) for
 direct inspection over the DevTools connection.
 
+Three more renderer globals help when the native tab misbehaves:
+`window.__SHELVES_NATIVE_ERR__` holds the last error the tab's error boundary
+caught (`message`, `stack`, `componentStack`); `window.__SHELVES_REFRESH__()`
+re-renders the tab's panels in place; and `window.__SHELVES_FIBER_REPOINT__ = false`,
+set before the runtime loads, opts out of the in-place re-point of an already
+mounted menu (the tab then needs a menu close/open to appear).
+
 The **Logs** action in the host's own tab renders that merged stream as a badged,
 scrollable list (newest first) with a refresh control.
 

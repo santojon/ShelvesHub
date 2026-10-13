@@ -10,10 +10,13 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
-- **Base para a atualização automática do plugin no modo cooperativo.** Com a nova opção
-  `coop_bundle` ligada, o ShelvesHub roda a própria cópia do Deck Shelves mesmo com um loader de
-  plugins presente e a posse forçada em uso, então as atualizações do plugin chegam pelo hub ali
-  também. Desligada por padrão até ser validada num dispositivo.
+- **Atualização automática do plugin no modo cooperativo.** Com a nova opção `coop_bundle` ligada
+  (junto com `force_owner`), o ShelvesHub roda e atualiza a própria cópia do Deck Shelves mesmo com
+  um loader de plugins presente: a cópia do loader (Deck Shelves 3.4.0 ou mais novo) se retira na
+  próxima partida do Steam e a entrada dela aponta para a aba do ShelvesHub, e as prateleiras
+  aparecem quando a primeira injeção do hub chega (cerca de 25 s depois de um reinício num Steam
+  Deck). Se o hub nunca aparece, a cópia do loader inicia sozinha depois de um minuto e o hub para
+  de pedir por um dia. Desligada por padrão.
 - **A posse forçada não cai mais em "sole" depois de um reinício.** O hub agora espera o loader de
   plugins aparecer antes de hospedar, então um Deck com um loader de plugins e posse forçada cai no
   modo cooperativo como esperado.

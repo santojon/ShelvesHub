@@ -31,9 +31,11 @@ tag="deploy:$PLAT"; [[ "$PLUGIN" == 1 ]] && tag="$tag:plugin"; [[ "$HARD" == 1 ]
 say(){ echo "[$tag] $*"; }
 
 need_plugin_dir(){ [[ -d "$PLUGIN_DIR" ]] || { echo "error: plugin repo not found at $PLUGIN_DIR — set SHELVES_PLUGIN_DIR in .env"; exit 1; }; }
-# Builds the plugin sole-host IIFE; prints ONLY its path on stdout (progress to
-# stderr) so callers can capture it with $(build_iife).
-build_iife(){ need_plugin_dir; say "building plugin sole-host bundle…" >&2; ( cd "$PLUGIN_DIR" && pnpm run build:release ) >&2; echo "$PLUGIN_DIR/dist/index.iife.js"; }
+# Builds the plugin sole-host IIFE. Runs at top level (not inside a command
+# substitution) so a failed build aborts the deploy instead of shipping the
+# stale bundle left in dist/; build_iife then only prints the path.
+build_plugin(){ need_plugin_dir; say "building plugin sole-host bundle…" >&2; ( cd "$PLUGIN_DIR" && pnpm run build:release ) >&2 || { echo "error: plugin build failed — deploy aborted" >&2; exit 1; }; }
+build_iife(){ echo "$PLUGIN_DIR/dist/index.iife.js"; }
 
 # Indirect env lookup that stays safe under `set -u` on bash 3.2.
 envof(){ eval "printf '%s' \"\${$1:-}\""; }
@@ -66,7 +68,7 @@ remote_deploy(){
   rsync -az -e "$rsh" runtime/i18n/ "$user@$host:$path/runtime/i18n/"
   rsync -az -e "$rsh" runtime/backend/ "$user@$host:$path/runtime/backend/"
   rsync -az --ignore-existing -e "$rsh" shelveshub.config.json "$user@$host:$path/shelveshub.config.json"
-  if [[ "$PLUGIN" == 1 ]]; then local iife; iife="$(build_iife)"; say "plugin bundle → $path/bundle/index.js"; rsync -az -e "$rsh" "$iife" "$user@$host:$path/bundle/index.js"; fi
+  if [[ "$PLUGIN" == 1 ]]; then build_plugin; local iife; iife="$(build_iife)"; say "plugin bundle → $path/bundle/index.js"; rsync -az -e "$rsh" "$iife" "$user@$host:$path/bundle/index.js"; fi
 
   "${ssh[@]}" bash -s <<REMOTE
 set -e
@@ -102,11 +104,11 @@ case "$PLAT" in
     # too. `deck-deploy.sh` otherwise ships this repo's checked-in `bundle/index.js`,
     # which nothing rebuilds — so cooperative/sole mode (where the hub injects its
     # OWN copy, not the loader's) kept running a stale bundle. Mirrors the mac leg.
-    if [[ "$PLUGIN" == 1 ]]; then BUNDLE="$(build_iife)" bash "scripts/deck-deploy$HSFX.sh"
+    if [[ "$PLUGIN" == 1 ]]; then build_plugin; BUNDLE="$(build_iife)" bash "scripts/deck-deploy$HSFX.sh"
     else bash "scripts/deck-deploy$HSFX.sh"; fi
     ;;
   mac)
-    if [[ "$PLUGIN" == 1 ]]; then local_iife="$(build_iife)"; say "plugin bundle → hub install"; mkdir -p "$HOME/.local/share/shelveshub/bundle"; cp "$local_iife" "$HOME/.local/share/shelveshub/bundle/index.js"; fi
+    if [[ "$PLUGIN" == 1 ]]; then build_plugin; local_iife="$(build_iife)"; say "plugin bundle → hub install"; mkdir -p "$HOME/.local/share/shelveshub/bundle"; cp "$local_iife" "$HOME/.local/share/shelveshub/bundle/index.js"; fi
     say "hub → Mac"; bash "scripts/mac-deploy$HSFX.sh"
     ;;
   linux) remote_deploy LINUX x86_64-unknown-linux-gnu "" ;;

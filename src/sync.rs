@@ -13,9 +13,7 @@
 //! applied only when it is the boolean its key expects.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -238,26 +236,8 @@ pub fn apply(
     (applied, restart)
 }
 
-fn read_json_object(path: &Path) -> Map<String, Value> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default()
-}
-
-fn write_json_object(path: &Path, obj: &Map<String, Value>) -> std::io::Result<()> {
-    let out = serde_json::to_string_pretty(&Value::Object(obj.clone()))
-        .unwrap_or_else(|_| "{}".to_string());
-    std::fs::write(path, out)
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
+use crate::config::{read_config_object, write_config_object};
+use crate::state::now_ms;
 
 fn device_label() -> String {
     let d = crate::config::detected_device();
@@ -279,9 +259,11 @@ fn read_cloud(client: &mut CdpClient) -> Result<Option<Doc>, String> {
     );
     match client.evaluate(&expr).map_err(|e| e.to_string())? {
         Value::String(raw) => Ok(Doc::parse(&raw)),
-        _ => Err("no RoamingStorage API".to_string()),
+        _ => Err(NO_ROAMING_API.to_string()),
     }
 }
+
+const NO_ROAMING_API: &str = "no RoamingStorage API";
 
 /// Write the document and confirm it reads back unchanged.
 fn write_cloud(client: &mut CdpClient, doc: &Doc) -> bool {
@@ -311,7 +293,7 @@ pub fn run(config: &Config) {
         return;
     }
     let file_path = state::config_file_path();
-    let mut file = file_path.map(|p| read_json_object(p)).unwrap_or_default();
+    let mut file = file_path.map(|p| read_config_object(p)).unwrap_or_default();
     let local = local_values(&settings, &file);
     if local.is_empty() {
         return;
@@ -334,8 +316,17 @@ pub fn run(config: &Config) {
     let cloud = match read_cloud(&mut client) {
         Ok(doc) => doc,
         Err(e) => {
-            if !UNAVAILABLE_LOGGED.swap(true, Ordering::Relaxed) {
-                log_warning("sync", &format!("settings sync off: {e}"));
+            // A renderer without the API is a platform fact (said once); a read that
+            // failed in transit — a round that met a Steam restart — just waits for the next.
+            if e == NO_ROAMING_API {
+                if !UNAVAILABLE_LOGGED.swap(true, Ordering::Relaxed) {
+                    log_warning("sync", &format!("settings sync off: {e}"));
+                }
+            } else {
+                log_warning(
+                    "sync",
+                    &format!("round skipped ({e}) — retrying next round."),
+                );
             }
             return;
         }
@@ -348,7 +339,7 @@ pub fn run(config: &Config) {
     let (applied, restart) = apply(&decided.adopt, &mut settings, &mut file);
     if applied.iter().any(|k| CONFIG_KEYS.contains(&k.as_str())) {
         if let Some(p) = file_path {
-            if let Err(e) = write_json_object(p, &file) {
+            if let Err(e) = write_config_object(p, &file) {
                 log_warning("sync", &format!("config file not updated: {e}"));
             }
         }

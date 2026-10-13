@@ -817,15 +817,9 @@ fn dispatch(body: &str) -> String {
                     state::set_boot_movie_enabled(enabled);
                     // Persist to the config file so the choice survives a restart.
                     if let Some(path) = state::config_file_path() {
-                        let mut obj = std::fs::read_to_string(path)
-                            .ok()
-                            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-                            .and_then(|v| v.as_object().cloned())
-                            .unwrap_or_default();
+                        let mut obj = crate::config::read_config_object(path);
                         obj.insert("boot_movie".to_string(), Value::Bool(enabled));
-                        if let Ok(out) = serde_json::to_string_pretty(&Value::Object(obj)) {
-                            let _ = std::fs::write(path, out);
-                        }
+                        let _ = crate::config::write_config_object(path, &obj);
                     }
                     log_info("rpc", &format!("Boot movie set to {enabled}."));
                     state::request_sync();
@@ -851,9 +845,8 @@ fn dispatch(body: &str) -> String {
                 // here or synced from another device) are what the next start
                 // applies — the hub screen shows those, with a restart note.
                 let mut restart_pending = false;
-                if let Some(file) = state::config_file_path()
-                    .and_then(|p| std::fs::read_to_string(p).ok())
-                    .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                if let Some(file) =
+                    state::config_file_path().map(|p| crate::config::read_config_object(p))
                 {
                     for key in crate::sync::CONFIG_KEYS {
                         if let Some(v) = file.get(key) {
@@ -922,15 +915,9 @@ fn dispatch(body: &str) -> String {
             };
             // Read-merge-write the config file (create if absent), preserving other
             // keys (comments included). Values apply on the next daemon restart.
-            let mut obj = std::fs::read_to_string(path)
-                .ok()
-                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-                .and_then(|v| v.as_object().cloned())
-                .unwrap_or_default();
+            let mut obj = crate::config::read_config_object(path);
             obj.insert(key.to_string(), coerced);
-            let out = serde_json::to_string_pretty(&Value::Object(obj))
-                .unwrap_or_else(|_| "{}".to_string());
-            match std::fs::write(path, out) {
+            match crate::config::write_config_object(path, &obj) {
                 Ok(()) => {
                     log_info(
                         "rpc",

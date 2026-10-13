@@ -107,3 +107,43 @@ Atribua cada diferença ao **host**, à **UI do Steam**, ao **pacote do Deck She
 ou a um **plugin externo** — nunca registre toda divergência como regressão do host.
 Os limites de desempenho ficam com os próprios gates do plugin; um número de
 Chromium ou VM não é um número da UI do Steam.
+
+Um registro de dispositivo escrito como JSON com os mesmos campos (`steps` como `pass` /
+`fail` / `skipped`, mais `checks` e `attribution` em texto livre) e salvo como
+`evidence/device-<plataforma>-<data>.json` acompanha a célula manual da plataforma no
+`matrix.json`; a célula continua `manual` — uma pessoa rodou, nenhum script julgou.
+
+## Evidência de dispositivo — 2026-10-12
+
+Registros: `evidence/device-steamos-2026-10-12.json` e `evidence/device-macos-2026-10-12.json`.
+Hub: a árvore de trabalho da 0.6.0; Deck Shelves 3.3.4 com as mudanças cooperativas da 3.4.0. O
+Deck rodou um carregador de plugins com 18 plugins (entre eles um plugin de temas CSS) em todas
+as células menos na que remove esse plugin.
+
+| Checagem | Steam Deck | macOS (host único) |
+|---|---|---|
+| partida a frio | só carregador +15 s · coexistência +25 s · cooperativo (cópia do carregador no host do hub) +28 s · bundle cooperativo +15–26 s · ao lado de um carregador sem o plugin +18 s | Big Picture de volta 11 s após um reinício do Steam |
+| sair e voltar (5 ciclos, detalhes e biblioteca → Home) | média: só carregador 474 ms · coexistência 494 · cooperativo 396 · bundle cooperativo 492; uma raiz, sem montagem de fallback | não rodado (o gate dirige a navegação do carregador) |
+| seleção do gamepad mantida | 5/5 na sessão quente que começou com um card focado, e 5/5 na sessão de bundle cooperativo depois de semear o foco num card pela árvore de navegação do Steam (404 ms de média, deltas zero de vazamento); nada fica focado após partida a frio, então o gate precisa da semente | — |
+| atalhos de teclado do sidecar | — | Ctrl+Shift+L abre, Ctrl+Shift+N alterna, com eventos de tecla reais via CDP; o ArrowRight duplo e o gesto do D-pad precisam do foco do gamepad no controle mais à direita da vista — checagem à mão |
+| hot-swap / desmontagem | bundle cooperativo 4 s, ao lado do carregador 3 s; um runtime, um dono | rollback do bundle → hot-swap em 2 s, desfazer igual |
+| dormir e acordar | 2/2 (20 s), Home de volta em até 1,2 s após acordar, cópia do hub mantida | — |
+| reinício do host | daemon reinicia sob systemd com o renderizador vivo; reinício do rollback do hub em 10 s, hold mantido | reinício do rollback do hub sob launchd, hold mantido |
+| hook com falha / não suportado | os builds de falha forçada do plugin (crash da Home, erro do painel de Acesso Rápido) trocados a quente na cópia do hub e de volta: Big Picture, menu e Home continuaram usáveis, sem colapso | não rodado |
+| sincronização de configurações | Mac → Deck adotado; a nota de reinício num `native_notifications` sincronizado (escrita direta no roaming) | Deck → Mac adotado após um reinício do Steam; um store novo pegou a nuvem na primeira rodada |
+| notificações | a janela de toast do próprio Steam renderizou o aviso do hub | o mesmo, mais cedo no mesmo dia |
+| vazamentos ao longo da rodada | deltas zero de timers/observers em toda rodada repetida (só carregador, coexistência, repetição cooperativa com 368 ms de média, bundle cooperativo, plugin ausente); o +1/+1 único da primeira rodada cooperativa não se repetiu | — |
+| plugin de temas CSS ausente | sessão cooperativa, 5 ciclos: 566 ms de média, uma raiz, sem fallback, deltas zero de vazamento — nenhuma diferença atribuível a esse plugin | — |
+
+Diferenças atribuídas: a variação da partida a frio é a ordem de boot do Steam (contexto
+compartilhado antes das janelas) mais a ordem de carga de plugins do carregador — o primeiro
+tick do hub agora é limitado pela subida das janelas; os atrasos de sincronização e as escritas
+que nunca chegaram são do armazenamento roaming do Steam (ele leva o documento numa partida do
+cliente, não a cada escrita); a leitura de seleção ausente após partida a frio é limitação do
+gate (precisa de um card focado antes da rodada, e lê 5/5 assim que um é semeado pela árvore de
+navegação do Steam); o +1 timer / +1 observer da primeira rodada cooperativa não se repetiu numa
+repetição do mesmo modo nem numa rodada quente do bundle cooperativo e não é registrado. Fechar todas
+as janelas de UI do Steam pela porta de depuração não é um colapso: o Steam cai para as janelas
+do cliente desktop, o portão de desktop do hub recua e retoma com o Big Picture — um colapso de
+verdade (só o contexto compartilhado) não pôde ser produzido sob demanda, então o aviso de
+recuperação após uma recuperação real continua uma observação de campo.

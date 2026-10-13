@@ -25,6 +25,10 @@ function scopeFromEnv() {
 }
 const scope = flag("--ci") ? scopeFromEnv() : (SCOPES.includes(opt("--scope", "local")) ? opt("--scope", "local") : "local");
 const noCargo = flag("--no-cargo");
+// `--only a,b`: run just those steps and print their verdicts (no report) — the CI's
+// cheap inline gates reuse the same checks this way.
+const only = opt("--only", "") ? opt("--only", "").split(",").map((s) => s.trim()).filter(Boolean) : null;
+const wanted = (key) => !only || only.includes(key);
 const h = new Harness(ROOT);
 const signals = {};
 
@@ -112,13 +116,13 @@ function browserAvailable() {
 }
 
 // A gate that is both a step and a signal: run once, record the log, parse the output.
-function gate(key, label, cmd, parse, kind) {
-  const out = h.step(key, label, cmd);
-  signals[key] = parse(out);
-  return out;
+function gate(key, label, cmd, parse) {
+  if (!wanted(key)) return;
+  signals[key] = parse(h.step(key, label, cmd));
 }
 
 function fnGate(key, label, cmd, parse, kind) {
+  if (!wanted(key)) return;
   h.fn(key, label, () => {
     const parsed = parse(run(cmd));
     signals[key] = parsed;
@@ -127,28 +131,38 @@ function fnGate(key, label, cmd, parse, kind) {
   });
 }
 
+function check(key, label, fn) {
+  if (wanted(key)) h.fn(key, label, fn);
+}
+
+function skip(key, label, reason) {
+  if (wanted(key)) h.skip(key, label, reason);
+}
+
 // ── The flow ──────────────────────────────────────────────────────────────────
 if (noCargo) {
-  for (const [k, l] of [["fmt", "rustfmt"], ["clippy", "clippy"], ["tests", "Rust unit tests"], ["audit", "cargo audit"]]) h.skip(k, l, "--no-cargo");
+  for (const [k, l] of [["fmt", "rustfmt"], ["clippy", "clippy"], ["tests", "Rust unit tests"], ["audit", "cargo audit"]]) skip(k, l, "--no-cargo");
 } else {
-  gate("fmt", "rustfmt (cargo fmt --check)", CMD.fmt, parseFmt, "fmt");
-  gate("clippy", "clippy (-D warnings)", CMD.clippy, parseClippy, "clippy");
-  gate("tests", "Rust unit tests (cargo test)", CMD.tests, parseTests, "tests");
-  if (auditAvailable()) gate("audit", "cargo audit", CMD.audit, parseAudit, "audit");
-  else h.skip("audit", "cargo audit", "cargo-audit is not installed");
+  gate("fmt", "rustfmt (cargo fmt --check)", CMD.fmt, parseFmt);
+  gate("clippy", "clippy (-D warnings)", CMD.clippy, parseClippy);
+  gate("tests", "Rust unit tests (cargo test)", CMD.tests, parseTests);
+  if (auditAvailable()) gate("audit", "cargo audit", CMD.audit, parseAudit);
+  else skip("audit", "cargo audit", "cargo-audit is not installed");
 }
 fnGate("eslint", "ESLint", CMD.eslint, parseEslint, "eslint");
 fnGate("complexity", "Complexity debt of the runtime", CMD.complexity, parseComplexity, "complexity");
-h.fn("syntax", "JavaScript syntax (node --check)", jsSyntax);
-h.fn("data", "Data files + localization parity", dataFiles);
-h.fn("launchers", "One-click launchers (.desktop Exec)", launchers);
-h.fn("shipped-text", "Shipped-text rule", shippedText);
-if (browserAvailable()) gate("harness", "Runtime harness (headless Chromium)", CMD.harness, parseHarness, "harness");
-else h.skip("harness", "Runtime harness (headless Chromium)", "no Chromium-family browser found");
-if (flag("--docker")) h.step("docker", "Container harness", "bash scripts/harness-docker.sh 2>&1");
-if (flag("--qa")) h.step("qa-matrix", "QA matrix (containers + host harness)", "bash scripts/qa-matrix.sh 2>&1");
+check("syntax", "JavaScript syntax (node --check)", jsSyntax);
+check("data", "Data files + localization parity", dataFiles);
+check("launchers", "One-click launchers (.desktop Exec)", launchers);
+check("shipped-text", "Shipped-text rule", shippedText);
+if (browserAvailable()) gate("harness", "Runtime harness (headless Chromium)", CMD.harness, parseHarness);
+else skip("harness", "Runtime harness (headless Chromium)", "no Chromium-family browser found");
+if (flag("--docker") && wanted("docker")) h.step("docker", "Container harness", "bash scripts/harness-docker.sh 2>&1");
+if (flag("--qa") && wanted("qa-matrix")) h.step("qa-matrix", "QA matrix (containers + host harness)", "bash scripts/qa-matrix.sh 2>&1");
 
 const counts = h.summary();
-const { record, runs } = recordRun({ scope, ts: timestamp(), signals: { ...signals, ...cheapSignals() }, steps: h.steps, durations: h.durations() });
-logSummary(record, runs);
+if (!only) {
+  const { record, runs } = recordRun({ scope, ts: timestamp(), signals: { ...signals, ...cheapSignals() }, steps: h.steps, durations: h.durations() });
+  logSummary(record, runs);
+}
 process.exit(counts.failed ? 1 : 0);

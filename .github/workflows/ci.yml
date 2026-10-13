@@ -125,61 +125,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Runtime JavaScript syntax
-        run: node --check runtime/shelves-host.js
+      # The same checks `pnpm validate` records locally: the shipped-text rule, the
+      # launchers' Exec lines, the data files + localization parity and JS syntax.
+      - name: Shipped-text rule, launchers, data files (validate --only)
+        run: node scripts/validate.mjs --only shipped-text,launchers,data,syntax
 
-      # The one-click launchers' `Exec` lines run through the desktop-entry parser
-      # BEFORE any shell: a `$`, a backtick or a `%` in there is pre-expanded (to
-      # nothing) and the terminal closes at once. Keep them shell-free, and keep the
-      # command they hand to bash syntactically valid.
-      - name: Validate one-click launchers (.desktop Exec lines)
-        run: |
-          set -e
-          for f in installer/SteamOS/*.desktop installer/Linux/*.desktop; do
-            exec_line="$(grep '^Exec=' "$f" | sed 's/^Exec=//')"
-            case "$exec_line" in
-              *'$'*|*'`'*|*'%'*) echo "::error file=$f::Exec must not contain \$, backticks or % (desktop-entry pre-expansion)"; exit 1 ;;
-            esac
-            case "$exec_line" in
-              'bash -c "'*'"') inner="${exec_line#bash -c \"}"; inner="${inner%\"}"; bash -n -c "$inner" || { echo "::error file=$f::inner command does not parse"; exit 1; } ;;
-              *) echo "::error file=$f::Exec must be: bash -c \"...\""; exit 1 ;;
-            esac
-            echo "$f: OK"
-          done
-
-      - name: Validate JSON data files (i18n + shipped config)
-        run: |
-          python3 - <<'PY'
-          import json, glob, sys
-          bad = []
-          for f in glob.glob("runtime/i18n/*.json") + ["shelveshub.config.json"]:
-              try:
-                  json.load(open(f, encoding="utf-8"))
-              except Exception as e:
-                  bad.append(f"{f}: {e}")
-          if bad:
-              print("Invalid JSON:\n" + "\n".join(bad)); sys.exit(1)
-          print("All JSON data files valid.")
-          PY
-
-      - name: i18n key parity (every locale carries the en-US keys)
-        run: |
-          python3 - <<'PY'
-          import json, glob, os, sys
-          base = json.load(open("runtime/i18n/en-US.json", encoding="utf-8"))
-          keys = set(base)
-          missing = {}
-          for f in glob.glob("runtime/i18n/*.json"):
-              d = json.load(open(f, encoding="utf-8"))
-              gap = keys - set(d)
-              if gap:
-                  missing[os.path.basename(f)] = sorted(gap)
-          if missing:
-              for loc, gap in missing.items():
-                  print(f"{loc} missing: {gap}")
-              sys.exit(1)
-          print("i18n key parity: OK.")
-          PY
 
   # Compatibility: the daemon's HOST_API_VERSION is derived from the shared
   # @deck-shelves/host contract at build time (build.rs). Assert the submodule is

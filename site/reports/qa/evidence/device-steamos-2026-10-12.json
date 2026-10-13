@@ -1,0 +1,77 @@
+{
+  "kind": "device",
+  "ts": "2026-10-12_12-00-00",
+  "version": "0.5.0",
+  "device": "Steam Deck (Jupiter) · SteamOS · Big Picture pt-BR · plugin loader with 18 plugins (a CSS theming plugin among them)",
+  "hub": "0.6.0 working tree (binary reports 0.5.0), deployed from the tree, interval 15 s",
+  "plugin": "Deck Shelves 3.3.4 dev build carrying the 3.4.0 cooperative changes in the loader; the hub's copy = the same build (gate and soak runs) or the v3.3.4 release asset",
+  "steps": {
+    "cold-boot": "pass",
+    "route-away-back": "pass",
+    "selection-retention": "pass",
+    "hot-swap-teardown": "pass",
+    "sleep-wake": "pass",
+    "host-restart": "pass",
+    "failed-hook": "pass",
+    "rollback": "pass",
+    "settings-sync": "pass",
+    "notifications": "pass",
+    "legacy-copy-guard": "pass",
+    "css-plugin-absent": "pass"
+  },
+  "modes": {
+    "loader-only": {
+      "cold_boot": "hub stopped: the plugin was up on the loader 15 s after the Steam restart",
+      "gate": { "cycles": 5, "t_full_ms": { "avg": 474, "max": 551 }, "roots_max": 1, "fallback": 0, "leaks": { "timers": 0, "observers": 0, "subs": 0 }, "heap_mb": "157 → 146", "selection": "n/a (no card focused after the cold boot)" }
+    },
+    "coexist": {
+      "cold_boot": "force off: plugin on the loader + the hub's tab 25 s after the restart (the loader's own owner label)",
+      "gate": { "cycles": 5, "t_full_ms": { "avg": 494, "max": 615 }, "roots_max": 1, "fallback": 0, "leaks": { "timers": 0, "observers": 0, "subs": 0 }, "heap_mb": "153 → 153", "selection": "n/a" }
+    },
+    "cooperative": {
+      "cold_boot": "force on, no cooperative bundle: the hub stamped at +28 s and the loader's copy bound to the hub's host (owner shelveshub, editor in the loader's tab, 567 images rendered) — the first time this mode was seen booting on a device",
+      "gate": { "cycles": 5, "t_full_ms": { "avg": 396, "max": 522 }, "roots_max": 1, "fallback": 0, "leaks": { "timers": 1, "observers": 1, "subs": 0 }, "heap_mb": "153 → 149", "selection": "5/5 (a card was focused when the run started)" },
+      "gate_repeat_seeded_focus": { "cycles": 5, "t_full_ms": { "avg": 368, "max": 448 }, "roots_max": 1, "fallback": 0, "leaks": { "timers": 0, "observers": 0, "subs": 0 }, "heap_mb": "158 → 162", "selection": "5/5", "note": "same mode on a fresh boot (the binding is a boot race: the first boot came up plain coexist, the retry cooperative), focus seeded through the nav tree" },
+      "note": "the +1 timer / +1 observer of the first run did not reproduce in the repeat of the same mode nor in the warm cooperative-bundle run — a one-off of that first session, not filed"
+    },
+    "coop-bundle": {
+      "cold_boot": "hand-over 15–26 s after the Steam restart (boot grace: wait line at +7…+10 s, first tick +12…+17 s; the rest is the loader's own plugin load)",
+      "hot_swap": "touch → re-injected in 4 s, one root, one owner",
+      "fallback": "hub stopped: the loader's copy booted itself at +60 s and stamped the offer; hub back → held for a day",
+      "newer_loader_copy": "tag pinned to v3.3.3: 'newer than our copy' on the next tick, update applied in 3 s, offer refreshed",
+      "gate": { "cycles": 5, "t_full_ms": { "avg": 492, "max": 612 }, "roots_max": 1, "fallback": 0, "leaks": { "timers": 0, "observers": 0, "subs": 0 }, "heap_mb": "183 → 170", "selection": "n/a" },
+      "gate_warm_seeded_focus": { "cycles": 5, "t_full_ms": { "avg": 404, "max": 450 }, "roots_max": 1, "fallback": 0, "leaks": { "timers": 0, "observers": 0, "subs": 0 }, "heap_mb": "179 → 174", "selection": "5/5", "note": "a card focus seeded through Steam's nav tree (BTakeFocus) before the run; same renderer throughout" },
+      "soak_restart": { "cycles": 2, "ok": 2, "home_ready_s": [18.7, 18.9], "owner": "shelveshub" },
+      "soak_sleepwake": { "cycles": 2, "ok": 2, "sleep_s": 20, "home_ready_after_resume_s": [1.2, 0.0], "owner": "shelveshub" }
+    },
+    "beside-loader": {
+      "cold_boot": "loader with 17 plugins and no Deck Shelves (its backend restarted with the directory moved aside): the hub hosted its copy 18 s after the restart",
+      "hot_swap": "re-hosted 3 s after the touch"
+    },
+    "css-absent": {
+      "cold_boot": "the CSS theming plugin moved aside (loader backend restarted, 17 plugins): cooperative session up 20 s after the restart (owner shelveshub)",
+      "gate": { "cycles": 5, "t_full_ms": { "avg": 566, "max": 628 }, "roots_max": 1, "fallback": 0, "leaks": { "timers": 0, "observers": 0, "subs": 0 }, "heap_mb": "151 → 145", "selection": "n/a" },
+      "note": "no difference attributable to the theming plugin: same roots/fallback/leak profile as the runs with it present; the timing sits inside the spread of the other modes"
+    }
+  },
+  "checks": {
+    "host_restart": "daemon restarts under systemd with the renderer live, many times today: the settled line once per renderer, the hosted copy stays (marker)",
+    "rollback_hub": "rollbackHub restored a previous/ snapshot, restarted under systemd (back in 10 s), hub_hold_tag kept through checkUpdates",
+    "rollback_bundle": "not applicable while the loader owns the bundle; see the macOS record",
+    "settings_sync": "Mac → Deck: adopted quiet_updates (09:47) and boot_movie (11:29) from the Mac's document; the restart note exercised with a direct roaming write (native_notifications false → 'Took … from another device', config written, restart_pending true; true → cleared). Steam carried the Mac's document at a client start but not for every write: three Mac writes never reached the Deck across four restarts",
+    "notifications": "a hub notice through the runtime rendered in Steam's own toast window (coexist, pt-BR text)",
+    "legacy_copy_guard": "ownership claim removed over CDP with force off: the next tick logged the pre-3.3.1 owner label and stayed tab-only",
+    "sync_round_at_restart": "a round that met the Steam restart logged 'settings sync off: … connection reset' and retried five minutes later — reworded to 'round skipped … retrying'",
+    "selection_retention": "5/5 in the cooperative session that started with a focused card, and 5/5 again in the cooperative-bundle session once a card focus was seeded through Steam's nav tree; after a cold boot nothing is focused, so the gate reads n/a unless seeded",
+    "failed_hook": "the plugin's QA fixture builds (forced Home crash, forced Quick Access panel error) hot-swapped into the hub's copy in the cooperative-bundle session, each re-hosted 4 s after the file change: Big Picture stayed up, the Quick Access menu opened and listed the loader's plugins, the Home root stayed mounted with its shelves, zero collapse sightings; the normal build hot-swapped back the same way. The hub's own tab panel (where the throwing editor would show its error boundary) could not be read over the debug port — the menu's tab switching from a script is unreliable, as the capture tooling already notes",
+    "desktop_fallback": "after the forced window closure Steam showed its desktop windows; the hub logged 'Desktop client on screen — standing down' and, after the restart, 'Gamepad / Big Picture UI is back — resuming injection' followed by the usual boot grace and hand-over (+17 s)",
+    "real_recovery": "closing every Steam UI window target over CDP (Big Picture, menu, Quick Access, toasts) does not collapse the renderer on the Deck: Steam falls back to its desktop-client windows, the shared context keeps the injection, the hub's desktop gate stands down and resumes when Big Picture is back after a restart — no collapse, no recovery, by design. A collapse with the shared context alone could not be produced on demand, so notice_recovered after a real recovery stays untested on-device (the push lives in run_recovery, the delivery is the same path the other notices took)"
+  },
+  "attribution": [
+    "cold-start latency: Steam's own boot (shared context before windows) + the loader's plugin load order; the hub's first tick is windows-bound now (host)",
+    "cooperative +1 timer / +1 observer: did not reproduce (two further runs at 0/0) — one-off, not filed",
+    "settings-sync propagation gaps and delays: Steam UI (roaming storage), not host",
+    "selection retention after a cold boot: gate limitation (needs an initial focus) — 5/5 whenever a card focus is seeded first",
+    "forced window closure = Steam's desktop fallback, not a collapse: host behaviour by design (desktop gate), nothing to fix"
+  ]
+}

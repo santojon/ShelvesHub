@@ -41,7 +41,18 @@ Você também pode mudar o host com `cef_host` caso esteja depurando um endpoint
 ## Outro host na mesma máquina (coexistência)
 
 O ShelvesHub coexiste com outro host (por exemplo, outro carregador de plugins): ele
-nunca carrega o plugin duas vezes e adiciona apenas sua própria aba. Dois ajustes:
+nunca carrega o plugin duas vezes e adiciona apenas sua própria aba. Quando o Deck
+Shelves do próprio carregador é anterior ao 3.3.1, ele nunca reivindica o renderizador,
+então nada avisa o hub de que está ali — o ShelvesHub ainda o vê na lista de plugins do
+carregador e fica só com sua aba (o log diz `Coexisting with "plugin loader (Deck
+Shelves <versão>, no ownership claim …)"`); atualize o Deck Shelves no carregador para
+ter o editor dentro da aba do hub e as configurações compartilhadas entre os dois. A loja de
+plugins do carregador pode ficar muito atrás das releases (ela listava a 2.0.0 quando a 3.3.4
+era a atual), então instale o zip da release na página de releases do Deck Shelves quando a
+loja não oferecer nada mais novo que a 3.3.0.
+Hospedar uma segunda cópia ao lado de uma gerenciada pelo carregador montaria a Home duas
+vezes e colapsaria a interface do Steam, então o hub nunca faz isso a não ser com
+`force_owner` de propósito. Dois ajustes:
 
 - **Ele sequestrou um plugin que o outro host estava prestes a carregar.** Dê ao outro host
   tempo para reivindicar o renderizador primeiro:
@@ -62,6 +73,29 @@ nunca carrega o plugin duas vezes e adiciona apenas sua própria aba. Dois ajust
   host ativo presente, o ShelvesHub recua e coexiste (sua aba continua sendo adicionada
   mesmo assim). A alteração dessa configuração só tem efeito após um reinício (use **Reiniciar para
   aplicar** na página do hub, que reinicia o daemon e o Steam juntos).
+
+- **Você quer que o hub rode e atualize o Deck Shelves ao lado do carregador** (`force_owner`
+  ligado):
+
+  ```json
+  { "force_owner": true, "coop_bundle": true }
+  ```
+
+  O hub deixa uma oferta fixa no renderizador (a versão do bundle que ele carrega); um Deck
+  Shelves 3.4.0 ou mais novo no carregador se retira com base nela na próxima partida do Steam —
+  a entrada dele no painel do carregador passa a só apontar para a aba do ShelvesHub — e o hub
+  hospeda a própria cópia quando a primeira injeção dele chega (cerca de 25 s depois de um
+  reinício num Steam Deck; mantenha `interval_secs` em 45 ou menos). Se a cópia do hub nunca
+  chega em um minuto, a cópia do carregador inicia sozinha e o hub segura a oferta por um dia (o
+  log avisa); desligar a opção retira a oferta no tick seguinte. Uma cópia do carregador mais
+  nova que a do hub faz o hub checar atualização na hora, para a oferta da próxima partida levar
+  a versão mais nova. Um Deck Shelves mais antigo ignora a oferta e mantém a coexistência de hoje.
+
+- **O carregador tem outros plugins, mas não o Deck Shelves.** Nada a esperar: o hub hospeda a
+  própria cópia ao lado do carregador na hora (o log diz `Plugin loader present without Deck
+  Shelves of its own — hosting our copy beside it.`), com `force_owner` ligado ou não. Instale o
+  Deck Shelves no carregador depois e a próxima partida do Steam volta à coexistência (ou ao
+  bundle cooperativo, se estiver ligado).
 
 ## Tela preta / interface do Steam colapsada
 
@@ -124,6 +158,24 @@ booleanos de chaves conhecidas são aplicados.
   entre dispositivos" na seção Configuração desse dispositivo (`setConfigSync` por RPC,
   `config_sync` no store do hub); o próprio interruptor nunca sincroniza.
 
+## O Deck Shelves se comporta mal depois de remover o ShelvesHub
+
+Apagar a pasta de instalação à mão deixa o serviço de usuário para trás, e um Deck Shelves
+gerenciado pelo carregador que passou por uma sessão com montagem dupla pode ter travado as
+próprias proteções. Nesta ordem:
+
+1. Pare o serviço que sobrou: `systemctl --user disable --now shelveshub` e remova
+   `~/.config/systemd/user/shelveshub.service` (o script oficial de desinstalação faz os dois).
+2. Atualize o Deck Shelves no carregador para 3.3.4 ou mais novo (o zip da release, se a loja
+   estiver atrasada).
+3. Se a Home não mostra prateleiras, abra o painel do Deck Shelves: um banner de **Modo
+   Seguro** quer dizer que três partidas seguidas nunca terminaram de montar a Home — escolha
+   **Sair do modo seguro**. Se a aba própria dele no Acesso Rápido sumiu, a proteção contra
+   travamento da aba travou durante a troca de host; a partir do Deck Shelves 3.4.0 ela se
+   limpa sozinha depois de um dia, e pode ser limpa na hora removendo `ds-own-qam-tab-trip`
+   do armazenamento local do renderizador (o registro do Modo Seguro é `ds-boot-outcomes-v1`).
+4. Reinicie o Steam.
+
 ## Lendo o log
 
 ```
@@ -131,3 +183,10 @@ journalctl --user -u shelveshub -f      # SteamOS / Linux user service
 ```
 
 Todo caminho de erro grava uma linha de log, então o log é o primeiro lugar a verificar.
+
+No SteamOS / Linux o log do serviço fica no journal do systemd, então sobrevive à remoção
+do diretório de instalação: `journalctl --user -u shelveshub -n 500 --no-pager >
+~/shelveshub.log` junta as últimas linhas para um relato mesmo depois de desinstalar. Se
+você removeu `~/.local/share/shelveshub` à mão em vez de rodar o desinstalador, desative
+também a unidade que ficou: `systemctl --user disable --now shelveshub`, depois
+`rm -f ~/.config/systemd/user/shelveshub.service` e `systemctl --user daemon-reload`.

@@ -43,7 +43,17 @@ You can also move the host with `cef_host` if debugging a remote endpoint.
 ## Another host on the same machine (coexistence)
 
 ShelvesHub coexists with another host (for example another plugin loader): it
-never loads the plugin twice and adds only its own tab. Two knobs:
+never loads the plugin twice and adds only its own tab. When the loader's own Deck
+Shelves is older than 3.3.1 it never claims the renderer, so nothing tells the hub it
+is there — ShelvesHub still sees it in the loader's plugin list and keeps to its tab
+(the log says `Coexisting with "plugin loader (Deck Shelves <version>, no ownership
+claim …)"`); update Deck Shelves in the loader to get the editor inside the hub's tab
+and settings shared between the two. The loader's plugin store can lag far behind the
+releases (it listed 2.0.0 while 3.3.4 was current), so install the release zip from the Deck
+Shelves releases page when the store offers nothing newer than 3.3.0. Hosting a second copy
+next to a loader-managed
+one would mount the home twice and collapse the Steam interface, so the hub never does
+it unless `force_owner` is set on purpose. Two knobs:
 
 - **It hijacked a plugin the other host was about to load.** Give the other host
   time to claim the renderer first:
@@ -64,6 +74,29 @@ never loads the plugin twice and adds only its own tab. Two knobs:
   live host present ShelvesHub stands down and coexists (its tab is still added
   alongside). Changing this setting takes effect after a restart (use **Restart to
   apply** on the hub page, which restarts the daemon and Steam together).
+
+- **You want the hub to run and update Deck Shelves next to the loader** (`force_owner`
+  on):
+
+  ```json
+  { "force_owner": true, "coop_bundle": true }
+  ```
+
+  The hub leaves a standing offer in the renderer (the bundle version it carries); a Deck
+  Shelves 3.4.0 or newer in the loader stands down on it at the next Steam start — its entry in
+  the loader's panel then just points at the ShelvesHub tab — and the hub hosts its own copy
+  when its first injection lands (about 25 s after a restart on a Steam Deck; keep
+  `interval_secs` at 45 or below). If the hub's copy never arrives within a minute, the
+  loader's copy boots itself and the hub withholds the offer for a day (the log says so);
+  turning the option off withdraws the offer on the next tick. A loader copy newer than the
+  hub's makes the hub check for an update at once, so the next start's offer carries the newer
+  version. An older Deck Shelves ignores the offer and keeps today's coexistence.
+
+- **The loader has other plugins but no Deck Shelves.** Nothing to wait for: the hub hosts its
+  own copy beside the loader right away (the log says `Plugin loader present without Deck
+  Shelves of its own — hosting our copy beside it.`), in either `force_owner` state. Install
+  Deck Shelves in the loader later and the next Steam start goes back to coexistence (or to the
+  cooperative bundle, if that is on).
 
 ## Black screen / collapsed Steam UI
 
@@ -133,6 +166,23 @@ ever applied.
   device's Configuration section (`setConfigSync` over RPC, `config_sync` in the hub's store);
   the switch itself never syncs.
 
+## Deck Shelves misbehaves after ShelvesHub was removed
+
+Deleting the install folder by hand leaves the user service behind, and a loader-managed
+Deck Shelves that went through a double-mounted session may have latched its own guards.
+In this order:
+
+1. Stop the leftover service: `systemctl --user disable --now shelveshub`, then remove
+   `~/.config/systemd/user/shelveshub.service` (the official uninstall script does both).
+2. Update Deck Shelves in the loader to 3.3.4 or newer (the release zip, if the store lags).
+3. If the home shows no shelves, open the Deck Shelves panel: a **Safe Mode** banner means
+   three starts in a row never finished mounting the home — choose **Leave safe mode**. If
+   its own Quick Access tab is missing, the tab's crash guard latched during the host churn;
+   from Deck Shelves 3.4.0 it clears itself after a day, and it can be cleared at once by
+   removing `ds-own-qam-tab-trip` from the renderer's local storage (the Safe Mode record is
+   `ds-boot-outcomes-v1`).
+4. Restart Steam.
+
 ## Reading the log
 
 ```
@@ -140,3 +190,10 @@ journalctl --user -u shelveshub -f      # SteamOS / Linux user service
 ```
 
 Every error path writes a log line, so the log is the first place to look.
+
+On SteamOS / Linux the service log lives in the systemd journal, so it survives
+removing the install directory: `journalctl --user -u shelveshub -n 500 --no-pager >
+~/shelveshub.log` collects the last lines for a report even after an uninstall. If you
+removed `~/.local/share/shelveshub` by hand instead of running the uninstaller, also
+disable the leftover unit: `systemctl --user disable --now shelveshub`, then
+`rm -f ~/.config/systemd/user/shelveshub.service` and `systemctl --user daemon-reload`.

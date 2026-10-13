@@ -169,6 +169,27 @@ fn loader_backend_dir() -> Option<PathBuf> {
     p.is_dir().then_some(p)
 }
 
+/// Whether a plugin loader on this machine has Deck Shelves installed: the usual
+/// install dir, or any plugin dir whose manifest carries the plugin's name (a loader
+/// names the dir after the package it installed, which need not be ours).
+pub(crate) fn loader_plugin_installed() -> bool {
+    if loader_backend_dir().is_some() {
+        return true;
+    }
+    let Some(home) = std::env::var_os("HOME") else {
+        return false;
+    };
+    let Ok(entries) = fs::read_dir(Path::new(&home).join("homebrew/plugins")) else {
+        return false;
+    };
+    entries.flatten().any(|e| {
+        fs::read_to_string(e.path().join("plugin.json"))
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+            .is_some_and(|v| v.get("name").and_then(|n| n.as_str()) == Some("Deck Shelves"))
+    })
+}
+
 /// Copy the backend files a sole host needs — `main.py` (at the root) plus the
 /// `src/backend/` module tree it imports — from `src` into `dest`.
 fn copy_backend_tree(src: &Path, dest: &Path) -> Result<(), String> {
@@ -475,35 +496,11 @@ fn newest_release_in_releases(releases_json: &str) -> Option<serde_json::Value> 
         .cloned()
 }
 
-/// The `tag_name` of the newest ShelvesHub release for this channel — the hub
-/// self-update check compares it to the running daemon's version. `None` on a
-/// network/parse miss (treated as "no update").
-pub fn latest_hub_release_tag(prerelease: bool) -> Option<String> {
-    if prerelease {
-        newest_hub_release_tag(&curl_text(HUB_RELEASES_ALL_URL).ok()?)
-    } else {
-        release_tag(&serde_json::from_str(&curl_text(HUB_RELEASES_LATEST_URL).ok()?).ok()?)
-    }
-}
-
 /// The tag AND the release notes of the newest ShelvesHub release for this
 /// channel (the same selection `apply_hub_update` installs from).
 pub fn latest_hub_release_info(prerelease: bool) -> Option<(String, String)> {
     let release = latest_hub_release(prerelease).ok()?;
     Some((release_tag(&release)?, release_notes(&release)))
-}
-
-fn newest_hub_release_tag(releases_json: &str) -> Option<String> {
-    let releases: serde_json::Value = serde_json::from_str(releases_json).ok()?;
-    for release in releases.as_array()? {
-        if release.get("draft").and_then(serde_json::Value::as_bool) == Some(true) {
-            continue;
-        }
-        if let Some(tag) = release_tag(release) {
-            return Some(tag);
-        }
-    }
-    None
 }
 
 /// The release-package asset names for the running OS+arch, in priority order.

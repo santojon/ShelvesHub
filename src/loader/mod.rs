@@ -10,6 +10,7 @@
 use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -40,11 +41,26 @@ pub const OWNER_KIND: &str = "shelveshub";
 pub const FORCE_OWNER_GLOBAL: &str = "window.__SHELVES_FORCE_OWNER__";
 /// Renderer global the loader's Deck Shelves copy sets when it stands down for
 /// the cooperative-bundle protocol (it saw `coopBundle` + a bundle at least as
-/// new as itself); the daemon then hosts its own copy.
+/// new as itself); the daemon then hosts its own copy. This and the two literals
+/// below mirror the host contract (`COOP_DEFER_GLOBAL`, `COOP_HOST_BUNDLE_BOOTED_GLOBAL`,
+/// `COOP_OFFER_KEY` in `host/src/contract/index.ts`), which is the source of truth.
 pub const DEFER_GLOBAL: &str = "window.__DECK_SHELVES_DEFER_TO_HOST__";
 /// Renderer global the host-hosted copy sets on boot so the deferring loader
 /// copy knows it arrived (and does not fall back to booting itself).
 pub const HOST_BUNDLE_BOOTED_GLOBAL: &str = "window.__DECK_SHELVES_HOST_BUNDLE_BOOTED__";
+/// Renderer storage key holding this host's standing cooperative-bundle offer (the
+/// bundle version it carries). A cold Steam start boots the loader's copy long before
+/// the daemon's first tick, so that copy stands down on the stored offer rather than
+/// on a live handshake. A fallback boot stamps it; the daemon then withholds the offer.
+pub const COOP_OFFER_KEY: &str = "shelveshub-coop-bundle";
+const COOP_OFFER_HOLD_MS: u64 = 24 * 60 * 60 * 1000;
+static COOP_OFFER_WITHDRAWN: AtomicBool = AtomicBool::new(false);
+static COOP_OFFER_HELD_LOGGED: AtomicBool = AtomicBool::new(false);
+/// A renderer whose UI windows were never seen is still booting (Steam creates
+/// `SharedJSContext` before its windows): polled fast, no collapse strike, for this long.
+const BOOT_GRACE: Duration = Duration::from_secs(90);
+/// The loader's Deck Shelves version we already reacted to (one update check per version).
+static NEWER_LOADER_NOTED: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
 /// Renderer global that opts the injected runtime into the native Quick
 /// Access tab path (`SHELVES_NATIVE_QAM=1`). Read once at runtime boot.
 pub const NATIVE_QAM_GLOBAL: &str = "window.__SHELVES_NATIVE_QAM__";
@@ -154,6 +170,16 @@ pub fn run(mut config: Config) {
     // Throttle for the settings sync: the first settled tick, then every
     // SYNC_INTERVAL, plus the next tick after a local change (state::request_sync).
     let mut last_sync: Option<Instant> = None;
+    // The settled lines ("Bundle active", "Coexisting with …") would repeat every tick (5 s
+    // while hosting) and bury the journal users send us: logged on change only.
+    let mut last_settled: Option<String> = None;
+    // The shared context's target id: a new one means Steam restarted, so the settled
+    // line is written again for the new session (tooling waits for it after a restart)
+    // and its first window-less ticks read as "booting", not as a collapse.
+    let mut renderer_id: Option<String> = None;
+    let mut renderer_since = Instant::now();
+    let mut renderer_had_windows = false;
+    let mut boot_wait_logged = false;
     // Tracks the troubleshooting pause so the transition INTO paused reloads once.
     let mut was_paused = false;
     // Tracks the experimental desktop-UI stand-down (inject only on the gamepad /
@@ -191,6 +217,22 @@ pub fn run(mut config: Config) {
         let collapsed = match cdp::discover_targets(&config.cef_host, config.cef_port) {
             Ok(targets) => {
                 discovery_fail_streak = 0;
+                let id = targets
+                    .iter()
+                    .find(|t| t.title == "SharedJSContext")
+                    .map(|t| t.id.clone());
+                if id != renderer_id {
+                    renderer_id = id;
+                    renderer_since = Instant::now();
+                    renderer_had_windows = false;
+                    boot_wait_logged = false;
+                    last_settled = None;
+                    // The renderer's storage outlives a Steam restart: a withdrawn offer
+                    // must be withdrawn again on the new renderer.
+                    COOP_OFFER_WITHDRAWN.store(false, AtomicOrdering::Relaxed);
+                }
+                let windows = cdp::ui_windows_present(&targets);
+                renderer_had_windows |= windows;
                 gamepad_active = cdp::gamepad_ui_active(&targets);
                 // The Big Picture window lingers as a target (titled "Big
                 // Picture", hidden) after returning to the desktop client, so the
@@ -203,7 +245,7 @@ pub fn run(mut config: Config) {
                         config.target_filter.as_deref(),
                     );
                 }
-                !cdp::ui_windows_present(&targets)
+                !windows
             }
             // Discovery failure = renderer unreachable (Steam closed / mid-
             // restart), not a collapse; tick() reports the same and retries.
@@ -230,9 +272,25 @@ pub fn run(mut config: Config) {
             }
         };
 
+        if collapsed && booting(renderer_had_windows, renderer_since.elapsed()) {
+            // Steam creates the shared context before its windows: a boot, not a collapse.
+            // Poll fast so the first inject lands as soon as the windows are up.
+            if !boot_wait_logged {
+                log_info(
+                    "loader",
+                    "Steam is still bringing up its UI windows — waiting.",
+                );
+                boot_wait_logged = true;
+            }
+            state::set_injected(false);
+            thread::sleep(fast);
+            continue;
+        }
+
         if collapsed {
             consecutive_collapse += 1;
             state::set_injected(false);
+            last_settled = None;
             log_warning(
                 "loader",
                 &format!(
@@ -298,6 +356,7 @@ pub fn run(mut config: Config) {
             }
             was_paused = true;
             state::set_injected(false);
+            last_settled = None;
             thread::sleep(interval);
             continue;
         }
@@ -324,6 +383,7 @@ pub fn run(mut config: Config) {
             }
             was_desktop_idle = true;
             state::set_injected(false);
+            last_settled = None;
             // Poll at the FAST cadence while stood down, so returning to Big
             // Picture is noticed (and re-injected) within a couple of seconds
             // instead of up to a full idle interval.
@@ -372,7 +432,7 @@ pub fn run(mut config: Config) {
         match result {
             Ok(Tick::Active) => {
                 state::set_injected(true);
-                log_info("loader", "Bundle active in renderer.");
+                log_settled(&mut last_settled, "Bundle active in renderer.".to_string());
             }
             Ok(Tick::NotConfirmed) => {
                 state::set_injected(false);
@@ -390,9 +450,9 @@ pub fn run(mut config: Config) {
                 // native tab is added alongside. `injected` tracks OUR bundle, so it
                 // stays false; the tab is purely additive.
                 state::set_injected(false);
-                log_info(
-                    "loader",
-                    &format!(
+                log_settled(
+                    &mut last_settled,
+                    format!(
                         "Coexisting with \"{owner}\" — native QAM tab added alongside (host untouched)."
                     ),
                 );
@@ -414,6 +474,10 @@ pub fn run(mut config: Config) {
             }
         }
 
+        if !settled {
+            last_settled = None;
+        }
+
         // Host notices (an update landed, a recovery ran, …) go to the runtime once
         // it is in place — ours (Active) or the coexist tab's.
         if settled {
@@ -432,7 +496,9 @@ pub fn run(mut config: Config) {
         // update stays gated on `hosting` inside (in coexist the loader owns it,
         // and when not settled `hosting` is false, so only the hub binary check
         // runs — nothing touches the renderer).
-        if last_update_check.is_none_or(|t| t.elapsed() >= UPDATE_CHECK_INTERVAL) {
+        if state::take_update_check_request()
+            || last_update_check.is_none_or(|t| t.elapsed() >= UPDATE_CHECK_INTERVAL)
+        {
             last_update_check = Some(Instant::now());
             // Single-flight: skip if a manual checkUpdates is mid-download.
             if state::try_begin_update_check() {
@@ -484,6 +550,14 @@ pub fn run(mut config: Config) {
     }
 }
 
+/// Settled-state lines would repeat every tick: log a line only when it changes.
+fn log_settled(last: &mut Option<String>, line: String) {
+    if last.as_deref() != Some(line.as_str()) {
+        log_info("loader", &line);
+        *last = Some(line);
+    }
+}
+
 /// Periodic auto-update. The plugin-bundle update runs only when we `hosting` the
 /// bundle (sole/owner — never coexist, where the loader owns its own copy): it
 /// compares the latest release tag for the plugin channel to the tag we last
@@ -509,8 +583,11 @@ fn auto_update_check(config: &Config, hosting: bool, cooperative: bool, manual: 
     state::set_update_deferred(deferred);
     // ── Plugin bundle: download + swap + reload on a newer release. ──
     // In plain cooperative mode the loader owns the on-disk copy, so a hub swap is
-    // deferred (lockstep guard) unless the cooperative-bundle protocol is enabled.
-    if hosting
+    // deferred (lockstep guard) unless the cooperative-bundle protocol is enabled —
+    // under which our copy is ours to keep current even while the loader's (newer)
+    // copy still runs: the refreshed offer is what brings the next hand-over.
+    let owns_bundle = hosting || (cooperative && config.coop_bundle);
+    if owns_bundle
         && settings.auto_update_plugin
         && coop_safety::coop_plugin_swap_allowed(cooperative, config.coop_bundle)
     {
@@ -942,6 +1019,15 @@ fn tick(
     // that listens for console events on the same target.
     let _ = client.call("Runtime.enable", json!({}));
 
+    // The stored offer follows the protocol switch: refreshed every tick while on (the
+    // bundle version moves with updates), withdrawn once when off.
+    if config.coop_bundle && config.force_owner {
+        COOP_OFFER_WITHDRAWN.store(false, AtomicOrdering::Relaxed);
+        sync_coop_offer(&mut client, config);
+    } else if !COOP_OFFER_WITHDRAWN.swap(true, AtomicOrdering::Relaxed) {
+        withdraw_coop_offer(&mut client);
+    }
+
     if probe_injected(&mut client)? {
         *empty_since = None;
         return Ok(Tick::Active);
@@ -962,7 +1048,36 @@ fn tick(
     //     stamped first so the runtime takes the cooperative path; the bundle is
     //     NEVER injected (the loader provides it).
     let cooperative = config.force_owner && loader_present;
-    if is_foreign_owner(&owner) || cooperative {
+    // The loader's own Deck Shelves (version): read while the renderer is ours or
+    // unclaimed, and under the cooperative bundle while the loader's copy runs.
+    let loader_plugin =
+        if loader_present && (!is_foreign_owner(&owner) || (cooperative && config.coop_bundle)) {
+            probe_loader_plugin(&mut client)?
+        } else {
+            None
+        };
+    let legacy_copy =
+        loader_manages_unclaimed_plugin(&owner, config.force_owner, loader_plugin.as_deref());
+    let solo_beside_loader = hosts_beside_loader(
+        loader_present,
+        &owner,
+        loader_plugin.as_deref(),
+        populate::loader_plugin_installed,
+    );
+    // While the loader's copy runs (on its own host or bound to ours) a newer version there
+    // means our offer is stale; hosting our own copy never reaches this point.
+    if cooperative && config.coop_bundle {
+        note_newer_loader_copy(config, loader_plugin.as_deref());
+    }
+    let owner = if legacy_copy {
+        format!(
+            "plugin loader (Deck Shelves {}, no ownership claim — update it for full coexistence)",
+            loader_plugin.as_deref().unwrap_or("?")
+        )
+    } else {
+        owner
+    };
+    if is_foreign_owner(&owner) || cooperative || legacy_copy {
         *empty_since = None;
         // In cooperative mode, read the renderer churn signal once (the bundle's
         // QAM-tab breaker) so auto-safe-mode can recede force if it keeps tripping.
@@ -973,13 +1088,8 @@ fn tick(
             return Ok(Tick::StoodDown(owner));
         }
         if probe_coexist_tab(&mut client)? {
-            // Cooperative-bundle protocol: the loader's copy saw our `coopBundle`
-            // capability and stood down (defer signal published) — host our own
-            // copy on the runtime that is already in place.
-            let defer_pending =
-                cooperative && config.coop_bundle && probe_defer_signal(&mut client)?;
-            if coop_safety::coop_bundle_turn(cooperative, config.coop_bundle, defer_pending) {
-                return inject_coop_bundle(&mut client, config);
+            if coop_hand_over_due(&mut client, config, cooperative)? || solo_beside_loader {
+                return inject_coop_bundle(&mut client, config, solo_beside_loader);
             }
             return Ok(Tick::CoexistTab(owner)); // host/tab already present
         }
@@ -992,7 +1102,16 @@ fn tick(
         if config.native_notifications {
             stamp_native_notifications(&mut client);
         }
-        inject_host_runtime(&mut client, config);
+        inject_host_runtime(
+            &mut client,
+            config,
+            config.coop_bundle || solo_beside_loader,
+        );
+        // A loader copy that stood down on the stored offer is waiting for ours — or the
+        // loader has no copy at all: host ours on the runtime just injected, this tick.
+        if coop_hand_over_due(&mut client, config, cooperative)? || solo_beside_loader {
+            return inject_coop_bundle(&mut client, config, solo_beside_loader);
+        }
         return Ok(Tick::CoexistTab(owner));
     }
 
@@ -1009,7 +1128,7 @@ fn tick(
     // down later ("sole" instead of "cooperative"). Wait a bounded window for the
     // loader before hosting; a machine with force on and no loader at all only
     // pays this once per renderer.
-    if owner.is_empty() {
+    if owner.is_empty() && !solo_beside_loader {
         let now = Instant::now();
         let since = *empty_since.get_or_insert(now);
         let waited = now.duration_since(since).as_secs();
@@ -1029,7 +1148,7 @@ fn tick(
     // We host: our own claim, forced, or unclaimed past the settle window. Stamp
     // the opt-ins, inject the runtime (it installs `window.__SHELVES_HOST__` when it
     // finds no other loader), then the bundle.
-    if config.force_owner {
+    if config.force_owner || solo_beside_loader {
         stamp_force_owner(&mut client);
     }
     if config.native_qam {
@@ -1037,6 +1156,12 @@ fn tick(
     }
     if config.native_notifications {
         stamp_native_notifications(&mut client);
+    }
+    // Beside a loader without Deck Shelves of its own, our copy runs on the cooperative
+    // runtime (host published, the loader's UI borrowed, no scan) — the proven path.
+    if solo_beside_loader {
+        inject_host_runtime(&mut client, config, true);
+        return inject_coop_bundle(&mut client, config, true);
     }
 
     log_warning("loader", "Bundle not detected — injecting.");
@@ -1055,7 +1180,7 @@ fn tick(
     // support) is present before the bundle boots. Best-effort: if it is
     // missing we still inject the bundle (it can fall back to an inert host).
     let t_runtime = Instant::now();
-    inject_host_runtime(&mut client, config);
+    inject_host_runtime(&mut client, config, config.coop_bundle);
     let runtime_ms = t_runtime.elapsed().as_millis();
 
     // Bundle compatibility check: never inject an empty/whitespace bundle — that
@@ -1139,11 +1264,95 @@ fn probe_defer_signal(client: &mut CdpClient) -> cdp::Result<bool> {
     Ok(value.as_bool().unwrap_or(false))
 }
 
-/// Host our own bundle copy under cooperative force (the runtime is already
-/// injected). A fresh copy announces itself through `HOST_BUNDLE_BOOTED_GLOBAL`;
-/// a stale announcement from a torn-down copy (hot-swap) is cleared first so the
-/// new copy's self-invoke is not skipped.
-fn inject_coop_bundle(client: &mut CdpClient, config: &Config) -> cdp::Result<Tick> {
+/// The hand-over is due this tick: the protocol is on and the loader's copy saw our
+/// offer and stood down (defer signal published) — host our own copy.
+fn coop_hand_over_due(
+    client: &mut CdpClient,
+    config: &Config,
+    cooperative: bool,
+) -> cdp::Result<bool> {
+    let defer_pending = cooperative && config.coop_bundle && probe_defer_signal(client)?;
+    Ok(coop_safety::coop_bundle_turn(
+        cooperative,
+        config.coop_bundle,
+        defer_pending,
+    ))
+}
+
+/// Writes this host's offer unless the loader's copy answered the previous one with a
+/// fallback boot less than `COOP_OFFER_HOLD_MS` ago. Yields "offered", "same", "held"
+/// or "error".
+fn coop_offer_script(bundle_tag: &str, host_version: &str) -> String {
+    format!(
+        "(function(){{try{{var k={COOP_OFFER_KEY:?},s=window.localStorage,c=null;\
+         try{{c=JSON.parse(s.getItem(k)||\"null\");}}catch(e){{}}\
+         if(c&&c.fallbackAt&&Date.now()-c.fallbackAt<{COOP_OFFER_HOLD_MS})return \"held\";\
+         if(c&&!c.fallbackAt&&c.bundleVersion==={bundle_tag:?})return \"same\";\
+         s.setItem(k,JSON.stringify({{bundleVersion:{bundle_tag:?},hostVersion:{host_version:?},at:Date.now()}}));\
+         return \"offered\";}}catch(e){{return \"error\";}}}})()"
+    )
+}
+
+fn coop_offer_withdraw_script() -> String {
+    format!(
+        "(function(){{try{{var k={COOP_OFFER_KEY:?},s=window.localStorage;\
+         if(s.getItem(k)==null)return \"none\";s.removeItem(k);return \"withdrawn\";}}\
+         catch(e){{return \"error\";}}}})()"
+    )
+}
+
+/// Keep the offer current with the bundle version this host carries (none recorded yet →
+/// nothing to offer). A fallback stamp from the loader's copy holds it; logged once.
+fn sync_coop_offer(client: &mut CdpClient, config: &Config) {
+    let tag = crate::store::load(&config.hub_config_path).bundle_tag;
+    if tag.is_empty() {
+        return;
+    }
+    let status = client
+        .evaluate(&coop_offer_script(&tag, env!("CARGO_PKG_VERSION")))
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string));
+    match status.as_deref() {
+        Some("offered") => log_info(
+            "loader",
+            &format!("Cooperative bundle {tag} offered to the loader's copy — it stands down at its next boot."),
+        ),
+        Some("held") => note_coop_offer_held(),
+        _ => {}
+    }
+}
+
+fn note_coop_offer_held() {
+    if !COOP_OFFER_HELD_LOGGED.swap(true, AtomicOrdering::Relaxed) {
+        log_warning(
+            "loader",
+            "Cooperative bundle: the loader's copy booted itself last time (ours did not land within its window) — not offering again for a day.",
+        );
+    }
+}
+
+fn withdraw_coop_offer(client: &mut CdpClient) {
+    if let Ok(v) = client.evaluate(&coop_offer_withdraw_script()) {
+        if v.as_str() == Some("withdrawn") {
+            log_info(
+                "loader",
+                "Cooperative bundle off — offer withdrawn from the loader's copy.",
+            );
+        }
+    }
+}
+
+/// Host our own bundle copy beside a loader (the runtime is already injected). A
+/// fresh copy announces itself through `HOST_BUNDLE_BOOTED_GLOBAL`; a stale
+/// announcement from a torn-down copy (hot-swap) is cleared first so the new copy's
+/// self-invoke is not skipped. `beside_loader`: the loader has no copy of its own, so
+/// no one published the hand-over for us — announce it ourselves and tell the runtime
+/// our copy is ours to update.
+fn inject_coop_bundle(
+    client: &mut CdpClient,
+    config: &Config,
+    beside_loader: bool,
+) -> cdp::Result<Tick> {
     let source = read_bundle(config)?;
     if source.trim().is_empty() {
         log_warning(
@@ -1155,19 +1364,70 @@ fn inject_coop_bundle(client: &mut CdpClient, config: &Config) -> cdp::Result<Ti
         );
         return Ok(Tick::NotConfirmed);
     }
+    if beside_loader {
+        let _ = client.evaluate(&format!(
+            "{DEFER_GLOBAL} = {{ loaderVersion: \"\", hostBundleVersion: \"\", at: Date.now() }}; \
+             try {{ window.__SHELVES_CONFIG__.coopBundle = true; }} catch (e) {{}} true"
+        ));
+    }
     let _ = client.evaluate(&format!("delete {HOST_BUNDLE_BOOTED_GLOBAL}; true"));
     let gated = format!("{BUNDLE_GATE_PREFIX}{source}{BUNDLE_GATE_SUFFIX}");
     inject_bundle(client, &gated, env!("CARGO_PKG_VERSION"))?;
     state::mark_injected_now();
     log_info(
         "loader",
-        "Cooperative bundle: the loader's copy stood down — hosting our own copy.",
+        if beside_loader {
+            "Plugin loader present without Deck Shelves of its own — hosting our copy beside it."
+        } else {
+            "Cooperative bundle: the loader's copy stood down — hosting our own copy."
+        },
     );
     Ok(if probe_injected(client)? {
         Tick::Active
     } else {
         Tick::NotConfirmed
     })
+}
+
+/// A renderer whose UI windows have never been seen is still booting, not collapsed —
+/// for a bounded grace; after it, a window-less renderer counts as a collapse as usual.
+fn booting(had_windows: bool, renderer_age: Duration) -> bool {
+    !had_windows && renderer_age < BOOT_GRACE
+}
+
+/// The loader has no Deck Shelves of its own — nothing in its plugin list and nothing
+/// installed on disk — and nobody foreign owns the renderer: the hub is the plugin's
+/// only host here and hosts its copy beside the loader, in either force state.
+fn hosts_beside_loader(
+    loader_present: bool,
+    owner: &str,
+    loader_plugin: Option<&str>,
+    installed: impl FnOnce() -> bool,
+) -> bool {
+    loader_present && !is_foreign_owner(owner) && loader_plugin.is_none() && !installed()
+}
+
+/// Under the cooperative bundle, a loader copy newer than ours ignores our offer at
+/// boot: check for an update right away rather than at the next periodic check, once
+/// per version seen, so the next offer carries the newer version.
+fn note_newer_loader_copy(config: &Config, loader_plugin: Option<&str>) {
+    let Some(theirs) = loader_plugin else {
+        return;
+    };
+    let ours = crate::store::load(&config.hub_config_path).bundle_tag;
+    if ours.is_empty() || !version_is_newer(theirs, &ours) {
+        return;
+    }
+    let mut noted = NEWER_LOADER_NOTED.lock().unwrap_or_else(|e| e.into_inner());
+    if *noted == theirs {
+        return;
+    }
+    *noted = theirs.to_string();
+    log_info(
+        "loader",
+        &format!("The loader's Deck Shelves {theirs} is newer than our copy ({ours}) — checking for an update now."),
+    );
+    state::request_update_check();
 }
 
 /// True when a gamepad / Big Picture window is actually on screen — not just
@@ -1220,17 +1480,35 @@ fn probe_loader_present(client: &mut CdpClient) -> cdp::Result<bool> {
     Ok(value.as_bool().unwrap_or(false))
 }
 
+/// The version of the Deck Shelves copy the plugin loader itself loaded, from the
+/// loader's plugin list — any version, including ones from before the coexistence
+/// protocol, which never claim the renderer. `None` when the loader lists no copy
+/// (or there is no loader).
+fn probe_loader_plugin(client: &mut CdpClient) -> cdp::Result<Option<String>> {
+    let expr = "(function(){try{var l=window.DeckyPluginLoader;var ps=l&&l.plugins;\
+         if(!Array.isArray(ps))return null;for(var i=0;i<ps.length;i++){var p=ps[i];\
+         if(p&&p.name===\"Deck Shelves\")return String(p.version||\"?\");}}catch(e){}return null;})()";
+    let value = client.evaluate(expr)?;
+    Ok(value.as_str().map(str::to_string))
+}
+
+/// A loader-managed Deck Shelves that has not claimed the renderer (it predates
+/// the coexistence protocol) must never be joined by a second copy of ours — two
+/// instances double-mount and collapse the Steam UI. Coexist with the tab only,
+/// unless ownership is forced on purpose.
+fn loader_manages_unclaimed_plugin(
+    owner: &str,
+    force_owner: bool,
+    loader_plugin: Option<&str>,
+) -> bool {
+    owner.is_empty() && !force_owner && loader_plugin.is_some()
+}
+
 /// Read the renderer's owner claim: empty string when unclaimed.
 pub fn probe_owner(client: &mut CdpClient) -> cdp::Result<String> {
     let expr = format!("String({OWNER_GLOBAL} || \"\")");
     let value = client.evaluate(&expr)?;
     Ok(value.as_str().unwrap_or_default().to_string())
-}
-
-/// Injection is allowed when the renderer is unclaimed, already ours, or
-/// ownership is forced. A foreign claim without force means stand down.
-pub fn may_inject(owner: &str, force: bool) -> bool {
-    owner.is_empty() || owner == OWNER_KIND || force
 }
 
 /// Whether an unclaimed renderer should keep settling (wait) rather than be hosted
@@ -1309,7 +1587,7 @@ pub(super) fn i18n_stamp(host_runtime_path: &Path) -> String {
 
 /// Expose the host-facing config to the runtime so it derives the RPC endpoint and
 /// the contract version from the daemon (one source) instead of hardcoding them.
-pub(super) fn config_stamp(config: &Config) -> String {
+pub(super) fn config_stamp(config: &Config, coop_bundle: bool) -> String {
     // The Deck Shelves bundle version this host carries (the last installed release
     // tag), for the handshake's `bundleVersion` — null until one is recorded.
     let bundle_tag = crate::store::load(&config.hub_config_path).bundle_tag;
@@ -1325,7 +1603,7 @@ pub(super) fn config_stamp(config: &Config) -> String {
         "rpcToken": state::rpc_token(),
         "device": crate::config::detected_device(),
         "bundleVersion": bundle_version,
-        "coopBundle": config.coop_bundle,
+        "coopBundle": coop_bundle,
     });
     format!("window.__SHELVES_CONFIG__ = {obj};\n")
 }
@@ -1363,7 +1641,7 @@ pub(super) fn assemble_host_runtime(config: &Config) -> std::io::Result<String> 
     ))
 }
 
-fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
+fn inject_host_runtime(client: &mut CdpClient, config: &Config, coop_bundle: bool) {
     // The runtime's trip breaker is now self-healing: it stamps each arm with a
     // timestamp and only trips on a STALE arm (a genuinely dead session), so a
     // boot double-inject (recent arm) re-arms instead of tripping. We must NOT clear
@@ -1376,7 +1654,7 @@ fn inject_host_runtime(client: &mut CdpClient, config: &Config) {
             // them the moment it evaluates.
             let source = format!(
                 "{}{}{}",
-                config_stamp(config),
+                config_stamp(config, coop_bundle),
                 i18n_stamp(&config.host_runtime_path),
                 source
             );

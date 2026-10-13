@@ -20,7 +20,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from deckprobe.screenshots.lib.nav import (
     navigate_to_ds_qam,
@@ -284,4 +284,25 @@ def home(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
     time.sleep(2.0)
     out = out_dir / "home.png"
     p = _capture_bigpicture(host, port, out)
-    return {"home.png": p} if p else {}
+    if not p:
+        return {}
+    shots = {"home.png": p}
+    webp = _to_webp(p)
+    if webp:
+        shots["home.webp"] = webp
+    return shots
+
+
+def _to_webp(png: Path) -> Optional[Path]:
+    """The site serves the WebP (about a tenth of the PNG); written beside the
+    PNG when Pillow is available, skipped quietly otherwise."""
+    try:
+        from PIL import Image  # type: ignore[import-not-found]
+    except ImportError:
+        return None
+    out = png.with_suffix(".webp")
+    try:
+        Image.open(png).convert("RGB").save(out, quality=85, method=6)
+    except OSError:
+        return None
+    return out

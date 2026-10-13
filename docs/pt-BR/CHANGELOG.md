@@ -21,9 +21,31 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   após um download novo e as linhas de atualização do plugin na aba passam a valer também no modo
   cooperativo. Um plugin anterior ao protocolo mantém o comportamento de hoje
   (`src/loader/mod.rs`, `src/loader/coop_safety.rs`, `runtime/shelves-host-api.js`,
-  `runtime/shelves-host-qam.js`). Decisão com testes unitários; ainda falta validar num
-  dispositivo sob force com uma release mais nova do plugin antes de documentar a opção como
-  suportada.
+  `runtime/shelves-host-qam.js`). Validado num Steam Deck ao lado de um loader de plugins (a
+  metade da partida a frio está na entrada seguinte).
+- **O bundle cooperativo agora engata numa partida a frio do Steam.** O loader inicia a cópia
+  dele do Deck Shelves muito antes do primeiro tick de injeção do hub (logo depois de um reinício o
+  hub vê o "colapso" transitório de sempre e espera um intervalo inteiro), então só o handshake ao
+  vivo nunca chegava ao plugin a tempo e a passagem nunca acontecia num dispositivo real. O hub
+  agora deixa uma oferta fixa no armazenamento do renderer (`shelveshub-coop-bundle`: a versão do
+  bundle que ele carrega), renovada a cada tick enquanto `coop_bundle` + `force_owner` estão ligados
+  e retirada uma vez por sessão do renderer quando qualquer um deles está desligado (o
+  armazenamento do renderer sobrevive a um reinício do Steam); um Deck Shelves que entende a oferta
+  (3.4.0 ou mais novo) se retira com base nela ao iniciar, e o hub hospeda a própria cópia no mesmo
+  tick em que injeta o runtime — no Deck as prateleiras estavam de pé 25 s depois do reinício do
+  Steam, uma raiz da Home, um dono. Se a cópia do hub nunca chega em 60 s, a cópia do loader inicia
+  sozinha e carimba a oferta; o hub então a segura por um dia (um aviso no log) em vez de repetir a
+  espera a cada partida. O hub também mantém a própria cópia atualizada enquanto a cópia mais nova
+  do loader ainda roda, para que a próxima oferta leve a versão mais nova (`src/loader/mod.rs`).
+- **Um loader de plugins sem Deck Shelves próprio não deixa mais o hub parado.** Ao lado de um
+  loader que tem outros plugins mas não o Deck Shelves (nada na lista de plugins dele, nada
+  instalado no diretório de plugins), o hub esperava a janela de acomodação e depois injetava um
+  bundle que nunca iniciava (o runtime fica só com a aba ao lado de um loader, e o bundle só se
+  inicia sozinho sem um). Agora hospeda a própria cópia na hora, no mesmo runtime cooperativo que
+  o bundle cooperativo usa — host publicado, UI do loader emprestada, sem varredura — anunciando
+  ele mesmo a passagem, com `force_owner` ligado ou não; hot-swap e atualizações funcionam como
+  quando hospeda sozinho. O log diz "Plugin loader present without Deck Shelves of its own —
+  hosting our copy beside it." (`src/loader/mod.rs`, `src/populate.rs`).
 - **A posse forçada espera o loader de plugins antes de hospedar.** Logo após um reinício do daemon
   ou da Steam, os globais do loader chegam alguns segundos depois do renderer, então o primeiro
   tick de injeção com `force_owner` não via loader nenhum e tomava o caminho de host único (a aba
@@ -155,7 +177,54 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   inicial e de funcionalidades, nos dois idiomas — um código vazio remove os dois. Nada disso
   vai dentro do host nem do plugin.
 
+### Alterado
+- **As linhas de log de estado estável são escritas uma vez por mudança, não a cada tick.** "Bundle
+  active in renderer." e "Coexisting with …" se repetiam a cada tick — a cada 5 s enquanto
+  hospedando — e enterravam o journal e o visualizador de log do próprio hub. Agora aparecem quando
+  o estado muda (e de novo depois de um reinício do Steam, um colapso, uma pausa ou um recuo para o
+  desktop), então o journal de um dia se lê como um punhado de transições (`src/loader/mod.rs`).
+  Uma rodada de sincronização que encontra um reinício do Steam agora registra "round skipped …
+  retrying" em vez de "settings sync off" (`src/sync.rs`).
+- **A primeira injeção depois de uma partida do Steam não espera mais um intervalo inteiro.** O
+  Steam cria o contexto compartilhado antes das janelas, então a primeira checagem de saúde
+  depois de um reinício via "sem janelas de UI" e tratava como colapso: pausava um
+  `interval_secs` inteiro antes da primeira injeção (25 s depois do reinício num Deck com
+  intervalo de 15 s, uns 40 s com os 30 s que shippamos). Um renderer cujas janelas nunca foram
+  vistas agora é lido como "iniciando" — sondado a cada 2 s sem contar strike de colapso, por no
+  máximo 90 s — então o runtime e o bundle chegam assim que as janelas sobem. Um renderer que
+  tinha janelas e as perdeu continua sendo colapso, com a mesma recuperação de antes
+  (`src/loader/mod.rs`).
+- **No bundle cooperativo, uma cópia do loader mais nova que a do hub dispara uma checagem de
+  atualização na hora.** Uma cópia mais nova ignora a oferta guardada, então o hub esperava a
+  próxima checagem periódica (até 30 min) até a própria cópia — e a oferta — alcançarem. Agora
+  checa imediatamente, uma vez por versão do loader vista, para a partida seguinte do Steam já
+  fazer a passagem (`src/loader/mod.rs`, `src/state.rs`).
+
 ### Corrigido
+- **A matriz de deploy não envia mais um bundle velho do plugin quando o build do plugin falha.** O plugin era construído dentro de uma substituição de comando, então um `build:release` com falha era ignorado e o bundle que estivesse em `dist/` do plugin saía como se fosse novo; agora o build roda antes, no nível superior, e uma falha aborta o deploy (`scripts/deploy-matrix.sh`).
+- **Um Deck Shelves do carregador de plugins anterior ao protocolo de coexistência não ganha mais
+  uma segunda cópia ao lado.** Essa cópia (anterior ao 3.3.1) nunca reivindica o renderizador,
+  então depois da janela de acomodação de posse o hub hospedava o próprio bundle ao lado dela —
+  duas instâncias montavam a Home duas vezes e a interface do Steam colapsava no reinício de
+  recuperação (relatado de um Deck como "gaming mode crashing" logo após instalar). O daemon
+  agora lê a lista de plugins do carregador e, quando ela lista o Deck Shelves sem reivindicação
+  de posse, fica só com sua aba (log: `Coexisting with "plugin loader (Deck Shelves <versão>, no
+  ownership claim …)"`), a não ser com `force_owner` de propósito (`src/loader/mod.rs`, decisão
+  com teste unitário). O guia de solução de problemas ganhou o comando do journal que recupera o
+  log do serviço depois de desinstalar e a limpeza para um diretório removido à mão.
+- **Uma instalação nova não começa mais numa cópia velha do Deck Shelves.** O repositório (e,
+  portanto, todo pacote) carregava um bundle real de 4,6 MB de uma release antiga em
+  `bundle/index.js`, e o serviço mantém qualquer bundle com cara de real que encontra — então uma
+  instalação nova rodava essa cópia velha até a primeira atualização automática. O pacote volta a
+  trazer o placeholder pequeno, que o serviço substitui na inicialização por uma cópia de um
+  carregador de plugins instalado ou pela release mais nova.
+- **Faxina de uma varredura do repositório.** Duas funções sem referência removidas
+  (`latest_hub_release_tag`, `may_inject`) junto com as últimas supressões de lint (duas linhas
+  `eslint-disable` no mock do harness, um `#[allow]` no tray); um `now_ms()` e um par de
+  leitura/escrita do arquivo de config substituem cinco e três cópias inline; `cfg_u16` não trunca
+  mais uma porta fora da faixa; as globais de diagnóstico do renderer estão documentadas
+  (`docs/debugging.md`); o CI roda a regra de texto publicado, os lançadores e os arquivos de
+  dados por `pnpm validate --only …`; o dispatch RPC ganhou testes das recusas do editor de config.
 - **Os instaladores de um clique do SteamOS / Linux abriam um terminal que fechava na hora.** Os
   arquivos `.desktop` levavam toda a lógica de instalação na linha `Exec`, com variáveis de shell
   (`$T`, `$A`, `$(uname -m)`) dentro das aspas. Um lançador de entradas desktop passa essa linha pelo

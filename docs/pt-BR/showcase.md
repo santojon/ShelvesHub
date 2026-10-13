@@ -32,7 +32,7 @@ automaticamente (os que faltarem são simplesmente ignorados):
 
 | Arquivo | Mostra |
 |---|---|
-| `home.png` | A Home do Deck Shelves, hospedada pelo ShelvesHub |
+| `home.png` → `home.webp` | A Home do Deck Shelves, hospedada pelo ShelvesHub (o site serve o WebP, um décimo do tamanho do PNG; a captura grava os dois) |
 | `qam-tab.png` | A aba nativa de Acesso Rápido (o editor abre diretamente) |
 | `fallback.png` | O painel de fallback — ações de recuperação + o visualizador de logs |
 | `coexist.png` | As duas abas, coexistindo com outro host |

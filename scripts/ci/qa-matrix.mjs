@@ -25,8 +25,8 @@ const AUTOMATED = [
 // Cells no automation can clear — a lab VM or real hardware. Stated here and in
 // docs/qa-lab.md; a human updates both when a lab comes online.
 const MANUAL = [
-  { id: "steamos-x86_64-device", platform: "SteamOS", arch: "x86_64", kind: "device", status: "manual", note: "Real Steam CEF integration (inject, render, gamepad, coexistence, cooperative) — run on a Steam Deck; `shelveshub status --report` plus the deploy and soak scripts are the evidence." },
-  { id: "macos-host-steam", platform: "macOS", arch: "x86_64 / arm64", kind: "device", status: "manual", note: "Sole host on this machine's Steam Big Picture (`pnpm local:run`)." },
+  { id: "steamos-x86_64-device", platform: "SteamOS", arch: "x86_64", kind: "device", status: "manual", files: ["device-steamos-"], note: "Real Steam CEF integration (inject, render, gamepad, coexistence, cooperative) — run on a Steam Deck; `shelveshub status --report` plus the deploy and soak scripts are the evidence." },
+  { id: "macos-host-steam", platform: "macOS", arch: "x86_64 / arm64", kind: "device", status: "manual", files: ["device-macos-"], note: "Sole host on this machine's Steam Big Picture (`pnpm local:run`)." },
   { id: "windows-x86_64-vm", platform: "Windows", arch: "x86_64", kind: "vm", status: "blocked", note: "Host, install, logon task, RPC, update and recovery need a Windows VM; CI covers build, unit tests and installer syntax only. Real Steam needs real hardware." },
   { id: "windows-arm64-vm", platform: "Windows", arch: "aarch64", kind: "vm", status: "blocked", note: "No ARM64 Windows lab yet; Steam would run under emulation only." },
   { id: "linux-aarch64-device", platform: "Linux", arch: "aarch64", kind: "device", status: "blocked", note: "Real aarch64 hardware with Steam: install, inject, ARM backend, signed self-update, recovery. Stays experimental until a tester report." },
@@ -83,7 +83,10 @@ function overallOf(cells) {
 }
 
 function main() {
-  const cells = AUTOMATED.map(automatedCell).concat(MANUAL.map((c) => ({ ...c, evidence: [] })));
+  // A hand-run device record (docs/qa-lab.md template, as JSON) rides along its manual
+  // cell as evidence; the status stays "manual" — a human ran it, no script judged it.
+  const manualCell = ({ files = [], ...c }) => ({ ...c, evidence: evidenceFor(files).map(summarize) });
+  const cells = AUTOMATED.map(automatedCell).concat(MANUAL.map(manualCell));
   const p = (n) => String(n).padStart(2, "0");
   const d = new Date();
   const ts = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;

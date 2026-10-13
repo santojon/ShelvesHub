@@ -148,6 +148,18 @@ pub fn requeue_host_notices(items: Vec<(String, serde_json::Value)>) {
 
 /// Set by the RPC handlers when a synced setting changed here, so the loop runs a
 /// sync round on the next settled tick instead of waiting for the periodic one.
+/// The next loop tick runs the update check at once (set when the loader's Deck
+/// Shelves turns out newer than the copy we carry under the cooperative bundle).
+static UPDATE_CHECK_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+pub fn request_update_check() {
+    UPDATE_CHECK_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+pub fn take_update_check_request() -> bool {
+    UPDATE_CHECK_REQUESTED.swap(false, Ordering::Relaxed)
+}
+
 static SYNC_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 pub fn request_sync() {
@@ -159,29 +171,34 @@ pub fn take_sync_request() -> bool {
     SYNC_REQUESTED.swap(false, Ordering::Relaxed)
 }
 
+/// Wall-clock millis since the epoch (0 when the clock is unavailable).
+pub fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Millis elapsed since a recorded stamp, or `None` when never stamped (0) or
+/// the clock went backwards.
+fn millis_since(at: u64) -> Option<u64> {
+    if at == 0 {
+        return None;
+    }
+    now_ms().checked_sub(at)
+}
+
 /// Wall-clock millis (since epoch) of the most recent update check, so the hub
 /// view can show "checked X ago". 0 = never checked this session.
 static LAST_UPDATE_CHECK_MS: AtomicU64 = AtomicU64::new(0);
 
 pub fn mark_update_checked_now() {
-    let ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
-    LAST_UPDATE_CHECK_MS.store(ms, Ordering::Relaxed);
+    LAST_UPDATE_CHECK_MS.store(now_ms(), Ordering::Relaxed);
 }
 
 /// Millis elapsed since the last update check, or `None` if never checked.
 pub fn millis_since_update_check() -> Option<u64> {
-    let at = LAST_UPDATE_CHECK_MS.load(Ordering::Relaxed);
-    if at == 0 {
-        return None;
-    }
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
-    now.checked_sub(at)
+    millis_since(LAST_UPDATE_CHECK_MS.load(Ordering::Relaxed))
 }
 
 /// Troubleshooting: when set, the loader stands down (stops injecting) until the
@@ -242,25 +259,13 @@ pub fn set_injected(value: bool) {
 /// Stamp "the bundle was just injected" with the current wall-clock time, so the
 /// bundleReady RPC can report how long the downstream boot took.
 pub fn mark_injected_now() {
-    let ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
-    INJECTED_AT_MS.store(ms, Ordering::Relaxed);
+    INJECTED_AT_MS.store(now_ms(), Ordering::Relaxed);
 }
 
 /// Millis elapsed since the last injection stamp, or `None` if never stamped /
 /// the clock went backwards. Read once by bundleReady.
 pub fn millis_since_injected() -> Option<u64> {
-    let at = INJECTED_AT_MS.load(Ordering::Relaxed);
-    if at == 0 {
-        return None;
-    }
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
-    now.checked_sub(at)
+    millis_since(INJECTED_AT_MS.load(Ordering::Relaxed))
 }
 
 /// Whether the bundle was active as of the last loop tick.
