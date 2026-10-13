@@ -9,7 +9,9 @@ set -e
 INSTALL_DIR="$HOME/.local/share/shelveshub"
 PLIST="$HOME/Library/LaunchAgents/com.shelveshub.plist"
 TRAY_PLIST="$HOME/Library/LaunchAgents/com.shelveshub.tray.plist"
-SETTINGS_DIR="$HOME/Library/Application Support/deck-shelves"
+# Resolved the same way install_mac.sh does, so --purge removes the directory the
+# install actually used.
+SETTINGS_DIR="${SHELVES_SETTINGS_DIR:-$HOME/Library/Application Support/deck-shelves}"
 CEF_FLAG="$HOME/Library/Application Support/Steam/.cef-enable-remote-debugging"
 PURGE=0
 [[ "$1" == "--purge" ]] && PURGE=1

@@ -62,7 +62,7 @@ Windows rode `%LOCALAPPDATA%\ShelvesHub\shelveshub.exe status --report`; depois 
 uname -m                                     # x86_64 ou aarch64 (arm64 num Mac) — o instalador do SteamOS escolhe o asset por isso
 ldd ~/.local/share/shelveshub/shelveshub | grep "not found"   # não deve imprimir nada (piso de glibc)
 ~/.local/share/shelveshub/shelveshub status --report   # o JSON do próprio host: versões, SO, arquitetura alvo vs. em execução, glibc, python, modelo do dispositivo, conectores de display, serviço de sessão do SteamOS
-~/.local/share/shelveshub/shelveshub doctor            # arquivo de flag, porta de depuração, processo do Steam, serviço do hub
+~/.local/share/shelveshub/shelveshub doctor            # arquivo de flag, porta de depuração, processo do Steam, RPC do daemon, serviço do hub
 curl -s 127.0.0.1:8080/json | grep '"title"' # os títulos de janela que o Steam expõe (veja "O que o hub observa")
 ```
 
@@ -101,11 +101,10 @@ de desenvolvimento, quando o ponto for o instalador. Depois confira:
 - no canal de pré-release, uma autoatualização exercita a checagem do binário antes da troca (no
   Linux a máquina do ELF precisa bater com a CPU; o Windows confere a máquina do PE, o macOS só o
   número mágico do Mach-O);
-- a desinstalação preserva as configurações e `--purge` as remove (SteamOS e macOS, onde o
-  `--purge` também apaga a flag da porta de depuração do Steam até a próxima instalação; `-Purge`
-  no Windows; o desinstalador Linux genérico — nos pacotes `shelveshub-linux` x86_64 e ARM64 —
-  não tem purge e sempre preserva `~/.local/share/deck-shelves`) — a perna de contêiner prova o
-  layout de arquivos do SteamOS; o dispositivo prova o gerenciador de serviços.
+- a desinstalação preserva as configurações e `--purge` as remove (SteamOS, Linux e macOS, onde
+  o `--purge` também apaga a flag da porta de depuração do Steam até a próxima instalação;
+  `-Purge` no Windows remove só as configurações) — a perna de contêiner prova o layout de
+  arquivos do SteamOS; o dispositivo prova o gerenciador de serviços.
 
 ## Passo 3 — colocar o dispositivo num modo
 

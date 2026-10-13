@@ -67,6 +67,10 @@ jobs:
             oneclick_name: install-windows.bat
 
     runs-on: ${{ matrix.os }}
+    env:
+      # Same glibc floor as release.yml (cargo-zigbuild's versioned target), so
+      # these artifacts link like the published ones.
+      GLIBC: "2.31"
 
     steps:
       - uses: actions/checkout@v4
@@ -86,9 +90,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # aarch64 Linux cross-links with cargo-zigbuild (apt-free — no dpkg-lock wedge).
-      - name: Install zig + cargo-zigbuild (apt-free aarch64 linker)
-        if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
+      # Every Linux target links through cargo-zigbuild (apt-free, and the glibc
+      # floor is explicit), exactly as the release does.
+      - name: Install zig + cargo-zigbuild (apt-free linker, glibc floor)
+        if: runner.os == 'Linux'
         run: |
           python3 -m pip install --break-system-packages ziglang
           cargo install --locked cargo-zigbuild
@@ -96,43 +101,87 @@ jobs:
       - name: Build release binary
         shell: bash
         run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            cargo zigbuild --release --target ${{ matrix.target }}
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            cargo zigbuild --release --target "${{ matrix.target }}.$GLIBC"
           else
             cargo build --release --target ${{ matrix.target }}
           fi
 
+      # macOS ships a UNIVERSAL binary (arm64 + x86_64), like the release: build
+      # the x86_64 slice too and lipo the two together in place.
+      - name: macOS universal binary (arm64 + x86_64)
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add x86_64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          for b in shelveshub shelves-devtools; do
+            lipo -create \
+              "target/aarch64-apple-darwin/release/$b" \
+              "target/x86_64-apple-darwin/release/$b" \
+              -output "target/aarch64-apple-darwin/release/$b"
+            archs="$(lipo -archs "target/aarch64-apple-darwin/release/$b")"
+            echo "$b arches: $archs"
+            case "$archs" in
+              *x86_64*arm64* | *arm64*x86_64*) ;;
+              *) echo "::error::$b is not a universal binary ($archs)"; exit 1 ;;
+            esac
+          done
+
       # Keep the optional tray companion compiling on every build (and shipped in
-      # the artifact). Linux uses ksni (pure Rust) — no apt; aarch64 via zigbuild.
+      # the artifact). Linux uses ksni (pure Rust) — no apt; zigbuild like the daemon.
       - name: Build tray companion
         shell: bash
         run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            cargo zigbuild --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            cargo zigbuild --release --features tray --bin shelveshub-tray --target "${{ matrix.target }}.$GLIBC"
           else
             cargo build --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
           fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            rustup target add x86_64-apple-darwin
+            cargo build --release --features tray --bin shelveshub-tray --target x86_64-apple-darwin
+            lipo -create \
+              "target/aarch64-apple-darwin/release/shelveshub-tray" \
+              "target/x86_64-apple-darwin/release/shelveshub-tray" \
+              -output "target/aarch64-apple-darwin/release/shelveshub-tray"
+          fi
 
+      # The same dist layout as release.yml (config file, boot cuts, installer dir).
       - name: Package (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p dist/bundle dist/runtime dist/installer
+          mkdir -p dist/bundle dist/runtime dist/installer dist/assets/boot
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           cp target/${{ matrix.target }}/release/shelves-devtools dist/
           [ -f target/${{ matrix.target }}/release/shelveshub-tray ] && cp target/${{ matrix.target }}/release/shelveshub-tray dist/ || true
+          cp shelveshub.config.json dist/
+          cp assets/boot/deck_startup.webm assets/boot/deck_startup_1280x800.webm dist/assets/boot/
           cp -r bundle/. dist/bundle/
           cp -r runtime/. dist/runtime/
           cp -r ${{ matrix.installer_dir }}/. dist/installer/
           cd dist && tar -czf ../${{ matrix.package }} .
 
+      - name: ELF arch audit (Linux packages)
+        if: runner.os == 'Linux'
+        run: |
+          case "${{ matrix.target }}" in
+            aarch64-*) expect=aarch64 ;;
+            *)         expect=x86_64 ;;
+          esac
+          for b in shelveshub shelves-devtools shelveshub-tray; do
+            if [ -f "dist/$b" ]; then bash scripts/arch-audit.sh "dist/$b" "$expect"; fi
+          done
+
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer | Out-Null
+          New-Item -ItemType Directory -Force dist\bundle, dist\runtime, dist\installer, dist\assets\boot | Out-Null
           Copy-Item target\${{ matrix.target }}\release\${{ matrix.binary }} dist\
           Copy-Item target\${{ matrix.target }}\release\shelves-devtools.exe dist\
           if (Test-Path target\${{ matrix.target }}\release\shelveshub-tray.exe) { Copy-Item target\${{ matrix.target }}\release\shelveshub-tray.exe dist\ }
+          Copy-Item shelveshub.config.json dist\
+          Copy-Item assets\boot\deck_startup.webm, assets\boot\deck_startup_1280x800.webm dist\assets\boot\
           Copy-Item -Recurse bundle\* dist\bundle\
           Copy-Item -Recurse runtime\* dist\runtime\
           Copy-Item -Recurse ${{ matrix.installer_dir }}\* dist\installer\

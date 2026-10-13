@@ -62,8 +62,11 @@ flowchart TB
 ```
 
 As escolhas de config e de preferências de update são aplicadas **só na primeira
-instalação**, então um upgrade nunca sobrescreve o que você mudou na aba. A escolha
-do tray é uma ação (instalar o binário + registrar o autostart) e é respeitada em
+instalação**, então um upgrade nunca sobrescreve o que você mudou na aba. As
+atualizações automáticas vêm ligadas por padrão — com as perguntas, sem elas (uma
+instalação por pipe) e numa instalação que nunca rodou o instalador — então as
+perguntas só servem para desligá-las ou optar pelos pré-lançamentos. A escolha do
+tray é uma ação (instalar o binário + registrar o autostart) e é respeitada em
 qualquer execução quando você opta por ela.
 
 ## Opções e defaults
@@ -107,4 +110,7 @@ O desinstalador para e remove o serviço do daemon e o diretório de instalaçã
 se o tray foi instalado — para ele e remove sua entrada de autostart. As suas
 configurações do Deck Shelves (compartilhadas com outros hosts) e a flag de debug
 CEF do Steam são **mantidas**, a menos que você passe a opção de purge (`--purge`
-nos desinstaladores shell/macOS; o desinstalador do Windows pergunta).
+nos desinstaladores shell/macOS). No Windows, `.\installer\uninstall.ps1 -Purge` a
+partir do pacote extraído remove só as configurações; o `uninstall-windows.bat` de
+um clique e o desinstalador do `setup.exe` nunca fazem purge, e a flag de debug do
+Steam fica no lugar.

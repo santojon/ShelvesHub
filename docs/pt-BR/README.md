@@ -70,7 +70,7 @@ O serviço também **se mantém atualizado, junto com o pacote**: com as atualiz
 - **Traz sua própria cópia do Deck Shelves** — reaproveita uma cópia local, copia de um carregador instalado, ou baixa a versão mais recente (`SHELVES_PRERELEASE=1` habilita pré-lançamentos).
 - **Hospeda o backend de dados** — supervisiona o backend de dados do Deck Shelves via stdio, reinicia em caso de crash e expõe seus logs, então lista de desejos, preços, backups e amigos funcionam numa instalação standalone.
 - **Se atualiza sozinho** — baixa e verifica uma versão mais nova do ShelvesHub, troca o próprio binário no lugar, e reinicia o serviço para concluir (ou pede para você reiniciar quando não consegue).
-- **Mantém o Deck Shelves atualizado** — com as atualizações automáticas ativadas, verifica periodicamente e instala uma versão mais nova no lugar, depois recarrega, então o aviso de "atualização disponível" some sozinho.
+- **Mantém o Deck Shelves atualizado** — com as atualizações automáticas ativadas, verifica periodicamente e instala uma versão mais nova no lugar e a troca entra em vigor sozinha, então o aviso de "atualização disponível" some por conta própria.
 - **Canais de atualização** — estável e pré-lançamento são separados para o host e para o Deck Shelves; cada interruptor mais específico só aparece depois que o de cima dele está ativado.
 - **Voltar uma versão** — toda atualização guarda o ShelvesHub anterior e o Deck Shelves anterior; as linhas "Voltar ao … anterior" na aba os restauram offline, e a versão que você deixou fica retida das atualizações automáticas até uma mais nova ser publicada.
 - **Novidades, em silêncio** — uma atualização pendente mostra suas notas de lançamento na aba antes de aplicar, e por padrão as atualizações automáticas esperam até nenhum jogo estar em execução.
@@ -159,7 +159,7 @@ Na **primeira** instalação os instaladores por script fazem algumas perguntas 
 | `SHELVES_FORCE_OWNER` | off | Hospeda o Deck Shelves mesmo com um carregador de plugins presente (modo cooperativo). |
 | `SHELVES_NATIVE_QAM` | on | Adiciona a aba própria do ShelvesHub no Quick Access. |
 | `SHELVES_DESKTOP_UI` | off | Também injeta no cliente desktop comum (experimental). |
-| `SHELVES_AUTO_UPDATE` | off | Interruptor mestre das atualizações automáticas. |
+| `SHELVES_AUTO_UPDATE` | on | Interruptor mestre das atualizações automáticas (um jogo em execução nunca é interrompido). |
 | `SHELVES_AUTO_UPDATE_HUB` | on | Autoatualiza o próprio ShelvesHub (quando o mestre está ligado). |
 | `SHELVES_AUTO_UPDATE_PLUGIN` | on | Autoatualiza o Deck Shelves (quando o mestre está ligado). |
 | `SHELVES_HUB_PRERELEASE` | off | Inclui pré-lançamentos do ShelvesHub. |
@@ -182,11 +182,11 @@ Cada desinstalador para e remove o serviço em segundo plano e o diretório de i
 | Plataforma | Um clique | Ou manualmente |
 |---|---|---|
 | SteamOS / Steam Deck | `uninstall-shelveshub.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (cópia instalada), ou `bash uninstall.sh` a partir do pacote extraído |
-| Linux | `uninstall-shelveshub-linux.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (cópia instalada), ou `bash uninstall.sh` a partir do pacote extraído |
+| Linux | `uninstall-shelveshub-linux.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (cópia instalada), ou `bash uninstall.sh` a partir do pacote extraído — adicione `--purge` para também remover as configurações e a flag de depuração remota do Steam |
 | macOS | `uninstall-mac.command` | `bash ~/.local/share/shelveshub/uninstall_mac.sh` — adicione `--purge` para também remover as configurações e a flag de depuração remota do Steam |
 | Windows | `uninstall-windows.bat`, ou **Configurações → Aplicativos** | execute `uninstall.exe` na pasta de instalação, ou `installer\uninstall.ps1` a partir do pacote |
 
-`--purge` (macOS/SteamOS) remove adicionalmente as configurações compartilhadas do Deck Shelves e a flag `.cef-enable-remote-debugging`; reinicie o Steam depois disso para que ele pare de expor a porta de depuração.
+`--purge` (Linux/SteamOS/macOS) remove adicionalmente as configurações compartilhadas do Deck Shelves e a flag `.cef-enable-remote-debugging`; reinicie o Steam depois disso para que ele pare de expor a porta de depuração. No Windows, `installer\uninstall.ps1 -Purge` a partir do pacote extraído remove só as configurações.
 
 ---
 

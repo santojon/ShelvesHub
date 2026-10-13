@@ -106,16 +106,19 @@ Get-ScheduledTask -TaskName ShelvesHub
 
 ## Bundle
 
-The `bundle/index.js` slot is populated by the Deck Shelves release pipeline. On a fresh loader install it contains a placeholder; the Deck Shelves installer replaces it with the real bundle. If you are setting up manually, copy the built Deck Shelves bundle to `<install_dir>/bundle/index.js`.
+The package ships `bundle/index.js` as a placeholder; the daemon fills the slot itself on its first start — it copies a loader-managed Deck Shelves if one is on the machine, otherwise it downloads the newest Deck Shelves release — and keeps it current with automatic updates on (on by default). If you are setting up manually, copy a built Deck Shelves bundle (the `index.iife.js` artifact) to `<install_dir>/bundle/index.js`.
 
 ## RPC server
 
-The loader exposes a local HTTP JSON-RPC endpoint at `127.0.0.1:60123`. You can probe it directly:
+The daemon exposes a local HTTP JSON-RPC endpoint at `127.0.0.1:60123` (`rpc_host` / `rpc_port` in the config file; per service, `SHELVES_RPC_HOST` / `SHELVES_RPC_PORT`, or `SHELVES_RPC_ADDR` when those two are unset). Every request carries the JSON content type and the per-boot bearer token the daemon writes next to its install (`~/.local/share/shelveshub/.rpc-token`; `%LOCALAPPDATA%\shelveshub\.rpc-token` on Windows):
 
 ```bash
-curl -s 127.0.0.1:60123 -d '{"method":"ping"}'
+TOKEN="$(cat ~/.local/share/shelveshub/.rpc-token)"
+curl -s http://127.0.0.1:60123/ -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"ping"}'
 # → {"ok":true,"result":"pong"}
 
-curl -s 127.0.0.1:60123 -d '{"method":"getVersion"}'
-# → {"ok":true,"result":"0.1.0"}
+curl -s http://127.0.0.1:60123/ -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"getVersion"}'
+# → {"ok":true,"result":"0.6.0"}
 ```
+
+The method list and the wire format are in [host-api.md](host-api.md#rpc-wire-format).

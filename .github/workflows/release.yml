@@ -85,6 +85,12 @@ jobs:
     # Whole-job cap: a wedged apt/network step fails fast instead of burning the
     # 6h GitHub default (a build normally finishes in a few minutes).
     timeout-minutes: 30
+    env:
+      # The glibc floor every Linux binary is linked against (cargo-zigbuild's
+      # versioned target), the same one scripts/deck-build.sh pins: the release
+      # runs on stock SteamOS and older desktop distros, not only on the runner's
+      # own glibc.
+      GLIBC: "2.31"
 
     steps:
       - uses: actions/checkout@v4
@@ -114,13 +120,12 @@ jobs:
           perl -0777 -pi -e "s/^version = \"[^\"]*\"/version = \"$V\"/m" Cargo.toml
           grep '^version' Cargo.toml
 
-      # apt on the hosted runner can wedge waiting for the dpkg lock held by the
-      # runner's own unattended-upgrades, or on a slow mirror. Bound the step, wait
-      # for the lock, and retry instead of hanging the whole release for hours.
-      # aarch64 Linux cross-links with cargo-zigbuild (zig bundles the linker) — no
-      # apt cross-toolchain to wedge on the runner's dpkg lock / a slow mirror.
-      - name: Install zig + cargo-zigbuild (apt-free aarch64 linker)
-        if: runner.os == 'Linux' && matrix.target == 'aarch64-unknown-linux-gnu'
+      # Every Linux target links through cargo-zigbuild (zig bundles the linker and
+      # a versioned glibc): that pins the glibc floor explicitly for x86_64 too,
+      # and cross-links aarch64 with no apt cross-toolchain to wedge on the
+      # runner's dpkg lock / a slow mirror. Bounded so a stuck install fails fast.
+      - name: Install zig + cargo-zigbuild (apt-free linker, glibc floor)
+        if: runner.os == 'Linux'
         timeout-minutes: 8
         run: |
           python3 -m pip install --break-system-packages ziglang
@@ -129,8 +134,8 @@ jobs:
       - name: Build release binary
         shell: bash
         run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            cargo zigbuild --release --target ${{ matrix.target }}
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            cargo zigbuild --release --target "${{ matrix.target }}.$GLIBC"
           else
             cargo build --release --target ${{ matrix.target }}
           fi
@@ -158,14 +163,14 @@ jobs:
           done
 
       # Optional tray companion. Linux uses ksni (pure-Rust StatusNotifierItem) —
-      # no gtk/appindicator/xdo, so NO apt and aarch64 cross-builds via zigbuild
-      # (zig+cargo-zigbuild are already installed for the aarch64 daemon above).
+      # no gtk/appindicator/xdo, so NO apt, and it links through zigbuild with the
+      # same glibc floor as the daemon (zig+cargo-zigbuild are installed above).
       # macOS/Windows use tray-icon; macOS lipos the two slices like the daemon.
       - name: Build tray companion
         shell: bash
         run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            cargo zigbuild --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            cargo zigbuild --release --features tray --bin shelveshub-tray --target "${{ matrix.target }}.$GLIBC"
           else
             cargo build --release --features tray --bin shelveshub-tray --target ${{ matrix.target }}
           fi
@@ -192,6 +197,20 @@ jobs:
           cp -r runtime/. dist/runtime/
           cp -r ${{ matrix.installer_dir }}/. dist/installer/
           cd dist && tar -czf ../${{ matrix.package }} .
+
+      # The packaged Linux binaries must be ELF for the package's architecture —
+      # catches an x86-only artifact slipping into an aarch64 package (or vice
+      # versa) before it is published.
+      - name: ELF arch audit (Linux packages)
+        if: runner.os == 'Linux'
+        run: |
+          case "${{ matrix.target }}" in
+            aarch64-*) expect=aarch64 ;;
+            *)         expect=x86_64 ;;
+          esac
+          for b in shelveshub shelves-devtools shelveshub-tray; do
+            if [ -f "dist/$b" ]; then bash scripts/arch-audit.sh "dist/$b" "$expect"; fi
+          done
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -375,10 +394,10 @@ jobs:
               done
           sort -k2 -o SHA256SUMS SHA256SUMS
           echo "== SHA256SUMS =="; cat SHA256SUMS
-          # Sign with minisign when the CI secret is configured; otherwise publish
-          # the sums unsigned (the daemon then verifies the hash but logs that the
-          # signature was unavailable). Set MINISIGN_SECRET_KEY + MINISIGN_PASSWORD
-          # (from `minisign -G`) to enable tamper-proof signature verification.
+          # Sign with minisign. The key is REQUIRED: installed daemons verify
+          # SHA256SUMS.minisig against the baked-in public key and refuse a release
+          # without it, so a missing secret fails the release here instead of
+          # publishing assets no daemon will install.
           if [ -n "${MINISIGN_SECRET_KEY:-}" ]; then
             sudo systemctl stop unattended-upgrades 2>/dev/null || true
             for i in 1 2 3 4 5; do
@@ -404,7 +423,8 @@ jobs:
             rm -f mkey
             echo "SHA256SUMS signed with minisign."
           else
-            echo "MINISIGN_SECRET_KEY not set — publishing SHA256SUMS without a signature."
+            echo "::error::MINISIGN_SECRET_KEY is not set — refusing to publish an unsigned release: installed daemons verify SHA256SUMS.minisig against the baked-in public key and reject a release without it. Set MINISIGN_SECRET_KEY (and MINISIGN_PASSWORD when the key is password-protected) to the key pair behind MINISIGN_PUBLIC_KEY in src/constants.rs, then re-run."
+            exit 1
           fi
 
       - name: Create GitHub Release

@@ -7,10 +7,10 @@ export interface PlatformApi {
 
 export const Platform: PlatformApi = {
   getOSVersion() {
-      return "Simulado: Versão 1.0.0";
+      return "Simulated: version 1.0.0";
   },
   checkCompatibility() {
-      console.log("Compatibilidade do sistema confirmada.");
+      console.log("System compatibility confirmed.");
       return true;
   },
 };

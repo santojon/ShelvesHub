@@ -17,8 +17,10 @@ key to fall back to its default.
 
 ### The RPC port (60123) is already in use
 
-Symptom: the log shows `Failed to bind 127.0.0.1:60123`. Another program holds the
-port. Fix — pick a free port:
+Symptom: the log shows `Failed to bind the control endpoint 127.0.0.1:60123: … Another
+process (a second ShelvesHub, or something else) holds the port, so settings CANNOT be
+saved.` The daemon keeps injecting without its RPC, but nothing can be saved until the
+port is free. Fix — stop the other process, or pick a free port:
 
 ```json
 { "rpc_port": 60124 }
@@ -29,8 +31,9 @@ you only change it in one place.
 
 ### Steam's debug port (8080) is wrong or unreachable
 
-Symptom: repeated `Injection cycle skipped: … Connection refused` on
-`127.0.0.1:8080`. Steam's CEF remote-debugging endpoint isn't reachable there. First
+Symptom: `Injection cycle skipped: … Connection refused` on `127.0.0.1:8080` (logged
+once; it stays the loader's last line until the endpoint answers). Steam's CEF
+remote-debugging endpoint isn't reachable there. First
 make sure it is enabled — `~/.steam/steam/.cef-enable-remote-debugging` exists and
 Steam was fully restarted afterwards. If it listens on a different port, set it:
 
@@ -62,21 +65,26 @@ it unless `force_owner` is set on purpose. Two knobs:
   { "owner_settle_secs": 25 }
   ```
 
-- **You want ShelvesHub to be the host** when it is the only one installed:
+- **You want Deck Shelves to run on ShelvesHub next to the loader** (cooperative
+  ownership):
 
   ```json
   { "force_owner": true }
   ```
 
-  This makes ShelvesHub claim the renderer immediately (skipping the owner-settle
-  wait). It does **not** take the renderer away from another host that already
-  owns it — that is not supported and could destabilise the interface — so with a
-  live host present ShelvesHub stands down and coexists (its tab is still added
-  alongside). Changing this setting takes effect after a restart (use **Restart to
-  apply** on the hub page, which restarts the daemon and Steam together).
+  Beside a loader the hub injects its runtime and publishes its host, so the Deck
+  Shelves the loader launched binds to ShelvesHub while the loader keeps the renderer
+  and its other plugins; the hub still never loads a second copy of the plugin. It does **not** take the renderer away from a host that already owns it
+  — that is not supported and could destabilise the interface. Without any loader on
+  the machine the option does nothing useful: the loop waits at least 20 s (or
+  `owner_settle_secs`, whichever is longer) for a loader to appear before hosting the
+  renderer as a sole host anyway, so a machine where ShelvesHub is the only host keeps
+  `force_owner` off and sets `owner_settle_secs` to `0` for an instant boot. Changing
+  this setting takes effect after a restart (use **Restart to apply** on the hub page,
+  which restarts the daemon and Steam together).
 
-- **You want the hub to run and update Deck Shelves next to the loader** (`force_owner`
-  on):
+- **You want the hub to run and update Deck Shelves next to the loader** (`force_owner` +
+  `coop_bundle`):
 
   ```json
   { "force_owner": true, "coop_bundle": true }
@@ -120,8 +128,13 @@ To **disable** auto-recovery (pause only, and just log the hint), set it to `off
 
 ## The native tab
 
-The native Quick Access tab is controlled by `native_qam` (or `SHELVES_NATIVE_QAM=1`
-per service). Set it to `false` to fall back to the on-screen panel.
+The native Quick Access tab is controlled by `native_qam` (on in the shipped config;
+`SHELVES_NATIVE_QAM=1` per service). Set it to `false` to disable it: the hub then
+adds nothing to the Quick Access menu — there is no on-screen panel to fall back to,
+and on a sole host the Deck Shelves panel has nowhere else to appear — so keep it on
+unless the tab itself misbehaves. From the Steam debug console,
+`__SHELVES_QAM__.mode()` (present in every mode, including beside a loader) answers
+`native`, `native-arming`, `tripped`, or `overlay` when the tab is not installed.
 
 ## Notifications
 

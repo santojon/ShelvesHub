@@ -12,7 +12,7 @@ use crate::cdp::{self, CdpClient};
 use crate::config::Config;
 use crate::logger::{log_error, log_info, log_warning};
 
-use super::{FORCE_OWNER_GLOBAL, NATIVE_QAM_GLOBAL, OWNER_KIND};
+use super::{FORCE_OWNER_GLOBAL, NATIVE_NOTIFICATIONS_GLOBAL, NATIVE_QAM_GLOBAL, OWNER_KIND};
 
 // The document-start script runs BEFORE Steam's UI is up. It gates the boot on the
 // SAME Steam lifecycle signal a plugin loader uses:
@@ -48,13 +48,15 @@ use super::{BUNDLE_GATE_PREFIX, BUNDLE_GATE_SUFFIX};
 /// at idle boot — before the plugin loads and renders — so its heavy webpack
 /// enumeration never blocks a busy renderer (the native-QAM late-inject failure
 /// mode, where a blocked main thread starves the plugin's async shelf resolves
-/// and tears the UI down). The registration lives as long as this process runs.
-pub(super) fn run_preload(config: Config) {
+/// and tears the UI down). The registration lives as long as this process runs:
+/// this returns only when the runtime cannot be read, and the caller then runs
+/// the normal injection loop instead of exiting.
+pub(super) fn run_preload(config: &Config) {
     log_info(
         "loader",
         "Preload mode: host runtime runs at document-start (idle boot).",
     );
-    let runtime = match super::assemble_host_runtime(&config) {
+    let runtime = match super::assemble_host_runtime(config) {
         Ok(s) => s,
         Err(e) => {
             log_error(
@@ -75,14 +77,12 @@ pub(super) fn run_preload(config: Config) {
     // Compose the document-start script: opt-in stamps first (so the runtime sees
     // them the moment it evaluates), the per-locale dictionaries, then the runtime
     // (+ bundle) wrapped in the React-ready gate.
-    let mut source = String::new();
-    if config.force_owner {
-        source.push_str(&format!("{FORCE_OWNER_GLOBAL} = {OWNER_KIND:?};\n"));
-    }
-    if config.native_qam {
-        source.push_str(&format!("{NATIVE_QAM_GLOBAL} = true;\n"));
-    }
-    source.push_str(&super::config_stamp(&config, config.coop_bundle));
+    let mut source = opt_in_stamps(
+        config.force_owner,
+        config.native_qam,
+        config.native_notifications,
+    );
+    source.push_str(&super::config_stamp(config, config.coop_bundle));
     source.push_str(&super::i18n_stamp(&config.host_runtime_path));
     source.push_str(GATE_PREFIX);
     source.push_str(&runtime);
@@ -106,7 +106,7 @@ pub(super) fn run_preload(config: Config) {
     let mut delay = base;
     loop {
         let started = Instant::now();
-        match preload_session(&config, &source) {
+        match preload_session(config, &source) {
             Ok(()) => {}
             Err(e) => log_warning(
                 "loader",
@@ -120,6 +120,22 @@ pub(super) fn run_preload(config: Config) {
         }
         thread::sleep(delay);
     }
+}
+
+/// The opt-in globals the normal inject path stamps before the runtime evaluates
+/// (force, native tab, native notifications), as one script prefix.
+fn opt_in_stamps(force_owner: bool, native_qam: bool, native_notifications: bool) -> String {
+    let mut source = String::new();
+    if force_owner {
+        source.push_str(&format!("{FORCE_OWNER_GLOBAL} = {OWNER_KIND:?};\n"));
+    }
+    if native_qam {
+        source.push_str(&format!("{NATIVE_QAM_GLOBAL} = true;\n"));
+    }
+    if native_notifications {
+        source.push_str(&format!("{NATIVE_NOTIFICATIONS_GLOBAL} = true;\n"));
+    }
+    source
 }
 
 /// Arm browser-level `Target.setAutoAttach` and register the document-start
@@ -221,4 +237,22 @@ fn preload_attached(client: &mut CdpClient, msg: &Value, source: &str, needle: O
     }
     // Harmless no-op unless a target happens to be waiting for a debugger.
     let _ = client.send_on_session("Runtime.runIfWaitingForDebugger", json!({}), sid);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opt_in_stamps_mirror_the_normal_inject_path() {
+        let all = opt_in_stamps(true, true, true);
+        assert!(all.contains(&format!("{FORCE_OWNER_GLOBAL} = {OWNER_KIND:?};")));
+        assert!(all.contains(&format!("{NATIVE_QAM_GLOBAL} = true;")));
+        assert!(all.contains(&format!("{NATIVE_NOTIFICATIONS_GLOBAL} = true;")));
+        assert!(opt_in_stamps(false, false, false).is_empty());
+        let notify_only = opt_in_stamps(false, false, true);
+        assert!(!notify_only.contains(FORCE_OWNER_GLOBAL));
+        assert!(!notify_only.contains(NATIVE_QAM_GLOBAL));
+        assert!(notify_only.contains(NATIVE_NOTIFICATIONS_GLOBAL));
+    }
 }

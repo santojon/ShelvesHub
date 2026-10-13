@@ -253,6 +253,126 @@ fn finds_newest_backend_archive_across_releases() {
 }
 
 #[test]
+fn release_url_parts_name_the_repository_and_the_tag() {
+    assert_eq!(
+        release_url_parts(
+            "https://github.com/santojon/Deck-Shelves/releases/download/v3.3.1/index.iife.js"
+        ),
+        Some(("santojon/Deck-Shelves", "v3.3.1"))
+    );
+    assert_eq!(
+        release_url_parts(
+            "https://github.com/santojon/Deck-Shelves/releases/download/v3.3.1/deck-shelves-backend.tar.gz"
+        )
+        .map(|(_, tag)| tag),
+        Some("v3.3.1")
+    );
+    assert!(
+        release_url_parts("https://github.com/santojon/Deck-Shelves/releases/latest").is_none()
+    );
+    assert!(release_url_parts("https://example.com/releases/download/v1/x").is_none());
+    assert!(release_url_parts("https://github.com//releases/download/v1/x").is_none());
+    assert!(release_url_parts("https://github.com/a/b/releases/download//x").is_none());
+}
+
+#[test]
+fn backend_refresh_is_due_until_the_same_release_is_recorded() {
+    let dir = std::env::temp_dir().join(format!("shelveshub-backend-tag-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    // A copied or pre-installed backend carries no marker: refreshed once, whatever the tag.
+    assert!(backend_refresh_due(&dir, "v3.3.1"));
+    record_backend_tag(
+        &dir,
+        "https://github.com/santojon/Deck-Shelves/releases/download/v3.3.1/deck-shelves-backend.tar.gz",
+    );
+    assert!(!backend_refresh_due(&dir, "v3.3.1"));
+    assert!(backend_refresh_due(&dir, "v3.4.0"));
+    // A URL that names no release leaves the marker alone.
+    record_backend_tag(&dir, "https://example.com/deck-shelves-backend.tar.gz");
+    assert!(!backend_refresh_due(&dir, "v3.3.1"));
+    // The bundle of the same release: nothing to fetch (no network is touched).
+    assert!(matches!(
+        refresh_backend(
+            &dir,
+            "https://github.com/santojon/Deck-Shelves/releases/download/v3.3.1/index.iife.js"
+        ),
+        Ok(BackendRefresh::Unchanged)
+    ));
+    // A bundle URL outside the release-download shape names no release to match.
+    assert!(refresh_backend(&dir, "https://example.com/index.iife.js").is_err());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn replace_dir_swaps_the_tree_in_place_and_keeps_the_old_one_on_failure() {
+    let dir = std::env::temp_dir().join(format!("shelveshub-replace-dir-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    let current = dir.join("backend");
+    let fresh = sibling_dir(&current, "new");
+    assert_eq!(fresh, dir.join("backend.new"));
+    fs::create_dir_all(current.join("src").join("backend")).unwrap();
+    fs::write(current.join("main.py"), b"old").unwrap();
+    fs::create_dir_all(&fresh).unwrap();
+    fs::write(fresh.join("main.py"), b"new").unwrap();
+
+    replace_dir(&current, &fresh).unwrap();
+    assert_eq!(fs::read(current.join("main.py")).unwrap(), b"new");
+    assert!(!current.join("src").exists());
+    assert!(!fresh.exists());
+    assert!(!sibling_dir(&current, "old").exists());
+
+    // No fresh tree to move in: the installed one is put back untouched.
+    assert!(replace_dir(&current, &fresh).is_err());
+    assert_eq!(fs::read(current.join("main.py")).unwrap(), b"new");
+    assert!(!sibling_dir(&current, "old").exists());
+
+    // Nothing installed yet: the fresh tree simply lands.
+    fs::remove_dir_all(&current).unwrap();
+    fs::create_dir_all(&fresh).unwrap();
+    fs::write(fresh.join("main.py"), b"first").unwrap();
+    replace_dir(&current, &fresh).unwrap();
+    assert_eq!(fs::read(current.join("main.py")).unwrap(), b"first");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn plugin_channel_combines_the_flag_the_plugin_switch_and_the_hub_switches() {
+    let dir = std::env::temp_dir().join(format!("shelveshub-channel-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(
+        dir.join("settings.json"),
+        r#"{"state":{"betaChannelEnabled":false}}"#,
+    )
+    .unwrap();
+    let mut hub = crate::store::HubSettings {
+        auto_update: false,
+        auto_update_plugin: true,
+        plugin_prerelease: false,
+        ..Default::default()
+    };
+    assert!(!plugin_prerelease(false, &dir, &hub));
+    // An explicit env/file flag always forces the channel.
+    assert!(plugin_prerelease(true, &dir, &hub));
+    // The hub's plugin-beta switch counts only under both auto-update switches.
+    hub.plugin_prerelease = true;
+    assert!(!plugin_prerelease(false, &dir, &hub));
+    hub.auto_update = true;
+    assert!(plugin_prerelease(false, &dir, &hub));
+    hub.auto_update_plugin = false;
+    assert!(!plugin_prerelease(false, &dir, &hub));
+    // The plugin's own beta switch counts on its own.
+    fs::write(
+        dir.join("settings.json"),
+        r#"{"state":{"betaChannelEnabled":true}}"#,
+    )
+    .unwrap();
+    assert!(plugin_prerelease(false, &dir, &hub));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn maps_release_download_url_to_tags_api() {
     assert_eq!(
         release_tags_api_url(
@@ -371,15 +491,13 @@ fn hub_rollback_restores_the_snapshot_and_keeps_the_undone_set() {
     // A "previous" set: a real-looking binary of the old version + its runtime.
     let prev = dir.join(HUB_PREVIOUS_DIR);
     fs::create_dir_all(prev.join("runtime")).unwrap();
-    let mut old_bin = fake_exe_head();
-    old_bin.resize(REAL_BUNDLE_MIN_BYTES as usize + 8, b'o');
+    let old_bin = fake_exe_body(b'o');
     fs::write(prev.join(hub_binary_name()), &old_bin).unwrap();
     fs::write(prev.join("runtime").join("host.js"), b"old runtime").unwrap();
     fs::write(prev.join("VERSION"), "0.5.0\n").unwrap();
     assert_eq!(snapshot_version(&prev).as_deref(), Some("0.5.0"));
     // The current (newer) set on disk.
-    let mut new_bin = fake_exe_head();
-    new_bin.resize(REAL_BUNDLE_MIN_BYTES as usize + 8, b'n');
+    let new_bin = fake_exe_body(b'n');
     fs::write(&exe, &new_bin).unwrap();
     fs::write(dir.join("runtime").join("host.js"), b"new runtime").unwrap();
 
@@ -397,6 +515,93 @@ fn hub_rollback_restores_the_snapshot_and_keeps_the_undone_set() {
     // Without a snapshot there is nothing to go back to.
     fs::remove_dir_all(&prev).unwrap();
     assert!(rollback_hub_at(&exe, "0.5.0").is_err());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hub_rollback_is_refused_while_an_update_is_staged() {
+    // The file at the exe path is then an un-run release: nothing truthful to snapshot.
+    let _serial = crate::state::UPDATE_GUARD_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    crate::state::set_hub_update_staged(true);
+    let err = rollback_hub().unwrap_err();
+    crate::state::set_hub_update_staged(false);
+    assert!(err.contains("update is staged"), "{err}");
+}
+
+#[test]
+fn hub_rollback_clears_an_interrupted_staging_and_snapshots_the_running_set() {
+    // A leftover `<exe>.new` was never swapped in, so the exe path still holds the
+    // running set: it is snapshotted as usual and the leftover is removed.
+    let dir = std::env::temp_dir().join(format!(
+        "shelveshub-hubrollback-leftover-{}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(dir.join("runtime")).unwrap();
+    let exe = dir.join(hub_binary_name());
+    let prev = dir.join(HUB_PREVIOUS_DIR);
+    fs::create_dir_all(prev.join("runtime")).unwrap();
+    let old_bin = fake_exe_body(b'o');
+    fs::write(prev.join(hub_binary_name()), &old_bin).unwrap();
+    fs::write(prev.join("runtime").join("host.js"), b"old runtime").unwrap();
+    fs::write(prev.join("VERSION"), "0.5.0\n").unwrap();
+    let running_bin = fake_exe_body(b'r');
+    fs::write(&exe, &running_bin).unwrap();
+    fs::write(dir.join("runtime").join("host.js"), b"running runtime").unwrap();
+    fs::write(staged_binary_path(&exe), b"interrupted staging").unwrap();
+
+    assert_eq!(rollback_hub_at(&exe, "0.6.0").unwrap(), "0.5.0");
+    assert_eq!(fs::read(&exe).unwrap(), old_bin);
+    assert_eq!(snapshot_version(&prev).as_deref(), Some("0.6.0"));
+    assert_eq!(fs::read(prev.join(hub_binary_name())).unwrap(), running_bin);
+    assert!(!staged_binary_path(&exe).exists());
+    assert!(!dir.join(HUB_PREVIOUS_STAGING).exists());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn copy_into_replaces_the_target_through_a_sibling_temp() {
+    let dir = std::env::temp_dir().join(format!("shelveshub-copyinto-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("src.js");
+    let dest = dir.join("sub").join("live.js");
+    fs::write(&src, b"NEW").unwrap();
+    fs::create_dir_all(dest.parent().unwrap()).unwrap();
+    fs::write(&dest, b"OLD").unwrap();
+
+    copy_into(&src, &dest).unwrap();
+    assert_eq!(fs::read(&dest).unwrap(), b"NEW");
+    assert!(!dir.join("sub").join(".live.js.tmp").exists());
+    // A missing source fails cleanly and leaves the target untouched.
+    assert!(copy_into(&dir.join("absent.js"), &dest).is_err());
+    assert_eq!(fs::read(&dest).unwrap(), b"NEW");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A fake binary that passes the executable checks: the right magic, padded
+/// past the size floor.
+fn fake_exe_body(fill: u8) -> Vec<u8> {
+    let mut bin = fake_exe_head();
+    bin.resize(REAL_BINARY_MIN_BYTES as usize + 8, fill);
+    bin
+}
+
+#[test]
+fn binary_floor_is_separate_from_the_bundle_floor() {
+    // A bundle-sized "binary" is not a usable snapshot, even with the right magic.
+    let dir = std::env::temp_dir().join(format!("shelveshub-binfloor-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    let mut small = fake_exe_head();
+    small.resize(REAL_BUNDLE_MIN_BYTES as usize + 8, b'x');
+    fs::write(dir.join(hub_binary_name()), &small).unwrap();
+    fs::write(dir.join("VERSION"), "0.5.0").unwrap();
+    assert!(snapshot_version(&dir).is_none());
+    fs::write(dir.join(hub_binary_name()), fake_exe_body(b'x')).unwrap();
+    assert_eq!(snapshot_version(&dir).as_deref(), Some("0.5.0"));
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -486,4 +691,21 @@ fn sha256_for_name_parses_both_shapes_and_skips_noise() {
     assert_eq!(sha256_for_name(&sums, "short.js"), None); // hash not 64 hex
     assert_eq!(sha256_for_name(&sums, "missing.js"), None); // not listed
     assert_eq!(sha256_for_name("404: Not Found", "index.iife.js"), None);
+}
+
+#[test]
+fn plugin_update_prefs_read_the_wrapped_settings_file() {
+    let dir = std::env::temp_dir().join(format!("shelves-prefs-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("settings.json"),
+        r#"{"state":{"betaChannelEnabled":true,"updateNotifyEnabled":false},"rev":3,"updatedAt":1}"#,
+    )
+    .unwrap();
+    let p = plugin_update_prefs(&dir);
+    assert!(p.beta);
+    assert!(!p.auto_update);
+    std::fs::write(dir.join("settings.json"), r#"{"betaChannelEnabled":true}"#).unwrap();
+    assert!(plugin_update_prefs(&dir).beta);
+    let _ = std::fs::remove_dir_all(&dir);
 }

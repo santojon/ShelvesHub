@@ -87,6 +87,13 @@ pub fn enabled() -> bool {
     SETTINGS.get().is_some()
 }
 
+/// The backend directory this daemon obtained itself (`<install dir>/backend`), when
+/// that is the one being hosted — a directory configured by hand is never replaced.
+pub fn managed_dir() -> Option<PathBuf> {
+    let hosted = &SETTINGS.get()?.backend_dir;
+    (crate::config::backend_install_dir().as_ref() == Some(hosted)).then(|| hosted.clone())
+}
+
 /// Whether the backend child process is currently alive.
 pub fn is_running() -> bool {
     let mut state = lock_state();
@@ -122,8 +129,8 @@ pub fn python_bin() -> &'static str {
 }
 
 /// Whether that interpreter is actually runnable — probed once and cached, so a
-/// status poll never respawns it. Answers ARM-10: a minimal ARM distro without
-/// `python3` shows up in diagnostics instead of only failing at the first call.
+/// status poll never respawns it. Covers a minimal ARM distro without
+/// `python3`: it shows up in diagnostics instead of only failing at the first call.
 pub fn python_available() -> bool {
     *PYTHON_OK.get_or_init(|| {
         Command::new(python_bin())

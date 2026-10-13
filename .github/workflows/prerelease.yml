@@ -17,7 +17,9 @@ name: "Release · Pre-release"
 # surface pre-releases.
 #
 # NOTE: pushing the tag needs SUBMIT_TOKEN (a PAT) so the push triggers Release -
-# a tag pushed with the default GITHUB_TOKEN does not start other workflows.
+# a tag pushed with the default GITHUB_TOKEN does not start other workflows. The
+# Release it triggers also needs the MINISIGN secrets: it refuses to publish
+# unsigned assets, since installed daemons reject them.
 
 on:
   workflow_dispatch:

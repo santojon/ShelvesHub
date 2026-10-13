@@ -98,7 +98,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   either tab, and it also opens without a pointer: a second D-pad right on the rightmost
   focusable of the hub view (the plugin's own gesture, read from Steam's controller input stream
   and registered only while the hub view is mounted), with D-pad left out of the panel closing
-  it; on a keyboard, a second ArrowRight, Ctrl+Shift+L (logs) or Ctrl+Shift+N (notifications).
+  it; on a keyboard, Ctrl+Shift+L (logs) or Ctrl+Shift+N (notifications).
   Inside the panel the bumpers move between its tabs (LB / RB); focus lands on the active tab
   when it opens. Notification rows show the sender's mark (the logo the toast was sent with, or
   the host's / Deck Shelves' default) and the per-type icon beside the title, as the Steam toasts
@@ -181,6 +181,28 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   code strips both. Nothing of this ships inside the host or the plugin.
 
 ### Changed
+- **Automatic updates are on by default** in the hub's own settings, matching the installers.
+- **After a Deck Shelves update the hub refreshes its Python backend from the same release** and
+  restarts it, so the backend always matches the bundle; on a first start the backend is
+  obtained in the background, so the control endpoint comes up at once on a slow network.
+- **A release is refused when the signing key is missing**; unsigned release assets are never
+  published.
+- **The local RPC drops the unused `bundleReady` method and `X-DS-Req` header**; diagnostics no
+  longer carry a `bundleReady` field, and `doctor` and the daemon share one list of debug ports.
+- **The runtime harness** adds node-level checks and browser scenarios for the cooperative
+  bundle, the locale and the configuration stepper; the container harness exercises the generic
+  Linux installer end to end.
+- **The daemon log records RPC method names instead of request bodies**, and the hub view's
+  status and log polls are not logged; the token file is created owner-only from the start, and
+  the RPC server caps header size, header count and concurrent connections.
+- **Stood-down, settling and renderer-unreachable states are logged once per change**, not on
+  every poll.
+- **Linux release binaries are linked against an explicit glibc 2.31 floor** and each packaged
+  Linux binary's architecture is checked before publishing; the legacy `shelveshub.reg` autostart
+  entry no longer ships; the generic Linux service unit uses `ProtectSystem=full` so the daemon
+  can write under your home directory; the Windows logon tasks start on battery, keep running
+  when unplugged and have no run-time limit.
+- **The self-update binary check uses its own size floor** instead of the bundle's.
 - **The settled-state log lines are written once per change, not every tick.** "Bundle active in
   renderer." and "Coexisting with …" repeated on every tick — every 5 s while hosting — and buried
   the journal and the hub's own log viewer. They now appear when the state changes (and again after
@@ -202,6 +224,104 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   (`src/loader/mod.rs`, `src/state.rs`).
 
 ### Fixed
+
+- **Settings writes no longer overwrite one another.** Edits made from the tab, by settings
+  sync and by the automatic update check are serialized, each write uses a unique temporary
+  file, and the configuration file keeps its key order so its comment entries stay beside their
+  keys.
+- **Update switches behave as you set them, without a restart.** The Deck Shelves pre-release
+  channel follows the plugin's beta switch and the hub's switches at every check; turning
+  automatic hub updates off no longer hides the restart notice of an update already downloaded;
+  the hub self-update reports "staged" instead of downloading the same release again; undoing a
+  hub update while another one is already downloaded is refused until the restart that applies
+  it.
+- **The cooperative bundle no longer makes an inert offer** when no release version is known,
+  and the host handshake reports the bundle's embedded version when no release tag is recorded.
+- **Loop details.** A Steam restart re-logs a stood-down or settling state for the new session, a
+  moved debug port is followed after forced ownership has stood down, a transiently unreadable
+  bundle no longer hides its version for good, and a replaced runtime or asset file that fails
+  to copy leaves no temporary file behind.
+- **Turning the boot animation off removes only the startup-movie files the hub placed**;
+  another tool's overrides stay.
+- **The host handshake says whether the hub's Quick Access tab is really present** and whether a
+  hub-driven Deck Shelves update takes effect for the copy that is running (sole host, or after
+  the cooperative-bundle hand-over); the hub view's interval and settle steppers stay within the
+  ranges the daemon accepts, and a refused edit puts the row back.
+- **Installers stop with a download error** when the package or SHA256SUMS cannot be fetched,
+  instead of a checksum mismatch or an unpack error; the Windows `setup.exe` uninstaller also
+  removes the configuration backup, the RPC token, a staged update, the rollback snapshot and
+  its log; upgrading with `setup.exe` restarts an installed tray companion even when the tray
+  option is left unticked.
+- **Quality checks.** The QA matrix marks automated evidence older than 30 days as stale and no
+  longer passes on it; the shipped-text check no longer scans the quality runs' own records.
+- **Configuration and settings writes are safe.** The configuration file is written atomically and
+  the previous version is kept as `shelveshub.config.json.bak`; a wrongly typed value in the hub's
+  settings file falls back to its default instead of resetting every other preference.
+- **The local RPC answers valid JSON for every error** (control characters in a message used to
+  break it), **bounds configuration edits** (`interval_secs` 1–3600 s, `owner_settle_secs`
+  0–300 s, refused with a clear message outside those ranges) and **keeps edits visible in the
+  hub view**, with the restart note, until the daemon restarts.
+- **Updates and rollbacks no longer race or regress.** Manual download, update and rollback
+  actions answer "busy" while an update check is in flight; the hub self-update reports
+  "current" instead of reinstalling or downgrading; a hub rollback is refused while an update is
+  already staged; after a manual download the installed release tag is recorded, not the
+  channel's newest.
+- **A second daemon that cannot bind the RPC port no longer replaces the running one's token
+  file.**
+- **The injection loop.** A Steam restart during the owner-settle wait no longer lets the new
+  renderer skip its settle window; the bundle boot gate keeps one poll timer per renderer (an
+  overlapping re-inject could leave a timer re-running the bundle every 20 ms); the daemon's
+  loader-presence probe reads the same globals as the runtime; the cooperative bundle makes an
+  offer on a fresh install; the manual update check uses the loop's current settings and
+  ownership; preload mode falls back to the normal loop when the runtime cannot be read; after
+  forced ownership stands down, a loader copy's ownership claim no longer sends the daemon down
+  the owner path.
+- **Settings sync** skips a malformed roaming entry instead of treating the whole document as
+  missing (which overwrote the other devices' settings), and keeps fields it does not know when
+  it writes the document back.
+- **`SHELVES_RPC_ADDR` is honoured again**, and the tray resolves the RPC address the way the
+  daemon does (including `rpc_port` from the configuration file); every release download and
+  release-API call has connect and overall time limits; `doctor` probes the configured ports and
+  Python, finds Steam's directory on Windows and treats a missing service unit as a note.
+- **Injected runtime.** Hidden Home sections stay pruned from gamepad navigation after an
+  in-place Deck Shelves update; the hub's screens use Steam's language when the client reports
+  it; routes registered through `host.routes` reach the loader's router in cooperative mode; the
+  Quick Access panel no longer walks Steam's module map on every render.
+- **Installers.** The Linux one-click installer downloads the package for your CPU, verifies it
+  against SHA256SUMS and installs it; upgrading over a running ShelvesHub no longer fails on a
+  busy or locked binary (the new file is staged and renamed into place, or the running `.exe` is
+  moved aside); `--purge` removes the settings directory the install actually used and the
+  generic Linux uninstaller gained `--purge`; the Windows `setup.exe` installs the boot-animation
+  cuts, enables Steam's debug port and its uninstaller removes everything it laid down; the
+  one-click macOS and Windows installers and `Install ShelvesHub.app` verify the download against
+  SHA256SUMS; the Windows installer no longer fails when run from an extracted package.
+- **Quality tooling.** The runtime harness proves the native render path and serves only its own
+  files on the loopback interface; the QA matrix records each cell's gating flag, UTC
+  timestamps, the evidence age and the host cell's real platform; the shipped-text check covers
+  the site, installers, container files and workflows; localization parity compares key names
+  (five unused strings removed from every locale); the example backend's recipe uses the bearer
+  token and an allowlisted method; the Windows installer scenario fails on an installer error;
+  ESLint runs on every pull request; the contract job verifies the compiled host API version.
+- **Docs.** The architecture and host-contract pages describe contract 1.5.0, the native Quick
+  Access tab and every RPC method, with a working curl recipe; the troubleshooting, debugging,
+  QA lab and installation pages were corrected, in both languages.
+- **The runtime keeps working with the daemon after the daemon alone restarts.** Every daemon
+  start issues a new RPC token, and the runtime already injected into Steam kept the old one, so
+  after a self-update, a rollback, a tray restart or a crash relaunch every call from the hub's
+  tab and from the plugin answered 401 until Steam itself restarted (confirmed live). The daemon
+  now hands the current token to an injected runtime on every tick, and the runtime reads it per
+  call.
+- **Installing a plugin update from the hub no longer reloads Steam's interface.** The reload
+  landed while the daemon was re-injecting the new bundle — the same mid-boot pattern behind the
+  2026-10-11 black screen. The daemon's file watch already hot-swaps the new bundle in place, so
+  the reload is gone; the plugin closes its install dialog itself.
+- **The plugin's beta-channel switch reaches the hub again.** The plugin stores its settings
+  wrapped as `{state, rev, updatedAt}`; the hub read the top level, so the switch was never seen.
+- **A stray argument no longer starts a second daemon.** `shelveshub --help` (or any unknown
+  argument) used to start a full daemon that overwrote the running one's RPC token; it now prints
+  the usage and exits.
+- **Three plugin backend methods now answer under the hub:** the pre-import snapshot, the device identity probe and the settings-recovery notice were missing from the backend method allowlist, so those features failed silently ([`rpc.rs`](src/rpc.rs)).
+- **The plugin's Parser categories filter works under the hub:** its new shortcut-tags method is on the backend method allowlist ([`rpc.rs`](src/rpc.rs)).
 - **The deploy matrix no longer ships a stale plugin bundle when the plugin build fails.** The plugin was built inside a command substitution, so a failed `build:release` was ignored and whatever bundle sat in the plugin's `dist/` went out as if freshly built; the build now runs first, at top level, and a failure aborts the deploy (`scripts/deploy-matrix.sh`).
 - **A plugin loader's Deck Shelves from before the coexistence protocol is no longer joined by a
   second copy.** Such a copy (older than 3.3.1) never claims the renderer, so after the

@@ -5,7 +5,8 @@
 export default [
   {
     files: ["runtime/**/*.js"],
-    languageOptions: { ecmaVersion: "latest", sourceType: "script" },
+    // The runtime files are IIFE body fragments with top-level `return`, as in the main config.
+    languageOptions: { ecmaVersion: "latest", sourceType: "script", parserOptions: { ecmaFeatures: { globalReturn: true } } },
     rules: { complexity: ["warn", 10] },
   },
 ];

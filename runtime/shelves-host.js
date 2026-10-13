@@ -1,8 +1,8 @@
 /* runtime/shelves-host.js — the ShelvesHub host runtime, injected (over CDP) into
    the Steam UI renderer before the Deck Shelves bundle, becoming window.__SHELVES_HOST__
    (the HostApi the bundle calls). Captures Steam's webpack, borrows its React + native
-   gamepad UI, adds a real Quick Access tab — no third-party loader needed. The loader
-   assembles this + shelves-host-qam.js + shelves-host-api.js into ONE IIFE (shared closure). */
+   gamepad UI, adds a real Quick Access tab — no third-party loader needed. The daemon
+   assembles this + the -qam, -api, -sidecar and -toast parts into ONE IIFE (shared closure). */
 
   "use strict";
 
@@ -45,9 +45,15 @@
   // Per-boot RPC token: the daemon stamps it into __SHELVES_CONFIG__ over the CDP
   // channel only it has, and requires it on every call. Sent as a Bearer header.
   const RPC_TOKEN = SHELVES_CFG.rpcToken || "";
+  // The daemon re-stamps the token after it restarts (a new one per process), so read it per call.
+  function rpcToken() {
+    try { const c = window.__SHELVES_CONFIG__; if (c && c.rpcToken) return c.rpcToken; } catch (e) {}
+    return RPC_TOKEN;
+  }
   function rpcHeaders() {
     const h = { "Content-Type": "application/json" };
-    if (RPC_TOKEN) h.Authorization = "Bearer " + RPC_TOKEN;
+    const token = rpcToken();
+    if (token) h.Authorization = "Bearer " + token;
     return h;
   }
 
@@ -162,10 +168,17 @@
     }
   }
 
-  // i18n for the host's OWN UI (fallback panel + error text): an ordered prefix→locale map, a
-  // navigator-language pick, per-locale dictionaries, and an en-US fallback. Standalone (no
-  // framework/fetch) because the plugin's i18n is gone exactly when the bundle fails to load.
+  // i18n for the host's OWN UI (fallback panel + error text): Steam's language when the renderer
+  // URL names it, else a navigator-language pick (ordered prefix→locale map); en-US fallback.
+  // Standalone (no framework/fetch): the plugin's i18n is gone exactly when the bundle fails to load.
   const I18N = (function () {
+    // Steam's own language names (the renderer URL's LANGUAGE=<name>), for the dictionaries we ship.
+    const STEAM_LANGUAGES = {
+      english: "en-US", brazilian: "pt-BR", portuguese: "pt-PT", spanish: "es-ES", latam: "es-419",
+      french: "fr-FR", german: "de-DE", italian: "it-IT", dutch: "nl-NL", polish: "pl-PL",
+      russian: "ru-RU", turkish: "tr-TR", ukrainian: "uk-UA", japanese: "ja-JP", koreana: "ko-KR",
+      schinese: "zh-CN", tchinese: "zh-TW",
+    };
     const PREFIXES = [
       ["pt-pt", "pt-PT"], ["pt", "pt-BR"], ["es-es", "es-ES"], ["es", "es-419"],
       ["it", "it-IT"], ["fr-ca", "fr-CA"], ["fr", "fr-FR"], ["de", "de-DE"],
@@ -192,8 +205,15 @@
       }
       return "en-US";
     }
+    function steamLocale() {
+      try {
+        const m = /[?&]LANGUAGE=([a-z_]+)/i.exec(String(window.location.href));
+        const name = m && m[1].toLowerCase();
+        return (name && Object.prototype.hasOwnProperty.call(STEAM_LANGUAGES, name)) ? STEAM_LANGUAGES[name] : null;
+      } catch (e) { return null; }
+    }
     let LOCALE = "en-US";
-    try { LOCALE = pickLocale(navigator && navigator.language); } catch (e) {}
+    try { LOCALE = steamLocale() || pickLocale(navigator && navigator.language); } catch (e) {}
     // Active locale is resolved per-call so a `window.__SHELVES_LOCALE__` override
     // (a language tag like "en-US") switches the UI language live — used for
     // documentation screenshots and locale testing; falls back to the boot locale.
@@ -410,17 +430,17 @@
     return "";
   }
 
-  // Steam's native, gamepad-focusable UI components. `ensureUi` is idempotent: the sole-host path
-  // calls it eagerly; under a loader (COEXIST) it's deferred to the hub view's first render (off the
-  // boot path) because this scan blocks the main thread and at boot starves the plugin → React #31.
+  // Steam's native, gamepad-focusable UI components. The sole host discovers them with the CHUNKED
+  // scan (ensureUiChunked, one step per tick); under a loader (COEXIST) nothing is scanned — its
+  // already-resolved components are borrowed. `ensureUi` (all steps at once) has no boot-path caller.
   const UI = {};
   let uiReady = false;
   let _commonValues = [];
   /* Discovery split into independent steps. One scan off-render is safe (~25ms),
-     but several back-to-back block the main thread long enough to starve the
-     running plugin in coexistence and collapse the Steam UI (observed on-device).
-     So sole-host runs all steps at once at inject (no other plugin to starve);
-     coexistence runs ONE STEP PER IDLE TICK (ensureUiChunked), yielding between. */
+     but several back-to-back block the main thread long enough to stall the
+     renderer and collapse the Steam UI (observed on-device). So the sole host
+     runs ONE STEP PER TIMER TICK (ensureUiChunked), yielding between; under a
+     loader the steps never run — its resolved components are borrowed instead. */
   const uiSteps = [
     function () {
       const CommonUIModule = Steam.findModule(function (m) {
@@ -927,7 +947,7 @@
        route-list. Steam's own route elements are UNKEYED, so appending leaves them at their positions
        (React reconciles by position, no remount — prepending would shift all → focus loss). The
        Switch's catch-all (`['/','/index.html','/sp.html']`) is `exact`, so it won't shadow a trailing
-       `/deck-shelves/*` route. Our nested array is the SAME cached object with KEYED children. */
+       `/deck-shelves/*` route. Our nested array is the SAME cached object, its children unkeyed at fixed positions. */
     function injectRoutes(routeList) {
       if (!routes.size) return;
       // Prefer the RAW react-router Route (findRoute): reusing a route's wrapper
@@ -1171,5 +1191,5 @@
 
   /* ── QAM: register a native tab in the Quick Access Menu ───────────────────
      The tab-list builder hook returns the tabs array; we append our tab(s) to
-     its output (non-destructive). Overlay panel is the fallback and the
-     immediate path. See installPatch below for the mechanism and its timing. */
+     its output (non-destructive). With no panel registered the tab shows the hub
+     view (FallbackPanel). See installPatch in -qam.js for the mechanism and timing. */

@@ -64,7 +64,7 @@ function dataFiles() {
     }
   }
   const docs = collectDocs();
-  if (!docs.keyParity) problems.push("i18n key parity: a locale differs from en-US");
+  if (!docs.keyParity) problems.push(`i18n key parity: ${docs.parityProblems.join(" · ")}`);
   if (docs.docsUnpaired) problems.push(`${docs.docsUnpaired} doc(s) without a pt-BR pair`);
   const output = problems.length ? problems.join("\n") : `${files.length} JSON files valid · ${docs.locales} locales × ${docs.keys} keys in parity · ${docs.docPairs} doc pairs`;
   return { ok: problems.length === 0, output };
@@ -88,21 +88,92 @@ function launchers() {
 }
 
 /* The shipped-text rule (see the repository's docs-language rule): process words,
-   tool names and the loader's name must not appear in committed text. The pattern
-   and the interop allowlist are assembled from pieces so this file never matches
-   its own check. */
+   tool names, the loader's name, internal phase labels and leaked Portuguese must
+   not appear in committed text. The patterns and the interop allowlist are
+   assembled from pieces so this file never matches its own check. */
+const WORDS = new RegExp(["spr" + "int", "\\broa" + "dmap\\b", "\\bba" + "tch\\b", "\\bA\\.?I\\b", "de" + "cky", "\\bcla" + "ude\\b", "\\.cla" + "ude", "\\.roa" + "dmaps"].join("|"), "i");
+// The loader's real globals the interop helper reads, and the owner value the harness asserts on.
+const ALLOW = ["borrowedToaster", "De" + "ckyPluginLoader", "de" + "ckyHasLoaded", "de" + "ckyLoaderAPIInit", "de" + "ckyFrontendLib", "__DECK_SHELVES_OWNER__ = \"de" + "cky\"", "owner===\"de" + "cky\""];
+// The lab's evidence records the renderer's owner value as data: that exact pair passes there only.
+const EVIDENCE_DIR = "site/reports/qa/evidence/";
+const OWNER_PAIR = new RegExp("^\\s*\"owner\": \"de" + "cky\",?$");
+/* An internal phase label is a short upper-case prefix and a small number, dashed or
+   not. Left alone: hashes and encodings (the prefixes below), display connector names,
+   URL escapes, hex colours, architecture names (three letters and two digits), lint
+   codes, identifiers, and SVG path data on a line that carries a path. */
+const LABEL = /(?<![\w#%./-])(?:[A-Z]{1,3}-\d{1,3}|[A-Z]{1,2}\d{1,2})(?![\w-])/g;
+const NOT_LABEL = /^(?:SHA|UTF|ISO|CVE|AES|RFC|MD|DSI|DP|HDMI|VGA|DVI|LVDS)-/;
+// Product and key names shaped like a label: Apple silicon, function keys, consoles, a codec,
+// release candidates, TLS versions, the X display server (split so this line passes too).
+const NOT_TOKEN = new RegExp("^(?:M[1-4]|F" + "1[0-2]|PS[45]|AV" + "1|RC\\d|TLS-\\d|X" + "11)$");
+const SVG_PATH = /\bd=["']|<path\b/;
+// Portuguese that leaked outside the deliberate translations (docs/pt-BR, runtime/i18n,
+// the site's own pt-BR strings). Each word carries a `~` so this line never matches itself.
+const PORTUGUESE = new RegExp("(?<![a-zá-ú])(?:" + "n~ão|vo~cê|tam~bém|atra~vés|en~tão|a~té|s~ão|es~tá|es~tão|ocul~tar|verif~icar|rece~ntes|favo~ritos|a~bas|arqu~ivos?|usu~ários?|pad~rão|agu~arde|carre~gando|dispo~sitivo|diret~órios?|tempo~rários?|[a-zá-ú]+(?:ç~ão|ç~ões|s~ão|s~ões)".replace(/~/g, "") + ")(?![a-zá-ú])", "i");
+
+function phaseLabel(line) {
+  if (SVG_PATH.test(line)) return null;
+  for (const m of line.match(LABEL) || []) if (!NOT_LABEL.test(m) && !NOT_TOKEN.test(m)) return m;
+  return null;
+}
+
+const WORD = "process word, tool or loader name";
+function textProblem(line, translated, evidence) {
+  if (WORDS.test(line) && !ALLOW.some((a) => line.includes(a)) && !(evidence && OWNER_PAIR.test(line))) return WORD;
+  const label = phaseLabel(line);
+  if (label) return `internal phase label ${label}`;
+  if (!translated && PORTUGUESE.test(line)) return "Portuguese outside the translations";
+  return null;
+}
+
+/* The rules run against these lines before any file — each says what it must read as
+   (null = clean; a third entry marks an evidence file), with the flagged pieces split
+   so this file stays clean — so a loosened or over-eager pattern fails the step here. */
+const SAMPLES = [
+  ["Apple M1 and M2 Macs, press F12, a PS5 pad, RC1, TLS-1.3 only, X11 or Wayland", null],
+  ["ES2020 UTF-8 ISO-8601 ARM64 HDMI-A-1 E0502 #DEADBEEF v1.2.3 HTTP 404 MUI2 %C2%B7", null],
+  ["<path d=\"M1 2 L3 4\"/>", null],
+  ["phase " + "F" + "4 of the plan", "internal phase label " + "F" + "4"],
+  ["covers " + "ARM-" + "10, a minimal ARM distro", "internal phase label " + "ARM-" + "10"],
+  ["the migration step (" + "H" + "6) ran", "internal phase label " + "H" + "6"],
+  ["the roa" + "dmap for the spr" + "int", WORD],
+  ["const guard = w.De" + "ckyPluginLoader;", null],
+  ["    \"owner\": \"de" + "cky\",", WORD],
+  ["    \"owner\": \"de" + "cky\",", null, true],
+  ["    \"note\": \"de" + "cky owns it\",", WORD, true],
+  ["Arqu" + "ivos tempor" + "ários do sistema", "Portuguese outside the translations"],
+  ["the configuration file and its translations", null],
+];
+function ruleSelfCheck() {
+  return SAMPLES.filter(([line, want, evidence]) => textProblem(line, false, !!evidence) !== want)
+    .map(([line, want]) => `rule self-check: ${JSON.stringify(line)} should read ${want ?? "clean"}`);
+}
+
+// Tracked files only (what ships): every committed text root plus the root-level JSON files.
+// Run records under site/reports/<scope>/ and the aggregates the quality run writes are the
+// gates' own output, not authored text; the lab's evidence under site/reports/qa/ is scanned.
+const GENERATED = /^site\/reports\/(?:(?:ci|release|local)\/|runs\.json$|qa\/matrix\.json$)/;
+function shippedFiles() {
+  const roots = ["README.md", "CHANGELOG.md", "RELEASE_NOTES.md", "NOTICE.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "SECURITY.md", "build.rs", "Cargo.toml", "docs/", "src/", "runtime/", "scripts/", "examples/", "site/", "installer/", "docker/", ".github/"];
+  const ours = (f) => (roots.some((r) => f === r || f.startsWith(r)) || /^[^/]+\.json$/.test(f)) && !f.includes("/vendor/") && !GENERATED.test(f) && !/\.(png|jpg|webm|svg|pyc|ico|woff2?)$/.test(f);
+  return run("git ls-files -z").split("\0").filter((f) => f && ours(f));
+}
+
 function shippedText() {
-  const words = ["spr" + "int", "\\broa" + "dmap\\b", "\\bba" + "tch\\b", "\\bA\\.?I\\b", "de" + "cky", "\\bcla" + "ude\\b", "\\.cla" + "ude", "\\.roa" + "dmaps"];
-  const re = new RegExp(words.join("|"), "i");
-  const allow = ["borrowedToaster", "De" + "ckyPluginLoader", "de" + "ckyHasLoaded", "de" + "ckyLoaderAPIInit", "de" + "ckyFrontendLib", "__DECK_SHELVES_OWNER__ = \"de" + "cky\"", "owner===\"de" + "cky\""];
-  // Tracked files only (what ships), under the rule's roots plus the root-level JSON files.
-  const roots = ["README.md", "CHANGELOG.md", "RELEASE_NOTES.md", "NOTICE.md", "docs/", "src/", "runtime/", "scripts/", "examples/"];
-  const ours = (f) => (roots.some((r) => f === r || f.startsWith(r)) || /^[^/]+\.json$/.test(f)) && !f.includes("/vendor/") && !/\.(png|jpg|webm|svg|pyc)$/.test(f);
-  const files = run("git ls-files -z").split("\0").filter((f) => f && ours(f));
-  const hits = [];
+  const files = shippedFiles();
+  const hits = ruleSelfCheck();
   for (const f of files) {
-    readFileSync(join(ROOT, f), "utf8").split("\n").forEach((line, i) => {
-      if (re.test(line) && !allow.some((a) => line.includes(a))) hits.push(`${f}:${i + 1}: ${line.trim().slice(0, 100)}`);
+    const translated = ["docs/pt-BR/", "runtime/i18n/", "site/", "scripts/build-site.mjs"].some((r) => f.startsWith(r));
+    const evidence = f.startsWith(EVIDENCE_DIR);
+    let text;
+    try {
+      text = readFileSync(join(ROOT, f), "utf8");
+    } catch {
+      continue; // tracked but deleted in the working tree: it will not ship
+    }
+    text.split("\n").forEach((line, i) => {
+      const why = textProblem(line, translated, evidence);
+      if (why) hits.push(`${f}:${i + 1}: ${why}: ${line.trim().slice(0, 100)}`);
     });
   }
   return { ok: hits.length === 0, output: hits.length ? hits.join("\n") : `${files.length} tracked files clean` };

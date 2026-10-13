@@ -25,7 +25,8 @@ use crate::logger::{log_error, log_info, log_warning};
 // Bundle-size floor and the pinned release/API URLs live in the central
 // `constants` module (imported below); the loader-relative paths stay here as
 // they are specific to this module's source-resolution logic.
-use crate::constants::defaults::REAL_BUNDLE_MIN_BYTES;
+use crate::constants::defaults::{REAL_BINARY_MIN_BYTES, REAL_BUNDLE_MIN_BYTES};
+use crate::constants::timers::{CURL_CONNECT_TIMEOUT, CURL_DOWNLOAD_TIMEOUT, CURL_TEXT_TIMEOUT};
 use crate::constants::urls::{
     HUB_RELEASES_ALL_URL, HUB_RELEASES_LATEST_URL, RELEASES_ALL_URL, RELEASES_LATEST_URL,
     TRUSTED_BUNDLE_PREFIX,
@@ -124,6 +125,135 @@ pub fn ensure_backend(dest: &Path, prerelease: bool) -> Result<String, String> {
     Ok(format!("downloaded ({url})"))
 }
 
+/// Marker inside the hub-managed backend directory: the release tag it came from,
+/// so a bundle update to the same release does not download it again.
+const BACKEND_TAG_MARKER: &str = ".release-tag";
+
+/// Outcome of `refresh_backend`.
+pub enum BackendRefresh {
+    /// The installed backend already came from this release.
+    Unchanged,
+    /// The backend was replaced by the release's archive; carries the tag.
+    Replaced(String),
+}
+
+/// Bring the backend at `dir` to the release the bundle at `bundle_url` came from:
+/// its archive is obtained like the first boot's (download, hash check, vetted
+/// extract) into a sibling directory that then replaces `dir` in two renames.
+pub fn refresh_backend(dir: &Path, bundle_url: &str) -> Result<BackendRefresh, String> {
+    let (repo, tag) =
+        release_url_parts(bundle_url).ok_or_else(|| format!("no release tag in {bundle_url}"))?;
+    if !backend_refresh_due(dir, tag) {
+        return Ok(BackendRefresh::Unchanged);
+    }
+    let url = find_backend_asset_url(&curl_text(&tags_api_url(repo, tag))?)
+        .ok_or_else(|| format!("release {tag} has no backend archive"))?;
+    let fresh = sibling_dir(dir, "new");
+    let _ = fs::remove_dir_all(&fresh);
+    let obtained = extract_tgz_url(&url, &fresh).and_then(|()| {
+        if fresh.join("main.py").is_file() {
+            Ok(())
+        } else {
+            Err(format!(
+                "extracted archive has no main.py at {}",
+                fresh.display()
+            ))
+        }
+    });
+    if let Err(e) = obtained {
+        let _ = fs::remove_dir_all(&fresh);
+        return Err(e);
+    }
+    record_backend_tag(&fresh, &url);
+    replace_dir(dir, &fresh)?;
+    log_info(
+        "populate",
+        &format!("Backend refreshed to {tag} from {url}"),
+    );
+    Ok(BackendRefresh::Replaced(tag.to_string()))
+}
+
+/// After a bundle swap: bring the hub-managed backend to the same release and
+/// restart it, so the running backend matches the bundle it serves. Best-effort —
+/// the bundle swap stands either way; a configured external backend is never touched.
+fn refresh_backend_for_bundle(bundle_url: &str) {
+    let Some(dir) = crate::backend::managed_dir() else {
+        return;
+    };
+    match refresh_backend(&dir, bundle_url) {
+        Ok(BackendRefresh::Unchanged) => {}
+        Ok(BackendRefresh::Replaced(tag)) => {
+            let running = crate::backend::restart();
+            log_info(
+                "populate",
+                &format!("Backend restarted on {tag} (running={running})."),
+            );
+        }
+        Err(e) => log_warning(
+            "populate",
+            &format!("backend not refreshed with the bundle: {e}"),
+        ),
+    }
+}
+
+/// Whether the backend at `dir` came from a release other than `tag`. A copied or
+/// pre-installed backend carries no marker, so it counts as a different one.
+fn backend_refresh_due(dir: &Path, tag: &str) -> bool {
+    fs::read_to_string(dir.join(BACKEND_TAG_MARKER))
+        .map(|t| t.trim() != tag)
+        .unwrap_or(true)
+}
+
+/// Record the release a downloaded backend came from (see `BACKEND_TAG_MARKER`).
+fn record_backend_tag(dir: &Path, url: &str) {
+    if let Some((_, tag)) = release_url_parts(url) {
+        let _ = fs::write(dir.join(BACKEND_TAG_MARKER), tag);
+    }
+}
+
+/// `<dir>.<suffix>` beside `dir`.
+fn sibling_dir(dir: &Path, suffix: &str) -> PathBuf {
+    let mut name = dir.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".{suffix}"));
+    dir.with_file_name(name)
+}
+
+/// Put `fresh` in place of `current` through two renames (`current` → `.old`,
+/// `fresh` → `current`), putting the old directory back if the second one fails.
+fn replace_dir(current: &Path, fresh: &Path) -> Result<(), String> {
+    let old = sibling_dir(current, "old");
+    let _ = fs::remove_dir_all(&old);
+    let had_current = current.is_dir();
+    if had_current {
+        if let Err(e) = fs::rename(current, &old) {
+            let _ = fs::remove_dir_all(fresh);
+            return Err(format!("move {} aside: {e}", current.display()));
+        }
+    }
+    if let Err(e) = fs::rename(fresh, current) {
+        if had_current {
+            let _ = fs::rename(&old, current);
+        }
+        let _ = fs::remove_dir_all(fresh);
+        return Err(format!("move {} into place: {e}", current.display()));
+    }
+    let _ = fs::remove_dir_all(&old);
+    Ok(())
+}
+
+/// The plugin channel as it stands now: an explicit env/file pre-release flag, the
+/// plugin's own beta switch, or the hub's plugin-beta switch while the master and
+/// the per-plugin switches are on. Read at every check, like the hub's own channel.
+pub fn plugin_prerelease(
+    explicit: bool,
+    settings_dir: &Path,
+    hub: &crate::store::HubSettings,
+) -> bool {
+    explicit
+        || plugin_update_prefs(settings_dir).beta
+        || (hub.auto_update && hub.auto_update_plugin && hub.plugin_prerelease)
+}
+
 /// The plugin's update preferences, read from `<settings_dir>/settings.json` (the
 /// shared store the backend persists). The hub honors these for its OWN obtain/
 /// update, on top of its own criteria (never overwrite a working bundle):
@@ -147,9 +277,11 @@ pub fn plugin_update_prefs(settings_dir: &Path) -> PluginUpdatePrefs {
     let Ok(text) = fs::read_to_string(settings_dir.join("settings.json")) else {
         return default;
     };
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+    let Ok(file) = serde_json::from_str::<serde_json::Value>(&text) else {
         return default;
     };
+    // The plugin wraps its settings as `{state, rev, updatedAt}`; older files are flat.
+    let v = file.get("state").filter(|s| s.is_object()).unwrap_or(&file);
     PluginUpdatePrefs {
         auto_update: v
             .get("updateNotifyEnabled")
@@ -243,6 +375,7 @@ fn download_latest_backend(dest: &Path, prerelease: bool) -> Result<String, Stri
             dest.display()
         ));
     }
+    record_backend_tag(dest, &url);
     log_info("populate", &format!("Downloaded backend from {url}"));
     Ok(url)
 }
@@ -308,13 +441,21 @@ fn loader_iife_path() -> Option<PathBuf> {
     p.exists().then_some(p)
 }
 
+/// Copy `src` to `dest` through a temp file beside it plus a rename, so a file the
+/// daemon watches or injects (the runtime, the bundle) is never seen half-written.
 fn copy_into(src: &Path, dest: &Path) -> Result<(), String> {
-    if let Some(dir) = dest.parent() {
-        fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-    }
-    fs::copy(src, dest)
-        .map(|_| ())
-        .map_err(|e| format!("copy {} -> {}: {e}", src.display(), dest.display()))
+    let dir = dest.parent().unwrap_or_else(|| Path::new(""));
+    fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+    let name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    let tmp = dir.join(format!(".{name}.tmp"));
+    fs::copy(src, &tmp).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("copy {} -> {}: {e}", src.display(), tmp.display())
+    })?;
+    fs::rename(&tmp, dest).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("move {} into place: {e}", dest.display())
+    })
 }
 
 /// Where the bundle that was live before the last swap is kept (`<bundle>.prev`,
@@ -819,12 +960,7 @@ fn stage_binary_swap(new_bin: &Path, exe: &Path) -> Result<(), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let staged = exe.with_file_name(format!(
-            "{}.new",
-            exe.file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("shelveshub")
-        ));
+        let staged = staged_binary_path(exe);
         copy_into(new_bin, &staged)?;
         fs::set_permissions(&staged, fs::Permissions::from_mode(0o755))
             .map_err(|e| format!("chmod staged binary: {e}"))?;
@@ -836,6 +972,17 @@ fn stage_binary_swap(new_bin: &Path, exe: &Path) -> Result<(), String> {
     }
 }
 
+/// `<exe>.new`: where a self-update lands the new binary before renaming it over
+/// the running one (Unix); only an interrupted staging leaves it behind.
+fn staged_binary_path(exe: &Path) -> PathBuf {
+    exe.with_file_name(format!(
+        "{}.new",
+        exe.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("shelveshub")
+    ))
+}
+
 /// Best-effort removal of leftover self-update artifacts beside the running
 /// binary: an interrupted staged copy (`*.new`) on any OS, and the moved-aside
 /// previous binary (`*.old`) on Windows (which could not be deleted while it was
@@ -844,9 +991,7 @@ pub fn cleanup_stale_update_artifacts() {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    if let Some(name) = exe.file_name().and_then(|s| s.to_str()) {
-        let _ = fs::remove_file(exe.with_file_name(format!("{name}.new")));
-    }
+    let _ = fs::remove_file(staged_binary_path(&exe));
     if let Some(dir) = exe.parent() {
         let _ = fs::remove_dir_all(dir.join(HUB_PREVIOUS_STAGING));
     }
@@ -888,7 +1033,7 @@ fn snapshot_hub_install(exe: &Path, into: &Path, version: &str) -> Result<(), St
 fn snapshot_version(dir: &Path) -> Option<String> {
     let bin = dir.join(hub_binary_name());
     let head = fs::read(&bin).ok()?;
-    if head.len() < REAL_BUNDLE_MIN_BYTES as usize || !looks_like_executable(&head) {
+    if head.len() < REAL_BINARY_MIN_BYTES as usize || !looks_like_executable(&head) {
         return None;
     }
     let v = fs::read_to_string(dir.join("VERSION")).ok()?;
@@ -907,6 +1052,13 @@ pub fn hub_previous_version() -> Option<String> {
 /// so it takes effect on the next restart). The set being left is snapshotted
 /// first, so the rollback itself can be undone. Returns the restored version.
 pub fn rollback_hub() -> Result<String, String> {
+    // An update staged over the binary has already replaced the file at the exe
+    // path: snapshotting it would keep an un-run release under the running label.
+    if crate::state::hub_update_staged() {
+        return Err(
+            "a ShelvesHub update is staged: restart to apply it before rolling back".to_string(),
+        );
+    }
     let exe = std::env::current_exe().map_err(|e| format!("locate running binary: {e}"))?;
     rollback_hub_at(&exe, env!("CARGO_PKG_VERSION"))
 }
@@ -918,6 +1070,9 @@ fn rollback_hub_at(exe: &Path, running_version: &str) -> Result<String, String> 
     let prev = install_dir.join(HUB_PREVIOUS_DIR);
     let version = snapshot_version(&prev)
         .ok_or_else(|| "no previous ShelvesHub to go back to".to_string())?;
+    // An interrupted staging leaves `<exe>.new` beside the running binary (never
+    // swapped in): junk the next start would clear, and never part of the snapshot.
+    let _ = fs::remove_file(staged_binary_path(exe));
     let staging = install_dir.join(HUB_PREVIOUS_STAGING);
     snapshot_hub_install(exe, &staging, running_version)?;
     for sub in ["runtime", "assets"] {
@@ -1205,7 +1360,7 @@ pub fn apply_hub_update(prerelease: bool) -> Result<String, String> {
         Ok(bytes) => bytes,
         Err(e) => return cleanup(Err(format!("extracted binary missing: {e}"))),
     };
-    if head.len() < REAL_BUNDLE_MIN_BYTES as usize || !looks_like_executable(&head) {
+    if head.len() < REAL_BINARY_MIN_BYTES as usize || !looks_like_executable(&head) {
         return cleanup(Err(
             "downloaded binary failed verification (truncated or not an executable)".to_string(),
         ));
@@ -1267,17 +1422,22 @@ fn resolve_iife_for_asset_url(asset_url: &str) -> Option<String> {
 /// `.../<owner>/<repo>/releases/download/<tag>/<file>` →
 /// `https://api.github.com/repos/<owner>/<repo>/releases/tags/<tag>`.
 fn release_tags_api_url(asset_url: &str) -> Option<String> {
+    release_url_parts(asset_url).map(|(repo, tag)| tags_api_url(repo, tag))
+}
+
+fn tags_api_url(repo_path: &str, tag: &str) -> String {
+    format!("https://api.github.com/repos/{repo_path}/releases/tags/{tag}")
+}
+
+/// The `(<owner>/<repo>, <tag>)` a GitHub release-download URL names (pure);
+/// `None` for any other URL shape.
+fn release_url_parts(asset_url: &str) -> Option<(&str, &str)> {
     let rest = asset_url.strip_prefix("https://github.com/")?;
     let idx = rest.find("/releases/download/")?;
-    let repo_path = &rest[..idx]; // "<owner>/<repo>"
-    let after = &rest[idx + "/releases/download/".len()..]; // "<tag>/<file>"
+    let repo_path = &rest[..idx];
+    let after = &rest[idx + "/releases/download/".len()..];
     let tag = after.split('/').next()?;
-    if repo_path.is_empty() || tag.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "https://api.github.com/repos/{repo_path}/releases/tags/{tag}"
-    ))
+    (!repo_path.is_empty() && !tag.is_empty()).then_some((repo_path, tag))
 }
 
 /// The `*.iife.js` asset URL of the newest non-draft release in a `releases`
@@ -1295,10 +1455,18 @@ fn find_newest_iife_in_releases(releases_json: &str) -> Option<String> {
     None
 }
 
-/// `curl -sL <url>` → stdout as text. Used for the GitHub API call.
+/// `curl -sL <url>` → stdout as text, bounded by the connect and whole-call
+/// timeouts so an unreachable or stalled endpoint never hangs the caller (the
+/// first-boot obtain runs before the RPC server is up). Used for the GitHub API call.
 fn curl_text(url: &str) -> Result<String, String> {
     let out = Command::new("curl")
-        .args(["-sL", "-H", "Accept: application/vnd.github+json", url])
+        .args([
+            "-sL",
+            "--connect-timeout",
+            &CURL_CONNECT_TIMEOUT.as_secs().to_string(),
+        ])
+        .args(["--max-time", &CURL_TEXT_TIMEOUT.as_secs().to_string()])
+        .args(["-H", "Accept: application/vnd.github+json", url])
         .output()
         .map_err(|e| format!("curl (is it installed?): {e}"))?;
     if !out.status.success() {
@@ -1307,10 +1475,17 @@ fn curl_text(url: &str) -> Result<String, String> {
     String::from_utf8(out.stdout).map_err(|e| format!("curl output not UTF-8: {e}"))
 }
 
-/// `curl -sL <url> -o <dest>` — download a file.
+/// `curl -sL <url> -o <dest>` — download a file, with the same timeout bounds
+/// (a longer whole-call cap, since packages are a few MiB on a slow link).
 fn curl_download(url: &str, dest: &Path) -> Result<(), String> {
     let status = Command::new("curl")
-        .args(["-fsSL", url, "-o"])
+        .args([
+            "-fsSL",
+            "--connect-timeout",
+            &CURL_CONNECT_TIMEOUT.as_secs().to_string(),
+        ])
+        .args(["--max-time", &CURL_DOWNLOAD_TIMEOUT.as_secs().to_string()])
+        .args([url, "-o"])
         .arg(dest)
         .status()
         .map_err(|e| format!("curl (is it installed?): {e}"))?;
@@ -1326,7 +1501,10 @@ fn curl_download(url: &str, dest: &Path) -> Result<(), String> {
 /// (`prerelease` widens it to the beta channel).
 pub fn update_from_release(dest: &Path, prerelease: bool) -> Result<String, String> {
     match download_latest_iife(dest, prerelease) {
-        Ok(url) => Ok(url),
+        Ok(url) => {
+            refresh_backend_for_bundle(&url);
+            Ok(url)
+        }
         Err(e) => {
             log_error("populate", &format!("update download failed: {e}"));
             Err(e)
@@ -1386,6 +1564,7 @@ pub fn apply_update(
     verify_plugin_asset_against_sums(url, &tmp)?;
     swap_bundle_in(&tmp, dest)?;
     log_info("populate", &format!("Applied plugin update from {url}"));
+    refresh_backend_for_bundle(url);
     Ok(url.to_string())
 }
 

@@ -14,8 +14,10 @@ else
   machine=$(file -b "$bin")
 fi
 
+# `aarch64` only: readelf prints "AArch64" and file "ARM aarch64" for 64-bit ARM,
+# while a 32-bit ARM binary is just "ARM" and must not pass.
 case "$expect" in
-  aarch64) grep -qiE "aarch64|arm" <<<"$machine" || { echo "::error::arch-audit: $bin is '$machine', expected aarch64"; exit 1; } ;;
+  aarch64) grep -qi "aarch64" <<<"$machine" || { echo "::error::arch-audit: $bin is '$machine', expected aarch64"; exit 1; } ;;
   x86_64)  grep -qiE "x86-64|x86_64|amd64|advanced micro" <<<"$machine" || { echo "::error::arch-audit: $bin is '$machine', expected x86_64"; exit 1; } ;;
   *) echo "::error::arch-audit: unknown expected arch '$expect'"; exit 1 ;;
 esac

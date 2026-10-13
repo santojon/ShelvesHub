@@ -321,7 +321,7 @@
 
       // ── Platform coverage: the QA matrix the lab assembles. ───────────────
       function statusPill(status) {
-        var cls = status === "tested" ? "ok" : (status === "blocked" || status === "not-run" ? "bad" : (status === "partial" ? "warn" : ""));
+        var cls = status === "tested" ? "ok" : (status === "blocked" || status === "not-run" ? "bad" : (status === "partial" || status === "stale" ? "warn" : ""));
         return '<span class="pill ' + cls + '">' + esc(status || "—") + '</span>';
       }
       function evidenceText(cell) {

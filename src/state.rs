@@ -1,20 +1,18 @@
-//! Shared injection state.
+//! Shared daemon state.
 //!
-//! The injection loop writes the latest observed state; the RPC server reads it
-//! to answer `isInjected`. A plain atomic is enough — there is exactly one
-//! writer (the loader loop) and many readers (RPC connections).
+//! The seam between the injection loop and the RPC threads: the loop records
+//! what it observed, the handlers read it and set the flags the loop acts on.
+//! Plain atomics and small mutexes; both sides write from their own threads.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static INJECTED: AtomicBool = AtomicBool::new(false);
-static BUNDLE_READY: AtomicBool = AtomicBool::new(false);
-/// Wall-clock millis (since epoch) of the most recent bundle injection, for the
-/// cold-start measurement: `bundleReady` subtracts it to report the downstream
-/// boot→initialised time. 0 = not injected yet this session.
+/// Wall-clock millis (since epoch) of the most recent bundle injection, stamped
+/// by the loop after each bundle eval. 0 = not injected yet this session.
 static INJECTED_AT_MS: AtomicU64 = AtomicU64::new(0);
 static POPULATE: OnceLock<(PathBuf, bool)> = OnceLock::new();
 static HUB_CONFIG: OnceLock<PathBuf> = OnceLock::new();
@@ -146,8 +144,6 @@ pub fn requeue_host_notices(items: Vec<(String, serde_json::Value)>) {
     }
 }
 
-/// Set by the RPC handlers when a synced setting changed here, so the loop runs a
-/// sync round on the next settled tick instead of waiting for the periodic one.
 /// The next loop tick runs the update check at once (set when the loader's Deck
 /// Shelves turns out newer than the copy we carry under the cooperative bundle).
 static UPDATE_CHECK_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -160,6 +156,8 @@ pub fn take_update_check_request() -> bool {
     UPDATE_CHECK_REQUESTED.swap(false, Ordering::Relaxed)
 }
 
+/// Set by the RPC handlers when a synced setting changed here, so the loop runs a
+/// sync round on the next settled tick instead of waiting for the periodic one.
 static SYNC_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 pub fn request_sync() {
@@ -256,34 +254,14 @@ pub fn set_injected(value: bool) {
     INJECTED.store(value, Ordering::Relaxed);
 }
 
-/// Stamp "the bundle was just injected" with the current wall-clock time, so the
-/// bundleReady RPC can report how long the downstream boot took.
+/// Stamp "the bundle was just injected" with the current wall-clock time.
 pub fn mark_injected_now() {
     INJECTED_AT_MS.store(now_ms(), Ordering::Relaxed);
-}
-
-/// Millis elapsed since the last injection stamp, or `None` if never stamped /
-/// the clock went backwards. Read once by bundleReady.
-pub fn millis_since_injected() -> Option<u64> {
-    millis_since(INJECTED_AT_MS.load(Ordering::Relaxed))
 }
 
 /// Whether the bundle was active as of the last loop tick.
 pub fn is_injected() -> bool {
     INJECTED.load(Ordering::Relaxed)
-}
-
-/// Record that the injected bundle has fully initialised. Set from the RPC
-/// server when the bundle calls `bundleReady`; distinct from `INJECTED` (which
-/// the loop derives from the renderer probe) because it is the bundle's own
-/// confirmation that it finished booting against the host API.
-pub fn set_bundle_ready(value: bool) {
-    BUNDLE_READY.store(value, Ordering::Relaxed);
-}
-
-/// Whether the bundle has confirmed full initialisation via `bundleReady`.
-pub fn is_bundle_ready() -> bool {
-    BUNDLE_READY.load(Ordering::Relaxed)
 }
 
 /// Record the bundle path + pre-release flag so RPC handlers (a manual
@@ -334,14 +312,41 @@ pub fn persist_rpc_token(path: &std::path::Path) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let wrote = std::fs::write(path, rpc_token()).is_ok();
+    // Recreated with its final mode, so the token is never readable by other
+    // users between the write and a later chmod (and a planted link is replaced,
+    // never followed).
+    let _ = std::fs::remove_file(path);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
     #[cfg(unix)]
-    if wrote {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
-    #[cfg(not(unix))]
-    let _ = wrote; // no file mode to tighten off Unix
+    if let Ok(mut file) = options.open(path) {
+        use std::io::Write;
+        let _ = file.write_all(rpc_token().as_bytes());
+    }
+}
+
+/// Config-file edits made over RPC this session, by key. They apply on the next
+/// restart; until then the hub view reads them back from here, since the boot
+/// snapshot (`RUNTIME_CONFIG`) still carries the values the daemon started with.
+static PENDING_CONFIG_EDITS: Mutex<BTreeMap<String, serde_json::Value>> =
+    Mutex::new(BTreeMap::new());
+
+pub fn record_config_edit(key: &str, value: serde_json::Value) {
+    if let Ok(mut edits) = PENDING_CONFIG_EDITS.lock() {
+        edits.insert(key.to_string(), value);
+    }
+}
+
+/// Every config edit recorded this session (empty when none).
+pub fn pending_config_edits() -> BTreeMap<String, serde_json::Value> {
+    PENDING_CONFIG_EDITS
+        .lock()
+        .map(|edits| edits.clone())
+        .unwrap_or_default()
 }
 
 /// Record the effective operational-config snapshot + the config file it maps to
@@ -375,9 +380,9 @@ pub fn daemon_config() -> Option<&'static crate::config::Config> {
     DAEMON_CONFIG.get()
 }
 
-/// A single-flight guard so the periodic loop and a manual `checkUpdates` RPC never
-/// run an update check at the same time (both download + swap files). `try_begin`
-/// returns false when a check is already in flight; `end` releases it.
+/// A single-flight guard so the periodic loop, a manual `checkUpdates` and the
+/// manual download/rollback RPCs never move the same files at the same time.
+/// `try_begin` returns false when one is already in flight; `end` releases it.
 static UPDATE_CHECK_RUNNING: AtomicBool = AtomicBool::new(false);
 
 pub fn try_begin_update_check() -> bool {
@@ -389,6 +394,10 @@ pub fn try_begin_update_check() -> bool {
 pub fn end_update_check() {
     UPDATE_CHECK_RUNNING.store(false, Ordering::Release);
 }
+
+/// Tests that take the (process-wide) update guard run one at a time on this.
+#[cfg(test)]
+pub(crate) static UPDATE_GUARD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 /// Append a formatted log line to the in-memory ring the `getLogs` RPC serves
 /// (bounded — the oldest line drops). Called by the logger on every emit.

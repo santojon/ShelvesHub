@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 use crate::cdp::CdpClient;
@@ -43,11 +43,14 @@ pub const CONFIG_KEYS: [&str; 3] = ["desktop_ui", "native_notifications", "boot_
 const RESTART_KEYS: [&str; 2] = ["desktop_ui", "native_notifications"];
 
 /// One synced setting: its value and when it last changed (ms since the epoch).
+/// Fields this build doesn't know ride along with the entry.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Entry {
     pub value: Value,
     pub at: u64,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
 }
 
 /// The roaming document. Fields and entries this build doesn't know are carried
@@ -58,13 +61,28 @@ pub struct Doc {
     pub v: u64,
     pub updated_at: u64,
     pub from: String,
+    #[serde(deserialize_with = "lenient_entries")]
     pub entries: BTreeMap<String, Entry>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
 
+/// Read the entries one by one and drop only those not in the expected shape:
+/// one bad entry must not make the whole document read as absent, which would
+/// have this device overwrite everything the other devices wrote.
+fn lenient_entries<'de, D: Deserializer<'de>>(d: D) -> Result<BTreeMap<String, Entry>, D::Error> {
+    let Value::Object(raw) = Value::deserialize(d)? else {
+        return Ok(BTreeMap::new());
+    };
+    Ok(raw
+        .into_iter()
+        .filter_map(|(key, entry)| Some((key, serde_json::from_value(entry).ok()?)))
+        .collect())
+}
+
 impl Doc {
     /// Parse the stored text; `None` for an empty, invalid or unversioned value.
+    /// A malformed entry is skipped on its own; the rest of the document stays.
     pub fn parse(raw: &str) -> Option<Doc> {
         let doc: Doc = serde_json::from_str(raw.trim()).ok()?;
         (doc.v >= 1).then_some(doc)
@@ -132,6 +150,7 @@ pub fn stamp(
                 Entry {
                     value: value.clone(),
                     at,
+                    extra: Map::new(),
                 },
             )
         })
@@ -177,7 +196,9 @@ fn defaults() -> BTreeMap<String, Value> {
     values
 }
 
-fn set_store_value(settings: &mut HubSettings, key: &str, value: bool) -> bool {
+/// Set one of the synced store switches by key; false for any other key. Shared
+/// with the `setUpdatePref` RPC so both sides accept the same six switches.
+pub(crate) fn set_store_value(settings: &mut HubSettings, key: &str, value: bool) -> bool {
     let slot = match key {
         "auto_update" => &mut settings.auto_update,
         "auto_update_hub" => &mut settings.auto_update_hub,
@@ -236,7 +257,7 @@ pub fn apply(
     (applied, restart)
 }
 
-use crate::config::{read_config_object, write_config_object};
+use crate::config::{read_config_object, update_config_object};
 use crate::state::now_ms;
 
 fn device_label() -> String {
@@ -337,9 +358,21 @@ pub fn run(config: &Config) {
         .unwrap_or_default();
     let decided = merge(&mine, &theirs);
     let (applied, restart) = apply(&decided.adopt, &mut settings, &mut file);
-    if applied.iter().any(|k| CONFIG_KEYS.contains(&k.as_str())) {
+    // Only the adopted keys go into the file, merged under the editors' lock: an
+    // edit made over RPC during this round must not be reverted by our copy.
+    let adopted_config: Vec<(String, Value)> = applied
+        .iter()
+        .filter(|k| CONFIG_KEYS.contains(&k.as_str()))
+        .filter_map(|k| file.get(k).map(|v| (k.clone(), v.clone())))
+        .collect();
+    if !adopted_config.is_empty() {
         if let Some(p) = file_path {
-            if let Err(e) = write_config_object(p, &file) {
+            let merged = update_config_object(p, |obj| {
+                for (key, value) in adopted_config {
+                    obj.insert(key, value);
+                }
+            });
+            if let Err(e) = merged {
                 log_warning("sync", &format!("config file not updated: {e}"));
             }
         }
@@ -358,18 +391,32 @@ pub fn run(config: &Config) {
             log_warning("sync", "roaming copy not written — retrying next round.");
         }
     }
-    if written || !decided.push {
-        settings.sync_base = local
+    let bookkeeping = (written || !decided.push).then(|| {
+        let base: Map<String, Value> = local
             .keys()
             .filter_map(|k| decided.entries.get(k).map(|e| (k.clone(), e.value.clone())))
             .collect();
-        settings.sync_stamps = local
+        let stamps: BTreeMap<String, u64> = local
             .keys()
             .filter_map(|k| decided.entries.get(k).map(|e| (k.clone(), e.at)))
             .collect();
-        settings.sync_last_at = now;
-    }
-    if let Err(e) = crate::store::save(&config.hub_config_path, &settings) {
+        (base, stamps)
+    });
+    // The round's decisions land on a fresh copy under the store lock, so a
+    // switch the user flipped meanwhile (over RPC) survives the round.
+    let saved = crate::store::update(&config.hub_config_path, |s| {
+        for (key, value) in &decided.adopt {
+            if let Some(b) = value.as_bool() {
+                set_store_value(s, key, b);
+            }
+        }
+        if let Some((base, stamps)) = bookkeeping {
+            s.sync_base = base;
+            s.sync_stamps = stamps;
+            s.sync_last_at = now;
+        }
+    });
+    if let Err(e) = saved {
         log_warning("sync", &format!("could not save the settings: {e}"));
     }
     if !applied.is_empty() {

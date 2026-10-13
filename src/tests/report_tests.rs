@@ -18,6 +18,14 @@ fn status_report_has_the_expected_shape() {
     // `runtime` is always present; `native` is a bool or null (uname may be absent).
     assert!(v.get("runtime").is_some());
     assert!(sh.get("native").is_some());
+    // The python probe names the interpreter the daemon would spawn.
+    assert_eq!(v["runtime"]["pythonBin"], Config::from_env().python_bin);
+}
+
+#[test]
+fn rpc_probe_rejects_a_malformed_address_without_connecting() {
+    assert!(!probe_rpc_port("no-port"));
+    assert!(!probe_rpc_port("127.0.0.1:notaport"));
 }
 
 // Device detection reads sysfs/procfs under a root; a temp fixture mimics a DSI-panel
@@ -71,6 +79,9 @@ fn doctor_classifiers_map_states() {
     assert_eq!(classify_steam(Some(true)).0, Status::Ok);
     assert_eq!(classify_steam(Some(false)).0, Status::Warn);
     assert_eq!(classify_steam(None).0, Status::Warn);
+
+    assert_eq!(classify_rpc(true).0, Status::Ok);
+    assert_eq!(classify_rpc(false).0, Status::Warn); // never a failure on its own
 
     assert_eq!(classify_service(Some(true)).0, Status::Ok);
     assert_eq!(classify_service(Some(false)).0, Status::Fail);

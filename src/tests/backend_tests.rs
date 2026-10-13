@@ -30,6 +30,12 @@ fn call_without_configuration_fails_cleanly() {
 }
 
 #[test]
+fn managed_dir_is_unknown_without_configuration() {
+    // Nothing hosted: a bundle update has no backend of its own to refresh.
+    assert!(managed_dir().is_none());
+}
+
+#[test]
 fn python_bin_falls_back_to_platform_default() {
     // SETTINGS is never initialised in unit tests, so we get the platform default.
     let expected = if cfg!(windows) { "python" } else { "python3" };

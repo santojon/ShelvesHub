@@ -1,10 +1,11 @@
 //! ShelvesHub — shared library.
 //!
 //! The CDP client, configuration, logging and injection state live here so
-//! both binaries can reuse them:
+//! the binaries can reuse them:
 //!
-//! - `loader`           — the background service ([`loader`] + [`rpc`]).
+//! - `shelveshub`       — the background service ([`loader`] + [`rpc`]).
 //! - `shelves-devtools` — the cross-platform CDP developer tool.
+//! - `shelveshub-tray`  — the tray companion (config and the RPC token path).
 
 pub mod backend;
 pub mod bootmovie;
@@ -16,6 +17,7 @@ pub mod logger;
 pub mod populate;
 pub mod report;
 pub mod rpc;
+pub mod semver;
 pub mod state;
 pub mod store;
 pub mod sync;

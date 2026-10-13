@@ -1,6 +1,6 @@
-// runtime/shelves-host-qam.js — QAM host section (native Quick Access tab, panel,
-// native-menu patching). Assembled with shelves-host.js into ONE injected IIFE by
-// the loader (shared closure); not a standalone module — see shelves-host.js.
+// runtime/shelves-host-qam.js — QAM host section (the native Quick Access tab, its
+// panel slot and the hub view). Assembled after shelves-host.js into ONE injected IIFE
+// by the daemon (shared closure); not a standalone module — see shelves-host.js.
 
   const QamHost = (function () {
     const KEY_PREFIX = "shelves-";
@@ -34,8 +34,8 @@
        collapse risk), so the breaker must never engage there — otherwise an armed
        state left by a restart before the QAM first renders would false-trip and
        silently kill our tab on every later boot. */
-    // Boot evaluation of the trip breaker (sole/owner only): a STALE arm trips (overlay
-    // fallback); a RECENT arm is a boot re-inject and re-arms cleanly; an existing "tripped"
+    // Boot evaluation of the trip breaker (sole/owner only): a STALE arm trips (the native
+    // tab stays off); a RECENT arm is a boot re-inject and re-arms cleanly; an existing "tripped"
     // stays tripped. Sets `tripped` and returns it so the caller can disable the native path.
     function tripBreakerDisablesNative() {
       const prior = tripGet();
@@ -44,13 +44,13 @@
         if (Date.now() - armTs > STALE_ARM_MS) {
           tripSet("tripped:" + Date.now());
           tripped = true;
-          log("QAM native: previous arm never confirmed (stale) — TRIPPED. Overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
+          log("QAM native: previous arm never confirmed (stale) — TRIPPED. Native tab off; clear localStorage['" + TRIP_KEY + "'] to retry.");
         } else {
           log("QAM native: recent arm (boot re-inject) — re-arming, not tripping.");
         }
       } else if (prior && prior.indexOf("tripped") === 0) {
         tripped = true;
-        logError("QAM", "breaker is tripped (" + prior + ") — overlay fallback active; clear localStorage['" + TRIP_KEY + "'] to retry.");
+        logError("QAM", "breaker is tripped (" + prior + ") — native tab off; clear localStorage['" + TRIP_KEY + "'] to retry.");
       }
       return tripped;
     }
@@ -126,6 +126,10 @@
       useSlotRefresh();
       const s = firstSpec();
       return iconEl((s && s.icon) || DEFAULT_ICON);
+    }
+    // The document a rendered element landed in (the Quick Access menu's, on Steam), else this one.
+    function panelDocument(ref) {
+      try { return (ref.current && ref.current.ownerDocument) || document; } catch (e) { return null; }
     }
     // POST a JSON-RPC call to the local host RPC server (same transport as
     // `host.rpc.call`) — used by the fallback panel's actions.
@@ -272,7 +276,16 @@
       // on the spot. The movie itself is only read by Steam on its next start, so
       // surface the "restart to apply" banner (Steam replays the startup movie).
       function applyBootMovie(v) { mergeRc({ boot_movie: v }); setRcDirty(true); hostRpc("setBootMovie", v).then(function () {}, function () {}); }
-      function applyCfg(key, val) { mergeRc((function () { const o = {}; o[key] = val; return o; })()); setRcDirty(true); hostRpc("setRuntimeConfig", { key: key, value: val }).then(function () {}, function () {}); }
+      // Optimistic edit; a refusal (out of range, busy) puts the row back on the value the file kept.
+      function applyCfg(key, val) {
+        const prev = rc, wasDirty = rcDirty;
+        mergeRc((function () { const o = {}; o[key] = val; return o; })());
+        setRcDirty(true);
+        const revert = function (why) { setRc(prev); setRcDirty(wasDirty); logWarn("RPC", "setRuntimeConfig " + key + " refused: " + why); };
+        hostRpc("setRuntimeConfig", { key: key, value: val }).then(function (r) {
+          if (!(r && r.ok)) revert((r && r.error) || "no answer");
+        }, function (e) { revert((e && e.message) || "request failed"); });
+      }
       /* Apply pending config edits: restart the daemon so it re-reads the config
          file (values are only read at startup), then restart Steam so the fresh
          daemon claims/injects on a clean boot (needed for an ownership change,
@@ -285,9 +298,10 @@
           try { const u = window.SteamClient && window.SteamClient.User; if (u && typeof u.StartRestart === "function") u.StartRestart(false); } catch (e) {}
         }, 600);
       }
-      /* Hub self-update: restart ONLY the daemon. The fresh binary reinjects the
-         runtime on its next tick, so no Steam restart is needed — never StartRestart
-         (black-screen discipline) and never close a running game. */
+      /* Hub self-update: restart ONLY the daemon. The new process stamps its RPC
+         token into __SHELVES_CONFIG__ on its next tick and the runtime reads it per
+         call, so no Steam restart is needed — never StartRestart (black-screen
+         discipline) and never close a running game. */
       function doRestartDaemonOnly() {
         if (busy) return;
         setBusy("restart");
@@ -378,9 +392,11 @@
       // status fields are merged, so a refresh never clobbers an in-flight optimistic toggle edit.
       React.useEffect(function () {
         let alive = true;
+        // The view lives in the menu's own document; that one hides when the menu closes.
+        const doc = panelDocument(titleRef);
         function refresh() {
           if (!alive) return;
-          try { if (typeof document !== "undefined" && document.hidden) return; } catch (e) {}
+          try { if (doc && doc.hidden) return; } catch (e) {}
           hostRpc("getConfig").then(function (r) {
             if (!alive || !(r && r.ok && r.result && typeof r.result === "object")) return;
             const res = r.result;
@@ -388,8 +404,6 @@
           }, function () {});
         }
         const iv = setInterval(refresh, 60000);
-        let doc = null;
-        try { doc = document; } catch (e) {}
         if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", refresh);
         return function () {
           alive = false;
@@ -579,13 +593,20 @@
         return clickable(function () { onAct(!checked); }, { key: key, "data-fb": key, "data-on": checked ? "1" : "0", focusClassName: "shelves-rowfocus", style: advRowStyle },
           [advLabelCol(label, sub), updSwitch(checked)]);
       };
+      // The ranges the daemon accepts for the stepped keys (setRuntimeConfig refuses the rest).
+      const CFG_RANGES = { interval_secs: [1, 3600], owner_settle_secs: [0, 300] };
+      function clampCfg(key, v) {
+        const r = CFG_RANGES[key];
+        return r ? Math.min(r[1], Math.max(r[0], v)) : Math.max(0, v);
+      }
       // Numeric stepper: the original two focusable − / + buttons (A activates
       // each), wrapped in a `flow-children:"horizontal"` Focusable so the gamepad
       // moves BETWEEN them laterally instead of vertically. Subtext under the label.
       const advStepRow = function (key, label, sub, val) {
         const cur = Number(val) || 0;
         const stepBtn = function (sym, delta) {
-          return clickable(function () { applyCfg(key, Math.max(0, cur + delta)); }, { key: key + sym, "data-fb": key + sym, style: { flex: "0 0 auto", width: "30px", height: "28px", borderRadius: "4px", background: "rgba(255,255,255,0.14)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "16px", lineHeight: "1" } }, [sym]);
+          const step = function () { const next = clampCfg(key, cur + delta); if (next !== cur) applyCfg(key, next); };
+          return clickable(step, { key: key + sym, "data-fb": key + sym, style: { flex: "0 0 auto", width: "30px", height: "28px", borderRadius: "4px", background: "rgba(255,255,255,0.14)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "16px", lineHeight: "1" } }, [sym]);
         };
         const groupKids = [stepBtn("−", -5), h("span", { key: "v", style: { flex: "0 0 auto", minWidth: "34px", textAlign: "center", fontFamily: "monospace" } }, String(cur)), stepBtn("+", 5)];
         const groupStyle = { display: "flex", alignItems: "center", gap: "8px", flex: "0 0 auto" };
@@ -927,11 +948,13 @@
       // mount and again when the tab becomes visible — no polling interval.
       const pu = React.useState(null);
       const pendingUpd = pu[0], setPendingUpd = pu[1];
+      const styleRef = React.useRef(null);
       React.useEffect(function () {
         let alive = true;
+        const doc = panelDocument(styleRef);
         function refresh() {
           if (!alive) return;
-          try { if (typeof document !== "undefined" && document.hidden) return; } catch (e) {}
+          try { if (doc && doc.hidden) return; } catch (e) {}
           hostRpc("getConfig").then(function (r) {
             if (!alive || !(r && r.ok && r.result && typeof r.result === "object")) return;
             const v = r.result.pending_hub_update;
@@ -939,8 +962,6 @@
           }, function () {});
         }
         refresh();
-        let doc = null;
-        try { doc = document; } catch (e) {}
         if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", refresh);
         return function () {
           alive = false;
@@ -967,25 +988,6 @@
               },
             }, [fbIcon("hub"), h("span", { key: "t" }, I18N.t("hub_title")), updDot]);
       }
-      /* Our edge-to-edge toggle row's Field has 0 horizontal padding, so pad the Field's CONTENT
-         (not the wrapper): the highlight still reaches the QAM edge, only the content insets. The
-         Field class is Steam's gamepadDialog class — from the webpack (sole) or the loader (coexist). */
-      function fieldPaddingCss() {
-        try {
-          let _gpdCls = null;
-          try {
-            _gpdCls = Steam.findModule(function (e) {
-              return e && typeof e === "object" && typeof e.Field === "string" &&
-                typeof e.GamepadDialogContent === "string" && typeof e.StandardPadding === "string";
-            });
-          } catch (e) {}
-          const _fieldCls = (_gpdCls && _gpdCls.Field) ||
-            (window.DFL && window.DFL.gamepadDialogClasses && window.DFL.gamepadDialogClasses.Field) || "";
-          if (_fieldCls) return ".shelves-panel .shelves-toggle-row ." + _fieldCls +
-            "{padding-left:14px!important;padding-right:14px!important;}";
-        } catch (e) {}
-        return "";
-      }
       const s = firstSpec();
       let body;
       // No registered panel → the hub view IS the content (the fallback).
@@ -1006,9 +1008,8 @@
         // Whole-row focus highlight (a background, like the plugin's QAM rows) for
         // section headers and Advanced rows — not the button ring above.
         ".shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}";
-      ringCss += fieldPaddingCss();
       ringCss += Sidecar.css;
-      const styleEl = h("style", { "data-shelves": "ring" }, ringCss);
+      const styleEl = h("style", { "data-shelves": "ring", ref: styleRef }, ringCss);
       // Wrap the panel in Steam's Focusable so it joins gamepad-focus navigation
       // (the mirrored editor's controls and ours), the way a loader wraps its
       // plugin view. Bare (touch still works) until Focusable is available.
@@ -1195,8 +1196,8 @@
        live-fiber surgery (those were the black-screen vectors, on-device 2026-07-23). */
     /* Timing: a mounted memo holds its pre-patch type, so this must wrap BEFORE the QAM first
        mounts. The preload path (addScriptToEvaluateOnNewDocument) runs at document-start ahead of
-       the mount; installPatchWithRetry polls until the module loads. Without preload the tab waits
-       for the next QAM mount; the overlay panel is the immediate fallback either way. */
+       the mount; installPatchWithRetry polls until the module loads. Without preload an already
+       mounted menu is re-pointed at the patched type (maybeRepoint), else the tab waits for the next mount. */
     // Locate the QAM tab-list consumers in the webpack: the BrowserView and the Embedded presentation
     // (both render the tab list). null = the consumer chunk hasn't loaded yet.
     function findQamConsumers() {
@@ -1297,7 +1298,7 @@
       patchAttempts++;
       if (patchAttempts === 1) log("QAM native: waiting for the tab-list builder…");
       if (patchAttempts < 1200) setTimeout(installPatchWithRetry, 50);
-      else log("QAM native: builder never appeared — overlay only.");
+      else log("QAM native: builder never appeared — native tab not added.");
     }
     // Discover Steam's native UI components off the render path, ~1.5s after inject (once the plugin
     // settled), then re-render the slots to render natively. CHUNKED (one scan per tick) because
@@ -1329,5 +1330,7 @@
       if (NATIVE_QAM_ENABLED && patched) return confirmed ? "native" : "native-arming";
       return "overlay";
     }
-    return { registerPanel: registerPanel, mode: mode, _specs: specs, _isNative: function () { return patched; } };
+    // Our tab really sits in the menu's strip this session (inserted, breaker not tripped).
+    function tabPresent() { return confirmed && !tripped; }
+    return { registerPanel: registerPanel, mode: mode, _specs: specs, _isNative: function () { return patched; }, _tabPresent: tabPresent };
   })();

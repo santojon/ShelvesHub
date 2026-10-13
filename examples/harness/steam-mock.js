@@ -33,14 +33,22 @@
       },
       getLogs: [],
     };
+    // Every call is recorded for the assertions; `__HARNESS_REFUSE_CONFIG__` makes a config edit
+    // answer the daemon's refusal envelope (what it sends outside its accepted ranges).
+    const calls = (window.__HARNESS_RPC_CALLS__ = []);
+    function answer(method, args) {
+      calls.push({ method: method, args: args });
+      if (method === "setRuntimeConfig" && window.__HARNESS_REFUSE_CONFIG__) return { ok: false, error: "refused by the harness" };
+      return { ok: true, result: Object.prototype.hasOwnProperty.call(results, method) ? results[method] : true };
+    }
     const realFetch = window.fetch ? window.fetch.bind(window) : null;
     window.fetch = function (url, opts) {
       try {
         if (typeof url === "string" && url.indexOf(RPC_HOST) >= 0) {
-          let method = "";
-          try { method = JSON.parse((opts && opts.body) || "{}").method || ""; } catch (e) {}
-          const result = Object.prototype.hasOwnProperty.call(results, method) ? results[method] : true;
-          return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, result: result }); } });
+          let call = {};
+          try { call = JSON.parse((opts && opts.body) || "{}"); } catch (e) {}
+          const body = answer(call.method || "", call.args);
+          return Promise.resolve({ ok: true, json: function () { return Promise.resolve(body); } });
         }
       } catch (e) {}
       return realFetch ? realFetch(url, opts) : Promise.reject(new Error("no fetch"));
@@ -68,6 +76,14 @@
   // ── The tab-list renderer + the QAM consumer ──────────────────────────────
   // The consumer returns an element carrying `props.tabs`; the runtime finds it
   // and pushes our tab. Named so `toString()` contains the discovery substring.
+  // Steam mounts only the ACTIVE tab's panel, so leaving a tab unmounts it: `tabSwitch`
+  // scenarios get that (the menu opens on our tab 900, __HARNESS_SELECT_TAB__ switches),
+  // the others render every panel at once.
+  let activeTab = 900;
+  function panelOf(t, id) {
+    if (S.tabSwitch && id !== activeTab) return null;
+    return typeof t.panel === "function" ? h(t.panel) : t.panel || null;
+  }
   function TabList(props) {
     return h(
       "div",
@@ -79,7 +95,7 @@
           { className: "qam-tab", "data-tabkey": String(id), key: String(id) },
           [
             h("div", { className: "qam-tab-title", key: "t" }, typeof t.tab === "string" ? t.tab : t.title || String(id)),
-            h("div", { className: "qam-tab-panel", key: "p" }, typeof t.panel === "function" ? h(t.panel) : t.panel || null),
+            h("div", { className: "qam-tab-panel", key: "p" }, panelOf(t, id)),
           ]
         );
       })
@@ -233,12 +249,17 @@
   };
 
   // ── Coexistence: a foreign loader (DFL) present ───────────────────────────
+  // Its router hook is a set of spies: cooperation swaps it into host.routerHook, and the
+  // coop assertions check that host.routes reaches it (the calls land in __HARNESS_ROUTER_CALLS__).
   if (S.coexist) {
+    const calls = (window.__HARNESS_ROUTER_CALLS__ = []);
+    const spy = function (name) { return function (p, x) { calls.push(name + " " + p); return x; }; };
     window.DFL = {
       definePlugin: function (fn) {
         return fn;
       },
       QuickAccessTab: QuickAccessTab,
+      routerHook: { addRoute: spy("addRoute"), removeRoute: spy("removeRoute"), addPatch: spy("addPatch"), removePatch: spy("removePatch") },
     };
   }
 
@@ -271,6 +292,11 @@
   }
   window.__HARNESS_MOUNT_QAM__ = mountQam;
   window.__HARNESS_RENDER__ = render;
+  // A tab switch is one synchronous re-render: the panel left is unmounted, the one picked mounted.
+  window.__HARNESS_SELECT_TAB__ = function (key) {
+    activeTab = key;
+    render();
+  };
 
   // ── A coexisting plugin that registers a QAM panel via the bridge ─────────
   // Mirrors what Deck Shelves does under a loader: register into __SHELVES_QAM__
@@ -293,6 +319,22 @@
   };
 
   // ── Report surface for assertions ─────────────────────────────────────────
+  /* The native render path: the runtime logs "UI scan complete" when its chunked
+     discovery lands, and the mock's components leave `.native-*` DOM wherever a
+     slot renders natively (the pinned hub button in the mirrored panel). */
+  function nativeUiReport() {
+    return {
+      discovered: (window.__SHELVES_LOG__ || []).some(function (e) { return /UI scan complete/.test(String(e && e.msg)); }),
+      rendered: !!document.querySelector(".native-dialogbutton, [data-native]"),
+    };
+  }
+  // What the host answers right now (null without a host): the capabilities follow the tab
+  // insertion and the cooperative hand-over, so the assertions read them at report time.
+  function hostRead(fn) {
+    const hostApi = window.__SHELVES_HOST__;
+    try { return hostApi ? fn(hostApi) : null; } catch (e) { return String(e && e.message); }
+  }
+  function routerCalls() { return (window.__HARNESS_ROUTER_CALLS__ || []).slice(); }
   window.__HARNESS_REPORT__ = function () {
     function tabKeys() {
       const out = [];
@@ -312,6 +354,9 @@
     const q = window.__SHELVES_QAM__;
     return {
       hostInstalled: !!window.__SHELVES_HOST__,
+      handshake: hostRead(function (hst) { return hst.handshake(); }),
+      canSelfInstall: hostRead(function (hst) { return hst.updates.canSelfInstall(); }),
+      routerCalls: routerCalls(),
       owner: String(window.__DECK_SHELVES_OWNER__ || ""),
       bridge: !!q,
       qamOwner: String(window.__SHELVES_QAM_OWNER__ || ""),
@@ -324,6 +369,7 @@
       log: (window.__SHELVES_LOG__ || []).slice(-16),
       errors: (window.__HARNESS_ERRORS__ || []).slice(-6),
       idle: window.__HARNESS_IDLE__,
+      nativeUi: nativeUiReport(),
       fallbackUi: (function () {
         const panel = document.querySelector("[data-fb-panel]");
         if (!panel) return null;

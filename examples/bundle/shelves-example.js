@@ -29,9 +29,9 @@
 
   // Sample (mock) shelves shown in the "Shelves" section.
   var SHELVES = [
-    { name: "Recently Played", source: "Recentes do Steam", enabled: true },
-    { name: "Favorites", source: "Marcados como favoritos", enabled: true },
-    { name: "Install Next", source: "Coleção: Para instalar", enabled: false },
+    { name: "Recently Played", source: "Steam recents", enabled: true },
+    { name: "Favorites", source: "Marked as favorites", enabled: true },
+    { name: "Install Next", source: "Collection: To install", enabled: false },
   ];
 
   function log() {
@@ -132,29 +132,29 @@
     // Master activation toggle (Deck Shelves: ToggleField label={t('enabled')}).
     var master = el("div", "background:rgba(26,159,255,0.10);border:1px solid rgba(26,159,255,0.35);" +
       "border-radius:8px;margin-bottom:10px");
-    master.appendChild(toggleRow("Ativar Deck Shelves", true, function (v) { log("enabled =", v); }));
+    master.appendChild(toggleRow("Enable Deck Shelves", true, function (v) { log("enabled =", v); }));
     container.appendChild(master);
 
     // Behavior
-    container.appendChild(section(ICONS.gear, "Comportamento", 0, false, function (body) {
-      body.appendChild(toggleRow("Ocultar recentes da Home", false, function (v) { log("hideRecents", v); }));
-      body.appendChild(toggleRow("Ocultar abas da Home", false, function (v) { log("hideHomeTabs", v); }));
+    container.appendChild(section(ICONS.gear, "Behavior", 0, false, function (body) {
+      body.appendChild(toggleRow("Hide recents on Home", false, function (v) { log("hideRecents", v); }));
+      body.appendChild(toggleRow("Hide the Home tabs", false, function (v) { log("hideHomeTabs", v); }));
     }));
 
     // Additional features
-    container.appendChild(section(ICONS.plus, "Recursos adicionais", 1, false, function (body) {
-      body.appendChild(toggleRow("Verificar atualizações", true, function (v) { log("updates", v); }));
-      body.appendChild(toggleRow("Recursos online", false, function (v) { log("online", v); }));
+    container.appendChild(section(ICONS.plus, "Additional features", 1, false, function (body) {
+      body.appendChild(toggleRow("Check for updates", true, function (v) { log("updates", v); }));
+      body.appendChild(toggleRow("Online features", false, function (v) { log("online", v); }));
     }));
 
     // Shelves (open by default)
-    container.appendChild(section(ICONS.stack, "Prateleiras", SHELVES.length, true, function (body) {
+    container.appendChild(section(ICONS.stack, "Shelves", SHELVES.length, true, function (body) {
       var bar = el("div", "display:flex;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06)");
-      var add = actionButton("+ Adicionar");
+      var add = actionButton("+ Add");
       add.addEventListener("click", function () { log("add shelf (mock)"); });
       bar.appendChild(add);
-      bar.appendChild(actionButton("Importar"));
-      bar.appendChild(actionButton("Exportar"));
+      bar.appendChild(actionButton("Import"));
+      bar.appendChild(actionButton("Export"));
       body.appendChild(bar);
       SHELVES.forEach(function (sh) {
         var row = el("div", "display:flex;align-items:center;justify-content:space-between;" +
@@ -173,12 +173,12 @@
     }));
 
     // Smart shelves
-    container.appendChild(section(ICONS.sparkle, "Prateleiras inteligentes", 0, false, function (body) {
-      body.appendChild(toggleRow("Ativar prateleiras inteligentes", false, function (v) { log("smart", v); }));
+    container.appendChild(section(ICONS.sparkle, "Smart shelves", 0, false, function (body) {
+      body.appendChild(toggleRow("Enable smart shelves", false, function (v) { log("smart", v); }));
     }));
 
     var foot = el("div", "padding:12px 14px;font-size:11px;color:#6b7682;text-align:center",
-      "Deck Shelves — mock de configurações (HostApi v" + host.version + ")");
+      "Deck Shelves — settings mock (HostApi v" + host.version + ")");
     container.appendChild(foot);
   }
 
@@ -201,7 +201,7 @@
     if (!root) { root = el("div"); root.id = ROOT_ID; document.body.appendChild(root); }
     root.innerHTML = "";
     root.appendChild(el("div", "font:600 13px system-ui;color:#9aa3ad;padding:6px 0",
-      hasPanel ? "Deck Shelves: abra o painel pelo ícone de prateleiras." : "Deck Shelves (sem QAM): " + info));
+      hasPanel ? "Deck Shelves: open the panel from the shelves icon." : "Deck Shelves (no QAM): " + info));
   }
 
   function boot() {

@@ -25,12 +25,20 @@ Há duas coisas neste repositório para isso:
 2. **Verificação.** Ele abre um WebSocket para o `webSocketDebuggerUrl` do alvo e
    avalia `window.__SHELVES_LOADER__?.injected` para ver se o pacote já
    está rodando (idempotente, seguro de repetir).
-3. **Injeção.** Se não estiver, ele avalia o runtime do host (`runtime/shelves-host.js`
-   → `window.__SHELVES_HOST__`, incluindo suporte ao painel do QAM), depois lê e
-   avalia `bundle/index.js`, então grava `window.__SHELVES_LOADER__`.
+3. **Injeção.** Se não estiver, ele grava `window.__SHELVES_CONFIG__` (o endpoint e o
+   token por inicialização do RPC, a versão do contrato, o dispositivo), embute os
+   dicionários de i18n, avalia o runtime do host — `runtime/shelves-host.js` e suas
+   partes `-qam.js` / `-api.js` / `-sidecar.js` / `-toast.js`, montadas em um único
+   script que se torna `window.__SHELVES_HOST__` — depois lê e avalia
+   `bundle/index.js`, então grava `window.__SHELVES_LOADER__`.
 4. **Ciclo de vida.** A conexão é reestabelecida a cada ciclo, então um reinício do Steam
    (renderizador novo, sem marcador) é reinjetado automaticamente. O `isInjected` via
-   RPC reflete o último estado observado.
+   RPC reflete o último estado observado. Cada ciclo começa com um portão de saúde
+   sobre a lista de alvos: a interface visível do Steam vive em janelas que são alvos
+   separados do `SharedJSContext`, então um `SharedJSContext` sozinho significa que a
+   interface colapsou — o loop então pausa a injeção e roda a recuperação da
+   plataforma uma vez (veja [solução de problemas](./troubleshooting.md)) em vez de
+   injetar.
 
 Configuração (tudo opcional, controlado por variáveis de ambiente — veja `src/config.rs`):
 
@@ -38,12 +46,15 @@ Configuração (tudo opcional, controlado por variáveis de ambiente — veja `s
 |---|---|---|
 | `SHELVES_CEF_HOST` | `127.0.0.1` | Host do DevTools |
 | `SHELVES_CEF_PORT` | `8080` | Porta do DevTools (padrão do CEF do Steam) |
-| `SHELVES_RPC_ADDR` | `127.0.0.1:60123` | Endereço de bind do RPC do host |
+| `SHELVES_RPC_HOST` | `127.0.0.1` | Host de bind do RPC do host (mantenha em loopback) |
+| `SHELVES_RPC_PORT` | `60123` | Porta de bind do RPC do host |
+| `SHELVES_RPC_ADDR` | `127.0.0.1:60123` | `host:porta`, usado quando `SHELVES_RPC_HOST` / `SHELVES_RPC_PORT` não estão definidos (esses dois vencem quando definidos); depois `rpc_host` / `rpc_port` do arquivo de configuração. A bandeja resolve o endereço do mesmo jeito |
+| `SHELVES_RPC_TOKEN_FILE` | `~/.local/share/shelveshub/.rpc-token` | Onde o token por inicialização do RPC é escrito (modo 0600) para ferramentas do mesmo usuário; `%LOCALAPPDATA%\shelveshub\.rpc-token` no Windows |
 | `SHELVES_BUNDLE_PATH` | `<exe-dir>/bundle/index.js` | Pacote a injetar |
 | `SHELVES_HOST_RUNTIME_PATH` | `<exe-dir>/runtime/shelves-host.js` | Runtime do host (`window.__SHELVES_HOST__`, incl. QAM) |
 | `SHELVES_TARGET` | _automático_ | Substring de título/URL para escolher o alvo |
 | `SHELVES_INTERVAL_SECS` | `30` | Intervalo do loop de injeção |
-| `SHELVES_NATIVE_QAM` | `0` | Adiciona uma aba nativa de Acesso Rápido (`1` para ativar) |
+| `SHELVES_NATIVE_QAM` | `0` (o arquivo de configuração distribuído define `native_qam: true`) | Adiciona uma aba nativa de Acesso Rápido (`1` para ativar) |
 | `SHELVES_OWNER_SETTLE_SECS` | `0` | Segundos de espera para que outro host reivindique um renderizador sem dono antes de hospedá-lo (coexistência; `0` = hospeda imediatamente) |
 | `SHELVES_HUB_CONFIG` | `<settings_dir>/shelveshub.json` | O repositório de configurações próprio do host (preferência de autoatualização; gravações atômicas + backup) |
 
@@ -61,10 +72,16 @@ $TOOL eval "navigator.userAgent"           # evaluate JS in the renderer
 $TOOL inject --bundle bundle/index.js      # inject a bundle (--force to re-inject)
 $TOOL reload --ignore-cache                # reload the renderer (after an update)
 $TOOL console                              # stream console + exceptions (Ctrl-C)
+$TOOL preload --script my-script.js        # register a document-start script on matching pages and hold the session (--duration N, or Ctrl-C)
 ```
 
 Flags/variáveis globais: `--host` (`SHELVES_CEF_HOST`), `--port` (`SHELVES_CEF_PORT`),
-`--target` (`SHELVES_TARGET`).
+`--target` (`SHELVES_TARGET`). O `inject` avalia o arquivo como está e grava o marcador
+do loader — não adiciona a gravação de configuração (logo, nenhum token de RPC) nem o
+runtime do host, então serve para empurrar um pacote num renderizador que o daemon já
+preparou. O `preload` usa o auto-attach em nível de navegador: o script é registrado
+em cada página correspondente quando ela se anexa, e vale para o próximo documento
+dessa página; os alvos nunca são pausados.
 
 ---
 
@@ -113,13 +130,15 @@ HEADLESS=0 pnpm harness  # show the browser window
 
 ### Ambiente de simulação em Docker (Linux)
 
-`pnpm harness:docker` constrói uma pequena imagem Linux e roda três verificações contra um
-Chromium headless em um container: o conjunto de testes de cenário acima, um **teste de fumaça de
-injeção daemon → Chromium headless** (o daemon real descobre o alvo via CDP e
-injeta), e o **ciclo de instalação e desinstalação do SteamOS/Linux** (um stub de gravação
-do `systemctl` faz esse papel — ele valida a criação/remoção de arquivos dos scripts e a
-preservação de configurações, não o systemd em si). Validação multiplataforma sem um
-dispositivo; integrado à CI. arm64 via `PLATFORM=linux/arm64 pnpm harness:docker`.
+`pnpm harness:docker` constrói uma pequena imagem Linux e roda quatro verificações contra um
+Chromium headless em um container: o conjunto de testes de cenário acima, o **ciclo de
+instalação e desinstalação do SteamOS/Linux** (um stub de gravação do `systemctl` faz esse
+papel — ele valida a criação/remoção de arquivos dos scripts e a preservação de
+configurações, não o systemd em si), um **teste de fumaça de injeção daemon → Chromium
+headless** (o daemon real descobre o alvo via CDP e injeta), e as **sondas do backend do
+plugin** (as sondas acopladas ao SO do backend do Deck Shelves rodando sob o host).
+Validação multiplataforma sem um dispositivo; integrado à CI. arm64 via
+`PLATFORM=linux/arm64 pnpm harness:docker`.
 
 > A instalação/desinstalação do Windows não pode ser containerizada — o Docker no Linux/macOS roda
 > apenas containers Linux, e o instalador do Windows (NSIS + uma tarefa agendada do PowerShell)
@@ -127,23 +146,29 @@ dispositivo; integrado à CI. arm64 via `PLATFORM=linux/arm64 pnpm harness:docke
 
 ---
 
-## Painel do QAM (Menu de Acesso Rápido)
+## A aba de Acesso Rápido
 
-O runtime do host expõe `host.qam.registerPanel({ id, title, icon, render })`,
-para que o pacote possa adicionar um painel dedicado com ícone próprio. O pacote de exemplo
-registra um (um ícone de prateleira) que renderiza as prateleiras de exemplo.
+O runtime do host expõe `host.qam.registerPanel({ id, title, icon, render | content })`,
+para que o pacote possa preencher o painel do host com seu próprio conteúdo. O pacote
+de exemplo registra um (um ícone de prateleira) que renderiza as configurações de
+exemplo.
 
-A implementação (`runtime/shelves-host.js`) atualmente renderiza um trilho de ícones + painel
-deslizante que funciona de forma idêntica no ambiente de testes local e como uma sobreposição no
-Steam. A costura para uma aba **nativa** do QAM do Steam (`tryMountNative`, apoiada pelo
-localizador de módulos webpack) está pronta, mas em estado de placeholder até que possa ser validada em
-um dispositivo real. Depois de `pnpm debug:local`, procure o ícone de prateleira (canto superior direito) ou
-verifique programaticamente:
+A implementação (`runtime/shelves-host-qam.js`) adiciona uma aba **nativa** de Acesso
+Rápido do Steam: uma chave numérica (`900`) no enum de abas do Steam, inserida depois
+da aba Desempenho, para que a barra a trate como uma das suas. A aba está presente
+desde o boot; o painel registrado a preenche, e sem um ela mostra a visão própria do
+hub (status, atualizações, configuração, logs, com o painel lateral de logs e
+notificações). Nada é desenhado fora dessa aba — com `native_qam` desligado ou o
+disjuntor acionado não há painel nenhum. Verifique programaticamente:
 
 ```bash
 shelves-devtools --port 9222 --target harness \
-  eval "!!window.__SHELVES_HOST__.qam._panels['deck-shelves']"
+  eval "window.__SHELVES_HOST__.qam.mode() + ' ' + Object.keys(window.__SHELVES_HOST__.qam._specs)"
 ```
+
+`mode()` responde `native` (aba confirmada), `native-arming`, `tripped`, ou o rótulo
+legado `overlay` quando a aba não está instalada. O conjunto de testes de cenário
+(`pnpm harness`) é o lugar para ver a aba renderizar contra a simulação do Steam.
 
 ---
 

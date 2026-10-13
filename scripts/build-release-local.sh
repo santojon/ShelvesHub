@@ -75,6 +75,8 @@ if bin_build x86_64-pc-windows-gnu zig; then
     cp target/x86_64-pc-windows-gnu/release/shelveshub.exe "$nb/payload/"
     cp target/x86_64-pc-windows-gnu/release/shelves-devtools.exe "$nb/payload/" 2>/dev/null || true
     cp -r bundle "$nb/payload/bundle"; cp -r runtime "$nb/payload/runtime"
+    mkdir -p "$nb/payload/assets/boot"
+    cp assets/boot/deck_startup.webm assets/boot/deck_startup_1280x800.webm "$nb/payload/assets/boot/"
     cp shelveshub.config.json "$nb/payload/"
     cp installer/Windows/register-task.ps1 installer/Windows/apply-setup.ps1 installer/Windows/migrate.ps1 "$nb/payload/"
     cp installer/Windows/shelveshub.nsi "$nb/"; cp assets/icons/icon.ico "$nb/icon.ico"

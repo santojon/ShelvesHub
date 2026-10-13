@@ -7,7 +7,6 @@
 //! marker-less context) is handled for free: the next probe returns `false`
 //! and we re-inject.
 
-use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
@@ -20,6 +19,7 @@ use crate::cdp::{self, CdpClient};
 use crate::config::Config;
 use crate::logger::{log_error, log_info, log_warning};
 use crate::populate;
+use crate::semver::version_is_newer;
 use crate::state;
 
 mod coop_safety;
@@ -61,6 +61,14 @@ static COOP_OFFER_HELD_LOGGED: AtomicBool = AtomicBool::new(false);
 const BOOT_GRACE: Duration = Duration::from_secs(90);
 /// The loader's Deck Shelves version we already reacted to (one update check per version).
 static NEWER_LOADER_NOTED: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+/// The loop's current config (the CEF port can move after boot) and whether its last
+/// tick was cooperative — what the manual update check runs against.
+static LIVE_CONFIG: std::sync::Mutex<Option<Config>> = std::sync::Mutex::new(None);
+static LAST_TICK_COOPERATIVE: AtomicBool = AtomicBool::new(false);
+/// The version literal read from the bundle file, cached per modification time (the
+/// scan reads the whole multi-megabyte file).
+static BUNDLE_VERSION_HINT: std::sync::Mutex<Option<(std::time::SystemTime, String)>> =
+    std::sync::Mutex::new(None);
 /// Renderer global that opts the injected runtime into the native Quick
 /// Access tab path (`SHELVES_NATIVE_QAM=1`). Read once at runtime boot.
 pub const NATIVE_QAM_GLOBAL: &str = "window.__SHELVES_NATIVE_QAM__";
@@ -76,7 +84,10 @@ pub const NATIVE_NOTIFICATIONS_GLOBAL: &str = "window.__SHELVES_NATIVE_NOTIFICAT
 // richer UI silently breaks. Coexist sets the flag synchronously (it borrows the
 // loader's UI), so the gate boots immediately there.
 pub(super) const BUNDLE_GATE_PREFIX: &str = "\nfunction __shelvesBootBundle(){\n";
-pub(super) const BUNDLE_GATE_SUFFIX: &str = "\n}\nif(window.__SHELVES_UI_READY__){__shelvesBootBundle();}else{var __bn=0,__biv=setInterval(function(){if(window.__SHELVES_UI_READY__||++__bn>600){clearInterval(__biv);__shelvesBootBundle();}},20);}\n";
+// The poll handle is kept on `window` (`__SHELVES_BUNDLE_GATE__`) and any earlier
+// one is cleared first: two gated evaluations overlapping inside the poll window
+// would otherwise orphan an interval that re-runs the whole bundle every 20 ms.
+pub(super) const BUNDLE_GATE_SUFFIX: &str = "\n}\nif(window.__SHELVES_UI_READY__){__shelvesBootBundle();}else{if(window.__SHELVES_BUNDLE_GATE__){clearInterval(window.__SHELVES_BUNDLE_GATE__);}var __bn=0,__biv=setInterval(function(){if(window.__SHELVES_UI_READY__||++__bn>600){clearInterval(__biv);if(window.__SHELVES_BUNDLE_GATE__===__biv){window.__SHELVES_BUNDLE_GATE__=null;}__shelvesBootBundle();}},20);window.__SHELVES_BUNDLE_GATE__=__biv;}\n";
 
 /// Outcome of one injection cycle.
 enum Tick {
@@ -90,8 +101,8 @@ enum Tick {
     /// Another host owns the renderer; we added ONLY our native QAM tab alongside
     /// it (the host + bundle are left to the other loader). Carries the owner kind.
     CoexistTab(String),
-    /// Renderer unclaimed and settling — waiting `owner_settle_secs` for another
-    /// host to claim before we host it ourselves. Carries seconds waited so far.
+    /// Renderer unclaimed and settling — waiting for another host to claim before we
+    /// host it ourselves. Carries the settle window in seconds.
     Settling(u64),
 }
 
@@ -110,7 +121,12 @@ pub fn run(mut config: Config) {
     // local bundle) still brings Deck Shelves up on its own — local → copy from
     // an installed plugin loader → download the newest release. Best-effort; on a
     // miss we keep whatever is at the path and injection reports it.
-    match crate::populate::ensure_bundle(&config.bundle_path, config.prerelease) {
+    let prerelease = populate::plugin_prerelease(
+        config.prerelease,
+        &config.settings_dir,
+        &crate::store::load(&config.hub_config_path),
+    );
+    match crate::populate::ensure_bundle(&config.bundle_path, prerelease) {
         Ok(src) => log_info("loader", &format!("Bundle ready via {src}.")),
         Err(e) => log_warning(
             "loader",
@@ -125,7 +141,12 @@ pub fn run(mut config: Config) {
     // of evaluating it into the live page — the safe path for the native QAM
     // tab, which must not run its heavy webpack walk on a busy renderer.
     if config.preload {
-        return preload::run_preload(config);
+        preload::run_preload(&config);
+        // Only reached when preload could not start: run the normal loop instead.
+        log_warning(
+            "loader",
+            "Preload mode unavailable — running the normal injection loop instead.",
+        );
     }
 
     // Resolve the CEF debug port: Steam usually exposes 8080, but it can vary; if
@@ -152,6 +173,7 @@ pub fn run(mut config: Config) {
     // Stash the effective config so the RPC server's manual "Check now"
     // (`checkUpdates`) runs against the same inputs as this loop.
     state::set_daemon_config(config.clone());
+    publish_live_config(&config);
     // While the bundle is NOT yet active (renderer still settling, not confirmed,
     // etc.) poll on a short interval so the first inject lands promptly after the
     // renderer appears — otherwise a renderer that settles just after a tick waits
@@ -164,8 +186,9 @@ pub fn run(mut config: Config) {
     // (`owner_settle_secs`): hold off owner-mode hosting until either a claim
     // appears (→ coexist) or the settle window elapses (→ sole host).
     let mut empty_since: Option<Instant> = None;
-    // Throttle for the auto-update check (see auto_update_check): first check runs
-    // on the first Active tick, then at most once per UPDATE_CHECK_INTERVAL.
+    // Throttle for the auto-update check (see auto_update_check): the first check runs
+    // on the first tick that gets past the health gates, whether or not it settled,
+    // then at most once per UPDATE_CHECK_INTERVAL or on request.
     let mut last_update_check: Option<Instant> = None;
     // Throttle for the settings sync: the first settled tick, then every
     // SYNC_INTERVAL, plus the next tick after a local change (state::request_sync).
@@ -173,6 +196,9 @@ pub fn run(mut config: Config) {
     // The settled lines ("Bundle active", "Coexisting with …") would repeat every tick (5 s
     // while hosting) and bury the journal users send us: logged on change only.
     let mut last_settled: Option<String> = None;
+    // Same for the unsettled states polled on the fast cadence (stood down, settling,
+    // renderer unreachable): the first occurrence and any change in wording.
+    let mut last_unsettled: Option<String> = None;
     // The shared context's target id: a new one means Steam restarted, so the settled
     // line is written again for the new session (tooling waits for it after a restart)
     // and its first window-less ticks read as "booting", not as a collapse.
@@ -227,6 +253,10 @@ pub fn run(mut config: Config) {
                     renderer_had_windows = false;
                     boot_wait_logged = false;
                     last_settled = None;
+                    last_unsettled = None;
+                    // The owner-settle clock belongs to the old renderer: carried over, a
+                    // restart mid-settle would let the new one skip its settle window.
+                    empty_since = None;
                     // The renderer's storage outlives a Steam restart: a withdrawn offer
                     // must be withdrawn again on the new renderer.
                     COOP_OFFER_WITHDRAWN.store(false, AtomicOrdering::Relaxed);
@@ -265,6 +295,10 @@ pub fn run(mut config: Config) {
                                 ),
                             );
                             config.cef_port = p;
+                            publish_live_config(&config);
+                            if let Some(c) = coexist_config.as_mut() {
+                                c.cef_port = p;
+                            }
                         }
                     }
                 }
@@ -291,6 +325,7 @@ pub fn run(mut config: Config) {
             consecutive_collapse += 1;
             state::set_injected(false);
             last_settled = None;
+            last_unsettled = None;
             log_warning(
                 "loader",
                 &format!(
@@ -357,6 +392,7 @@ pub fn run(mut config: Config) {
             was_paused = true;
             state::set_injected(false);
             last_settled = None;
+            last_unsettled = None;
             thread::sleep(interval);
             continue;
         }
@@ -374,8 +410,8 @@ pub fn run(mut config: Config) {
                 // Just stand down — do NOT reload the renderer. A reload bounces the
                 // whole Steam window (visible close/reopen on the desktop→BP switch),
                 // and the gamepad Home route the bundle patches isn't rendered by the
-                // desktop client anyway, so the injection is harmless there. Clearing
-                // the marker re-injects cleanly the moment the gamepad UI returns.
+                // desktop client anyway, so the injection is harmless there. It stays
+                // in place and is confirmed again the moment the gamepad UI returns.
                 log_info(
                     "loader",
                     "Desktop client on screen (not the gamepad UI) — standing down; enable desktop_ui to inject here.",
@@ -384,6 +420,7 @@ pub fn run(mut config: Config) {
             was_desktop_idle = true;
             state::set_injected(false);
             last_settled = None;
+            last_unsettled = None;
             // Poll at the FAST cadence while stood down, so returning to Big
             // Picture is noticed (and re-injected) within a couple of seconds
             // instead of up to a full idle interval.
@@ -414,6 +451,7 @@ pub fn run(mut config: Config) {
         // result under force, before any recede). Feeds the plugin-swap guard.
         let cooperative =
             config.force_owner && !coop.receded() && matches!(&result, Ok(Tick::CoexistTab(_)));
+        LAST_TICK_COOPERATIVE.store(cooperative, AtomicOrdering::Relaxed);
         // Renderer churn while cooperative counts toward standing force down.
         if cooperative && coop_churn && coexist_config.is_none() && coop.renderer_churn() {
             log_warning(
@@ -436,13 +474,15 @@ pub fn run(mut config: Config) {
             }
             Ok(Tick::NotConfirmed) => {
                 state::set_injected(false);
+                last_unsettled = None;
                 log_warning("loader", "Injection attempted but not confirmed.");
             }
             Ok(Tick::StoodDown(owner)) => {
                 state::set_injected(false);
-                log_info(
-                    "loader",
-                    &format!("Renderer owned by \"{owner}\" — standing down this tick."),
+                log_on_change(
+                    &mut last_unsettled,
+                    format!("Renderer owned by \"{owner}\" — standing down."),
+                    log_info,
                 );
             }
             Ok(Tick::CoexistTab(owner)) => {
@@ -457,24 +497,31 @@ pub fn run(mut config: Config) {
                     ),
                 );
             }
-            Ok(Tick::Settling(secs)) => {
+            Ok(Tick::Settling(window)) => {
                 state::set_injected(false);
-                log_info(
-                    "loader",
-                    &format!(
-                        "Renderer unclaimed — settling {secs}s (waiting for another host to claim before hosting)."
+                log_on_change(
+                    &mut last_unsettled,
+                    format!(
+                        "Renderer unclaimed — settling up to {window}s (waiting for another host to claim before hosting)."
                     ),
+                    log_info,
                 );
             }
             Err(e) => {
                 state::set_injected(false);
                 // Renderer-not-ready is the common case (Steam closed, CEF
                 // debugging not enabled yet) — warn, don't crash, retry next tick.
-                log_warning("loader", &format!("Injection cycle skipped: {e}"));
+                log_on_change(
+                    &mut last_unsettled,
+                    format!("Injection cycle skipped: {e}"),
+                    log_warning,
+                );
             }
         }
 
-        if !settled {
+        if settled {
+            last_unsettled = None;
+        } else {
             last_settled = None;
         }
 
@@ -552,26 +599,38 @@ pub fn run(mut config: Config) {
 
 /// Settled-state lines would repeat every tick: log a line only when it changes.
 fn log_settled(last: &mut Option<String>, line: String) {
+    log_on_change(last, line, log_info);
+}
+
+/// Per-tick lines are logged on change only: the first occurrence and any change in
+/// wording, never the same line again on the next tick.
+fn log_on_change(last: &mut Option<String>, line: String, log: fn(&str, &str)) {
     if last.as_deref() != Some(line.as_str()) {
-        log_info("loader", &line);
+        log("loader", &line);
         *last = Some(line);
     }
+}
+
+/// The loop's config as it stands now, for the manual update check.
+fn publish_live_config(config: &Config) {
+    *LIVE_CONFIG.lock().unwrap_or_else(|e| e.into_inner()) = Some(config.clone());
 }
 
 /// Periodic auto-update. The plugin-bundle update runs only when we `hosting` the
 /// bundle (sole/owner — never coexist, where the loader owns its own copy): it
 /// compares the latest release tag for the plugin channel to the tag we last
-/// installed and, on a change, downloads the new bundle, records the tag, and
-/// reloads the renderer so the plugin reboots on it (clearing its "update
-/// available" banner). The hub self-update runs in either mode, so the daemon's
-/// own binary stays current even while coexisting. Best-effort: any network/parse
-/// miss is a silent no-op until the next check, and a working bundle is never
-/// replaced unless a genuinely different release tag is published.
+/// installed and, on a change, downloads the new bundle and records the tag; the
+/// loop's on-disk watch then hot-swaps it in place, so the plugin reboots on it
+/// (clearing its "update available" banner) without a renderer reload. The hub
+/// self-update runs in either mode, so the daemon's own binary stays current even
+/// while coexisting. Best-effort: any network/parse miss is a silent no-op until
+/// the next check, and a working bundle is never replaced unless a genuinely
+/// different release tag is published.
 fn auto_update_check(config: &Config, hosting: bool, cooperative: bool, manual: bool) {
     state::mark_update_checked_now();
-    let mut settings = crate::store::load(&config.hub_config_path);
+    let settings = crate::store::load(&config.hub_config_path);
     if !settings.auto_update {
-        state::set_pending_hub_update(None); // master off — clear any stale notice
+        clear_pending_hub_update_unless_staged(); // master off — clear any stale notice
         state::set_pending_plugin_update(None);
         state::set_update_deferred(false);
         return;
@@ -591,7 +650,7 @@ fn auto_update_check(config: &Config, hosting: bool, cooperative: bool, manual: 
         && settings.auto_update_plugin
         && coop_safety::coop_plugin_swap_allowed(cooperative, config.coop_bundle)
     {
-        check_plugin_update(config, &mut settings, deferred);
+        check_plugin_update(config, &settings, deferred);
     }
     // ── Hub itself: detect a newer release, stage its binary over ours in place
     //    (populate::apply_hub_update), and record a "restart to finish" notice —
@@ -599,8 +658,16 @@ fn auto_update_check(config: &Config, hosting: bool, cooperative: bool, manual: 
     if settings.auto_update_hub {
         check_hub_update(&settings.hub_hold_tag, settings.hub_prerelease, deferred);
     } else {
+        clear_pending_hub_update_unless_staged();
+    }
+}
+
+/// A staged binary applies at the next restart whatever the switches say now, so
+/// its notice stays; only an un-staged pending notice is cleared.
+fn clear_pending_hub_update_unless_staged() {
+    if !state::hub_update_staged() {
         state::set_pending_hub_update(None);
-        state::set_hub_update_staged(false);
+        state::set_pending_hub_notes(None);
     }
 }
 
@@ -639,34 +706,35 @@ fn deliver_host_notices(config: &Config) {
 /// a rollback) landed — queue the notice and remember what runs now.
 pub fn note_version_change(hub_config_path: &Path) {
     let running = env!("CARGO_PKG_VERSION");
-    let mut settings = crate::store::load(hub_config_path);
-    if settings.last_run_version == running {
-        return;
-    }
-    if !settings.last_run_version.is_empty() {
-        let key = if version_is_newer(running, &settings.last_run_version) {
-            "notice_hub_updated"
-        } else {
-            "notice_hub_reverted"
-        };
-        state::push_host_notice(key, serde_json::json!({ "version": running }));
-    }
-    settings.last_run_version = running.to_string();
-    if let Err(e) = crate::store::save(hub_config_path, &settings) {
+    let mut previous = String::new();
+    let recorded = crate::store::update(hub_config_path, |s| {
+        previous = std::mem::replace(&mut s.last_run_version, running.to_string());
+    });
+    if let Err(e) = recorded {
         log_warning(
             "loader",
             &format!("could not record the running version: {e}"),
         );
     }
+    if previous.is_empty() || previous == running {
+        return;
+    }
+    let key = if version_is_newer(running, &previous) {
+        "notice_hub_updated"
+    } else {
+        "notice_hub_reverted"
+    };
+    state::push_host_notice(key, serde_json::json!({ "version": running }));
 }
 
-/// The plugin-bundle half of the check. Applies when we don't yet know what's
-/// installed (seed the tag) OR the latest on the channel is strictly newer by
-/// SEMVER — never a downgrade (so a newer beta is not replaced by an older stable
-/// on a channel switch, and a same-core stable DOES supersede its beta). A
-/// release the user rolled back from is left alone until a newer one appears.
-fn check_plugin_update(config: &Config, settings: &mut crate::store::HubSettings, deferred: bool) {
-    let Some((latest, notes)) = populate::latest_release_info(config.prerelease) else {
+/// The plugin-bundle half of the check, on the channel as it stands now
+/// (`populate::plugin_prerelease`). Applies when no tag is known yet (seed it)
+/// OR the latest is strictly newer by SEMVER — never a downgrade (a newer beta
+/// is not replaced by an older stable on a channel switch; a same-core stable
+/// DOES supersede its beta). A rolled-back release waits for a newer one.
+fn check_plugin_update(config: &Config, settings: &crate::store::HubSettings, deferred: bool) {
+    let prerelease = populate::plugin_prerelease(config.prerelease, &config.settings_dir, settings);
+    let Some((latest, notes)) = populate::latest_release_info(prerelease) else {
         return;
     };
     let apply = settings.bundle_tag.is_empty() || version_is_newer(&latest, &settings.bundle_tag);
@@ -689,11 +757,15 @@ fn check_plugin_update(config: &Config, settings: &mut crate::store::HubSettings
             settings.bundle_tag
         ),
     );
-    match populate::update_from_release(&config.bundle_path, config.prerelease) {
+    match populate::update_from_release(&config.bundle_path, prerelease) {
         Ok(url) => {
-            settings.bundle_prev_tag = std::mem::replace(&mut settings.bundle_tag, latest);
-            settings.bundle_hold_tag.clear();
-            if let Err(e) = crate::store::save(&config.hub_config_path, settings) {
+            // Recorded under the store lock: the copy read before the download may
+            // be stale against an RPC setter that ran meanwhile.
+            let recorded = crate::store::update(&config.hub_config_path, |s| {
+                s.bundle_prev_tag = std::mem::replace(&mut s.bundle_tag, latest.clone());
+                s.bundle_hold_tag.clear();
+            });
+            if let Err(e) = recorded {
                 log_warning(
                     "update",
                     &format!("applied update but could not record tag: {e}"),
@@ -702,7 +774,7 @@ fn check_plugin_update(config: &Config, settings: &mut crate::store::HubSettings
             state::set_pending_plugin_update(None);
             state::push_host_notice(
                 "notice_plugin_updated",
-                serde_json::json!({ "version": settings.bundle_tag }),
+                serde_json::json!({ "version": latest }),
             );
             log_info(
                 "update",
@@ -737,19 +809,23 @@ const RUNNING_APPS_PROBE: &str = "(function(){ try { var a = window.SteamUIStore
      window.SteamUIStore.RunningApps; return !!(a && a.length); } catch (e) { return false; } })()";
 
 /// Manual "Check now" entry point for the RPC server: runs one update check
-/// against the stashed daemon config, using the current injected state as the
-/// `hosting` proxy. Single-flight with the periodic loop — returns false when a
-/// check is already running or the config isn't available yet.
+/// against the loop's live config (the boot snapshot until the loop publishes one),
+/// using the current injected state as the `hosting` proxy and the last tick's
+/// ownership as `cooperative`. Single-flight with the periodic loop — returns false
+/// when a check is already running or the config isn't available yet.
 pub(crate) fn run_update_check_now() -> bool {
-    let Some(config) = state::daemon_config() else {
+    let live = LIVE_CONFIG
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let Some(config) = live.or_else(|| state::daemon_config().cloned()) else {
         return false;
     };
     if !state::try_begin_update_check() {
         return false; // a check is already in flight
     }
-    // Manual check: a hosted bundle (`is_injected`) means sole/owner today, so
-    // cooperative is false here; the cooperative-bundle track revisits this path.
-    auto_update_check(config, state::is_injected(), false, true);
+    let cooperative = LAST_TICK_COOPERATIVE.load(AtomicOrdering::Relaxed);
+    auto_update_check(&config, state::is_injected(), cooperative, true);
     state::end_update_check();
     true
 }
@@ -769,9 +845,7 @@ fn check_hub_update(hold: &str, prerelease: bool, deferred: bool) {
     };
     let current = env!("CARGO_PKG_VERSION");
     if !version_is_newer(&latest, current) || same_version(&latest, hold) {
-        state::set_pending_hub_update(None);
-        state::set_pending_hub_notes(None);
-        state::set_hub_update_staged(false);
+        clear_pending_hub_update_unless_staged();
         return;
     }
     state::set_pending_hub_notes(Some(notes));
@@ -814,20 +888,6 @@ fn check_hub_update(hold: &str, prerelease: bool, deferred: bool) {
     }
 }
 
-/// True when release tag `latest` is a strictly newer version than the running
-/// `current` (CARGO_PKG_VERSION) by SEMVER PRECEDENCE — so a pre-release is lower
-/// than its release (`3.3.0-beta.2` < `3.3.0`), a higher core wins regardless of
-/// suffix (`3.3.0-beta.2` > `3.0.0`), and two pre-releases order by their
-/// identifiers (`beta.2` > `beta.1`). Channel selection (stable vs pre-release)
-/// is separate — this only orders versions the channel already allows. An
-/// unparseable version never prompts (a false negative only delays the notice).
-fn version_is_newer(latest: &str, current: &str) -> bool {
-    match (parse_semver(latest), parse_semver(current)) {
-        (Some(l), Some(c)) => semver_precedence(&l, &c) == Ordering::Greater,
-        _ => false,
-    }
-}
-
 /// Whether a release tag names the held-back version (a `v` prefix is optional on
 /// either side, since tags carry it and the running version doesn't). An empty
 /// hold never matches.
@@ -835,65 +895,23 @@ fn same_version(tag: &str, hold: &str) -> bool {
     !hold.is_empty() && tag.trim_start_matches('v') == hold.trim_start_matches('v')
 }
 
-/// (major, minor, patch) + the dot-separated pre-release identifiers (empty = a
-/// stable release). Build metadata (`+…`) is ignored, per semver.
-type Semver = ((u64, u64, u64), Vec<String>);
-
-fn parse_semver(s: &str) -> Option<Semver> {
-    let s = s.trim().trim_start_matches('v');
-    let (core, pre) = match s.split_once('-') {
-        Some((c, p)) => (c, p.split('+').next().unwrap_or("")),
-        None => (s.split('+').next().unwrap_or(s), ""),
-    };
-    let mut it = core.split('.');
-    let major = it.next()?.parse().ok()?;
-    let minor = it.next()?.parse().ok()?;
-    let patch = it.next()?.parse().ok()?;
-    let pre_ids = if pre.is_empty() {
-        Vec::new()
-    } else {
-        pre.split('.').map(str::to_string).collect()
-    };
-    Some(((major, minor, patch), pre_ids))
+/// `x.y.z` with an optional `-pre`/`+build` tail: the shape of a manifest's version
+/// field, which the bundle marker scan looks for among quoted literals.
+fn is_version_literal(s: &str) -> bool {
+    let core = s.split(['-', '+']).next().unwrap_or("");
+    let mut parts = core.split('.');
+    let numeric =
+        |p: Option<&str>| p.is_some_and(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+    numeric(parts.next())
+        && numeric(parts.next())
+        && numeric(parts.next())
+        && parts.next().is_none()
 }
 
-fn semver_precedence(a: &Semver, b: &Semver) -> Ordering {
-    match a.0.cmp(&b.0) {
-        Ordering::Equal => {}
-        core => return core,
-    }
-    // Equal core: a stable (no pre-release) outranks a pre-release of that core.
-    match (a.1.is_empty(), b.1.is_empty()) {
-        (true, true) => Ordering::Equal,
-        (true, false) => Ordering::Greater,
-        (false, true) => Ordering::Less,
-        (false, false) => cmp_prerelease(&a.1, &b.1),
-    }
-}
-
-/// Compare pre-release identifier lists (semver §11): numeric identifiers compare
-/// numerically and rank below alphanumeric ones; a longer list outranks a prefix.
-fn cmp_prerelease(a: &[String], b: &[String]) -> Ordering {
-    for (x, y) in a.iter().zip(b.iter()) {
-        let ord = match (x.parse::<u64>(), y.parse::<u64>()) {
-            (Ok(nx), Ok(ny)) => nx.cmp(&ny),
-            (Ok(_), Err(_)) => Ordering::Less,
-            (Err(_), Ok(_)) => Ordering::Greater,
-            (Err(_), Err(_)) => x.as_str().cmp(y.as_str()),
-        };
-        if ord != Ordering::Equal {
-            return ord;
-        }
-    }
-    a.len().cmp(&b.len())
-}
-
-/// Reload the renderer over CDP so a freshly-swapped bundle is picked up (the
-/// daemon re-injects on the next tick into the reloaded page). Best-effort.
 /// The debug ports to probe, in order: the configured one first, then Steam's
 /// known alternates (8080/8081), de-duplicated so the configured port is never
 /// probed twice.
-fn port_candidates(configured: u16) -> Vec<u16> {
+pub(crate) fn port_candidates(configured: u16) -> Vec<u16> {
     let mut candidates = vec![configured];
     for p in [crate::config::DEFAULT_CEF_PORT, 8081] {
         if !candidates.contains(&p) {
@@ -955,6 +973,9 @@ fn soft_reinject(config: &Config) -> bool {
     }
 }
 
+/// Reload the renderer over CDP (the troubleshooting pause: the current injection
+/// is cleared with the page, and the daemon re-injects on the next tick once hosting
+/// resumes). Best-effort.
 fn reload_renderer(config: &Config) {
     match CdpClient::connect_renderer(
         &config.cef_host,
@@ -1019,6 +1040,10 @@ fn tick(
     // that listens for console events on the same target.
     let _ = client.call("Runtime.enable", json!({}));
 
+    // A runtime injected by an earlier daemon process still holds that process's token;
+    // hand it the current one so its RPC calls keep working after a daemon-only restart.
+    let _ = client.evaluate(&restamp_token_script(state::rpc_token()));
+
     // The stored offer follows the protocol switch: refreshed every tick while on (the
     // bundle version moves with updates), withdrawn once when off.
     if config.coop_bundle && config.force_owner {
@@ -1058,6 +1083,8 @@ fn tick(
         };
     let legacy_copy =
         loader_manages_unclaimed_plugin(&owner, config.force_owner, loader_plugin.as_deref());
+    let stale_claim =
+        loader_copy_holds_our_claim(&owner, config.force_owner, loader_plugin.as_deref());
     let solo_beside_loader = hosts_beside_loader(
         loader_present,
         &owner,
@@ -1074,10 +1101,15 @@ fn tick(
             "plugin loader (Deck Shelves {}, no ownership claim — update it for full coexistence)",
             loader_plugin.as_deref().unwrap_or("?")
         )
+    } else if stale_claim {
+        format!(
+            "plugin loader (Deck Shelves {}, claimed under an earlier forced ownership — coexisting only)",
+            loader_plugin.as_deref().unwrap_or("?")
+        )
     } else {
         owner
     };
-    if is_foreign_owner(&owner) || cooperative || legacy_copy {
+    if is_foreign_owner(&owner) || cooperative || legacy_copy || stale_claim {
         *empty_since = None;
         // In cooperative mode, read the renderer churn signal once (the bundle's
         // QAM-tab breaker) so auto-safe-mode can recede force if it keeps tripping.
@@ -1140,7 +1172,7 @@ fn tick(
                     &format!("Forced ownership — waiting up to {window}s for a plugin loader before hosting."),
                 );
             }
-            return Ok(Tick::Settling(waited));
+            return Ok(Tick::Settling(window));
         }
     }
     *empty_since = None;
@@ -1226,7 +1258,8 @@ fn tick(
 }
 
 /// Stamp the native-QAM opt-in global before the runtime evaluates, so it picks
-/// the native tab path (trip-breaker guarded; overlay stays the fallback).
+/// the native tab path (trip-breaker guarded; when the breaker trips, the hub view's
+/// fallback panel is what remains).
 fn stamp_native_qam(client: &mut CdpClient) {
     match client.evaluate(&format!("{NATIVE_QAM_GLOBAL} = true; true")) {
         Ok(_) => log_info("loader", "Native QAM stamp set."),
@@ -1279,6 +1312,12 @@ fn coop_hand_over_due(
     ))
 }
 
+fn restamp_token_script(token: &str) -> String {
+    format!(
+        "(function(t){{try{{var c=window.__SHELVES_CONFIG__;if(c&&c.rpcToken!==t)c.rpcToken=t;}}catch(e){{}}return 0;}})({token:?})"
+    )
+}
+
 /// Writes this host's offer unless the loader's copy answered the previous one with a
 /// fallback boot less than `COOP_OFFER_HOLD_MS` ago. Yields "offered", "same", "held"
 /// or "error".
@@ -1301,13 +1340,21 @@ fn coop_offer_withdraw_script() -> String {
     )
 }
 
-/// Keep the offer current with the bundle version this host carries (none recorded yet →
-/// nothing to offer). A fallback stamp from the loader's copy holds it; logged once.
+/// Keep the offer current with the bundle version this host carries (see
+/// `offered_bundle_version`). A fallback stamp from the loader's copy holds it; logged once.
 fn sync_coop_offer(client: &mut CdpClient, config: &Config) {
-    let tag = crate::store::load(&config.hub_config_path).bundle_tag;
-    if tag.is_empty() {
+    let recorded = crate::store::load(&config.hub_config_path).bundle_tag;
+    let real_bundle = fs::metadata(&config.bundle_path)
+        .map(|m| m.is_file() && m.len() >= crate::constants::defaults::REAL_BUNDLE_MIN_BYTES)
+        .unwrap_or(false);
+    let embedded = if recorded.is_empty() && real_bundle {
+        bundle_version_hint(&config.bundle_path)
+    } else {
+        None
+    };
+    let Some(tag) = offered_bundle_version(&recorded, real_bundle, embedded.as_deref()) else {
         return;
-    }
+    };
     let status = client
         .evaluate(&coop_offer_script(&tag, env!("CARGO_PKG_VERSION")))
         .ok()
@@ -1320,6 +1367,69 @@ fn sync_coop_offer(client: &mut CdpClient, config: &Config) {
         Some("held") => note_coop_offer_held(),
         _ => {}
     }
+}
+
+/// The bundle version the offer carries. A daemon-driven download records a tag; without
+/// one (a copied or pre-installed bundle) the version the bundle itself embeds stands in,
+/// so a fresh install still makes an offer. No real bundle or no readable version, no offer.
+fn offered_bundle_version(
+    recorded_tag: &str,
+    real_bundle: bool,
+    embedded: Option<&str>,
+) -> Option<String> {
+    if !recorded_tag.is_empty() {
+        return Some(recorded_tag.to_string());
+    }
+    if !real_bundle {
+        return None;
+    }
+    embedded.map(str::to_string)
+}
+
+/// The version the bundle file embeds, cached per modification time.
+fn bundle_version_hint(path: &Path) -> Option<String> {
+    let mtime = bundle_mtime(path);
+    let mut cache = BUNDLE_VERSION_HINT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let (Some(m), Some((cached, hint))) = (mtime, cache.as_ref()) {
+        if *cached == m {
+            return Some(hint.clone()).filter(|h| !h.is_empty());
+        }
+    }
+    // Cached only after a successful read: a transient read failure must not stand
+    // in for "no marker" for the rest of this bundle's life.
+    let bytes = fs::read(path).ok();
+    let hint = bytes.as_deref().and_then(bundle_version_marker);
+    if let (Some(m), Some(_)) = (mtime, bytes.as_ref()) {
+        *cache = Some((m, hint.clone().unwrap_or_default()));
+    }
+    hint
+}
+
+/// The plugin's build inlines its package manifest, so the bundle carries
+/// `"deck-shelves"` followed closely by the version literal (`version$1 = "3.3.4"` in a
+/// development build, `<id>="3.3.4"` once minified): the first quoted semver within a
+/// short window after the package name. `None` when the file carries no such marker.
+fn bundle_version_marker(source: &[u8]) -> Option<String> {
+    const NAME: &[u8] = b"\"deck-shelves\"";
+    const WINDOW: usize = 64;
+    let mut from = 0;
+    while let Some(at) = source[from..].windows(NAME.len()).position(|w| w == NAME) {
+        let start = from + at + NAME.len();
+        let window = String::from_utf8_lossy(&source[start..source.len().min(start + WINDOW)]);
+        let found = window
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .find(|literal| is_version_literal(literal))
+            .map(str::to_string);
+        if found.is_some() {
+            return found;
+        }
+        from = start;
+    }
+    None
 }
 
 fn note_coop_offer_held() {
@@ -1469,16 +1579,22 @@ fn probe_coop_churn(client: &mut CdpClient) -> cdp::Result<bool> {
     Ok(value.as_bool().unwrap_or(false))
 }
 
-/// True when another plugin loader is present in the renderer (mirrors the
-/// runtime's own detection). Under force this catches a loader that has injected
-/// its globals but not yet claimed the renderer, so cooperative mode never falls
-/// through to the sole-host path and boots a second bundle over the loader's copy.
+/// True when another plugin loader is present in the renderer (the same globals the
+/// runtime's own detection reads, so both sides agree during the loader's early boot).
+/// Under force this catches a loader that has injected its globals but not yet
+/// claimed the renderer, so cooperative mode never falls through to the sole-host
+/// path and boots a second bundle over the loader's copy. The runtime also counts
+/// the plugin's development build stamp; this probe does not, since a copy this
+/// daemon hosts itself sets it too.
 fn probe_loader_present(client: &mut CdpClient) -> cdp::Result<bool> {
-    let expr = "!!(window.DeckyPluginLoader || window.deckyFrontendLib \
-         || (window.DFL && typeof window.DFL.definePlugin === 'function'))";
-    let value = client.evaluate(expr)?;
+    let value = client.evaluate(LOADER_PRESENT_PROBE)?;
     Ok(value.as_bool().unwrap_or(false))
 }
+
+const LOADER_PRESENT_PROBE: &str = "!!(window.DeckyPluginLoader || window.deckyHasLoaded \
+     || window.__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit \
+     || window.deckyFrontendLib \
+     || (window.DFL && typeof window.DFL.definePlugin === 'function'))";
 
 /// The version of the Deck Shelves copy the plugin loader itself loaded, from the
 /// loader's plugin list — any version, including ones from before the coexistence
@@ -1502,6 +1618,20 @@ fn loader_manages_unclaimed_plugin(
     loader_plugin: Option<&str>,
 ) -> bool {
     owner.is_empty() && !force_owner && loader_plugin.is_some()
+}
+
+/// Our own claim on the renderer, while we are not forcing and our bundle is not there
+/// (no marker), beside a loader that lists a Deck Shelves of its own: that copy made the
+/// claim under an earlier force stamp (after auto-safe-mode receded, or a restart with
+/// force turned off — the renderer keeps the stamp until Steam restarts) and runs bound
+/// to our host. Hosting a second copy would stay dormant yet count as Active, and the
+/// next hot-swap would tear the loader copy's handlers down — coexist with the tab only.
+fn loader_copy_holds_our_claim(
+    owner: &str,
+    force_owner: bool,
+    loader_plugin: Option<&str>,
+) -> bool {
+    owner == OWNER_KIND && !force_owner && loader_plugin.is_some()
 }
 
 /// Read the renderer's owner claim: empty string when unclaimed.
@@ -1533,8 +1663,6 @@ fn settle_window(force_owner: bool, loader_present: bool, owner_settle_secs: u64
     owner_settle_secs.max(FORCE_LOADER_SETTLE_SECS)
 }
 
-/// Evaluate the host runtime (`window.__SHELVES_HOST__`) in the renderer. The
-/// runtime is idempotent, so re-evaluating on a later tick is harmless.
 /// Compose a `window.__SHELVES_I18N__ = {…}` assignment from the per-locale JSON
 /// files next to the runtime (`<runtime dir>/i18n/*.json`), so the injected
 /// runtime — a blob that cannot read files — gets its dictionaries. Empty when
@@ -1588,13 +1716,19 @@ pub(super) fn i18n_stamp(host_runtime_path: &Path) -> String {
 /// Expose the host-facing config to the runtime so it derives the RPC endpoint and
 /// the contract version from the daemon (one source) instead of hardcoding them.
 pub(super) fn config_stamp(config: &Config, coop_bundle: bool) -> String {
-    // The Deck Shelves bundle version this host carries (the last installed release
-    // tag), for the handshake's `bundleVersion` — null until one is recorded.
-    let bundle_tag = crate::store::load(&config.hub_config_path).bundle_tag;
-    let bundle_version = if bundle_tag.is_empty() {
-        serde_json::Value::Null
+    // The Deck Shelves bundle version this host carries, for the handshake's
+    // `bundleVersion`: the last installed release tag, else (under the cooperative
+    // bundle) the version the bundle file embeds; null until either is known.
+    let recorded = crate::store::load(&config.hub_config_path).bundle_tag;
+    let embedded = if coop_bundle && recorded.is_empty() {
+        bundle_version_hint(&config.bundle_path)
     } else {
-        serde_json::Value::String(bundle_tag)
+        None
+    };
+    let bundle_version = match (recorded.is_empty(), embedded) {
+        (false, _) => serde_json::Value::String(recorded),
+        (true, Some(v)) => serde_json::Value::String(v),
+        (true, None) => serde_json::Value::Null,
     };
     let obj = serde_json::json!({
         "rpcEndpoint": format!("http://{}", config.rpc_addr),
@@ -1641,6 +1775,8 @@ pub(super) fn assemble_host_runtime(config: &Config) -> std::io::Result<String> 
     ))
 }
 
+/// Evaluate the host runtime (`window.__SHELVES_HOST__`) in the renderer. The
+/// runtime is idempotent, so re-evaluating on a later tick is harmless.
 fn inject_host_runtime(client: &mut CdpClient, config: &Config, coop_bundle: bool) {
     // The runtime's trip breaker is now self-healing: it stamps each arm with a
     // timestamp and only trips on a STALE arm (a genuinely dead session), so a

@@ -60,7 +60,7 @@ there; on Windows run `%LOCALAPPDATA%\ShelvesHub\shelveshub.exe status --report`
 uname -m                                     # x86_64 or aarch64 (arm64 on a Mac) — the SteamOS installer picks the asset by this
 ldd ~/.local/share/shelveshub/shelveshub | grep "not found"   # must print nothing (glibc floor)
 ~/.local/share/shelveshub/shelveshub status --report   # the host's own JSON: versions, OS, target vs. running arch, glibc, python, device model, display connectors, SteamOS session service
-~/.local/share/shelveshub/shelveshub doctor            # flag file, debug port, Steam process, hub service
+~/.local/share/shelveshub/shelveshub doctor            # flag file, debug port, Steam process, daemon RPC, hub service
 curl -s 127.0.0.1:8080/json | grep '"title"' # the window titles Steam exposes (see "What the hub keys off")
 ```
 
@@ -97,11 +97,10 @@ development deploy, when the point is the installer. Then check:
   `arm` (Apple silicon) or `i386` (Intel) — expected, not a defect);
 - on the pre-release channel, a self-update exercises the binary check before the swap (on Linux
   the ELF machine must match the CPU; Windows checks the PE machine, macOS only the Mach-O magic);
-- uninstall keeps the settings and `--purge` removes them (SteamOS and macOS, where `--purge` also
-  deletes Steam's debug-port flag until the next install; `-Purge` on Windows; the generic Linux
-  uninstaller — in the x86_64 and ARM64 `shelveshub-linux` packages — has no purge and always
-  keeps `~/.local/share/deck-shelves`) — the container leg proves the SteamOS file layout; the
-  device proves the service manager.
+- uninstall keeps the settings and `--purge` removes them (SteamOS, Linux and macOS, where
+  `--purge` also deletes Steam's debug-port flag until the next install; `-Purge` on Windows
+  removes the settings only) — the container leg proves the SteamOS file layout; the device
+  proves the service manager.
 
 ## Step 3 — put the device in a mode
 

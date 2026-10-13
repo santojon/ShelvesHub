@@ -1,9 +1,11 @@
 name: "Ops · Quality reports"
 
-# Records a quality snapshot (Rust tests, clippy, the eslint suppression
-# baseline, runtime code-lines) into site/reports/<scope>/<ts>.json and rebuilds
-# the aggregate site/reports/runs.json the dashboard reads. Commits the snapshot
-# back to main with SUBMIT_TOKEN (a PAT with push access), like Ops · Site stats.
+# Records a quality snapshot (every gate as a step: Rust tests, clippy, ESLint,
+# the runtime harness, lint and complexity debt, code lines) into
+# site/reports/<scope>/<ts>.json and rebuilds the aggregate site/reports/runs.json
+# the dashboard reads. Commits the snapshot back to main with SUBMIT_TOKEN (a PAT
+# with push access), like Ops · Site stats — a failing run is recorded too, and
+# the job then fails on the verdict.
 #
 # Scope: `release` for a published release, `ci` otherwise. The push trigger
 # ignores site/reports/** so its own commit doesn't loop.
@@ -41,9 +43,17 @@ jobs:
         with:
           components: clippy
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: pnpm
+
+      # ESLint and its plugin come from the lockfile; without them the ESLint and
+      # complexity steps would record "not measured" instead of a verdict.
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Cache Cargo registry
         uses: actions/cache@v4
@@ -61,8 +71,12 @@ jobs:
         uses: browser-actions/setup-chrome@v1
 
       # Every gate as a recorded step (status, duration, log tail) + the parsed
-      # signals: site/reports/<scope>/<ts>.json and .html.
+      # signals: site/reports/<scope>/<ts>.json and .html. The script writes the
+      # record before exiting 1 on a failed gate, so the commit step below still
+      # runs and the red run reaches the dashboard; the verdict step fails the job.
       - name: Validate and record the run
+        id: validate
+        continue-on-error: true
         env:
           BROWSER: ${{ steps.chrome.outputs.chrome-path }}
           HARNESS_NO_SANDBOX: '1'
@@ -107,4 +121,10 @@ jobs:
             echo "Push rejected (main moved) — retrying ($i/5)…"
           done
           echo "Could not push the quality snapshot after retries."
+          exit 1
+
+      - name: Gate verdict
+        if: steps.validate.outcome == 'failure'
+        run: |
+          echo "::error::a quality gate failed — the run was recorded above"
           exit 1

@@ -1,6 +1,6 @@
 // examples/harness/orchestrate.js — drives one scenario end to end against the Steam mock.
-// Reads window.__HARNESS__ (?scenario=: coexist / pluginPanel / lateMount), loads shelves-host.js
-// via a <script> tag (no browser flags), and sets window.__HARNESS_READY__ when fully wired.
+// Reads window.__HARNESS__ (?scenario=: coexist / pluginPanel / lateMount / nativeUi / forceOwner /
+// coopBundle / locale / tabSwitch), loads the runtime via a <script> tag, sets window.__HARNESS_READY__.
 
 (function () {
   "use strict";
@@ -41,7 +41,6 @@
       "en-US": {
         hub_title: "ShelvesHub",
         panel_error: "Deck Shelves: could not render the panel.",
-        unavailable_title: "Deck Shelves is not loaded",
         unavailable_body: "The Deck Shelves bundle could not be brought up on this host.",
         action_download: "Download the latest Deck Shelves",
         action_update_hub: "Update ShelvesHub",
@@ -49,6 +48,11 @@
         action_auto_update: "Automatic updates",
       },
     };
+
+    // A locale scenario reads the real shipped dictionary (the daemon inlines them all on-device).
+    const dict = S.locale
+      ? fetch("../../runtime/i18n/" + S.locale + ".json").then(function (r) { return r.json(); }).then(function (d) { window.__SHELVES_I18N__[S.locale] = d; })
+      : Promise.resolve();
 
     // A coexisting plugin queues its panel BEFORE the runtime arrives, exercising
     // the order-independent __SHELVES_QAM_PENDING__ path (the runtime drains it).
@@ -59,28 +63,30 @@
       // QAM already mounted when the runtime patches → native-arming; the
       // coexistence re-point should still land the tab on the next render.
       window.__HARNESS_MOUNT_QAM__();
-      chain = loadRuntime().then(function () {
+      chain = dict.then(loadRuntime).then(function () {
         window.__HARNESS_RENDER__();
       });
     } else {
       // Runtime patches BEFORE the QAM first mounts → the tab lands on mount.
-      chain = loadRuntime().then(function () {
+      chain = dict.then(loadRuntime).then(function () {
         window.__HARNESS_MOUNT_QAM__();
       });
     }
     return chain;
   }
 
-  // Native discovery runs OFF the render path (a settle timer, then a chunked
-  // scan yielding between steps), so native components land after the QAM mounts.
-  // For native scenarios, wait for that render before signalling ready.
+  /* Native discovery runs OFF the render path (a settle timer, then a chunked
+     scan yielding between steps), so native components land after the QAM mounts.
+     For native scenarios, wait for that discovery — and, with a plugin panel
+     registered, for the hub button's native render — before signalling ready. */
   function waitForNativeRender() {
     return new Promise(function (resolve) {
       const t0 = Date.now();
       (function poll() {
-        let r = null;
-        try { r = window.__HARNESS_REPORT__(); } catch (e) {}
-        if ((r && r.nativeUi) || Date.now() - t0 > 4000) return resolve();
+        let n = null;
+        try { n = window.__HARNESS_REPORT__().nativeUi; } catch (e) {}
+        const landed = !!(n && n.discovered && (n.rendered || !S.pluginPanel));
+        if (landed || Date.now() - t0 > 4000) return resolve();
         setTimeout(poll, 80);
       })();
     });

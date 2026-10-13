@@ -10,7 +10,8 @@ guess. One command runs everything that is automatable and assembles the matrix.
 What the lab proves: the host builds and installs, the service lifecycle, the
 local RPC, the daemon injecting its runtime into a headless Chromium, the runtime
 scenarios (native tab, coexistence, sole host, cooperative ownership, fallback
-panel, idle cost) and the plugin's backend probes on each OS/arch.
+panel, idle cost, the log side panel, notifications and the gamepad/keyboard
+gestures) and the plugin's backend probes on each OS/arch.
 
 What it cannot prove: the **real Steam CEF integration** — injection into the
 gamepad UI, rendering, focus and gamepad navigation, black-screen behaviour. Those
@@ -28,7 +29,7 @@ Single legs, when you only need one record:
 
 ```sh
 QA_EVIDENCE=1 PLATFORM=linux/arm64 bash scripts/harness-docker.sh   # one container run
-HARNESS_JSON=site/reports/qa/evidence/scenarios-host.json pnpm harness  # the host harness
+HARNESS_JSON="site/reports/qa/evidence/scenarios-host-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m).json" pnpm harness  # the host harness (the matrix picks up files named scenarios-host-<os>-<arch>.json)
 node scripts/ci/qa-matrix.mjs                                         # rebuild the matrix only
 ```
 
@@ -40,8 +41,8 @@ dispatch; both upload their evidence as a workflow artifact.
 | File | Written by | Holds |
 |---|---|---|
 | `site/reports/qa/evidence/container-<arch>.json` | `docker/entrypoint.sh` | one verdict per step: runtime scenarios, install/uninstall lifecycle, daemon-injection smoke, plugin backend probes (`pass` / `fail` / `skipped`) |
-| `site/reports/qa/evidence/scenarios-<arch>.json`, `scenarios-host-<os>-<arch>.json` | `scripts/harness.sh` (`HARNESS_JSON`) | every scenario's verdict and its full report (host installed, owner, bridge, tab, fallback UI, errors, idle counters) |
-| `site/reports/qa/matrix.json` | `scripts/ci/qa-matrix.mjs` | the cells below with their computed status, the evidence files behind each, and `ts` / `version` / `overall` like the quality runs in `site/reports/runs.json` |
+| `site/reports/qa/evidence/scenarios-<arch>.json`, `scenarios-host-<os>-<arch>.json` | `scripts/harness.sh` (`HARNESS_JSON`) | every scenario's verdict and its full report (host installed, owner, bridge, tab, fallback UI, errors, idle counters); `ts` in UTC ISO 8601 |
+| `site/reports/qa/matrix.json` | `scripts/ci/qa-matrix.mjs` | the cells below with their computed status, whether each one gates the overall verdict (`gate`), the age of its evidence (`ageDays`, and `stale` once it is older than the root's `staleDays`, 30 days — the cell's status then reads `stale`), the evidence files behind each — the host-harness cell takes its platform and architecture from its newest evidence record — and `ts` / `version` / `overall` like the quality runs in `site/reports/runs.json`; every `ts` is UTC ISO 8601 |
 
 A step that is skipped (for example the plugin probes without a plugin checkout)
 is recorded as `skipped`, never as a pass; the cell then reads `partial`.
@@ -49,8 +50,10 @@ is recorded as `skipped`, never as a pass; the cell then reads `partial`.
 ## The matrix
 
 Status legend: **tested** — evidence present, all green · **partial** — evidence with
-a failed or skipped step · **not-run** — automatable, no evidence yet · **blocked** —
-needs a lab that is not available · **manual** — real hardware, human-run.
+a failed or skipped step · **stale** — evidence older than 30 days (counts like
+partial for the overall verdict) · **not-run** — automatable, no evidence yet ·
+**blocked** — needs a lab that is not available · **manual** — real hardware,
+human-run.
 
 | Platform | Arch | Kind | Covers | Status |
 |---|---|---|---|---|
@@ -115,6 +118,9 @@ Those stay with the device cells.
 | `coexist-idle` | combined host settled | no permanent sub-second timer, bounded observers |
 | `coop-mirror` | loader present **and** ownership forced to ShelvesHub | host published, owner `shelveshub`, bridge up, editor mirrored, no errors |
 | `coop-fallback` | same, no plugin panel | fallback panel with plugin updates delegated (the loader's copy runs), host owned |
+| `sole-host-sidecar` | sole host, hub view open | "View logs" in Troubleshooting opens the side panel (the menu widens — `QamFriendsExpanded` posted) with one log view; Back closes it (narrowed, `QamFriendsHidden` last), no errors |
+| `sole-host-notify` | sole host; a toast through `host.notifications.toast` and a hub notice through `__SHELVES_NOTIFY__` | both listed, bell badge `2`, both rows in the side panel's Notifications tab (active), none inline in the hub view, `notifications.mode()` is `failed` (the mock has no Steam toast pipeline), no errors |
+| `sole-host-gesture` | sole host, a hub-view row focused | the D-pad gesture (right, twice) opens the side panel on Logs; Back closes it; Ctrl+Shift+N reopens it on Notifications, no errors |
 
 ## Device cells — evidence template
 

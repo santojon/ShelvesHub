@@ -2460,5 +2460,239 @@
       "total": 13
     },
     "page": "local/2026-10-13_09-54-14.html"
+  },
+  {
+    "ts": "2026-10-13_16-27-27",
+    "scope": "local",
+    "version": "0.5.0",
+    "overall": "PASS",
+    "tests": {
+      "passed": 126,
+      "failed": 0,
+      "skipped": 0,
+      "total": 126
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "fmt": {
+      "clean": true
+    },
+    "audit": {
+      "vulnerabilities": 0,
+      "clean": true
+    },
+    "harness": {
+      "passed": 14,
+      "failed": 0,
+      "total": 14
+    },
+    "eslint": {
+      "errors": 0,
+      "warnings": 0,
+      "problems": 0,
+      "byRule": {}
+    },
+    "complexity": {
+      "level": 0,
+      "count": 0,
+      "max": 0,
+      "top": []
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 3098,
+    "rustCodeLines": {
+      "total": 8665,
+      "files": 32
+    },
+    "qa": {
+      "cells": 10,
+      "byStatus": {
+        "tested": 3,
+        "partial": 1,
+        "manual": 2,
+        "blocked": 4
+      },
+      "assembled": "2026-10-13T19:22:05Z"
+    },
+    "docs": {
+      "locales": 19,
+      "keys": 84,
+      "keyParity": true,
+      "parityProblems": [],
+      "docPairs": 12,
+      "docsUnpaired": 0
+    },
+    "durations": {
+      "tests": 1902,
+      "clippy": 108,
+      "fmt": 100,
+      "audit": 1974,
+      "harness": 22206,
+      "eslint": 519,
+      "complexity": 364,
+      "total": 27197
+    }
+  },
+  {
+    "ts": "2026-10-13_17-24-37",
+    "scope": "local",
+    "version": "0.5.0",
+    "overall": "PASS",
+    "tests": {
+      "passed": 145,
+      "failed": 0,
+      "skipped": 0,
+      "total": 145
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "fmt": {
+      "clean": true
+    },
+    "audit": {
+      "vulnerabilities": 0,
+      "clean": true
+    },
+    "harness": {
+      "passed": 16,
+      "failed": 0,
+      "total": 16
+    },
+    "eslint": {
+      "errors": 0,
+      "warnings": 0,
+      "problems": 0,
+      "byRule": {}
+    },
+    "complexity": {
+      "level": 0,
+      "count": 0,
+      "max": 0,
+      "top": []
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 3126,
+    "rustCodeLines": {
+      "total": 9394,
+      "files": 34
+    },
+    "qa": {
+      "cells": 10,
+      "byStatus": {
+        "tested": 3,
+        "partial": 1,
+        "manual": 2,
+        "blocked": 4
+      },
+      "assembled": "2026-10-13T20:19:24Z"
+    },
+    "docs": {
+      "locales": 19,
+      "keys": 84,
+      "keyParity": true,
+      "parityProblems": [],
+      "docPairs": 12,
+      "docsUnpaired": 0
+    },
+    "durations": {
+      "tests": 1982,
+      "clippy": 110,
+      "fmt": 98,
+      "audit": 1600,
+      "harness": 25447,
+      "eslint": 818,
+      "complexity": 374,
+      "total": 30455
+    }
+  },
+  {
+    "ts": "2026-10-13_17-27-35",
+    "scope": "local",
+    "version": "0.5.0",
+    "overall": "PASS",
+    "tests": {
+      "passed": 145,
+      "failed": 0,
+      "skipped": 0,
+      "total": 145
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "fmt": {
+      "clean": true
+    },
+    "audit": {
+      "vulnerabilities": 0,
+      "clean": true
+    },
+    "harness": {
+      "passed": 17,
+      "failed": 0,
+      "total": 17
+    },
+    "eslint": {
+      "errors": 0,
+      "warnings": 0,
+      "problems": 0,
+      "byRule": {}
+    },
+    "complexity": {
+      "level": 0,
+      "count": 0,
+      "max": 0,
+      "top": []
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 3126,
+    "rustCodeLines": {
+      "total": 9394,
+      "files": 34
+    },
+    "qa": {
+      "cells": 10,
+      "byStatus": {
+        "tested": 3,
+        "partial": 1,
+        "manual": 2,
+        "blocked": 4
+      },
+      "assembled": "2026-10-13T20:19:24Z"
+    },
+    "docs": {
+      "locales": 19,
+      "keys": 84,
+      "keyParity": true,
+      "parityProblems": [],
+      "docPairs": 12,
+      "docsUnpaired": 0
+    },
+    "durations": {
+      "tests": 1089,
+      "clippy": 129,
+      "fmt": 97,
+      "audit": 1488,
+      "harness": 27377,
+      "eslint": 833,
+      "complexity": 371,
+      "total": 31422
+    }
   }
 ]

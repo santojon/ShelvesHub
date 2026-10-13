@@ -57,8 +57,7 @@ const commentLengthPlugin = {
 };
 
 // Bug-catching + modern-JS rules (minus the TS-type-aware ones — this is plain
-// JS). Legacy `runtime/shelves-host.js` violations are baselined via eslint bulk
-// suppressions; new violations fail. Retrofit opportunistically.
+// JS). The suppressions file is empty, so every violation fails.
 const rules = {
   complexity: ['error', 10],
   'max-lines': ['error', { max: 1000, skipBlankLines: true, skipComments: true }],
@@ -99,8 +98,8 @@ export default [
   },
   {
     // The injected runtime: a browser-context script, not a module. shelves-host.js
-    // and its shelves-host.part*.js siblings are function-body fragments the loader
-    // concatenates into one IIFE, so top-level `return` is legal (allowReturnOutsideFunction).
+    // and its shelves-host-*.js parts are function-body fragments the daemon
+    // concatenates into one IIFE, so top-level `return` is legal (globalReturn).
     files: ['runtime/**/*.js', 'examples/harness/*.js'],
     languageOptions: { ecmaVersion: 'latest', sourceType: 'script', parserOptions: { ecmaFeatures: { globalReturn: true } }, globals: { window: 'readonly', document: 'readonly', globalThis: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', setInterval: 'readonly', clearInterval: 'readonly', console: 'readonly', localStorage: 'readonly', requestAnimationFrame: 'readonly' } },
     plugins,

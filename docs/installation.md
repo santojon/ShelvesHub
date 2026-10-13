@@ -62,8 +62,11 @@ flowchart TB
 ```
 
 Config and update-preference choices are applied **only on a first install**, so an
-upgrade never overwrites what you changed in the tab. The tray choice is an action
-(install the binary + register autostart) and is honored on any run when opted in.
+upgrade never overwrites what you changed in the tab. Automatic updates are on by
+default — with the prompts, without them (a piped install), and on an install that
+never ran the installer — so the prompts only let you turn them off or opt into
+pre-releases. The tray choice is an action (install the binary + register autostart)
+and is honored on any run when opted in.
 
 ## Options and defaults
 
@@ -106,4 +109,6 @@ The uninstaller stops and removes the daemon service and the install directory,
 and — if the tray was installed — stops it and removes its autostart entry. Your
 Deck Shelves settings (shared with other hosts) and Steam's CEF debug flag are
 **kept** unless you pass the purge option (`--purge` on the shell/macOS
-uninstallers; the Windows uninstaller prompts).
+uninstallers). On Windows, `.\installer\uninstall.ps1 -Purge` from the extracted
+package removes the settings only; the one-click `uninstall-windows.bat` and the
+`setup.exe` uninstaller never purge, and Steam's debug flag stays in place.

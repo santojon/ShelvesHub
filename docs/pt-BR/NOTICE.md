@@ -30,11 +30,11 @@ copiado ou adaptado — deliberadamente, para manter este projeto sob a licença
 
 O conjunto de testes de cenário (`examples/harness/`, executado por `scripts/harness.sh`) exercita
 o runtime injetado contra uma simulação da interface do Steam em um navegador headless. Ele usa
-**React** e **ReactDOM** (Meta Platforms, Inc., MIT) — as builds UMD de
-produção — baixadas sob demanda para `examples/harness/vendor/` (ignorado pelo git). Elas são
-uma **dependência apenas de desenvolvimento/teste**: não incluídas no repositório, não fazem parte do
-serviço, do runtime injetado, ou de nenhum artefato de lançamento, e sua licença MIT é
-compatível com a deste projeto.
+**React** e **ReactDOM** 18.3.1 (Meta Platforms, Inc., MIT) — as builds UMD de produção,
+mantidas neste repositório em `examples/harness/vendor/` com seus cabeçalhos de licença
+intactos (o harness só as baixa quando estão ausentes). Elas são uma **dependência apenas de
+desenvolvimento/teste**: não fazem parte do serviço, do runtime injetado, ou de nenhum
+artefato de lançamento, e sua licença MIT é compatível com a deste projeto.
 
 ## Steam / SteamOS
 

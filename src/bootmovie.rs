@@ -6,17 +6,22 @@
 //! Enabled by the `boot_movie` config flag. On every boot the daemon calls
 //! `apply()`: when on, place the configured source WebM into
 //! `<steam>/config/uioverrides/movies/` under each startup-movie name the
-//! platform might play (see `slot_names`); when off, remove them. Steam picks a
-//! different name per device (LCD Deck / OLED Deck / desktop Big Picture), so
-//! writing every applicable name is what makes the override actually take effect.
+//! platform might play (see `slot_names`) and record those names in the hub
+//! store; when off, remove only the recorded slots and any slot still holding
+//! the hub's own movie — another tool's files stay. Steam picks a different
+//! name per device (LCD Deck / OLED Deck / desktop Big Picture), so writing
+//! every applicable name is what makes the override actually take effect.
 //! Each slot is a symlink to the source (the same approach animation-manager
 //! plugins use), falling back to a copy where symlinks aren't available. The
-//! install/remove core is pure (`install_one`/`remove_one`) so it unit-tests
+//! install/remove core is pure (`install_one`/`remove_ours`) so it unit-tests
 //! against a temp dir without a real Steam install.
 
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use crate::logger::log_warning;
+use crate::state;
 
 /// Steam picks a different startup-movie file name per device/context, so an
 /// override placed under one name is ignored where another is played:
@@ -141,10 +146,31 @@ pub fn remove_one(movies_dir: &Path, name: &str) -> Result<(), String> {
     }
 }
 
-/// Remove every slot name this host may have installed. Missing names succeed.
-pub fn remove_from(movies_dir: &Path) -> Result<(), String> {
+/// Whether the slot holds the hub's own movie: a link to `source`, or a copy
+/// with the same bytes (the copy fallback, or a slot placed before the record
+/// existed). A dangling link to our source counts; another tool's file never does.
+fn holds_source(slot: &Path, source: &Path) -> bool {
+    if let Ok(target) = fs::read_link(slot) {
+        let canonical = fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
+        return target == canonical || target == source;
+    }
+    let same_len = match (fs::metadata(slot), fs::metadata(source)) {
+        (Ok(a), Ok(b)) => a.is_file() && a.len() == b.len(),
+        _ => false,
+    };
+    same_len && matches!((fs::read(slot), fs::read(source)), (Ok(a), Ok(b)) if a == b)
+}
+
+/// Remove the slots this host placed: the `recorded` names, plus any slot still
+/// holding the hub's own movie (placed before the record existed). Other tools'
+/// files stay. Missing names succeed.
+pub fn remove_ours(movies_dir: &Path, recorded: &[String], source: &Path) -> Result<(), String> {
     for name in slot_names() {
-        remove_one(movies_dir, name)?;
+        let ours =
+            recorded.iter().any(|r| r == name) || holds_source(&movies_dir.join(name), source);
+        if ours {
+            remove_one(movies_dir, name)?;
+        }
     }
     Ok(())
 }
@@ -155,10 +181,53 @@ pub fn remove_from(movies_dir: &Path) -> Result<(), String> {
 pub fn apply(enabled: bool, source: &Path) -> Result<Option<PathBuf>, String> {
     let dir =
         movies_dir().ok_or_else(|| "cannot resolve Steam movies dir (no HOME)".to_string())?;
+    apply_in(&dir, enabled, source, &store_path())
+}
+
+/// The hub store that records the placed slots: the path published at boot, else
+/// the same path resolved from the environment (the boot-time `apply` runs
+/// before the daemon publishes it).
+fn store_path() -> PathBuf {
+    state::hub_config_path()
+        .cloned()
+        .unwrap_or_else(crate::config::hub_config_path_from_env)
+}
+
+/// `apply` over an explicit movies directory and store, so tests run against
+/// temp directories.
+fn apply_in(
+    dir: &Path,
+    enabled: bool,
+    source: &Path,
+    store: &Path,
+) -> Result<Option<PathBuf>, String> {
     if enabled {
-        install_to(&dir, source).map(Some)
+        let placed = install_to(dir, source);
+        // Record what is in place now (even after a part-way failure), so a
+        // later "off" clears exactly those slots.
+        let ours = slot_names()
+            .iter()
+            .filter(|name| holds_source(&dir.join(name), source))
+            .map(|name| name.to_string())
+            .collect();
+        record_slots(store, ours);
+        placed.map(Some)
     } else {
-        remove_from(&dir).map(|()| None)
+        let recorded = crate::store::load(store).boot_movie_slots;
+        remove_ours(dir, &recorded, source)?;
+        record_slots(store, Vec::new());
+        Ok(None)
+    }
+}
+
+/// Persist the slot record; a no-op write when it is unchanged (every boot
+/// passes through here).
+fn record_slots(store: &Path, names: Vec<String>) {
+    if let Err(e) = crate::store::update(store, |s| s.boot_movie_slots = names) {
+        log_warning(
+            "bootmovie",
+            &format!("could not record the startup-movie slots: {e}"),
+        );
     }
 }
 

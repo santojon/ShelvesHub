@@ -7,11 +7,12 @@ ExecStart=%h/.local/share/shelveshub/shelveshub
 Restart=always
 RestartSec=10
 WorkingDirectory=%h/.local/share/shelveshub
-# Runs as the current user (a user unit) — never root. Light hardening that
-# doesn't touch $HOME (the daemon writes settings, the boot movie and logs
-# under the user's home).
+# Runs as the current user (a user unit) — never root. Light hardening that keeps
+# /usr, /boot and /etc read-only but leaves $HOME writable: the daemon writes its
+# install dir, the shared settings, the boot movie and Steam's debug flag there
+# (Steam can live outside ~/.local/share), which `strict` would mount read-only.
 NoNewPrivileges=true
-ProtectSystem=strict
+ProtectSystem=full
 PrivateTmp=true
 
 [Install]

@@ -10,7 +10,9 @@ set -e
 INSTALL_DIR="$HOME/.local/share/shelveshub"
 SERVICE_DIR="$HOME/.config/systemd/user"
 SERVICE="shelveshub.service"
-SETTINGS_DIR="$HOME/.local/share/deck-shelves"
+# Resolved the same way install.sh does, so --purge removes the directory the
+# install actually used.
+SETTINGS_DIR="${SHELVES_SETTINGS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/deck-shelves}"
 CEF_FLAG="$HOME/.steam/steam/.cef-enable-remote-debugging"
 PURGE=0
 [[ "$1" == "--purge" ]] && PURGE=1

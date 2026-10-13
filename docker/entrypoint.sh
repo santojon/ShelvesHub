@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 #
-# In-container harness entrypoint. Runs two Linux validations against a headless
+# In-container harness entrypoint. Runs four Linux validations against a headless
 # Chromium, with no Steam Deck:
 #   1. the runtime scenario harness (scripts/harness.sh) — the native tab,
 #      coexistence, sole-host and fallback paths against a mock of Steam's UI;
-#   2. a daemon-injection smoke — the real ShelvesHub daemon discovers the
-#      headless target over CDP and injects its runtime + an example bundle.
+#   2. the SteamOS and generic-Linux install/uninstall lifecycle
+#      (docker/install-scenario.sh) over service-manager and download stubs;
+#   3. a daemon-injection smoke — the real ShelvesHub daemon discovers the
+#      headless target over CDP and injects its runtime + an example bundle;
+#   4. the plugin's backend probes under the host (docker/plugin-probes.py).
 #
-# Exits non-zero if either fails, so it drops straight into CI.
+# Exits non-zero if any fails, so it drops straight into CI.
 set -uo pipefail
 
 ROOT="${SHELVES_ROOT:-/work}"
@@ -46,7 +49,7 @@ else
 fi
 fi
 
-# ── 3. Install / uninstall lifecycle (SteamOS user-service path) ─────────────
+# ── 2. Install / uninstall lifecycle (SteamOS + generic Linux user services) ──
 if [[ "$MODE" == "all" || "$MODE" == "install" ]]; then
 echo ""
 echo "[install] Install / uninstall lifecycle…"
@@ -60,7 +63,7 @@ else
 fi
 fi
 
-# ── 2. Daemon-injection smoke ───────────────────────────────────────────────
+# ── 3. Daemon-injection smoke ───────────────────────────────────────────────
 if [[ "$MODE" == "all" || "$MODE" == "smoke" ]]; then
 echo ""
 echo "[smoke] Daemon injection smoke (daemon → headless Chromium)…"

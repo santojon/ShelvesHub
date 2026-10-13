@@ -93,7 +93,8 @@ jobs:
 
       # Installer lifecycle on Windows (laydown, options, migration from Program
       # Files, settings keep/purge, install.log) under a redirected per-user
-      # profile. The scheduled task is registered for real and cleaned up; no Steam.
+      # profile. The ScheduledTask cmdlets are stubbed, so no task is registered
+      # and no daemon starts; no Steam.
       - name: Installer lifecycle (Windows)
         run: powershell -ExecutionPolicy Bypass -NoProfile -File scripts/install-scenario-win.ps1
 
@@ -116,7 +117,7 @@ jobs:
       - name: Audit
         run: cargo audit
 
-  # Runtime syntax + data-file validation.
+  # Runtime syntax + data-file validation, and ESLint on every PR.
   docs-and-runtime:
     runs-on: ubuntu-latest
     if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
@@ -130,11 +131,27 @@ jobs:
       - name: Shipped-text rule, launchers, data files (validate --only)
         run: node scripts/validate.mjs --only shipped-text,launchers,data,syntax
 
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The runtime and the scripts: complexity, the comment-length rule, no-var,
+      # prefer-const and the correctness rules (the same `pnpm lint:js` as locally).
+      - name: ESLint
+        run: pnpm lint:js
+
 
   # Compatibility: the daemon's HOST_API_VERSION is derived from the shared
   # @deck-shelves/host contract at build time (build.rs). Assert the submodule is
-  # present and the derived version is NOT the fallback, so a missing submodule or
-  # a drifted contract fails CI instead of shipping a wrong compatibility number.
+  # present, then build and read what build.rs emitted: the derived version must be
+  # the contract's and not the debug fallback, so a missing submodule or a drifted
+  # contract fails CI instead of shipping a wrong compatibility number.
   contract:
     runs-on: ubuntu-latest
     if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
@@ -155,6 +172,34 @@ jobs:
           V=$(grep -E "HOST_API_VERSION" "$SRC" | head -1 | sed -E 's/[^"]*"([^"]+)".*/\1/')
           echo "Contract HOST_API_VERSION = $V"
           test -n "$V" || { echo "::error::could not extract HOST_API_VERSION from the contract"; exit 1; }
+          echo "CONTRACT_VERSION=$V" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # build.rs runs under `cargo check` and leaves its output file next to the build
+      # script (the newest one, should target/ ever be reused): the `cargo:rustc-env=`
+      # line is the version the daemon was compiled with, and a `cargo:warning=` line
+      # is the debug fallback announcing itself.
+      - name: Derived version is the contract's, not the fallback
+        run: |
+          cargo check
+          OUT="$(cat "$(ls -t target/debug/build/shelveshub-*/output | head -1)")"
+          DERIVED="$(printf '%s\n' "$OUT" | sed -n 's/^cargo:rustc-env=SHELVES_HOST_API_VERSION=//p' | head -1)"
+          echo "Derived SHELVES_HOST_API_VERSION = $DERIVED"
+          if printf '%s\n' "$OUT" | grep -q '^cargo:warning='; then
+            echo "::error::build.rs used the fallback: $(printf '%s\n' "$OUT" | grep '^cargo:warning=')"
+            exit 1
+          fi
+          test "$DERIVED" = "$CONTRACT_VERSION" || { echo "::error::derived $DERIVED differs from the contract's $CONTRACT_VERSION"; exit 1; }
 
   # Cross-platform simulation harness: build + run the daemon, the runtime
   # scenarios, and the install/uninstall lifecycle against a headless Chromium in

@@ -1,6 +1,7 @@
 ; ShelvesHub Windows installer (NSIS / Modern UI 2). Built in CI on the windows
 ; runner (choco install nsis). Expects, in the build dir next to this script:
-;   payload\  (shelveshub.exe, shelves-devtools.exe, runtime\, bundle\, register-task.ps1)
+;   payload\  (shelveshub.exe, shelves-devtools.exe, runtime\, bundle\, assets\,
+;              shelveshub.config.json, register-task.ps1, apply-setup.ps1, migrate.ps1)
 ;   icon.ico
 ; Produces shelveshub-setup.exe — a clickable installer carrying the app icon.
 
@@ -164,14 +165,34 @@ Section "Install"
   nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -NoProfile -File "$INSTDIR\migrate.ps1" -InstallPath "$INSTDIR"'
   Pop $0
 
+  ; Upgrade over a running daemon: a running image can be renamed but not
+  ; overwritten, so move it aside the way self-update does (the daemon deletes the
+  ; .old copy on its next start); register-task.ps1 restarts onto the new file.
+  ${If} ${FileExists} "$INSTDIR\shelveshub.exe"
+    Delete "$INSTDIR\shelveshub.old"
+    Rename "$INSTDIR\shelveshub.exe" "$INSTDIR\shelveshub.old"
+  ${EndIf}
   File "payload\shelveshub.exe"
   File "payload\shelves-devtools.exe"
   File /r "payload\runtime"
   File /r "payload\bundle"
+  ; Boot-animation source cuts, read from <install>\assets\boot by the boot_movie toggle.
+  File /r "payload\assets"
   File "payload\register-task.ps1"
   ; Optional tray companion binary — /nonfatal so the setup still builds when a
   ; package doesn't ship it; register-task.ps1 only wires it when -Tray and present.
+  ; An installed tray may be running: stop it and move its image aside first, then
+  ; drop the old copy (a still-held copy goes on the next install or uninstall).
+  ${If} ${FileExists} "$INSTDIR\shelveshub-tray.exe"
+    nsExec::ExecToLog 'schtasks /end /tn "ShelvesHubTray"'
+    Pop $0
+    nsExec::ExecToLog 'taskkill /f /fi "IMAGENAME eq shelveshub-tray.exe"'
+    Pop $0
+    Delete "$INSTDIR\shelveshub-tray.old"
+    Rename "$INSTDIR\shelveshub-tray.exe" "$INSTDIR\shelveshub-tray.old"
+  ${EndIf}
   File /nonfatal "payload\shelveshub-tray.exe"
+  Delete "$INSTDIR\shelveshub-tray.old"
 
   ; Config file — install only if absent, so a re-install never clobbers edits.
   StrCpy $ConfigWasFresh "0"
@@ -191,6 +212,19 @@ Section "Install"
   Pop $0
   ${If} $0 != 0
     DetailPrint "Warning: service registration returned $0 (see log)."
+  ${EndIf}
+
+  ; Steam opens its CEF debug port only when this flag file exists in its install
+  ; dir (HKCU SteamPath); without it a fresh install logs "connection refused"
+  ; forever. Best-effort: a missing Steam never fails the setup.
+  ReadRegStr $0 HKCU "Software\Valve\Steam" "SteamPath"
+  ${If} $0 != ""
+  ${AndIf} ${FileExists} "$0\*.*"
+    FileOpen $1 "$0\.cef-enable-remote-debugging" "a"
+    ${If} $1 != ""
+      FileClose $1
+      DetailPrint "Enabled Steam's debug port ($0) - restart Steam once so it takes effect."
+    ${EndIf}
   ${EndIf}
 
   ; Per-user uninstall entry (HKCU — no admin; shows under Add/Remove Programs
@@ -213,8 +247,13 @@ Section "Uninstall"
   ; Opt-in tray companion task + binary (harmless no-ops if it was never installed).
   nsExec::ExecToLog 'schtasks /end /tn "ShelvesHubTray"'
   nsExec::ExecToLog 'schtasks /delete /tn "ShelvesHubTray" /f'
+  ; A daemon relaunched outside the task (self-update) survives `schtasks /end`.
+  nsExec::ExecToLog 'taskkill /f /fi "IMAGENAME eq shelveshub.exe"'
+  nsExec::ExecToLog 'taskkill /f /fi "IMAGENAME eq shelveshub-tray.exe"'
   Delete "$INSTDIR\shelveshub-tray.exe"
+  Delete "$INSTDIR\shelveshub-tray.old"
   Delete "$INSTDIR\shelveshub.exe"
+  Delete "$INSTDIR\shelveshub.old"
   Delete "$INSTDIR\shelves-devtools.exe"
   Delete "$INSTDIR\register-task.ps1"
   Delete "$INSTDIR\apply-setup.ps1"
@@ -223,6 +262,19 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\runtime"
   RMDir /r "$INSTDIR\bundle"
   RMDir /r "$INSTDIR\backend"
+  RMDir /r "$INSTDIR\backend.new"
+  RMDir /r "$INSTDIR\backend.old"
+  RMDir /r "$INSTDIR\assets"
+  ; Files the daemon and the installers write beside the payload: the config backup
+  ; + the dot-prefixed write temps, the RPC token, a staged self-update, the rollback
+  ; snapshot and the install log. Without these the directory is left behind.
+  Delete "$INSTDIR\shelveshub.config.json.bak"
+  Delete "$INSTDIR\.*.tmp"
+  Delete "$INSTDIR\.rpc-token"
+  Delete "$INSTDIR\shelveshub.exe.new"
+  Delete "$INSTDIR\install.log"
+  RMDir /r "$INSTDIR\previous"
+  RMDir /r "$INSTDIR\previous.tmp"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"

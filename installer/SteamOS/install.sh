@@ -101,11 +101,11 @@ else
   trap 'rc=$?; rm -rf "$TMPDIR"; [[ $rc -ne 0 ]] && { echo; echo "[!] Install failed (exit $rc). Full log: $LOGFILE"; }' EXIT
 
   echo "[i] Downloading $PACKAGE..."
-  curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"
+  curl -fsL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"
 
   # Integrity: verify the download against the release's SHA256SUMS when present.
   if [[ -n "$SUMS_URL" ]]; then
-    curl -sL "$SUMS_URL" -o "$TMPDIR/SHA256SUMS"
+    curl -fsL "$SUMS_URL" -o "$TMPDIR/SHA256SUMS"
     EXPECTED=$(grep " $PACKAGE\$" "$TMPDIR/SHA256SUMS" | awk '{print $1}')
     ACTUAL=$(sha256sum "$TMPDIR/$PACKAGE" | awk '{print $1}')
     if [[ -n "$EXPECTED" && "$EXPECTED" != "$ACTUAL" ]]; then
@@ -123,8 +123,12 @@ fi
 echo "[i] Installing to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 
-cp "$EXTRACTED_DIR/$BINARY" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/$BINARY"
+# Stage next to the running binary and rename over it: a plain cp onto a running
+# executable can fail with "Text file busy"; a rename never does, and the service
+# is restarted onto the new file below.
+cp "$EXTRACTED_DIR/$BINARY" "$INSTALL_DIR/$BINARY.new"
+chmod +x "$INSTALL_DIR/$BINARY.new"
+mv -f "$INSTALL_DIR/$BINARY.new" "$INSTALL_DIR/$BINARY"
 
 if [[ -d "$EXTRACTED_DIR/bundle" ]]; then
   mkdir -p "$INSTALL_DIR/bundle"
@@ -214,7 +218,10 @@ install_tray() {
     echo "[i] Tray companion not bundled in this package — skipping."
     return
   fi
-  cp "$EXTRACTED_DIR/shelveshub-tray" "$INSTALL_DIR/"; chmod +x "$INSTALL_DIR/shelveshub-tray"
+  # Stage + rename, like the daemon binary: the tray may be running right now.
+  cp "$EXTRACTED_DIR/shelveshub-tray" "$INSTALL_DIR/shelveshub-tray.new"
+  chmod +x "$INSTALL_DIR/shelveshub-tray.new"
+  mv -f "$INSTALL_DIR/shelveshub-tray.new" "$INSTALL_DIR/shelveshub-tray"
   mkdir -p "$HOME/.config/autostart"
   cat > "$HOME/.config/autostart/shelveshub-tray.desktop" <<EOF
 [Desktop Entry]

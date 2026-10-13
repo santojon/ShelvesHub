@@ -1,7 +1,7 @@
 /* runtime/shelves-host-toast.js — host notifications through Steam's OWN toast pipeline (sole
    host, opt-in): push into NotificationStore and render our entries with Steam's toast chrome by
    wrapping the toast renderer the way a plugin loader does — a trampoline that lets a bare
-   function component be patched. The DOM toast stays the fallback. Assembled last. */
+   function component be patched. Without it, entries stay in the hub view's center. Assembled last. */
 
   const NativeToasts = (function () {
     const CALL_ORIGINAL = {};

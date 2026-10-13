@@ -40,6 +40,13 @@ pub mod timers {
     /// How long a cooperative tick keeps the fast cadence waiting for the
     /// loader's copy to publish the cooperative-bundle defer signal.
     pub const COOP_BUNDLE_FAST_WINDOW: Duration = Duration::from_secs(120);
+    /// `curl` connect timeout for every release-API call and download.
+    pub const CURL_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+    /// Whole-call cap for a release-API / checksum fetch (small text bodies).
+    pub const CURL_TEXT_TIMEOUT: Duration = Duration::from_secs(30);
+    /// Whole-call cap for a bundle / backend / package download: generous for a
+    /// slow link, but bounded so a stalled transfer never hangs the start path.
+    pub const CURL_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 }
 
 /// Default values and fixed limits.
@@ -53,6 +60,10 @@ pub mod defaults {
     /// A real Deck Shelves IIFE is at least this large; the shipped placeholder is
     /// far smaller, so this tells them apart.
     pub const REAL_BUNDLE_MIN_BYTES: u64 = 4096;
+    /// A real ShelvesHub binary is at least this large (release builds run to a
+    /// few MiB on every target); a truncated download or an HTML error page is
+    /// far smaller. Used by self-update and the rollback snapshot check.
+    pub const REAL_BINARY_MIN_BYTES: u64 = 512 * 1024;
     /// Cap on the in-memory log ring the fallback viewer reads.
     pub const LOG_RING_CAP: usize = 300;
     /// Largest RPC request body the daemon will read (2 MiB).

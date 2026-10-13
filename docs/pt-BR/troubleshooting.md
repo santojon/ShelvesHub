@@ -1,5 +1,7 @@
 # Solução de problemas
 
+*[Read in English](../troubleshooting.md)*
+
 A maioria dos problemas se resume a um **conflito de porta**, **outro host na mesma máquina**
 ou uma **interface do Steam colapsada**. Quase todos podem ser resolvidos a partir do arquivo de
 configuração — `shelveshub.config.json`, instalado ao lado do binário — sem precisar recompilar.
@@ -15,8 +17,10 @@ chave para voltar ao seu valor padrão.
 
 ### A porta RPC (60123) já está em uso
 
-Sintoma: o log mostra `Failed to bind 127.0.0.1:60123`. Outro programa está usando a
-porta. Correção — escolha uma porta livre:
+Sintoma: o log mostra `Failed to bind the control endpoint 127.0.0.1:60123: … Another
+process (a second ShelvesHub, or something else) holds the port, so settings CANNOT be
+saved.` O daemon continua injetando sem o RPC, mas nada pode ser salvo até a porta
+ficar livre. Correção — pare o outro processo, ou escolha uma porta livre:
 
 ```json
 { "rpc_port": 60124 }
@@ -27,8 +31,9 @@ você só precisa alterá-la em um único lugar.
 
 ### A porta de depuração do Steam (8080) está errada ou inacessível
 
-Sintoma: `Injection cycle skipped: … Connection refused` repetido em
-`127.0.0.1:8080`. O endpoint de depuração remota CEF do Steam não está acessível ali. Primeiro
+Sintoma: `Injection cycle skipped: … Connection refused` em `127.0.0.1:8080` (registrado
+uma vez; permanece como a última linha do loader até o endpoint responder). O endpoint de
+depuração remota CEF do Steam não está acessível ali. Primeiro
 certifique-se de que ele está habilitado — `~/.steam/steam/.cef-enable-remote-debugging` existe e
 o Steam foi totalmente reiniciado depois disso. Se ele estiver escutando em outra porta, configure-a:
 
@@ -61,21 +66,27 @@ vezes e colapsaria a interface do Steam, então o hub nunca faz isso a não ser 
   { "owner_settle_secs": 25 }
   ```
 
-- **Você quer que o ShelvesHub seja o host** quando ele é o único instalado:
+- **Você quer que o Deck Shelves rode no ShelvesHub ao lado do carregador** (posse
+  cooperativa):
 
   ```json
   { "force_owner": true }
   ```
 
-  Isso faz o ShelvesHub reivindicar o renderizador imediatamente (pulando a espera de
-  acomodação do proprietário). Ele **não** tira o renderizador de outro host que já o
-  possui — isso não é suportado e poderia desestabilizar a interface — então, com um
-  host ativo presente, o ShelvesHub recua e coexiste (sua aba continua sendo adicionada
-  mesmo assim). A alteração dessa configuração só tem efeito após um reinício (use **Reiniciar para
-  aplicar** na página do hub, que reinicia o daemon e o Steam juntos).
+  Ao lado de um carregador o hub injeta seu runtime e publica seu host, então o Deck
+  Shelves lançado pelo carregador se vincula ao ShelvesHub enquanto o carregador mantém
+  o renderizador e seus outros plugins; o hub continua nunca carregando uma segunda
+  cópia do plugin. Ele **não** tira o renderizador de um host que
+  já o possui — isso não é suportado e poderia desestabilizar a interface. Sem nenhum
+  carregador na máquina a opção não serve para nada: o loop espera pelo menos 20 s (ou
+  `owner_settle_secs`, o que for maior) por um carregador antes de hospedar o
+  renderizador como host único mesmo assim, então uma máquina em que o ShelvesHub é o
+  único host mantém `force_owner` desligado e define `owner_settle_secs` como `0` para um
+  boot instantâneo. A alteração dessa configuração só tem efeito após um reinício (use
+  **Reiniciar para aplicar** na página do hub, que reinicia o daemon e o Steam juntos).
 
-- **Você quer que o hub rode e atualize o Deck Shelves ao lado do carregador** (`force_owner`
-  ligado):
+- **Você quer que o hub rode e atualize o Deck Shelves ao lado do carregador** (`force_owner` +
+  `coop_bundle`):
 
   ```json
   { "force_owner": true, "coop_bundle": true }
@@ -100,17 +111,35 @@ vezes e colapsaria a interface do Steam, então o hub nunca faz isso a não ser 
 ## Tela preta / interface do Steam colapsada
 
 Se a interface do Steam colapsar, o daemon **pausa a injeção** (ele nunca
-força um reinício do Steam — isso pioraria a situação) e registra uma dica de recuperação. Para recuperar
-automaticamente, defina o comando para sua plataforma — por exemplo, em um Steam Deck:
+força um reinício do Steam — isso pioraria a situação) e, por padrão, roda a
+**recuperação oficial da plataforma** uma vez (num Steam Deck, reiniciando a sessão do
+Modo Jogo; no macOS/Windows, trazendo o Steam de volta ao Big Picture). Você não precisa
+configurar nada.
+
+Para rodar um comando **personalizado** no lugar, defina `recover_cmd` (ou
+`SHELVES_RECOVER_CMD`):
 
 ```json
 { "recover_cmd": "systemctl --user restart steam-launcher.service" }
 ```
 
+Para **desligar** a recuperação automática (só pausar e registrar a dica), defina como
+`off`:
+
+```json
+{ "recover_cmd": "off" }
+```
+
 ## A aba nativa
 
-A aba nativa de Acesso Rápido é controlada por `native_qam` (ou `SHELVES_NATIVE_QAM=1`
-por serviço). Defina como `false` para usar o painel na tela como alternativa.
+A aba nativa de Acesso Rápido é controlada por `native_qam` (ligada na configuração
+distribuída; `SHELVES_NATIVE_QAM=1` por serviço). Defina como `false` para desligá-la: o
+hub então não adiciona nada ao menu de Acesso Rápido — não há painel na tela para usar
+como alternativa, e em host único o painel do Deck Shelves não tem outro lugar onde
+aparecer — então mantenha-a ligada a menos que a própria aba se comporte mal. Pelo
+console de depuração do Steam, `__SHELVES_QAM__.mode()` (presente em todos os modos,
+inclusive ao lado de um carregador) responde `native`, `native-arming`, `tripped`, ou
+`overlay` quando a aba não está instalada.
 
 ## Notificações
 

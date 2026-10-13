@@ -157,11 +157,118 @@ fn settings_sync_defaults_on_and_bookkeeping_roundtrips() {
 }
 
 #[test]
+fn wrong_type_known_key_keeps_the_other_settings() {
+    let path = scratch("lenient");
+    cleanup(&path);
+    // Two mistyped known keys fall back to their defaults; the rest is kept.
+    fs::write(
+        &path,
+        r#"{"auto_update":true,"quiet_updates":"yes","bundle_tag":42,"config_sync":false,"keep":1}"#,
+    )
+    .unwrap();
+    let s = load(&path);
+    assert!(s.auto_update);
+    assert!(!s.config_sync);
+    assert!(s.quiet_updates, "mistyped key falls back to its default");
+    assert!(s.bundle_tag.is_empty());
+    assert_eq!(
+        s.extra.get("keep").and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert!(s.extra.get("quiet_updates").is_none());
+    // A bad inner shape (a stamp that is not a number) drops only that key.
+    fs::write(
+        &path,
+        r#"{"auto_update":true,"sync_stamps":{"auto_update":"x"},"sync_last_at":5}"#,
+    )
+    .unwrap();
+    let s = load(&path);
+    assert!(s.auto_update);
+    assert!(s.sync_stamps.is_empty());
+    assert_eq!(s.sync_last_at, 5);
+    // Not JSON at all is still corrupt → defaults.
+    fs::write(&path, "{ not valid json").unwrap();
+    assert_eq!(load(&path), HubSettings::default());
+    cleanup(&path);
+}
+
+/// Temp files left in the store's directory (`.<name>.<pid>.<n>.tmp`).
+fn temp_files(path: &Path) -> Vec<String> {
+    let dir = path.parent().unwrap();
+    fs::read_dir(dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".tmp"))
+        .collect()
+}
+
+#[test]
 fn atomic_write_leaves_no_temp() {
     let path = scratch("atomic");
     cleanup(&path);
     save(&path, &HubSettings::default()).unwrap();
-    let tmp = path.with_file_name(".shelveshub.json.tmp");
-    assert!(!tmp.exists(), "temp file should be renamed away");
+    save(&path, &HubSettings::default()).unwrap();
+    assert!(
+        temp_files(&path).is_empty(),
+        "temp files should be renamed away: {:?}",
+        temp_files(&path)
+    );
+    cleanup(&path);
+}
+
+#[test]
+fn update_serializes_concurrent_writers_and_skips_an_unchanged_save() {
+    let path = scratch("update");
+    cleanup(&path);
+    // Many threads bump the same counter through load→modify→save: with the
+    // store lock every increment lands; without it most would be lost.
+    let threads: Vec<_> = (0..8)
+        .map(|_| {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                for _ in 0..10 {
+                    update(&path, |s| s.sync_last_at += 1).unwrap();
+                }
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
+    assert_eq!(load(&path).sync_last_at, 80);
+    assert!(temp_files(&path).is_empty(), "{:?}", temp_files(&path));
+    // The saved settings come back; a closure that changes nothing writes nothing.
+    let stamp = fs::metadata(&path).unwrap().modified().unwrap();
+    let bak_before = fs::read_to_string(backup_path(&path)).unwrap();
+    let same = update(&path, |_| {}).unwrap();
+    assert_eq!(same.sync_last_at, 80);
+    assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), stamp);
+    assert_eq!(fs::read_to_string(backup_path(&path)).unwrap(), bak_before);
+    cleanup(&path);
+}
+
+#[test]
+fn auto_update_defaults_on_and_boot_movie_slots_roundtrip() {
+    let path = scratch("slots");
+    cleanup(&path);
+    let d = HubSettings::default();
+    assert!(
+        d.auto_update,
+        "updates are on out of the box, like the installers promise"
+    );
+    assert!(d.auto_update_hub && d.auto_update_plugin);
+    assert!(d.boot_movie_slots.is_empty());
+    let s = HubSettings {
+        boot_movie_slots: vec!["deck_startup.webm".into(), "oled_startup.webm".into()],
+        ..Default::default()
+    };
+    save(&path, &s).unwrap();
+    assert_eq!(load(&path), s);
+    // A file from before the record existed loads with no slots recorded.
+    fs::write(&path, r#"{"auto_update":false}"#).unwrap();
+    let old = load(&path);
+    assert!(!old.auto_update);
+    assert!(old.boot_movie_slots.is_empty());
     cleanup(&path);
 }

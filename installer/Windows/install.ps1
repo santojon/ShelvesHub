@@ -1,7 +1,7 @@
 # One-click installer for Windows - installs PER USER (no admin needed): the
 # daemon must run as you so it can write the bundle/backend/config and self-update,
 # and reach your Steam. Everything lives under %LOCALAPPDATA%.
-# Usage (online): irm https://github.com/santojon/ShelvesHub/releases/latest/download/install-windows.ps1 | iex
+# Usage (one-click): run install-windows.bat or shelveshub-setup.exe from the latest release
 # Usage (from extracted package): .\installer\install.ps1
 
 $ErrorActionPreference = "Stop"
@@ -9,6 +9,7 @@ $repo        = "santojon/ShelvesHub"
 $binary      = "shelveshub.exe"
 $package     = "shelveshub-windows.zip"
 $installPath = Join-Path $env:LOCALAPPDATA "ShelvesHub"
+$tmpDir      = $null
 
 # Capture the whole run to a log next to the install so a failure is diagnosable
 # even if the window closes. Start-Transcript keeps writing on a terminating error,
@@ -71,6 +72,14 @@ if (Test-Path $binary) {
 }
 
 New-Item -Path $installPath -ItemType Directory -Force | Out-Null
+# An upgrade over a running daemon: a running image can be renamed but not
+# overwritten, so move it aside the way self-update does (the daemon deletes the
+# .old copy on its next start), then copy the new binary into place.
+$oldBinary = Join-Path $installPath "shelveshub.old"
+if (Test-Path "$installPath\$binary") {
+  Remove-Item $oldBinary -Force -ErrorAction SilentlyContinue
+  Move-Item -Path "$installPath\$binary" -Destination $oldBinary -Force
+}
 Copy-Item -Path "$extractedDir\$binary" -Destination "$installPath\$binary" -Force
 
 if (Test-Path "$extractedDir\bundle") {
@@ -146,6 +155,13 @@ if (Test-Path "$extractedDir\assets") {
   Copy-Item -Recurse -Path "$extractedDir\assets" -Destination $installPath -Force
 }
 
+# Task settings shared by the daemon and the tray: both are long-running, so lift
+# the Task Scheduler defaults that refuse to start a task on battery, stop it when
+# the machine unplugs, or end it after 72 hours (PT0S = no time limit).
+$taskSettings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+  -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+$taskSettings.ExecutionTimeLimit = "PT0S"
+
 # Optional tray companion (opt-in, OFF by default): a system-tray icon over the
 # daemon's local RPC. Installs only when the package ships the binary AND the user
 # opts in; a per-user logon task (no elevation) starts it.
@@ -153,14 +169,15 @@ $tray = Ask $env:SHELVES_TRAY "Install the ShelvesHub tray companion (system-tra
 if ($tray) {
   if (Test-Path "$extractedDir\shelveshub-tray.exe") {
     $trayExe = Join-Path $installPath "shelveshub-tray.exe"
+    # Stop a running tray BEFORE the copy: a running exe cannot be overwritten.
+    Stop-ScheduledTask -TaskName "ShelvesHubTray" -ErrorAction SilentlyContinue
+    Get-Process -Name "shelveshub-tray" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 300
     Copy-Item -Path "$extractedDir\shelveshub-tray.exe" -Destination $trayExe -Force
     $ta = New-ScheduledTaskAction -Execute $trayExe
     $tt = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
     $tp = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
-    Register-ScheduledTask -TaskName "ShelvesHubTray" -Action $ta -Trigger $tt -Principal $tp -Force | Out-Null
-    Stop-ScheduledTask -TaskName "ShelvesHubTray" -ErrorAction SilentlyContinue
-    Get-Process -Name "shelveshub-tray" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 300
+    Register-ScheduledTask -TaskName "ShelvesHubTray" -Action $ta -Trigger $tt -Settings $taskSettings -Principal $tp -Force | Out-Null
     Start-ScheduledTask -TaskName "ShelvesHubTray"
     Write-Output "[i] Tray companion installed and started (system-tray icon)."
   } else {
@@ -173,9 +190,8 @@ if ($tray) {
 # the current user needs no admin rights.
 $action    = New-ScheduledTaskAction -Execute "$installPath\$binary"
 $trigger   = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings  = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
-Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $taskSettings -Principal $principal -Force | Out-Null
 # Reinstall-safe (upgrade in place): stop a running task instance and kill any
 # lingering daemon so the freshly-copied binary is the ONLY one running - else two
 # daemons fight over the RPC port after an upgrade and the new binary never takes.
@@ -184,7 +200,9 @@ Get-Process -Name "shelveshub" -ErrorAction SilentlyContinue | Stop-Process -For
 Start-Sleep -Milliseconds 500
 Start-ScheduledTask -TaskName "ShelvesHub"
 
-if (Test-Path $tmpDir -ErrorAction SilentlyContinue) { Remove-Item -Recurse -Force $tmpDir }
+# Package mode never set $tmpDir; Test-Path on $null throws (a binding error, not
+# suppressible), which would trip the trap after a successful install.
+if ($tmpDir -and (Test-Path $tmpDir)) { Remove-Item -Recurse -Force $tmpDir }
 
 # ShelvesHub reaches Steam over its CEF debug port, which Steam only opens when
 # this flag file exists in its install dir - otherwise a fresh install just logs

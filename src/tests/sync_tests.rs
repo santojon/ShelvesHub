@@ -8,6 +8,7 @@ fn entry(value: bool, at: u64) -> Entry {
     Entry {
         value: Value::Bool(value),
         at,
+        extra: Map::new(),
     }
 }
 
@@ -100,11 +101,11 @@ fn stamp_marks_changes_since_the_last_round() {
 
 #[test]
 fn stamp_on_a_first_round_marks_only_non_defaults() {
-    let local = values(&[("auto_update", true), ("quiet_updates", true)]);
+    let local = values(&[("auto_update", false), ("quiet_updates", true)]);
     let out = stamp(&local, &Map::new(), &BTreeMap::new(), &defaults(), 100);
     assert_eq!(
         out["auto_update"].at, 100,
-        "not the default → the user set it here"
+        "not the default (on) → the user turned it off here"
     );
     assert_eq!(
         out["quiet_updates"].at, 0,
@@ -125,6 +126,111 @@ fn doc_parse_rejects_junk_and_keeps_extra_fields() {
     assert_eq!(doc.extra["later"]["x"], 1);
     let text = serde_json::to_string(&doc).unwrap();
     assert!(text.contains("\"later\""), "{text}");
+}
+
+#[test]
+fn doc_parse_skips_only_the_malformed_entries() {
+    let doc = Doc::parse(
+        r#"{"v":1,"updated_at":5,"from":"deck/x86_64","entries":{
+            "auto_update":{"value":true,"at":5},
+            "quiet_updates":"yes",
+            "hub_prerelease":{"value":false,"at":"soon"},
+            "boot_movie":null,
+            "future_key":{"value":1,"at":9}},"later":{"x":1}}"#,
+    )
+    .expect("one bad entry must not cost the document");
+    assert_eq!(doc.entries["auto_update"], entry(true, 5));
+    assert_eq!(doc.entries["future_key"].at, 9);
+    assert_eq!(doc.entries.len(), 2, "{:?}", doc.entries);
+    assert_eq!(doc.extra["later"]["x"], 1);
+    assert_eq!(doc.updated_at, 5);
+    assert!(Doc::parse(r#"{"v":1}"#).unwrap().entries.is_empty());
+    assert!(
+        Doc::parse(r#"{"v":1,"entries":[1]}"#)
+            .unwrap()
+            .entries
+            .is_empty(),
+        "entries of the wrong shape read as none, not as a missing document"
+    );
+}
+
+#[test]
+fn entry_extras_survive_a_merge_round_trip() {
+    let cloud = Doc::parse(
+        r#"{"v":1,"updated_at":20,"from":"deck/x86_64","entries":{
+            "auto_update":{"value":false,"at":20,"origin":"deck"},
+            "quiet_updates":{"value":true,"at":20,"origin":"deck"}}}"#,
+    )
+    .unwrap();
+    assert_eq!(cloud.entries["auto_update"].extra["origin"], "deck");
+    // The shared copy is newer for auto_update and ties on quiet_updates:
+    // both entries stay as written, extras included.
+    let local = entries(&[("auto_update", true, 10), ("quiet_updates", true, 20)]);
+    let m = merge(&local, &cloud.entries);
+    assert_eq!(
+        m.adopt,
+        vec![("auto_update".to_string(), Value::Bool(false))]
+    );
+    let written = Doc {
+        v: DOC_VERSION,
+        updated_at: 30,
+        from: "mac/arm64".into(),
+        entries: m.entries,
+        extra: cloud.extra,
+    };
+    let back = Doc::parse(&serde_json::to_string(&written).unwrap()).unwrap();
+    assert_eq!(back.entries["auto_update"], cloud.entries["auto_update"]);
+    assert_eq!(
+        back.entries["quiet_updates"],
+        cloud.entries["quiet_updates"]
+    );
+    assert_eq!(back.entries["auto_update"].extra["origin"], "deck");
+}
+
+#[test]
+fn a_newer_local_value_replaces_the_entry_and_its_extras() {
+    let cloud =
+        Doc::parse(r#"{"v":1,"entries":{"auto_update":{"value":false,"at":5,"origin":"deck"}}}"#)
+            .unwrap();
+    let local = entries(&[("auto_update", true, 9)]);
+    let m = merge(&local, &cloud.entries);
+    assert!(m.adopt.is_empty());
+    assert!(m.push);
+    assert_eq!(
+        m.entries["auto_update"],
+        entry(true, 9),
+        "the entry is this device's now; no stale extras"
+    );
+}
+
+#[test]
+fn a_malformed_entry_is_replaced_and_the_rest_of_the_document_is_kept() {
+    let cloud = Doc::parse(
+        r#"{"v":1,"updated_at":5,"from":"deck/x86_64","entries":{
+            "auto_update":{"value":true,"at":5},
+            "quiet_updates":{"value":"yes","at":-1},
+            "future_key":{"value":1,"at":9,"note":"n"}},"later":{"x":1}}"#,
+    )
+    .unwrap();
+    let local = entries(&[("auto_update", true, 5), ("quiet_updates", false, 3)]);
+    let m = merge(&local, &cloud.entries);
+    assert!(m.adopt.is_empty());
+    assert!(
+        m.push,
+        "the key whose entry was unreadable is written afresh"
+    );
+    let written = Doc {
+        v: DOC_VERSION,
+        updated_at: 10,
+        from: "mac/arm64".into(),
+        entries: m.entries,
+        extra: cloud.extra,
+    };
+    let back = Doc::parse(&serde_json::to_string(&written).unwrap()).unwrap();
+    assert_eq!(back.entries["auto_update"], entry(true, 5));
+    assert_eq!(back.entries["quiet_updates"], entry(false, 3));
+    assert_eq!(back.entries["future_key"].extra["note"], "n");
+    assert_eq!(back.extra["later"]["x"], 1);
 }
 
 #[test]
@@ -149,6 +255,19 @@ fn apply_writes_only_booleans_for_known_keys() {
     assert_eq!(file["native_notifications"], Value::Bool(false));
     assert_eq!(applied, vec!["auto_update", "native_notifications"]);
     assert!(restart, "native_notifications is read at start-up");
+}
+
+#[test]
+fn set_store_value_covers_exactly_the_synced_switches() {
+    let mut settings = HubSettings::default();
+    for key in STORE_KEYS {
+        assert!(set_store_value(&mut settings, key, false), "{key}");
+    }
+    assert!(!settings.auto_update && !settings.quiet_updates);
+    for key in ["config_sync", "bundle_tag", "recover_cmd", "nope"] {
+        assert!(!set_store_value(&mut settings, key, true), "{key}");
+    }
+    assert!(settings.config_sync, "an unknown key changes nothing");
 }
 
 #[test]

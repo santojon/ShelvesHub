@@ -150,9 +150,9 @@ fn cmd_preload(
     }
 }
 
-/// Connect to the browser-level endpoint, arm `Target.setAutoAttach` with
-/// `waitForDebuggerOnStart` so each new page is paused at birth, and register
-/// the document-start script on matching pages before resuming them. Returns
+/// Connect to the browser-level endpoint, arm `Target.setAutoAttach` without
+/// pausing new targets, and register the document-start script on matching
+/// pages as they attach (it applies to each page's next document). Returns
 /// Err when the browser connection drops (Steam restart) so the caller
 /// reconnects.
 fn run_autoattach(host: &str, port: u16, filter: Option<&str>, source: &str) -> cdp::Result<()> {
@@ -179,7 +179,8 @@ fn run_autoattach(host: &str, port: u16, filter: Option<&str>, source: &str) -> 
 }
 
 /// One `Target.attachedToTarget`: register the document-start script when the
-/// page matches the filter, then always resume the paused target.
+/// page matches the filter, then send a resume that is a no-op unless the
+/// target happened to be waiting for a debugger.
 fn handle_attached(
     client: &mut CdpClient,
     msg: &serde_json::Value,

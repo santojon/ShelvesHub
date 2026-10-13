@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use shelveshub::config::{backend_install_dir, Config};
 use shelveshub::logger::{log_info, log_warning};
 use shelveshub::{backend, bootmovie, loader, populate, rpc, state};
@@ -17,6 +19,11 @@ fn main() {
         return;
     }
 
+    if let Some(arg) = std::env::args().nth(1) {
+        eprintln!("shelveshub: unknown argument {arg:?}. Usage: shelveshub [status [--report] | doctor [--fix]]");
+        std::process::exit(2);
+    }
+
     log_info("main", "ShelvesHub starting...");
     log_info("main", concat!("Version: ", env!("CARGO_PKG_VERSION")));
 
@@ -25,56 +32,33 @@ fn main() {
     // `.old` on Windows) now that the new binary is the one running.
     populate::cleanup_stale_update_artifacts();
 
-    let mut config = Config::from_env();
+    let config = Config::from_env();
 
-    // Beta channel for the bundle + backend obtains combines three sources, so
-    // the hub honours the plugin's own toggles AND its own criteria:
-    //   * an explicit env pre-release flag (`config.prerelease`) always forces it;
-    //   * the PLUGIN's own beta channel (`betaChannelEnabled`) — honoured as-is;
-    //   * the hub's own plugin beta switch, but only while the master auto-update
-    //     and the per-plugin switch are both on (the toggle hierarchy).
-    // A working bundle is still never overwritten on boot regardless of channel.
-    let prefs = populate::plugin_update_prefs(&config.settings_dir);
+    // The plugin channel is read live at every update check (`plugin_prerelease`);
+    // this boot value only serves the first obtains and the RPC handlers' snapshot.
+    // A working bundle is never overwritten on boot, whatever the channel.
     let hub_prefs = shelveshub::store::load(&config.hub_config_path);
-    let hub_plugin_beta =
-        hub_prefs.auto_update && hub_prefs.auto_update_plugin && hub_prefs.plugin_prerelease;
-    let effective_prerelease = config.prerelease || prefs.beta || hub_plugin_beta;
-    if effective_prerelease != config.prerelease {
+    let prerelease =
+        populate::plugin_prerelease(config.prerelease, &config.settings_dir, &hub_prefs);
+    if prerelease != config.prerelease {
         log_info(
             "main",
-            &format!(
-                "Pre-release downloads on (plugin beta channel={}, hub plugin beta={}, plugin auto-update={}).",
-                prefs.beta, hub_plugin_beta, prefs.auto_update
-            ),
+            "Pre-release downloads on for the first obtain (plugin beta channel or hub plugin beta).",
         );
     }
-    config.prerelease = effective_prerelease;
 
     // A different binary since the last run (an update, or a rollback) → the user is
     // told once the renderer is there; the running version is remembered.
     shelveshub::loader::note_version_change(&config.hub_config_path);
 
-    // Obtain the Deck Shelves Python backend for a SOLE host (no plugin loader —
-    // e.g. macOS/Windows) so the data RPCs work (settings persistence, online
-    // wishlist/prices, launchers, device state), not just local shelves. Skipped
-    // when the backend is already configured (explicit dir, or a loader-hosted
-    // backend). Best-effort: on a miss the daemon runs core-only, no crash.
-    if config.backend_dir.is_none() {
-        if let Some(dir) = backend_install_dir() {
-            match populate::ensure_backend(&dir, config.prerelease) {
-                Ok(src) => {
-                    log_info("backend", &format!("Backend ready via {src}."));
-                    if dir.join("main.py").is_file() {
-                        config.backend_dir = Some(dir);
-                    }
-                }
-                Err(e) => log_warning(
-                    "backend",
-                    &format!("No backend obtained ({e}); data RPC stays disabled (local shelves still work)."),
-                ),
-            }
-        }
-    }
+    // The Deck Shelves Python backend for a SOLE host (no loader: macOS/Windows),
+    // so the data RPCs work, not just local shelves. Obtained when nothing is
+    // configured, off the start path: a slow network delays only the data RPCs.
+    let backend_obtain = config
+        .backend_dir
+        .is_none()
+        .then(backend_install_dir)
+        .flatten();
 
     log_info("main", &format!("Config: {}", config.summary()));
 
@@ -90,12 +74,15 @@ fn main() {
         Err(e) => log_warning("main", &format!("boot movie skipped: {e}")),
     }
 
-    // Host the Deck Shelves Python backend (data RPC) when configured.
-    backend::init(&config);
+    // Host the Deck Shelves Python backend (data RPC) when configured; a pending
+    // obtain starts hosting itself once the backend lands.
+    if backend_obtain.is_none() {
+        backend::init(&config);
+    }
 
     // Expose the bundle path + pre-release flag to RPC handlers (the fallback
     // panel's manual re-download) before the server starts.
-    state::set_populate_config(config.bundle_path.clone(), config.prerelease);
+    state::set_populate_config(config.bundle_path.clone(), prerelease);
     state::set_hub_config_path(config.hub_config_path.clone());
     // Effective operational config, for the hub's "advanced configuration" mirror
     // (read-only display + an editable safe subset that writes the config file and
@@ -112,11 +99,13 @@ fn main() {
             "desktop_ui": config.desktop_ui,
             "native_notifications": config.native_notifications,
             "boot_movie": config.boot_movie,
-            "prerelease": config.prerelease,
+            "prerelease": prerelease,
             "force_owner": config.force_owner,
             "recover_cmd": config.recover_cmd,
             "bundle_path": config.bundle_path.display().to_string(),
-            "backend": config.backend_dir.is_some(),
+            // Backend hosting is on: configured, or being obtained for this sole
+            // host (it starts when it lands; `getBackendStatus` is the live state).
+            "backend": config.backend_dir.is_some() || backend_obtain.is_some(),
             "version": env!("CARGO_PKG_VERSION"),
             // Whether another plugin loader can coexist here — only on
             // Linux/SteamOS. On macOS/Windows this is a pure sole host, so the
@@ -126,16 +115,37 @@ fn main() {
         }),
     );
 
-    // Publish the per-boot RPC token to a 0600 file so the optional same-user
-    // tray companion can authenticate to the loopback RPC without CDP.
-    if let Some(p) = shelveshub::config::rpc_token_path() {
-        state::persist_rpc_token(&p);
-    }
-
-    // Spawn the RPC server on a background thread so the loader loop
-    // can run concurrently without blocking on incoming connections.
+    // Spawn the RPC server on a background thread so the loader loop can run
+    // concurrently without blocking on incoming connections. It publishes the
+    // per-boot token file once its port is bound (see `rpc::serve`).
     let rpc_addr = config.rpc_addr.clone();
     std::thread::spawn(move || rpc::serve(&rpc_addr));
 
+    if let Some(dir) = backend_obtain {
+        let hosted = config.clone();
+        std::thread::spawn(move || obtain_backend(hosted, dir, prerelease));
+    }
+
     loader::run(config);
+}
+
+/// First-boot obtain of the hub-managed backend (local, loader copy or download),
+/// then hosting starts on it. Runs beside the RPC server and the injection loop;
+/// best-effort — on a miss the daemon runs core-only, no crash.
+fn obtain_backend(mut config: Config, dir: PathBuf, prerelease: bool) {
+    match populate::ensure_backend(&dir, prerelease) {
+        Ok(src) => {
+            log_info("backend", &format!("Backend ready via {src}."));
+            if dir.join("main.py").is_file() {
+                config.backend_dir = Some(dir);
+                backend::init(&config);
+            }
+        }
+        Err(e) => log_warning(
+            "backend",
+            &format!(
+                "No backend obtained ({e}); data RPC stays disabled (local shelves still work)."
+            ),
+        ),
+    }
 }

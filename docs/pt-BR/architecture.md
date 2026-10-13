@@ -34,7 +34,7 @@ flowchart TB
     user --> steam
     steam --- bundle
     daemon -->|"inject runtime + bundle<br/>CDP WebSocket :8080"| steam
-    bundle -->|"HTTP JSON-RPC<br/>127.0.0.1:60123"| daemon
+    bundle -->|"HTTP JSON-RPC + bearer token<br/>127.0.0.1:60123"| daemon
     daemon -->|"stdio JSON"| backend
     backend --> settings
 ```
@@ -44,15 +44,15 @@ flowchart TB
 ```mermaid
 flowchart TB
     subgraph renderer["Steam CEF renderer — SharedJSContext"]
-        hostruntime["runtime/shelves-host.js<br/>window.__SHELVES_HOST__"]
+        hostruntime["runtime/shelves-host*.js, one script<br/>window.__SHELVES_HOST__"]
         dsbundle["bundle/index.js<br/>Deck Shelves UI"]
     end
 
     subgraph daemon["ShelvesHub daemon (Rust)"]
         mainrs["main.rs<br/>entry point"]
-        loaderrs["loader.rs<br/>injection loop"]
-        cdprs["cdp.rs<br/>DevTools protocol client"]
-        rpcrs["rpc.rs<br/>HTTP JSON-RPC server"]
+        loaderrs["loader/<br/>health gate + injection loop"]
+        cdprs["cdp/<br/>DevTools protocol client"]
+        rpcrs["rpc.rs<br/>HTTP JSON-RPC server, token-gated"]
         backendrs["backend.rs<br/>spawn / supervise / proxy"]
         configrs["config.rs + state.rs + logger.rs"]
     end
@@ -69,7 +69,7 @@ flowchart TB
     loaderrs --> cdprs -->|"inject"| hostruntime --> dsbundle
     dsbundle -->|"rpc.call(method, args)"| hostruntime
     hostruntime -->|"POST {method, args}"| rpcrs
-    rpcrs -->|"unknown method → proxy"| backendrs
+    rpcrs -->|"allowlisted data method → proxy"| backendrs
     backendrs -->|"stdio JSON lines"| runner --> plugin --> settings
     devtools --> cdprs
 ```
@@ -78,9 +78,9 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    call["bundle<br/>rpc.call"] --> rt["__SHELVES_HOST__<br/>fetch POST"] --> srv["rpc.rs<br/>dispatch"]
-    srv -->|"local method"| local["ping / versions /<br/>status / bundleReady"]
-    srv -->|"data method"| prx["backend.rs<br/>serialized call"] --> run["runner<br/>kwargs dispatch"] --> m["Plugin method"] --> store[("settings store")]
+    call["bundle<br/>rpc.call"] --> rt["__SHELVES_HOST__<br/>fetch POST + bearer token"] --> srv["rpc.rs<br/>415 / 401 gate, then dispatch"]
+    srv -->|"hub method"| local["ping / versions / status /<br/>updates / config / logs"]
+    srv -->|"allowlisted data method"| prx["backend.rs<br/>serialized call"] --> run["runner<br/>kwargs dispatch"] --> m["Plugin method"] --> store[("settings store")]
 ```
 
 O pacote recebe o objeto `HostApi` como `window.__SHELVES_HOST__` na
@@ -95,28 +95,38 @@ chamada ao backend em andamento por vez — então as gravações nunca competem
 
 ### Loader (`src/loader/`)
 
-A cada ciclo (30s por padrão) ele se conecta ao renderizador CEF do Steam via o Chrome
-DevTools Protocol, verifica se o pacote já está rodando
-(`window.__SHELVES_LOADER__`), e — se não estiver — injeta o runtime do host
-(`runtime/shelves-host.js`, que se torna `window.__SHELVES_HOST__`) seguido de
-`bundle/index.js` via `Runtime.evaluate`. A conexão é reconstruída a cada ciclo,
-então um reinício do Steam é reinjetado automaticamente. Os caminhos e o endpoint CEF são
-configuráveis (`src/config.rs`).
+A cada ciclo (30s por padrão) ele lê a lista de alvos do renderizador via o Chrome
+DevTools Protocol como um portão de saúde — a interface visível do Steam vive em janelas
+que são alvos separados do `SharedJSContext`, então um `SharedJSContext` sozinho
+significa que a interface colapsou e o loop pausa a injeção (e roda a recuperação
+por plataforma uma vez) em vez de injetar nela. Num renderizador saudável ele verifica
+se o pacote já está rodando (`window.__SHELVES_LOADER__`) e — se não estiver — grava
+`window.__SHELVES_CONFIG__` (endpoint e token do RPC, versão do contrato, dispositivo),
+injeta o runtime do host (as partes `runtime/shelves-host*.js` montadas em um único
+script, que se torna `window.__SHELVES_HOST__`) e depois `bundle/index.js` via
+`Runtime.evaluate`. A conexão é reconstruída a cada ciclo, então um reinício do Steam
+é reinjetado automaticamente. Os caminhos e o endpoint CEF são configuráveis
+(`src/config.rs`).
 
 Antes de injetar, o loop respeita a reivindicação de proprietário único do renderizador
-(`window.__DECK_SHELVES_OWNER__`): se outro adaptador de host já possui o
-renderizador, o ciclo nunca assume a hospedagem nem carrega o pacote do plugin. Com a
-aba nativa de Acesso Rápido habilitada (`SHELVES_NATIVE_QAM=1`), ele ainda injeta apenas
-seu runtime, que detecta o outro host e adiciona a aba do ShelvesHub ao lado
-sem instalar seu próprio host — então ambas as abas coexistem e o plugin do
-outro host permanece intocado; caso contrário, o ciclo recua completamente. Definir
-`SHELVES_FORCE_OWNER=shelveshub` faz o ShelvesHub reivindicar um renderizador *sem dono*
-imediatamente (pula a espera de acomodação do proprietário e grava `window.__SHELVES_FORCE_OWNER__`
-para que o plugin selecione o ShelvesHub). Isso **não** sobrescreve um host que já
-reivindicou o renderizador: uma reivindicação alheia sempre leva o daemon a recuar para o
-caminho de coexistência (apenas a aba), porque dois hosts fazendo uma injeção completa em
-um mesmo renderizador é instável. Portanto, a posse forçada é uma preferência de host único,
-não uma tomada de um host ativo.
+(`window.__DECK_SHELVES_OWNER__`) e procura um carregador de plugins: se outro host
+possui o renderizador, o ciclo nunca hospeda o pacote do plugin ele mesmo. Com a aba
+nativa de Acesso Rápido habilitada (`native_qam`, ligada na configuração distribuída;
+`SHELVES_NATIVE_QAM=1` por serviço) ele ainda injeta apenas seu runtime, que detecta o
+outro host e adiciona a aba do ShelvesHub ao lado sem publicar seu próprio host — então
+ambas as abas coexistem e o plugin do outro host permanece intocado; com a aba
+desligada o ciclo recua completamente. `force_owner`
+(`SHELVES_FORCE_OWNER=shelveshub`) é a posse cooperativa: ao lado de um carregador o
+daemon grava `window.__SHELVES_FORCE_OWNER__` e injeta um runtime que publica, sim,
+`window.__SHELVES_HOST__`, para que o Deck Shelves do carregador se vincule ao
+ShelvesHub enquanto o carregador mantém o renderizador e seus outros plugins; o pacote
+continua não sendo injetado (o carregador o fornece, a menos que `coop_bundle` esteja
+ligado). Ele nunca expulsa um host que já possui o renderizador — dois hosts fazendo
+uma injeção completa no mesmo renderizador é instável. Sem nenhum carregador na máquina,
+a posse forçada só atrasa a primeira injeção: o loop espera pelo menos 20 s (ou
+`owner_settle_secs`, o que for maior) pelos globais de um carregador e então hospeda
+como host único mesmo assim, com a marca de força gravada — então uma máquina em que o
+ShelvesHub é o único host mantém `force_owner` desligado.
 
 Enquanto o renderizador ainda estiver sem dono, `SHELVES_OWNER_SETTLE_SECS` (chave de configuração
 `owner_settle_secs`) faz o loop esperar esse número de segundos por uma reivindicação antes
@@ -136,19 +146,36 @@ e pela CLI `shelves-devtools`. Veja [debugging.md](./debugging.md).
 
 Servidor HTTP/1.1 bloqueante e minimalista em `127.0.0.1:60123` (configurável). O pacote
 o alcança com um `fetch` POST de `{ method, args }` de dentro do renderizador, então
-ele emite cabeçalhos CORS e trata preflight. Métodos registrados:
+ele emite cabeçalhos CORS e trata preflight. Toda requisição precisa levar
+`Content-Type: application/json` (qualquer outra coisa responde 415) e
+`Authorization: Bearer <token>` — um token por inicialização que o daemon grava no
+runtime (`window.__SHELVES_CONFIG__.rpcToken`) pelo seu canal CDP privado e escreve,
+com modo 0600, em `.rpc-token` no seu diretório de instalação por usuário para
+ferramentas do mesmo usuário, como a bandeja; um token ausente ou errado responde 401
+antes de qualquer despacho. Métodos, por grupo:
 
-| Método | Resultado |
+| Grupo | Métodos |
 |---|---|
-| `ping` | `"pong"` |
-| `getVersion` | Versão semântica do loader a partir de `Cargo.toml` |
-| `isInjected` | estado de injeção ao vivo a partir de `state.rs` |
-| `getBackendStatus` | `{ configured, running }` para o backend de dados hospedado |
+| Saúde e handshake | `ping`, `getVersion`, `getHostApiVersion`, `isInjected`, `getDiagnostics` |
+| Backend hospedado | `getBackendStatus`, `restartBackend`, e os nomes da API pública do backend do plugin (a lista permitida `BACKEND_METHODS`, 34 nomes) |
+| Pacote do plugin | `populateBundle`, `applyUpdate` (URL fixada nas releases do Deck Shelves), `rollbackBundle` |
+| Binário do hub | `checkUpdates`, `selfUpdate`, `rollbackHub`, `restartService` |
+| Store de configurações do hub | `getConfig`, `setAutoUpdate`, `setUpdatePref`, `setConfigSync` |
+| Configuração operacional | `getRuntimeConfig`, `setRuntimeConfig` (um conjunto fixo de chaves editáveis; `recover_cmd` nunca é alterável por RPC), `setBootMovie`, `setHostingPaused` |
+| Logs | `getLogs`, `clearLogs`, `pushLogs` |
 
-Todo outro método é tratado como método de dados: quando a hospedagem do backend está
-configurada, ele é repassado ao backend hospedado (abaixo); caso contrário, retorna
-um erro de `unknown method`. Cada conexão é servida em sua própria thread, então uma
-chamada de dados lenta nunca atrasa as verificações.
+Só os nomes de backend da lista permitida são repassados ao backend hospedado (abaixo),
+e só enquanto a hospedagem do backend está configurada; qualquer outra coisa responde um
+erro de `unknown method`. As ações manuais de pacote e de hub (`populateBundle`,
+`applyUpdate`, `rollbackBundle`, `rollbackHub`, `selfUpdate`) compartilham a trava de
+verificação única do loop e respondem `busy` enquanto uma verificação roda; `selfUpdate`
+informa `current` quando nada mais novo foi publicado, e `rollbackHub` é recusado enquanto
+um binário do hub está preparado. Cada conexão é servida em sua própria thread (no máximo
+64 ao mesmo tempo, 503 além disso; linha de requisição e cabeçalhos limitados a 8 KiB e 64
+cabeçalhos, 400 além disso), então uma chamada de dados lenta nunca atrasa as
+verificações, e o log guarda só o nome do método de uma requisição, nunca o corpo. Veja
+[host-api.md](./host-api.md#formato-de-comunicação-do-rpc) para o formato de
+comunicação e uma receita de `curl`.
 
 ### Host do backend (`src/backend.rs` + `runtime/backend/`)
 
@@ -168,16 +195,19 @@ exemplo mínimo vive em `examples/backend/`.
 ### Logger (`src/logger.rs`)
 
 Linhas de log estruturadas: `[LEVEL] [timestamp] [subsystem] message`. Níveis: INFO,
-WARNING, ERROR, DEBUG. Usado por todos os módulos Rust.
+WARN, ERROR. Usado por todos os módulos Rust; as linhas do próprio runtime do host
+chegam ao mesmo anel pela requisição `pushLogs`.
 
 ### Runtime — HostApi
 
-O runtime de host injetado é `runtime/shelves-host.js` — um script autocontido que
-o loader avalia no renderizador. Ele instala `window.__SHELVES_HOST__` (o
-`HostApi` concreto) e a aba nativa de Acesso Rápido, e delega o RPC ao
-servidor Rust. O contrato que ele implementa é o pacote compartilhado `@deck-shelves/host`
-(`HOST_API_VERSION = "1.3.0"`, apenas aditivo após a linha de base 1.0); seu código-fonte
-tipado é incluído como o submódulo `host/` (`host/src/contract/`).
+O runtime de host injetado é `runtime/shelves-host.js` mais suas partes `-qam.js`,
+`-api.js`, `-sidecar.js` e `-toast.js` — o daemon as monta em um único script
+autocontido e o avalia no renderizador. Ele instala `window.__SHELVES_HOST__` (o
+`HostApi` concreto) e a aba nativa de Acesso Rápido, e delega o RPC ao servidor Rust.
+O contrato que ele implementa é o pacote compartilhado `@deck-shelves/host`
+(`HOST_API_VERSION = "1.5.0"`, apenas aditivo após a linha de base 1.0); seu
+código-fonte tipado é incluído como o submódulo `host/` (`host/src/contract/index.ts`),
+e o daemon deriva a versão dele em tempo de compilação.
 
 Veja [docs/host-api.md](./host-api.md) para a referência completa do contrato.
 
@@ -189,21 +219,25 @@ pelo pipeline de lançamento do Deck Shelves. O loader o lê a partir de
 ao repositório do Deck Shelves. Um substituto funcional para testes locais vive em
 `examples/bundle/shelves-example.js` (veja [debugging.md](./debugging.md)).
 
-### Runtime do host (`runtime/shelves-host.js`)
+### Runtime do host (`runtime/shelves-host*.js`)
 
 A implementação executada do contrato HostApi. O loader o injeta no
 renderizador antes do pacote, onde ele se torna `window.__SHELVES_HOST__`:
-`lifecycle`, `rpc` (HTTP), `routes`, `notifications`, `platform`, e `qam`
-(painéis do Menu de Acesso Rápido). Inclui um localizador de módulos webpack do
-Steam feito do zero e um host de painel do QAM (trilho de ícones + painel deslizante, com uma
-costura para uma aba nativa do QAM do Steam). Escrito do zero — nenhum código-fonte de
+`lifecycle`, `rpc` (HTTP), `ui` (os próprios componentes do Steam), `routes`,
+`notifications`, `platform`, `qam`, `updates` e `handshake()`. Inclui um localizador de
+módulos webpack do Steam feito do zero e, em `shelves-host-qam.js`, a aba nativa de
+Acesso Rápido: uma aba de primeira classe na própria barra do Steam que mostra o painel
+registrado do Deck Shelves (o editor) ou, quando nenhum está registrado, a visão
+própria do hub (status, atualizações, configuração, logs); `shelves-host-sidecar.js`
+alarga o menu para o painel lateral de logs e notificações, e `shelves-host-toast.js`
+leva os avisos pelo pipeline de toast do Steam. Escrito do zero — nenhum código-fonte de
 loader de terceiros é copiado. Distribuído junto do binário (`runtime/` ao lado de
 `shelveshub`).
 
 ### Ferramenta de desenvolvimento (`src/bin/devtools.rs`)
 
 `shelves-devtools` — uma CLI CDP multiplataforma (`targets` / `probe` / `eval` /
-`inject` / `reload` / `console`) para inspecionar e depurar o renderizador no
+`inject` / `reload` / `console` / `preload`) para inspecionar e depurar o renderizador no
 Linux, macOS ou Windows, localmente ou contra um Deck via um túnel SSH.
 
 ---

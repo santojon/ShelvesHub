@@ -11,7 +11,8 @@ automatizável e monta a matriz.
 O que o laboratório prova: o host compila e instala, o ciclo de vida do serviço, o
 RPC local, o daemon injetando seu runtime num Chromium headless, os cenários do
 runtime (aba nativa, coexistência, host único, propriedade cooperativa, painel de
-fallback, custo ocioso) e as sondas do backend do plugin em cada SO/arquitetura.
+fallback, custo ocioso, o painel lateral de logs, notificações e os gestos de
+controle/teclado) e as sondas do backend do plugin em cada SO/arquitetura.
 
 O que ele não consegue provar: a **integração real com o CEF do Steam** — injeção
 na interface gamepad, renderização, foco e navegação por controle, comportamento de
@@ -30,7 +31,7 @@ Pernas isoladas, quando só um registro interessa:
 
 ```sh
 QA_EVIDENCE=1 PLATFORM=linux/arm64 bash scripts/harness-docker.sh   # uma execução em contêiner
-HARNESS_JSON=site/reports/qa/evidence/scenarios-host.json pnpm harness  # o harness do host
+HARNESS_JSON="site/reports/qa/evidence/scenarios-host-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m).json" pnpm harness  # o harness do host (a matriz lê arquivos chamados scenarios-host-<so>-<arq>.json)
 node scripts/ci/qa-matrix.mjs                                         # só remontar a matriz
 ```
 
@@ -42,8 +43,8 @@ ambos enviam sua evidência como artefato do workflow.
 | Arquivo | Escrito por | Contém |
 |---|---|---|
 | `site/reports/qa/evidence/container-<arch>.json` | `docker/entrypoint.sh` | um veredito por etapa: cenários do runtime, ciclo instalar/desinstalar, smoke de injeção do daemon, sondas do backend do plugin (`pass` / `fail` / `skipped`) |
-| `site/reports/qa/evidence/scenarios-<arch>.json`, `scenarios-host-<os>-<arch>.json` | `scripts/harness.sh` (`HARNESS_JSON`) | o veredito de cada cenário e seu relatório completo (host instalado, dono, bridge, aba, UI de fallback, erros, contadores ociosos) |
-| `site/reports/qa/matrix.json` | `scripts/ci/qa-matrix.mjs` | as células abaixo com o status calculado, os arquivos de evidência por trás de cada uma, e `ts` / `version` / `overall` como as execuções de qualidade em `site/reports/runs.json` |
+| `site/reports/qa/evidence/scenarios-<arch>.json`, `scenarios-host-<os>-<arch>.json` | `scripts/harness.sh` (`HARNESS_JSON`) | o veredito de cada cenário e seu relatório completo (host instalado, dono, bridge, aba, UI de fallback, erros, contadores ociosos); `ts` em ISO 8601 UTC |
+| `site/reports/qa/matrix.json` | `scripts/ci/qa-matrix.mjs` | as células abaixo com o status calculado, se cada uma decide o veredito geral (`gate`), a idade da evidência (`ageDays`, e `stale` quando mais velha que o `staleDays` da raiz, 30 dias — o status da célula passa a ser `stale`), os arquivos de evidência por trás de cada uma — a célula do harness no host tira plataforma e arquitetura do seu registro de evidência mais novo — e `ts` / `version` / `overall` como as execuções de qualidade em `site/reports/runs.json`; todo `ts` é ISO 8601 UTC |
 
 Uma etapa pulada (por exemplo as sondas do plugin sem um checkout do plugin) é
 registrada como `skipped`, nunca como aprovada; a célula então fica `partial`.
@@ -51,7 +52,8 @@ registrada como `skipped`, nunca como aprovada; a célula então fica `partial`.
 ## A matriz
 
 Legenda: **tested** — evidência presente, tudo verde · **partial** — evidência com
-uma etapa falha ou pulada · **not-run** — automatizável, ainda sem evidência ·
+uma etapa falha ou pulada · **stale** — evidência com mais de 30 dias (conta como
+partial no veredito geral) · **not-run** — automatizável, ainda sem evidência ·
 **blocked** — precisa de um laboratório indisponível · **manual** — hardware real,
 executado por uma pessoa.
 
@@ -119,6 +121,9 @@ energia e suspensão. Isso fica com as células de dispositivo.
 | `coexist-idle` | host combinado assentado | nenhum timer permanente abaixo de um segundo, observers limitados |
 | `coop-mirror` | carregador presente **e** propriedade forçada para o ShelvesHub | host publicado, dono `shelveshub`, bridge ativa, editor espelhado, sem erros |
 | `coop-fallback` | o mesmo, sem painel do plugin | painel de fallback com as atualizações do plugin delegadas (a cópia do carregador roda), host com dono |
+| `sole-host-sidecar` | host único, visão do hub aberta | "Ver logs" em Solução de problemas abre o painel lateral (o menu alarga — `QamFriendsExpanded` enviado) com uma vista de logs; Voltar o fecha (estreitado, `QamFriendsHidden` por último), sem erros |
+| `sole-host-notify` | host único; um toast por `host.notifications.toast` e um aviso do hub por `__SHELVES_NOTIFY__` | os dois listados, selo do sino `2`, as duas linhas na aba Notificações do painel lateral (ativa), nenhuma inline na visão do hub, `notifications.mode()` é `failed` (a simulação não tem o pipeline de toast do Steam), sem erros |
+| `sole-host-gesture` | host único, uma linha da visão do hub focada | o gesto do D-pad (direita, duas vezes) abre o painel lateral em Logs; Voltar o fecha; Ctrl+Shift+N o reabre em Notificações, sem erros |
 
 ## Células de dispositivo — modelo de evidência
 

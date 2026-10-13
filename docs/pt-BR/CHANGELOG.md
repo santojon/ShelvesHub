@@ -101,8 +101,8 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   ícones ao lado do título ShelvesHub o abrem em qualquer uma das abas, e ele também abre sem
   ponteiro: um segundo D-pad direita no focável mais à direita da visão do hub (o gesto do
   próprio plugin, lido do fluxo de entrada de controle do Steam e registrado só enquanto a visão
-  do hub está montada), com D-pad esquerda para fora do painel fechando-o; no teclado, um
-  segundo ArrowRight, Ctrl+Shift+L (logs) ou Ctrl+Shift+N (notificações). Dentro do painel os
+  do hub está montada), com D-pad esquerda para fora do painel fechando-o; no teclado,
+  Ctrl+Shift+L (logs) ou Ctrl+Shift+N (notificações). Dentro do painel os
   bumpers alternam entre as abas (LB / RB); o foco pousa na aba ativa ao abrir. As linhas de
   notificação mostram a marca do remetente (o logo com que o toast foi enviado, ou o padrão do
   host / do Deck Shelves) e o ícone por tipo ao lado do título, como nos toasts do Steam. É
@@ -193,6 +193,32 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   vai dentro do host nem do plugin.
 
 ### Alterado
+- **Atualizações automáticas ligadas por padrão** nas preferências do próprio hub, como nos
+  instaladores.
+- **Depois de uma atualização do Deck Shelves o hub renova o backend Python da mesma release** e
+  o reinicia, então o backend sempre combina com o bundle; numa primeira partida o backend é
+  obtido em segundo plano, então o endpoint de controle sobe na hora mesmo numa rede lenta.
+- **Uma release é recusada quando falta a chave de assinatura**; assets de release sem assinatura
+  nunca são publicados.
+- **O RPC local deixa o método `bundleReady` e o cabeçalho `X-DS-Req`, que ninguém usava**; o
+  diagnóstico não traz mais um campo `bundleReady`, e o `doctor` e o daemon compartilham uma
+  única lista de portas de depuração.
+- **O harness do runtime** ganha checagens em node e cenários de navegador para o bundle
+  cooperativo, o idioma e o seletor de configuração; o harness de contêiner exercita o instalador
+  Linux genérico de ponta a ponta.
+- **O log do daemon registra os nomes dos métodos RPC em vez dos corpos das requisições**, e as
+  consultas de status e de log da vista do hub não são registradas; o arquivo de token é criado
+  só para o dono desde o início, e o servidor RPC limita tamanho e quantidade de cabeçalhos e
+  conexões simultâneas.
+- **Os estados de recuo, espera e renderizador inalcançável são registrados uma vez por mudança**,
+  não a cada poll.
+- **Os binários Linux de release são ligados contra um piso explícito de glibc 2.31** e a
+  arquitetura de cada binário Linux empacotado é conferida antes de publicar; a entrada legada de
+  autoinício `shelveshub.reg` não é mais distribuída; a unidade de serviço Linux genérica usa
+  `ProtectSystem=full` para o daemon poder escrever na sua pasta pessoal; as tarefas de logon do
+  Windows iniciam na bateria, continuam ao desconectar e não têm limite de tempo de execução.
+- **A checagem do binário na autoatualização usa um piso de tamanho próprio** em vez do piso do
+  bundle.
 - **As linhas de log de estado estável são escritas uma vez por mudança, não a cada tick.** "Bundle
   active in renderer." e "Coexisting with …" se repetiam a cada tick — a cada 5 s enquanto
   hospedando — e enterravam o journal e o visualizador de log do próprio hub. Agora aparecem quando
@@ -216,6 +242,112 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   fazer a passagem (`src/loader/mod.rs`, `src/state.rs`).
 
 ### Corrigido
+
+- **Escritas de preferências não se sobrescrevem mais.** Edições feitas pela aba, pela
+  sincronização de configurações e pela checagem automática de atualização são serializadas,
+  cada escrita usa um arquivo temporário próprio, e o arquivo de configuração mantém a ordem das
+  chaves, para os comentários continuarem ao lado das suas chaves.
+- **Os interruptores de atualização valem como você os deixou, sem reiniciar.** O canal de
+  pré-release do Deck Shelves segue o interruptor beta do plugin e os do hub a cada checagem;
+  desligar as atualizações automáticas do hub não esconde mais o aviso de reinício de uma
+  atualização já baixada; a autoatualização do hub responde "staged" em vez de baixar de novo a
+  mesma release; desfazer uma atualização do hub enquanto outra já está baixada é recusado até o
+  reinício que a aplica.
+- **O bundle cooperativo não faz mais uma oferta inerte** quando nenhuma versão de release é
+  conhecida, e o handshake do host informa a versão embutida no bundle quando nenhuma tag de
+  release está registrada.
+- **Detalhes do loop.** Um reinício do Steam registra de novo o estado de recuo ou de espera para
+  a sessão nova, uma porta de depuração que mudou é seguida depois que a posse forçada recuou, um
+  bundle momentaneamente ilegível não esconde mais a versão de vez, e um arquivo de runtime ou de
+  assets substituído que falha ao copiar não deixa arquivo temporário para trás.
+- **Desligar a animação de boot remove só os arquivos de filme de inicialização que o hub
+  colocou**; os de outra ferramenta ficam.
+- **O handshake do host diz se a aba do hub no Acesso Rápido está mesmo presente** e se uma
+  atualização do Deck Shelves feita pelo hub vale para a cópia em execução (host único, ou depois
+  da passagem do bundle cooperativo); os seletores de intervalo e de espera da vista do hub ficam
+  dentro das faixas que o daemon aceita, e uma edição recusada devolve a linha.
+- **Os instaladores param com um erro de download** quando o pacote ou o SHA256SUMS não podem ser
+  baixados, em vez de um checksum divergente ou um erro ao desempacotar; o desinstalador do
+  `setup.exe` do Windows também remove o backup da configuração, o token RPC, uma atualização
+  preparada, o snapshot de rollback e o log dele; atualizar com o `setup.exe` reinicia um
+  companheiro de bandeja instalado mesmo com a opção da bandeja desmarcada.
+- **Checagens de qualidade.** A matriz de QA marca como velha a evidência automatizada com mais de
+  30 dias e não passa mais com ela; a checagem de texto publicado não varre mais os próprios
+  registros das execuções de qualidade.
+- **Escritas de configuração e de preferências ficaram seguras.** O arquivo de configuração é
+  escrito atomicamente e a versão anterior fica guardada como `shelveshub.config.json.bak`; um
+  valor de tipo errado no arquivo de preferências do hub volta ao padrão em vez de zerar todas as
+  outras preferências.
+- **O RPC local responde JSON válido para todo erro** (caracteres de controle numa mensagem o
+  quebravam), **limita as edições de configuração** (`interval_secs` 1–3600 s,
+  `owner_settle_secs` 0–300 s, recusadas com mensagem clara fora dessas faixas) e **mantém as
+  edições visíveis na vista do hub**, com a nota de reinício, até o daemon reiniciar.
+- **Atualizações e rollbacks não disputam nem regridem mais.** Download, atualização e rollback
+  manuais respondem "busy" enquanto uma checagem de atualização está em curso; a autoatualização
+  do hub responde "current" em vez de reinstalar ou rebaixar; um rollback do hub é recusado
+  enquanto uma atualização já está preparada; depois de um download manual a tag instalada é
+  registrada, não a mais nova do canal.
+- **Um segundo daemon que não consegue abrir a porta RPC não substitui mais o arquivo de token do
+  que já roda.**
+- **O loop de injeção.** Um reinício do Steam durante a espera de posse não deixa mais o
+  renderizador novo pular a janela de espera; o portão de boot do bundle mantém um único timer de
+  poll por renderizador (uma reinjeção sobreposta podia deixar um timer rodando o bundle a cada
+  20 ms); a sonda de presença do carregador lê os mesmos globais que o runtime; o bundle
+  cooperativo faz a oferta numa instalação nova; a checagem manual de atualização usa as
+  configurações e a posse atuais do loop; o modo preload cai para o loop normal quando o runtime
+  não pode ser lido; depois que a posse forçada recua, a reivindicação de uma cópia do carregador
+  não manda mais o daemon pelo caminho de dono.
+- **A sincronização de configurações** pula uma entrada roaming malformada em vez de tratar o
+  documento inteiro como ausente (o que sobrescrevia as configurações dos outros dispositivos), e
+  preserva campos que não conhece ao escrever o documento de volta.
+- **`SHELVES_RPC_ADDR` volta a ser respeitada**, e a bandeja resolve o endereço RPC do mesmo jeito
+  que o daemon (inclusive `rpc_port` do arquivo de configuração); todo download de release e
+  chamada à API de releases tem limites de conexão e de tempo total; o `doctor` sonda as portas e o
+  Python configurados, encontra o diretório do Steam no Windows e trata uma unidade de serviço
+  ausente como nota.
+- **Runtime injetado.** Seções escondidas da Home continuam fora da navegação por gamepad depois
+  de uma atualização do Deck Shelves no lugar; as telas do hub usam o idioma do Steam quando o
+  cliente o informa; rotas registradas por `host.routes` chegam ao roteador do carregador no modo
+  cooperativo; o painel do Acesso Rápido não percorre mais o mapa de módulos do Steam a cada
+  renderização.
+- **Instaladores.** O instalador Linux de um clique baixa o pacote da sua CPU, confere contra o
+  SHA256SUMS e instala; atualizar por cima de um ShelvesHub em execução não falha mais num binário
+  ocupado ou travado (o arquivo novo é preparado e renomeado no lugar, ou o `.exe` em execução é
+  posto de lado); `--purge` remove o diretório de configurações que a instalação realmente usou e
+  o desinstalador Linux genérico ganhou `--purge`; o `setup.exe` do Windows instala os cortes da
+  animação de boot, habilita a porta de depuração do Steam e seu desinstalador remove tudo o que
+  colocou; os instaladores de um clique do macOS e do Windows e o `Install ShelvesHub.app` conferem
+  o download contra o SHA256SUMS; o instalador do Windows não falha mais quando roda de um pacote
+  extraído.
+- **Ferramental de qualidade.** O harness do runtime prova o caminho de renderização nativa e serve
+  só os próprios arquivos na interface de loopback; a matriz de QA registra o sinalizador de
+  portão de cada célula, timestamps em UTC, a idade da evidência e a plataforma real da célula do
+  host; a checagem de texto publicado cobre o site, os instaladores, os arquivos de contêiner e os
+  workflows; a paridade de localização compara nomes de chave (cinco strings sem uso removidas de
+  todos os idiomas); a receita do backend de exemplo usa o token e um método permitido; o cenário
+  do instalador do Windows falha num erro do instalador; o ESLint roda em todo pull request; o job
+  de contrato confere a versão compilada da API do host.
+- **Docs.** As páginas de arquitetura e do contrato do host descrevem o contrato 1.5.0, a aba
+  nativa do Acesso Rápido e todos os métodos RPC, com uma receita curl que funciona; as páginas de
+  solução de problemas, depuração, QA lab e instalação foram corrigidas, nos dois idiomas.
+- **O runtime continua funcionando com o daemon depois que só o daemon reinicia.** Cada partida
+  do daemon emite um token RPC novo, e o runtime já injetado no Steam guardava o antigo, então
+  depois de uma autoatualização, um rollback, um reinício pela bandeja ou uma relançada após
+  falha toda chamada da aba do hub e do plugin respondia 401 até o próprio Steam reiniciar
+  (confirmado ao vivo). O daemon agora entrega o token atual a um runtime injetado a cada tick, e
+  o runtime o lê a cada chamada.
+- **Instalar uma atualização do plugin pelo hub não recarrega mais a interface do Steam.** O
+  recarregamento caía enquanto o daemon reinjetava o bundle novo — o mesmo padrão de boot pela
+  metade por trás da tela preta de 2026-10-11. A vigilância de arquivo do daemon já troca o bundle
+  novo a quente, então o recarregamento saiu; o plugin fecha o próprio diálogo de instalação.
+- **O interruptor de canal beta do plugin volta a chegar ao hub.** O plugin guarda as
+  configurações embrulhadas como `{state, rev, updatedAt}`; o hub lia o nível de cima, então o
+  interruptor nunca era visto.
+- **Um argumento perdido não inicia mais um segundo daemon.** `shelveshub --help` (ou qualquer
+  argumento desconhecido) iniciava um daemon completo que sobrescrevia o token RPC do que já
+  rodava; agora imprime o uso e sai.
+- **Três métodos do backend do plugin agora respondem sob o hub:** o snapshot antes de importar, a sondagem de identidade do dispositivo e o aviso de recuperação das configurações estavam fora da lista de métodos permitidos do backend, então esses recursos falhavam em silêncio ([`rpc.rs`](../../src/rpc.rs)).
+- **O filtro Categorias do analisador do plugin funciona sob o hub:** o novo método de tags de atalhos dele está na lista de métodos permitidos do backend ([`rpc.rs`](../../src/rpc.rs)).
 - **A matriz de deploy não envia mais um bundle velho do plugin quando o build do plugin falha.** O plugin era construído dentro de uma substituição de comando, então um `build:release` com falha era ignorado e o bundle que estivesse em `dist/` do plugin saía como se fosse novo; agora o build roda antes, no nível superior, e uma falha aborta o deploy (`scripts/deploy-matrix.sh`).
 - **Um Deck Shelves do carregador de plugins anterior ao protocolo de coexistência não ganha mais
   uma segunda cópia ao lado.** Essa cópia (anterior ao 3.3.1) nunca reivindica o renderizador,

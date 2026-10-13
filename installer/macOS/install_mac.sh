@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-click installer for macOS
-# Usage (online): bash install-mac.sh
+# Usage (one-click): run install-mac.command or "Install ShelvesHub.app" from the latest release
 # Usage (from extracted package): bash installer/install_mac.sh
 set -e
 
@@ -35,7 +35,7 @@ echo "=== ShelvesHub — macOS Installer ==="
 # Removes an old root LaunchDaemon + old /usr/local install and drops root. Your
 # Deck Shelves settings live in a separate dir, so this never loses data — and old
 # root-owned settings are rescued to yours only when yours don't exist yet.
-SETTINGS_DIR="$HOME/Library/Application Support/deck-shelves"
+SETTINGS_DIR="${SHELVES_SETTINGS_DIR:-$HOME/Library/Application Support/deck-shelves}"
 set +e # migration is best-effort — a sudo hiccup must never abort the install
 if [[ -f /Library/LaunchDaemons/com.shelveshub.plist || -d /usr/local/shelveshub ]]; then
   echo "[i] Migrating an old system (root) install to the per-user agent…"
@@ -74,11 +74,11 @@ else
   trap 'rc=$?; rm -rf "$TMPDIR"; [[ $rc -ne 0 ]] && { echo; echo "[!] Install failed (exit $rc). Full log: $LOGFILE"; }' EXIT
 
   echo "[i] Downloading $PACKAGE..."
-  curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"
+  curl -fsL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"
 
   # Integrity: verify the download against the release's SHA256SUMS when present.
   if [[ -n "$SUMS_URL" ]]; then
-    curl -sL "$SUMS_URL" -o "$TMPDIR/SHA256SUMS"
+    curl -fsL "$SUMS_URL" -o "$TMPDIR/SHA256SUMS"
     EXPECTED=$(grep " $PACKAGE\$" "$TMPDIR/SHA256SUMS" | awk '{print $1}')
     ACTUAL=$(shasum -a 256 "$TMPDIR/$PACKAGE" | awk '{print $1}')
     if [[ -n "$EXPECTED" && "$EXPECTED" != "$ACTUAL" ]]; then
@@ -94,8 +94,12 @@ fi
 
 mkdir -p "$INSTALL_DIR/logs" "$LAUNCH_AGENTS_DIR"
 
-cp "$EXTRACTED_DIR/$BINARY" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/$BINARY"
+# Stage next to the running binary and rename over it: overwriting a running
+# executable in place can fail or crash the running daemon; a rename never does,
+# and the agent is kickstarted onto the new file below.
+cp "$EXTRACTED_DIR/$BINARY" "$INSTALL_DIR/$BINARY.new"
+chmod +x "$INSTALL_DIR/$BINARY.new"
+mv -f "$INSTALL_DIR/$BINARY.new" "$INSTALL_DIR/$BINARY"
 
 [[ -d "$EXTRACTED_DIR/bundle" ]] && mkdir -p "$INSTALL_DIR/bundle" && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
 [[ -d "$EXTRACTED_DIR/runtime" ]] && mkdir -p "$INSTALL_DIR/runtime" && cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
@@ -175,7 +179,10 @@ install_tray() {
     echo "[i] Tray companion not bundled in this package — skipping."
     return
   fi
-  cp "$EXTRACTED_DIR/shelveshub-tray" "$INSTALL_DIR/"; chmod +x "$INSTALL_DIR/shelveshub-tray"
+  # Stage + rename, like the daemon binary: the tray may be running right now.
+  cp "$EXTRACTED_DIR/shelveshub-tray" "$INSTALL_DIR/shelveshub-tray.new"
+  chmod +x "$INSTALL_DIR/shelveshub-tray.new"
+  mv -f "$INSTALL_DIR/shelveshub-tray.new" "$INSTALL_DIR/shelveshub-tray"
   local plist="$LAUNCH_AGENTS_DIR/com.shelveshub.tray.plist"
   cat > "$plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

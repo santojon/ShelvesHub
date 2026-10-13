@@ -13,7 +13,37 @@ fn rpc_token_is_nonempty_and_stable() {
 }
 
 #[test]
+fn token_file_is_private_from_creation() {
+    let dir = std::env::temp_dir().join(format!("shelveshub-token-{}", std::process::id()));
+    let path = dir.join("nested").join(".rpc-token");
+    persist_rpc_token(&path);
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("token file"),
+        rpc_token()
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&path)
+            .expect("metadata")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600, "owner-only from the first write");
+    }
+    // A second boot's write replaces the file rather than appending to it.
+    persist_rpc_token(&path);
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("token file"),
+        rpc_token()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn update_check_single_flight_guard() {
+    let _serial = UPDATE_GUARD_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     assert!(try_begin_update_check(), "first caller acquires the guard");
     assert!(
         !try_begin_update_check(),
@@ -25,6 +55,16 @@ fn update_check_single_flight_guard() {
         "the guard is re-acquirable after release"
     );
     end_update_check();
+}
+
+#[test]
+fn config_edits_are_remembered_by_key_with_the_latest_value() {
+    record_config_edit("interval_secs", serde_json::json!(45));
+    record_config_edit("native_qam", serde_json::json!(false));
+    record_config_edit("interval_secs", serde_json::json!(60));
+    let edits = pending_config_edits();
+    assert_eq!(edits.get("interval_secs"), Some(&serde_json::json!(60)));
+    assert_eq!(edits.get("native_qam"), Some(&serde_json::json!(false)));
 }
 
 #[test]

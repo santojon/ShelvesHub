@@ -25,12 +25,19 @@ There are two things in this repo for that:
 2. **Probe.** It opens a WebSocket to the target's `webSocketDebuggerUrl` and
    evaluates `window.__SHELVES_LOADER__?.injected` to see if the bundle is
    already running (idempotent, safe to repeat).
-3. **Inject.** If not, it evaluates the host runtime (`runtime/shelves-host.js`
-   → `window.__SHELVES_HOST__`, including QAM panel support), then reads and
-   evaluates `bundle/index.js`, then stamps `window.__SHELVES_LOADER__`.
+3. **Inject.** If not, it stamps `window.__SHELVES_CONFIG__` (the RPC endpoint
+   and per-boot token, the contract version, the device), inlines the i18n
+   dictionaries, evaluates the host runtime — `runtime/shelves-host.js` and its
+   `-qam.js` / `-api.js` / `-sidecar.js` / `-toast.js` parts, assembled into one
+   script that becomes `window.__SHELVES_HOST__` — then reads and evaluates
+   `bundle/index.js`, then stamps `window.__SHELVES_LOADER__`.
 4. **Lifecycle.** The connection is re-established every tick, so a Steam restart
    (fresh, marker-less renderer) is re-injected automatically. `isInjected` over
-   RPC reflects the last observed state.
+   RPC reflects the last observed state. Each tick starts with a health gate on
+   the target list: the visible Steam UI lives in windows that are separate
+   targets from `SharedJSContext`, so a lone `SharedJSContext` means the UI
+   collapsed — the loop then pauses injection and runs the per-platform recovery
+   once (see [troubleshooting](./troubleshooting.md)) instead of injecting.
 
 Configuration (all optional, env-driven — see `src/config.rs`):
 
@@ -38,12 +45,15 @@ Configuration (all optional, env-driven — see `src/config.rs`):
 |---|---|---|
 | `SHELVES_CEF_HOST` | `127.0.0.1` | DevTools host |
 | `SHELVES_CEF_PORT` | `8080` | DevTools port (Steam CEF default) |
-| `SHELVES_RPC_ADDR` | `127.0.0.1:60123` | Host RPC bind address |
+| `SHELVES_RPC_HOST` | `127.0.0.1` | Host RPC bind host (keep it on loopback) |
+| `SHELVES_RPC_PORT` | `60123` | Host RPC bind port |
+| `SHELVES_RPC_ADDR` | `127.0.0.1:60123` | `host:port`, used when `SHELVES_RPC_HOST` / `SHELVES_RPC_PORT` are unset (those two win when set); then `rpc_host` / `rpc_port` from the config file. The tray resolves the address the same way |
+| `SHELVES_RPC_TOKEN_FILE` | `~/.local/share/shelveshub/.rpc-token` | Where the per-boot RPC token is written (mode 0600) for same-user tools; `%LOCALAPPDATA%\shelveshub\.rpc-token` on Windows |
 | `SHELVES_BUNDLE_PATH` | `<exe-dir>/bundle/index.js` | Bundle to inject |
 | `SHELVES_HOST_RUNTIME_PATH` | `<exe-dir>/runtime/shelves-host.js` | Host runtime (`window.__SHELVES_HOST__`, incl. QAM) |
 | `SHELVES_TARGET` | _auto_ | Title/URL substring to pick the target |
 | `SHELVES_INTERVAL_SECS` | `30` | Injection-loop interval |
-| `SHELVES_NATIVE_QAM` | `0` | Add a native Quick Access tab (`1` to enable) |
+| `SHELVES_NATIVE_QAM` | `0` (the shipped config file sets `native_qam: true`) | Add a native Quick Access tab (`1` to enable) |
 | `SHELVES_OWNER_SETTLE_SECS` | `0` | Seconds to wait for another host to claim an unclaimed renderer before hosting it (coexistence; `0` = host immediately) |
 | `SHELVES_HUB_CONFIG` | `<settings_dir>/shelveshub.json` | The host's own settings store (auto-update preference; atomic writes + backup) |
 
@@ -61,10 +71,16 @@ $TOOL eval "navigator.userAgent"           # evaluate JS in the renderer
 $TOOL inject --bundle bundle/index.js      # inject a bundle (--force to re-inject)
 $TOOL reload --ignore-cache                # reload the renderer (after an update)
 $TOOL console                              # stream console + exceptions (Ctrl-C)
+$TOOL preload --script my-script.js        # register a document-start script on matching pages and hold the session (--duration N, or Ctrl-C)
 ```
 
 Global flags / env: `--host` (`SHELVES_CEF_HOST`), `--port` (`SHELVES_CEF_PORT`),
-`--target` (`SHELVES_TARGET`).
+`--target` (`SHELVES_TARGET`). `inject` evaluates the file as-is and stamps the
+loader marker — it adds no config stamp (so no RPC token) and no host runtime, so
+it is for pushing a bundle into a renderer the daemon already prepared. `preload`
+uses browser-level auto-attach: the script is registered on each matching page
+as it attaches, and applies to that page's next document; targets are never
+paused.
 
 ---
 
@@ -113,13 +129,15 @@ HEADLESS=0 pnpm harness  # show the browser window
 
 ### Simulation harness in Docker (Linux)
 
-`pnpm harness:docker` builds a small Linux image and runs three checks against a
-headless Chromium in a container: the scenario harness above, a **daemon →
-headless-Chromium injection smoke** (the real daemon discovers the target over CDP
-and injects), and the **SteamOS/Linux install + uninstall lifecycle** (a recording
-`systemctl` stub stands in — it validates the scripts' file lay-down/tear-down and
-settings preservation, not systemd itself). Cross-platform validation without a
-device; wired into CI. arm64 via `PLATFORM=linux/arm64 pnpm harness:docker`.
+`pnpm harness:docker` builds a small Linux image and runs four checks against a
+headless Chromium in a container: the scenario harness above, the
+**SteamOS/Linux install + uninstall lifecycle** (a recording `systemctl` stub
+stands in — it validates the scripts' file lay-down/tear-down and settings
+preservation, not systemd itself), a **daemon → headless-Chromium injection
+smoke** (the real daemon discovers the target over CDP and injects), and the
+**plugin backend probes** (the Deck Shelves backend's OS-coupled probes running
+under the host). Cross-platform validation without a device; wired into CI.
+arm64 via `PLATFORM=linux/arm64 pnpm harness:docker`.
 
 > Windows install/uninstall cannot be containerized — Docker on Linux/macOS runs
 > Linux containers only, and the Windows installer (NSIS + a PowerShell scheduled
@@ -127,23 +145,28 @@ device; wired into CI. arm64 via `PLATFORM=linux/arm64 pnpm harness:docker`.
 
 ---
 
-## QAM panel (Quick Access Menu)
+## The Quick Access tab
 
-The host runtime exposes `host.qam.registerPanel({ id, title, icon, render })`,
-so the bundle can add a dedicated panel with its own icon. The example bundle
-registers one (a shelf icon) that renders the sample shelves.
+The host runtime exposes `host.qam.registerPanel({ id, title, icon, render | content })`,
+so the bundle can fill the host's panel with its own content. The example bundle
+registers one (a shelf icon) that renders the sample settings.
 
-The implementation (`runtime/shelves-host.js`) currently renders an icon rail +
-slide-in panel that works identically in the local harness and as an overlay in
-Steam. The seam for a **native** Steam QAM tab (`tryMountNative`, backed by the
-webpack module-finder) is in place but stubbed until it can be validated on a
-real device. After `pnpm debug:local`, look for the shelf icon (top-right) or
-check it programmatically:
+The implementation (`runtime/shelves-host-qam.js`) adds a **native** Steam Quick
+Access tab: a numeric key (`900`) in Steam's tab enum, inserted after the
+Performance tab, so the strip treats it like its own. The tab is present from
+boot; the registered panel fills it, and without one it shows the hub's own view
+(status, updates, configuration, logs, with the side panel for logs and
+notifications). Nothing is drawn outside that tab — with `native_qam` off or the
+trip breaker tripped there is no panel at all. Check it programmatically:
 
 ```bash
 shelves-devtools --port 9222 --target harness \
-  eval "!!window.__SHELVES_HOST__.qam._panels['deck-shelves']"
+  eval "window.__SHELVES_HOST__.qam.mode() + ' ' + Object.keys(window.__SHELVES_HOST__.qam._specs)"
 ```
+
+`mode()` answers `native` (tab confirmed), `native-arming`, `tripped`, or the
+legacy label `overlay` when the tab is not installed. The scenario harness
+(`pnpm harness`) is the place to see the tab render against the Steam mock.
 
 ---
 

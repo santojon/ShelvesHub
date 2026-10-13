@@ -70,7 +70,7 @@ The service also **keeps itself and the bundle current**: with automatic updates
 - **Brings its own copy of Deck Shelves** — reuses a local copy, copies one from an installed loader, or downloads the newest release (`SHELVES_PRERELEASE=1` opts into pre-releases).
 - **Hosts the data backend** — supervises the Deck Shelves data backend over stdio, restarts it on crashes and surfaces its logs, so wishlist, prices, backups and friends work on a standalone install.
 - **Updates itself** — downloads and verifies a newer ShelvesHub, swaps its own binary in place, and restarts the service to finish (or asks you to restart when it can't).
-- **Keeps Deck Shelves current** — with automatic updates on, checks periodically and installs a newer release in place, then reloads, so the "update available" prompt clears on its own.
+- **Keeps Deck Shelves current** — with automatic updates on, checks periodically and installs a newer release in place and swaps it in on its own, so the "update available" prompt clears by itself.
 - **Update channels** — stable and pre-release are separate for the host and for Deck Shelves; each finer switch only appears once the one above it is on.
 - **Go back a version** — every update keeps the previous ShelvesHub and the previous Deck Shelves; "Go back to the previous …" rows in the tab restore them offline, and the version you left is held back from automatic updates until a newer one is published.
 - **What's new, quietly** — a pending update shows its release notes in the tab before it applies, and by default automatic updates wait until no game is running.
@@ -159,7 +159,7 @@ On a **first** install the script installers ask a few optional questions (in a 
 | `SHELVES_FORCE_OWNER` | off | Host Deck Shelves even when a plugin loader is present (cooperative mode). |
 | `SHELVES_NATIVE_QAM` | on | Add ShelvesHub's own Quick Access tab. |
 | `SHELVES_DESKTOP_UI` | off | Also inject into the plain desktop client (experimental). |
-| `SHELVES_AUTO_UPDATE` | off | Master switch for automatic updates. |
+| `SHELVES_AUTO_UPDATE` | on | Master switch for automatic updates (a running game is never interrupted). |
 | `SHELVES_AUTO_UPDATE_HUB` | on | Auto-update ShelvesHub itself (when the master is on). |
 | `SHELVES_AUTO_UPDATE_PLUGIN` | on | Auto-update Deck Shelves (when the master is on). |
 | `SHELVES_HUB_PRERELEASE` | off | Include ShelvesHub pre-releases. |
@@ -182,11 +182,11 @@ Each uninstaller stops and removes the background service and the install direct
 | Platform | One-click | Or by hand |
 |---|---|---|
 | SteamOS / Steam Deck | `uninstall-shelveshub.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (installed copy), or `bash uninstall.sh` from the extracted package |
-| Linux | `uninstall-shelveshub-linux.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (installed copy), or `bash uninstall.sh` from the extracted package |
+| Linux | `uninstall-shelveshub-linux.desktop` | `bash ~/.local/share/shelveshub/uninstall.sh` (installed copy), or `bash uninstall.sh` from the extracted package — add `--purge` to also remove settings and Steam's CEF debug flag |
 | macOS | `uninstall-mac.command` | `bash ~/.local/share/shelveshub/uninstall_mac.sh` — add `--purge` to also remove settings and Steam's CEF debug flag |
 | Windows | `uninstall-windows.bat`, or **Settings → Apps** | run `uninstall.exe` in the install folder, or `installer\uninstall.ps1` from the package |
 
-`--purge` (macOS/SteamOS) additionally removes the shared Deck Shelves settings and the `.cef-enable-remote-debugging` flag; restart Steam afterward so it stops exposing the debug port.
+`--purge` (Linux/SteamOS/macOS) additionally removes the shared Deck Shelves settings and the `.cef-enable-remote-debugging` flag; restart Steam afterward so it stops exposing the debug port. On Windows, `installer\uninstall.ps1 -Purge` from the extracted package removes the settings only.
 
 ---
 

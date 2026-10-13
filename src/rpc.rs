@@ -7,18 +7,21 @@
 //! HTTP (not raw TCP) because the caller lives inside the CEF renderer, where
 //! `fetch` is the only available transport, and cross-origin requests need the
 //! CORS headers we emit below. The body parsing is hand-rolled to avoid a full
-//! HTTP-server dependency for three methods over loopback.
+//! HTTP-server dependency for a small, fixed method set over loopback.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
 use crate::constants::defaults::MAX_BODY_BYTES;
 use crate::constants::timers::READ_TIMEOUT;
+use crate::constants::urls::TRUSTED_BUNDLE_PREFIX;
 
 use serde_json::Value;
 
 use crate::backend;
 use crate::logger::{log_error, log_info, log_warning};
+use crate::semver::version_is_newer;
 use crate::state;
 
 /// Operational-config keys the "advanced configuration" editor may change. The
@@ -42,9 +45,10 @@ const EDITABLE_CONFIG_KEYS: [&str; 7] = [
 /// the proxy would be a generic gateway to arbitrary Python calls; anything not
 /// here answers "unknown method". (Path-safety of the file methods is jailed on
 /// the plugin side; this bounds the callable surface to the real API.)
-const BACKEND_METHODS: [&str; 31] = [
+const BACKEND_METHODS: [&str; 35] = [
     "clear_backups",
     "create_backup",
+    "create_pre_import_backup",
     "delete_backup",
     "download_release",
     "export_backup",
@@ -52,12 +56,14 @@ const BACKEND_METHODS: [&str; 31] = [
     "get_audio_state",
     "get_bluetooth_state",
     "get_css_loader_themes",
+    "get_device_identity",
     "get_display_state",
     "get_hardware_info",
     "get_host_os",
     "get_library_locations",
     "get_perf_snapshot",
     "get_settings",
+    "get_shortcut_tags",
     "get_tabmaster_tabs",
     "get_user_desktop",
     "get_user_home",
@@ -73,8 +79,60 @@ const BACKEND_METHODS: [&str; 31] = [
     "reset_settings",
     "restore_backup",
     "set_settings",
+    "was_settings_recovered",
     "write_json_file",
 ];
+
+/// Read-only probes and polls — the hub view's status and log refresh, the tray's
+/// status line, the runtime's log forwarding. Not logged: they would fill the
+/// ring they read.
+const QUIET_METHODS: [&str; 10] = [
+    "ping",
+    "getVersion",
+    "getHostApiVersion",
+    "isInjected",
+    "getBackendStatus",
+    "getDiagnostics",
+    "getConfig",
+    "getRuntimeConfig",
+    "getLogs",
+    "pushLogs",
+];
+
+/// Accepted ranges for the numeric editable keys (seconds). The loop floors the
+/// interval at 1 s itself; the caps keep a typo from parking the daemon for hours.
+const INTERVAL_SECS_RANGE: std::ops::RangeInclusive<u64> = 1..=3600;
+const OWNER_SETTLE_SECS_RANGE: std::ops::RangeInclusive<u64> = 0..=300;
+
+/// Longest request or header line and most headers read from one caller, so a
+/// local client cannot grow the daemon's memory by streaming an endless header.
+const MAX_HEADER_LINE: u64 = 8 * 1024;
+const MAX_HEADERS: usize = 64;
+
+/// Connections handled at once; beyond this the accept loop answers 503 instead
+/// of spawning another thread. Each one may sit in a backend call for a while.
+const MAX_CONNECTIONS: usize = 64;
+static ACTIVE_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
+
+/// One accepted connection's slot in the bounded pool, released on drop (so a
+/// panicking handler or a failed thread spawn never leaks it).
+struct ConnectionSlot;
+
+impl ConnectionSlot {
+    fn acquire() -> Option<Self> {
+        if ACTIVE_CONNECTIONS.fetch_add(1, AtomicOrdering::AcqRel) < MAX_CONNECTIONS {
+            return Some(Self);
+        }
+        ACTIVE_CONNECTIONS.fetch_sub(1, AtomicOrdering::AcqRel);
+        None
+    }
+}
+
+impl Drop for ConnectionSlot {
+    fn drop(&mut self) {
+        ACTIVE_CONNECTIONS.fetch_sub(1, AtomicOrdering::AcqRel);
+    }
+}
 
 pub fn serve(addr: &str) {
     let listener = match TcpListener::bind(addr) {
@@ -94,6 +152,11 @@ pub fn serve(addr: &str) {
                          from the local network. Keep rpc_host at 127.0.0.1 unless you intend this."
                     ),
                 );
+            }
+            // The token file is written only once the port is ours: a second
+            // daemon that fails to bind must never replace the running one's token.
+            if let Some(p) = crate::config::rpc_token_path() {
+                state::persist_rpc_token(&p);
             }
             l
         }
@@ -117,9 +180,27 @@ pub fn serve(addr: &str) {
         match stream {
             // One thread per connection: a slow data call proxied to the
             // Python backend must not block ping/version probes.
-            Ok(s) => {
-                std::thread::spawn(move || handle_connection(s));
-            }
+            Ok(s) => match ConnectionSlot::acquire() {
+                Some(slot) => {
+                    let spawned = std::thread::Builder::new().spawn(move || {
+                        let _slot = slot;
+                        handle_connection(s);
+                    });
+                    if let Err(e) = spawned {
+                        log_warning("rpc", &format!("Could not start a connection thread: {e}"));
+                    }
+                }
+                None => {
+                    let mut s = s;
+                    let _ = s.set_write_timeout(Some(READ_TIMEOUT));
+                    let _ = write_response(
+                        &mut s,
+                        503,
+                        r#"{"ok":false,"error":"too many connections"}"#,
+                        None,
+                    );
+                }
+            },
             Err(e) => log_warning("rpc", &format!("Accept error: {e}")),
         }
     }
@@ -202,16 +283,27 @@ fn handle_connection(mut stream: TcpStream) {
         return;
     }
 
-    let response_body = dispatch(&request.body);
-    match request.correlation.as_deref() {
-        Some(id) => log_info(
-            "rpc",
-            &format!("[{id}] {peer} -> {}", truncate_for_log(&request.body)),
-        ),
-        None => log_info(
-            "rpc",
-            &format!("{peer} -> {}", truncate_for_log(&request.body)),
-        ),
+    let parsed = serde_json::from_str::<Value>(&request.body).ok();
+    let method = parsed
+        .as_ref()
+        .and_then(|v| v.get("method"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let response_body = dispatch(parsed);
+    // Only the method name is logged (capped: it is caller text): a body can be a
+    // whole settings document, and the polls would fill the ring they read.
+    if !method
+        .as_deref()
+        .is_some_and(|m| QUIET_METHODS.contains(&m))
+    {
+        let name: String = method
+            .as_deref()
+            .unwrap_or("(invalid)")
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(64)
+            .collect();
+        log_info("rpc", &format!("{peer} -> {name}"));
     }
     if let Err(e) = write_response(&mut stream, 200, &response_body, origin) {
         log_warning("rpc", &format!("Write error to {peer}: {e}"));
@@ -237,11 +329,23 @@ struct HttpRequest {
     origin: Option<String>,
     authorization: Option<String>,
     content_type: Option<String>,
-    /// Optional `X-DS-Req` correlation id from the caller, echoed into the RPC log
-    /// line so a renderer-side call can be matched to its daemon-side log entry.
-    correlation: Option<String>,
     /// Content-Length exceeded `MAX_BODY_BYTES` — the body was not read.
     too_large: bool,
+}
+
+/// One request or header line, refused past `MAX_HEADER_LINE` bytes without a newline.
+fn read_line_capped(
+    reader: &mut BufReader<&TcpStream>,
+    line: &mut String,
+) -> std::io::Result<usize> {
+    let n = reader.by_ref().take(MAX_HEADER_LINE).read_line(line)?;
+    if n as u64 == MAX_HEADER_LINE && !line.ends_with('\n') {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "header line too long",
+        ));
+    }
+    Ok(n)
 }
 
 /// Read request line + headers, then exactly `Content-Length` body bytes (capped).
@@ -249,7 +353,7 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
     let mut reader = BufReader::new(stream);
 
     let mut request_line = String::new();
-    reader.read_line(&mut request_line)?;
+    read_line_capped(&mut reader, &mut request_line)?;
     let method = request_line
         .split_whitespace()
         .next()
@@ -260,12 +364,19 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
     let mut origin = None;
     let mut authorization = None;
     let mut content_type = None;
-    let mut correlation = None;
+    let mut headers = 0usize;
     loop {
         let mut line = String::new();
-        let n = reader.read_line(&mut line)?;
+        let n = read_line_capped(&mut reader, &mut line)?;
         if n == 0 || line == "\r\n" || line == "\n" {
             break;
+        }
+        headers += 1;
+        if headers > MAX_HEADERS {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "too many headers",
+            ));
         }
         if let Some((name, value)) = line.split_once(':') {
             let name = name.trim();
@@ -278,9 +389,6 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
                 authorization = Some(value);
             } else if name.eq_ignore_ascii_case("content-type") {
                 content_type = Some(value);
-            } else if name.eq_ignore_ascii_case("x-ds-req") {
-                // Cap the echoed id so a hostile caller can't bloat the log line.
-                correlation = Some(value.chars().take(64).collect());
             }
         }
     }
@@ -292,7 +400,6 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
             origin,
             authorization,
             content_type,
-            correlation,
             too_large: true,
         });
     }
@@ -308,31 +415,27 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
         origin,
         authorization,
         content_type,
-        correlation,
         too_large: false,
     })
 }
 
-/// Keep journal lines sane: request bodies can be full settings documents.
-fn truncate_for_log(body: &str) -> String {
-    const MAX: usize = 300;
-    if body.len() <= MAX {
-        return body.to_string();
-    }
-    let cut = body
-        .char_indices()
-        .take_while(|(i, _)| *i < MAX)
-        .last()
-        .map(|(i, c)| i + c.len_utf8())
-        .unwrap_or(0);
-    format!("{}… ({} bytes)", &body[..cut], body.len())
+/// The release tag a trusted bundle download URL names
+/// (`<TRUSTED_BUNDLE_PREFIX><tag>/<file>`), or `None` for any other URL.
+fn bundle_tag_from_url(url: &str) -> Option<String> {
+    url.strip_prefix(TRUSTED_BUNDLE_PREFIX)?
+        .split('/')
+        .next()
+        .filter(|tag| !tag.is_empty())
+        .map(str::to_string)
 }
 
-/// Record the newest release tag as the installed `bundle_tag` after a download,
-/// so the "update available" check resolves. Without this a manual/host-driven
-/// update re-downloads every cycle and the plugin's update banner never clears.
-fn record_bundle_tag(prerelease: bool) {
-    let Some(tag) = crate::populate::latest_release_tag(prerelease) else {
+/// Record the installed release as `bundle_tag` after a download, so the
+/// "update available" check resolves (else every cycle re-downloads). The tag
+/// comes from the fetched URL; the channel's newest tag is the fallback.
+fn record_bundle_tag(prerelease: bool, url: &str) {
+    let Some(tag) =
+        bundle_tag_from_url(url).or_else(|| crate::populate::latest_release_tag(prerelease))
+    else {
         return;
     };
     let Some(cfg_path) = crate::state::hub_config_path() else {
@@ -340,14 +443,17 @@ fn record_bundle_tag(prerelease: bool) {
     };
     // The swap kept the old copy as `.prev`; its tag follows it. A download the
     // user asked for also lifts any hold left by a rollback.
-    let mut s = crate::store::load(cfg_path);
-    s.bundle_prev_tag = std::mem::replace(&mut s.bundle_tag, tag);
-    s.bundle_hold_tag.clear();
-    let _ = crate::store::save(cfg_path, &s);
+    let recorded = tag.clone();
+    if let Err(e) = crate::store::update(cfg_path, |s| {
+        s.bundle_prev_tag = std::mem::replace(&mut s.bundle_tag, tag);
+        s.bundle_hold_tag.clear();
+    }) {
+        log_warning("rpc", &format!("could not record the bundle tag: {e}"));
+    }
     state::set_pending_plugin_update(None);
     state::push_host_notice(
         "notice_plugin_updated",
-        serde_json::json!({ "version": s.bundle_tag }),
+        serde_json::json!({ "version": recorded }),
     );
 }
 
@@ -357,12 +463,54 @@ fn hold_rolled_back_bundle() -> String {
     let Some(cfg_path) = crate::state::hub_config_path() else {
         return String::new();
     };
-    let mut s = crate::store::load(cfg_path);
-    s.bundle_hold_tag = s.bundle_tag.clone();
-    std::mem::swap(&mut s.bundle_tag, &mut s.bundle_prev_tag);
-    let _ = crate::store::save(cfg_path, &s);
+    let live = crate::store::update(cfg_path, |s| {
+        s.bundle_hold_tag = s.bundle_tag.clone();
+        std::mem::swap(&mut s.bundle_tag, &mut s.bundle_prev_tag);
+    });
     state::set_pending_plugin_update(None);
-    s.bundle_tag
+    match live {
+        Ok(s) => s.bundle_tag,
+        Err(e) => {
+            log_warning("rpc", &format!("could not record the rollback: {e}"));
+            String::new()
+        }
+    }
+}
+
+/// Run a manual download, swap or rollback under the loop's single-flight guard,
+/// so a user action never moves the same files as a periodic check mid-way.
+/// Answers "busy" instead of waiting.
+fn under_update_guard(handler: impl FnOnce() -> String) -> String {
+    struct Release;
+    impl Drop for Release {
+        fn drop(&mut self) {
+            state::end_update_check();
+        }
+    }
+    if !state::try_begin_update_check() {
+        return err("busy: an update check is in flight, try again shortly");
+    }
+    let _release = Release;
+    handler()
+}
+
+/// Why a `selfUpdate` for `latest` is skipped: `current` when it is not newer
+/// than the running version (a reinstall or a downgrade would snapshot the
+/// running set over `previous/`), `staged` when that same release already waits
+/// for the restart (the loop skips it the same way). `None` = go ahead.
+fn self_update_skip_reason(
+    latest: &str,
+    current: &str,
+    staged: bool,
+    pending: Option<&str>,
+) -> Option<&'static str> {
+    if !version_is_newer(latest, current) {
+        Some("current")
+    } else if staged && pending == Some(latest) {
+        Some("staged")
+    } else {
+        None
+    }
 }
 
 /// Exit after the response flushes, so a relaunching service manager brings the
@@ -412,8 +560,8 @@ fn insert_update_state(obj: &mut serde_json::Map<String, Value>) {
     );
 }
 
-fn dispatch(body: &str) -> String {
-    let parsed = serde_json::from_str::<Value>(body).ok();
+/// Route one parsed request body (`None` = not JSON) to its handler.
+fn dispatch(parsed: Option<Value>) -> String {
     let method = parsed
         .as_ref()
         .and_then(|v| v.get("method").and_then(Value::as_str).map(str::to_string));
@@ -423,21 +571,6 @@ fn dispatch(body: &str) -> String {
         Some("getVersion") => ok(format!(r#""{}""#, env!("CARGO_PKG_VERSION"))),
         Some("getHostApiVersion") => ok(format!(r#""{}""#, crate::HOST_API_VERSION)),
         Some("isInjected") => ok(state::is_injected().to_string()),
-        // The bundle calls this once it has fully initialised against the host
-        // API — record it as an explicit init confirmation from the bundle side.
-        Some("bundleReady") => {
-            state::set_bundle_ready(true);
-            match state::millis_since_injected() {
-                Some(ms) => log_info(
-                    "rpc",
-                    &format!(
-                        "Bundle reported ready (initialisation confirmed) — {ms}ms after injection."
-                    ),
-                ),
-                None => log_info("rpc", "Bundle reported ready (initialisation confirmed)."),
-            }
-            ok("true".to_string())
-        }
         // Health of the hosted Python backend (loader-local, not proxied).
         // `python_available` surfaces a missing interpreter (e.g. a minimal ARM
         // distro without python3) in diagnostics before the first data call fails.
@@ -477,7 +610,6 @@ fn dispatch(body: &str) -> String {
                 "os": std::env::consts::OS,
                 "arch": std::env::consts::ARCH,
                 "hosting": state::is_injected(),
-                "bundleReady": state::is_bundle_ready(),
                 "backend": {
                     "configured": backend::enabled(),
                     "running": backend::is_running(),
@@ -505,11 +637,11 @@ fn dispatch(body: &str) -> String {
         }
         // Manual bundle re-download (the fallback panel's "download" action):
         // fetch the newest release into the bundle path; the loop re-injects it.
-        Some("populateBundle") => match state::populate_config() {
+        Some("populateBundle") => under_update_guard(|| match state::populate_config() {
             Some((path, prerelease)) => {
                 match crate::populate::update_from_release(path, *prerelease) {
                     Ok(url) => {
-                        record_bundle_tag(*prerelease);
+                        record_bundle_tag(*prerelease, &url);
                         log_info("rpc", &format!("Bundle re-downloaded: {url}"));
                         ok(serde_json::Value::String(url).to_string())
                     }
@@ -517,11 +649,11 @@ fn dispatch(body: &str) -> String {
                 }
             }
             None => err("bundle path not configured"),
-        },
+        }),
         // Host self-install of a PLUGIN update (`host.updates.applyUpdate`): obtain the
         // given release asset (or the newest) and swap the injected bundle in place; the
-        // renderer reload the runtime triggers afterwards re-boots the plugin on it.
-        Some("applyUpdate") => match state::populate_config() {
+        // loop's on-disk watch then hot-swaps the new copy into the renderer.
+        Some("applyUpdate") => under_update_guard(|| match state::populate_config() {
             Some((path, prerelease)) => {
                 let asset_url = parsed
                     .as_ref()
@@ -530,7 +662,7 @@ fn dispatch(body: &str) -> String {
                     .and_then(Value::as_str);
                 match crate::populate::apply_update(path, asset_url, *prerelease) {
                     Ok(url) => {
-                        record_bundle_tag(*prerelease);
+                        record_bundle_tag(*prerelease, &url);
                         log_info("rpc", &format!("Applied plugin update: {url}"));
                         ok(r#"{"applied":true}"#.to_string())
                     }
@@ -541,7 +673,7 @@ fn dispatch(body: &str) -> String {
                 }
             }
             None => err("bundle path not configured"),
-        },
+        }),
         // The host's own settings (the fallback panel's auto-update toggle).
         Some("getConfig") => match state::hub_config_path() {
             Some(path) => match serde_json::to_value(crate::store::load(path)) {
@@ -580,7 +712,7 @@ fn dispatch(body: &str) -> String {
         // Undo the last Deck Shelves swap: the `.prev` copy becomes live again (the
         // loop's on-disk watch hot-swaps it in) and the undone release is held back
         // from auto-update until a newer one is published.
-        Some("rollbackBundle") => match state::populate_config() {
+        Some("rollbackBundle") => under_update_guard(|| match state::populate_config() {
             Some((path, _)) => match crate::populate::rollback_bundle(path) {
                 Ok(()) => {
                     let tag = hold_rolled_back_bundle();
@@ -597,46 +729,61 @@ fn dispatch(body: &str) -> String {
                 Err(e) => err(&e),
             },
             None => err("bundle path not configured"),
-        },
+        }),
         // Undo the last hub update: restore the `previous/` snapshot (runtime +
         // assets, and the binary staged like an update) and hold the undone release
         // back from auto-update. Restarts under a relaunching service manager;
         // otherwise the "restart to finish" notice stands.
-        Some("rollbackHub") => match crate::populate::rollback_hub() {
-            Ok(version) => {
-                if let Some(cfg_path) = state::hub_config_path() {
-                    let mut s = crate::store::load(cfg_path);
-                    s.hub_hold_tag = env!("CARGO_PKG_VERSION").to_string();
-                    let _ = crate::store::save(cfg_path, &s);
-                }
-                state::set_hub_update_staged(true);
-                state::set_hub_rollback_staged(true);
-                state::set_pending_hub_update(Some(version.clone()));
-                state::set_pending_hub_notes(None);
-                let restarting = crate::populate::under_relaunching_service();
-                log_info(
-                    "rpc",
-                    &format!("Hub rollback to {version} staged (restarting={restarting})."),
-                );
-                if restarting {
-                    // The next start notices the version change and tells the user.
-                    exit_after_flush("Restarting to apply hub rollback.");
+        Some("rollbackHub") => under_update_guard(|| {
+            // With a binary already staged over the running one, the snapshot a
+            // rollback takes would capture that staged binary under the running
+            // version's label — so the restart that applies it has to come first.
+            if state::hub_update_staged() {
+                return err(if state::hub_rollback_staged() {
+                    "a ShelvesHub rollback is already staged: restart to finish it first"
                 } else {
-                    state::push_host_notice(
-                        "notice_hub_restored",
-                        serde_json::json!({ "version": version }),
+                    "a ShelvesHub update is staged: restart to apply it before rolling back"
+                });
+            }
+            match crate::populate::rollback_hub() {
+                Ok(version) => {
+                    if let Some(cfg_path) = state::hub_config_path() {
+                        let hold = crate::store::update(cfg_path, |s| {
+                            s.hub_hold_tag = env!("CARGO_PKG_VERSION").to_string();
+                        });
+                        if let Err(e) = hold {
+                            log_warning("rpc", &format!("could not record the hub hold: {e}"));
+                        }
+                    }
+                    state::set_hub_update_staged(true);
+                    state::set_hub_rollback_staged(true);
+                    state::set_pending_hub_update(Some(version.clone()));
+                    state::set_pending_hub_notes(None);
+                    let restarting = crate::populate::under_relaunching_service();
+                    log_info(
+                        "rpc",
+                        &format!("Hub rollback to {version} staged (restarting={restarting})."),
                     );
+                    if restarting {
+                        // The next start notices the version change and tells the user.
+                        exit_after_flush("Restarting to apply hub rollback.");
+                    } else {
+                        state::push_host_notice(
+                            "notice_hub_restored",
+                            serde_json::json!({ "version": version }),
+                        );
+                    }
+                    ok(format!(
+                        r#"{{"rolled_back":true,"restarting":{restarting},"version":{}}}"#,
+                        Value::String(version)
+                    ))
                 }
-                ok(format!(
-                    r#"{{"rolled_back":true,"restarting":{restarting},"version":{}}}"#,
-                    Value::String(version)
-                ))
+                Err(e) => {
+                    log_error("rpc", &format!("rollbackHub failed: {e}"));
+                    err(&e)
+                }
             }
-            Err(e) => {
-                log_error("rpc", &format!("rollbackHub failed: {e}"));
-                err(&e)
-            }
-        },
+        }),
         Some("setAutoUpdate") => match state::hub_config_path() {
             Some(path) => {
                 let enabled = parsed
@@ -647,10 +794,8 @@ fn dispatch(body: &str) -> String {
                             .or_else(|| a.get("enabled").and_then(Value::as_bool))
                     })
                     .unwrap_or(false);
-                let mut settings = crate::store::load(path);
-                settings.auto_update = enabled;
-                match crate::store::save(path, &settings) {
-                    Ok(()) => {
+                match crate::store::update(path, |s| s.auto_update = enabled) {
+                    Ok(settings) => {
                         log_info("rpc", &format!("Auto-update set to {enabled}."));
                         state::request_sync();
                         match serde_json::to_string(&settings) {
@@ -677,40 +822,24 @@ fn dispatch(body: &str) -> String {
                     .and_then(|a| a.get("value"))
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
-                let mut settings = crate::store::load(path);
-                let applied = match key {
-                    Some("auto_update") => {
-                        settings.auto_update = value;
-                        true
+                // The six update switches, by the key→field map sync uses too.
+                let pref = match key {
+                    Some(k)
+                        if crate::sync::set_store_value(
+                            &mut crate::store::HubSettings::default(),
+                            k,
+                            value,
+                        ) =>
+                    {
+                        k
                     }
-                    Some("auto_update_hub") => {
-                        settings.auto_update_hub = value;
-                        true
-                    }
-                    Some("hub_prerelease") => {
-                        settings.hub_prerelease = value;
-                        true
-                    }
-                    Some("auto_update_plugin") => {
-                        settings.auto_update_plugin = value;
-                        true
-                    }
-                    Some("plugin_prerelease") => {
-                        settings.plugin_prerelease = value;
-                        true
-                    }
-                    Some("quiet_updates") => {
-                        settings.quiet_updates = value;
-                        true
-                    }
-                    _ => false,
+                    other => return err(&format!("unknown update pref key: {other:?}")),
                 };
-                if !applied {
-                    return err(&format!("unknown update pref key: {key:?}"));
-                }
-                match crate::store::save(path, &settings) {
-                    Ok(()) => {
-                        log_info("rpc", &format!("Update pref {key:?} set to {value}."));
+                match crate::store::update(path, |s| {
+                    crate::sync::set_store_value(s, pref, value);
+                }) {
+                    Ok(settings) => {
+                        log_info("rpc", &format!("Update pref {pref:?} set to {value}."));
                         state::request_sync();
                         match serde_json::to_string(&settings) {
                             Ok(json) => ok(json),
@@ -738,10 +867,8 @@ fn dispatch(body: &str) -> String {
                             .or_else(|| a.get("enabled").and_then(Value::as_bool))
                     })
                     .unwrap_or(false);
-                let mut settings = crate::store::load(path);
-                settings.config_sync = enabled;
-                match crate::store::save(path, &settings) {
-                    Ok(()) => {
+                match crate::store::update(path, |s| s.config_sync = enabled) {
+                    Ok(settings) => {
                         log_info("rpc", &format!("Settings sync set to {enabled}."));
                         if enabled {
                             state::request_sync();
@@ -817,9 +944,15 @@ fn dispatch(body: &str) -> String {
                     state::set_boot_movie_enabled(enabled);
                     // Persist to the config file so the choice survives a restart.
                     if let Some(path) = state::config_file_path() {
-                        let mut obj = crate::config::read_config_object(path);
-                        obj.insert("boot_movie".to_string(), Value::Bool(enabled));
-                        let _ = crate::config::write_config_object(path, &obj);
+                        let saved = crate::config::update_config_object(path, |obj| {
+                            obj.insert("boot_movie".to_string(), Value::Bool(enabled));
+                        });
+                        if let Err(e) = saved {
+                            log_warning(
+                                "rpc",
+                                &format!("boot_movie not written to the config file: {e}"),
+                            );
+                        }
                     }
                     log_info("rpc", &format!("Boot movie set to {enabled}."));
                     state::request_sync();
@@ -841,10 +974,18 @@ fn dispatch(body: &str) -> String {
                     serde_json::json!(EDITABLE_CONFIG_KEYS),
                 );
                 obj.insert("paused".to_string(), Value::Bool(state::hosting_paused()));
+                // Edits made here this session apply on the next restart; until
+                // then the tab reads them back from the daemon, with the restart
+                // note whenever one differs from the value the daemon started with.
+                let boot = state::runtime_config();
+                let mut restart_pending = false;
+                for (key, value) in state::pending_config_edits() {
+                    restart_pending |= boot.and_then(|b| b.get(&key)) != Some(&value);
+                    obj.insert(key, value);
+                }
                 // The config file's current values for the synced toggles (edited
                 // here or synced from another device) are what the next start
                 // applies — the hub screen shows those, with a restart note.
-                let mut restart_pending = false;
                 if let Some(file) =
                     state::config_file_path().map(|p| crate::config::read_config_object(p))
                 {
@@ -910,19 +1051,35 @@ fn dispatch(body: &str) -> String {
             let Some(coerced) = coerced else {
                 return err(&format!("invalid value type for {key}"));
             };
+            let range = match key {
+                "interval_secs" => Some(&INTERVAL_SECS_RANGE),
+                "owner_settle_secs" => Some(&OWNER_SETTLE_SECS_RANGE),
+                _ => None,
+            };
+            if let Some(range) = range {
+                if !coerced.as_u64().is_some_and(|n| range.contains(&n)) {
+                    return err(&format!(
+                        "{key} out of range: {coerced} (allowed {}-{} seconds)",
+                        range.start(),
+                        range.end()
+                    ));
+                }
+            }
             let Some(path) = state::config_file_path() else {
                 return err("config file path not known");
             };
-            // Read-merge-write the config file (create if absent), preserving other
-            // keys (comments included). Values apply on the next daemon restart.
-            let mut obj = crate::config::read_config_object(path);
-            obj.insert(key.to_string(), coerced);
-            match crate::config::write_config_object(path, &obj) {
+            // Read-merge-write the config file (create if absent) under the editors'
+            // lock, preserving other keys (comments included). Applies on restart.
+            let written = crate::config::update_config_object(path, |obj| {
+                obj.insert(key.to_string(), coerced.clone());
+            });
+            match written {
                 Ok(()) => {
                     log_info(
                         "rpc",
                         &format!("Config file updated: {key} (restart to apply)."),
                     );
+                    state::record_config_edit(key, coerced);
                     if crate::sync::CONFIG_KEYS.contains(&key) {
                         state::request_sync();
                     }
@@ -969,48 +1126,65 @@ fn dispatch(body: &str) -> String {
         // when running under a relaunching service manager the daemon restarts itself
         // (respond first, then exit); otherwise the "restart to apply" notice stands.
         Some("selfUpdate") => {
-            let prerelease = state::hub_config_path()
-                .map(|p| crate::store::load(p).hub_prerelease)
-                .unwrap_or(false);
-            match crate::populate::apply_hub_update(prerelease) {
-                Ok(tag) => {
-                    // An update the user asked for lifts the hold a rollback left.
-                    if let Some(cfg_path) = state::hub_config_path() {
-                        let mut s = crate::store::load(cfg_path);
-                        if !s.hub_hold_tag.is_empty() {
-                            s.hub_hold_tag.clear();
-                            let _ = crate::store::save(cfg_path, &s);
+            under_update_guard(|| {
+                let prerelease = state::hub_config_path()
+                    .map(|p| crate::store::load(p).hub_prerelease)
+                    .unwrap_or(false);
+                // Only a newer release that is not already staged is downloaded (see
+                // self_update_skip_reason). A lookup miss falls through to the
+                // download's own error.
+                let current = env!("CARGO_PKG_VERSION");
+                if let Some((latest, _)) = crate::populate::latest_hub_release_info(prerelease) {
+                    let pending = state::pending_hub_update();
+                    let staged = state::hub_update_staged();
+                    if let Some(reason) =
+                        self_update_skip_reason(&latest, current, staged, pending.as_deref())
+                    {
+                        let line =
+                            format!("Hub self-update skipped ({reason}): {latest} vs {current}.");
+                        log_info("rpc", &line);
+                        return ok(format!(r#"{{"updated":false,"reason":"{reason}"}}"#));
+                    }
+                }
+                match crate::populate::apply_hub_update(prerelease) {
+                    Ok(tag) => {
+                        // An update the user asked for lifts the hold a rollback left.
+                        if let Some(cfg_path) = state::hub_config_path() {
+                            let lifted = crate::store::update(cfg_path, |s| s.hub_hold_tag.clear());
+                            if let Err(e) = lifted {
+                                log_warning("rpc", &format!("could not lift the hub hold: {e}"));
+                            }
                         }
-                    }
-                    state::set_hub_update_staged(true);
-                    state::set_hub_rollback_staged(false);
-                    state::set_pending_hub_update(Some(tag.clone()));
-                    let restarting = crate::populate::under_relaunching_service();
-                    log_info(
-                        "rpc",
-                        &format!("Hub self-update {tag} staged (restarting={restarting})."),
-                    );
-                    if restarting {
-                        // The renderer keeps the current runtime until the new
-                        // daemon re-injects; the next start tells the user.
-                        exit_after_flush("Restarting to apply hub update.");
-                    } else {
-                        state::push_host_notice(
-                            "notice_hub_staged",
-                            serde_json::json!({ "version": tag }),
+                        state::set_hub_update_staged(true);
+                        state::set_hub_rollback_staged(false);
+                        state::set_pending_hub_update(Some(tag.clone()));
+                        let restarting = crate::populate::under_relaunching_service();
+                        log_info(
+                            "rpc",
+                            &format!("Hub self-update {tag} staged (restarting={restarting})."),
                         );
+                        if restarting {
+                            // The renderer keeps the current runtime until the new
+                            // daemon re-injects; the next start tells the user.
+                            exit_after_flush("Restarting to apply hub update.");
+                        } else {
+                            state::push_host_notice(
+                                "notice_hub_staged",
+                                serde_json::json!({ "version": tag }),
+                            );
+                        }
+                        ok(format!(
+                            r#"{{"updated":true,"restarting":{restarting},"version":"{}","tag":"{}"}}"#,
+                            env!("CARGO_PKG_VERSION"),
+                            tag.replace('"', "'")
+                        ))
                     }
-                    ok(format!(
-                        r#"{{"updated":true,"restarting":{restarting},"version":"{}","tag":"{}"}}"#,
-                        env!("CARGO_PKG_VERSION"),
-                        tag.replace('"', "'")
-                    ))
+                    Err(e) => {
+                        log_error("rpc", &format!("selfUpdate failed: {e}"));
+                        err(&e)
+                    }
                 }
-                Err(e) => {
-                    log_error("rpc", &format!("selfUpdate failed: {e}"));
-                    err(&e)
-                }
-            }
+            })
         }
         // Manual "Check now": run one update check immediately (same path as the
         // periodic loop, single-flight) and report the refreshed status so the hub
@@ -1075,8 +1249,10 @@ fn ok(result_json: String) -> String {
 }
 
 fn err(message: &str) -> String {
-    let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-    format!(r#"{{"ok":false,"error":"{escaped}"}}"#)
+    format!(
+        r#"{{"ok":false,"error":{}}}"#,
+        Value::String(message.to_string())
+    )
 }
 
 fn write_response(
@@ -1092,6 +1268,7 @@ fn write_response(
         401 => "Unauthorized",
         413 => "Payload Too Large",
         415 => "Unsupported Media Type",
+        503 => "Service Unavailable",
         _ => "OK",
     };
     // Reflect a real Origin (never `*`); omit ACAO entirely when there is none.
@@ -1105,7 +1282,7 @@ fn write_response(
          Content-Length: {len}\r\n\
          {cors_origin}\
          Access-Control-Allow-Methods: POST, OPTIONS\r\n\
-         Access-Control-Allow-Headers: Content-Type, Authorization, X-DS-Req\r\n\
+         Access-Control-Allow-Headers: Content-Type, Authorization\r\n\
          Connection: close\r\n\
          \r\n\
          {body}",

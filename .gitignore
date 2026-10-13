@@ -1,7 +1,6 @@
 # ── Rust ──────────────────────────────────────────────────────────────────────
 /target/
 **/*.rs.bk
-.cargo/
 Cargo.lock
 
 # ── OS artifacts ──────────────────────────────────────────────────────────────
@@ -61,6 +60,9 @@ SHA256SUMS.minisig
 *.rpm
 *.bak
 *.tmp
+# The daemon's safe-download temps land beside the bundle it serves, including
+# examples/bundle/ on a local run.
+*.download.tmp
 *.temp
 *.backup
 
@@ -72,6 +74,11 @@ SHA256SUMS.minisig
 # ── Hidden directories (except .github) ───────────────────────────────────────
 .*/
 !.github/
+# cargo-audit's ignore list ships with the repo (CI reads it); nothing else under
+# .cargo/ (local config, credentials) ever does.
+!.cargo/
+.cargo/*
+!.cargo/audit.toml
 
 # ── Workflow-generated files ──────────────────────────────────────────────────
 CHANGELOG*.md

@@ -4,7 +4,8 @@
 //! testing (see `docs/debugging.md`).
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde_json::Value;
 
@@ -59,7 +60,7 @@ pub struct Config {
     pub coop_bundle: bool,
     /// When true (`SHELVES_NATIVE_QAM=1`), stamp the renderer so the injected
     /// runtime attempts the native Quick Access tab (guarded by a trip
-    /// breaker; overlay remains the fallback). Off by default.
+    /// breaker; when the native path is off the tab shows the hub view). Off by default.
     pub native_qam: bool,
     /// EXPERIMENTAL. When false (the default), the loader only injects while the
     /// Steam gamepad / Big Picture UI is on screen; in the plain desktop client
@@ -113,18 +114,30 @@ pub struct Config {
     pub boot_movie_path: PathBuf,
 }
 
+/// The shared settings directory: `SHELVES_SETTINGS_DIR`, else the per-OS default.
+fn settings_dir_from_env() -> PathBuf {
+    env::var("SHELVES_SETTINGS_DIR")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(default_settings_dir)
+}
+
+/// The hub's own settings store: `SHELVES_HUB_CONFIG`, else
+/// `<settings_dir>/shelveshub.json`. Also used before the daemon publishes the
+/// path in `state` (the boot-time boot-movie apply records its slots there).
+pub fn hub_config_path_from_env() -> PathBuf {
+    env::var("SHELVES_HUB_CONFIG")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| settings_dir_from_env().join("shelveshub.json"))
+}
+
 impl Config {
     pub fn from_env() -> Self {
-        let settings_dir = env::var("SHELVES_SETTINGS_DIR")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(default_settings_dir);
-        let hub_config_path = env::var("SHELVES_HUB_CONFIG")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| settings_dir.join("shelveshub.json"));
+        let settings_dir = settings_dir_from_env();
+        let hub_config_path = hub_config_path_from_env();
         // Optional external config file (JSON) for the tunable hub settings, so
         // one-off changes need no rebuild and no long env-var lines. Precedence per
         // setting: env var > config file > built-in default.
@@ -132,11 +145,7 @@ impl Config {
         Config {
             cef_host: cfg_string(&file, "SHELVES_CEF_HOST", "cef_host", DEFAULT_CEF_HOST),
             cef_port: cfg_u16(&file, "SHELVES_CEF_PORT", "cef_port", DEFAULT_CEF_PORT),
-            rpc_addr: format!(
-                "{}:{}",
-                cfg_string(&file, "SHELVES_RPC_HOST", "rpc_host", DEFAULT_RPC_HOST),
-                cfg_u16(&file, "SHELVES_RPC_PORT", "rpc_port", DEFAULT_RPC_PORT)
-            ),
+            rpc_addr: resolve_rpc_addr(&file),
             bundle_path: resolve_asset_path("SHELVES_BUNDLE_PATH", "bundle/index.js"),
             host_runtime_path: resolve_asset_path(
                 "SHELVES_HOST_RUNTIME_PATH",
@@ -286,11 +295,73 @@ fn default_python() -> &'static str {
     }
 }
 
+/// The RPC bind address as the daemon resolves it, for a same-user companion (the
+/// tray) that must reach the same endpoint: see `resolve_rpc_addr`.
+pub fn rpc_addr() -> String {
+    resolve_rpc_addr(&load_config_file())
+}
+
+/// `host:port` for the RPC server. Precedence per part: `SHELVES_RPC_HOST` /
+/// `SHELVES_RPC_PORT`, then `SHELVES_RPC_ADDR` (`host:port`, what the scripts and
+/// docs pass), then the config file's `rpc_host` / `rpc_port`, then the default.
+fn resolve_rpc_addr(file: &Value) -> String {
+    resolve_rpc_addr_with(
+        env::var("SHELVES_RPC_HOST").ok(),
+        env::var("SHELVES_RPC_PORT").ok(),
+        env::var("SHELVES_RPC_ADDR").ok(),
+        file,
+    )
+}
+
+/// `resolve_rpc_addr` over explicit env values, so the precedence is testable
+/// without touching the process environment.
+fn resolve_rpc_addr_with(
+    env_host: Option<String>,
+    env_port: Option<String>,
+    env_addr: Option<String>,
+    file: &Value,
+) -> String {
+    let addr = env_addr.and_then(|a| split_host_port(&a));
+    let host = env_host
+        .filter(|s| !s.is_empty())
+        .or_else(|| addr.as_ref().map(|(h, _)| h.clone()))
+        .or_else(|| {
+            file.get("rpc_host")
+                .and_then(Value::as_str)
+                .map(String::from)
+        })
+        .unwrap_or_else(|| DEFAULT_RPC_HOST.to_string());
+    let port = env_port
+        .and_then(|s| s.parse().ok())
+        .or(addr.map(|(_, p)| p))
+        .or_else(|| {
+            file.get("rpc_port")
+                .and_then(Value::as_u64)
+                .and_then(|v| u16::try_from(v).ok())
+        })
+        .unwrap_or(DEFAULT_RPC_PORT);
+    format!("{host}:{port}")
+}
+
+/// `host:port` → `(host, port)`; `None` unless both parts are present and the port
+/// parses. A bracketed IPv6 host is kept as written.
+fn split_host_port(addr: &str) -> Option<(String, u16)> {
+    let (host, port) = addr.trim().rsplit_once(':')?;
+    let port = port.parse().ok()?;
+    (!host.is_empty()).then(|| (host.to_string(), port))
+}
+
 /// A compact device identity for the host handshake (contract `HostHandshake.device`):
 /// `{ kind, arch, model }`. `kind` is conservative — desktop on macOS/Windows, deck on a
 /// SteamOS Deck panel, else unknown (the plugin refines with its own detection). `arch` is
 /// the build target arch; `model` is a device-tree/DMI label on Linux when readable.
+/// Detected once per process (the Linux probe spawns systemctl; the answer cannot change while the daemon runs).
 pub fn detected_device() -> Value {
+    static DEVICE: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+    DEVICE.get_or_init(detect_device).clone()
+}
+
+fn detect_device() -> Value {
     let arch = std::env::consts::ARCH;
     #[cfg(target_os = "linux")]
     {
@@ -390,14 +461,56 @@ pub fn read_config_object(path: &std::path::Path) -> serde_json::Map<String, Val
         .unwrap_or_default()
 }
 
-/// Write the config file back, pretty-printed (the write half of read-merge-write).
+/// Write the config file back, pretty-printed (the write half of read-merge-write):
+/// the current good copy rolls to `<file>.bak` first, then the new text lands via a
+/// temp file + rename, so an interrupted write never leaves a truncated config.
 pub fn write_config_object(
     path: &std::path::Path,
     obj: &serde_json::Map<String, Value>,
 ) -> std::io::Result<()> {
     let out = serde_json::to_string_pretty(&Value::Object(obj.clone()))
         .unwrap_or_else(|_| "{}".to_string());
-    std::fs::write(path, out)
+    let current_is_valid = std::fs::read_to_string(path)
+        .ok()
+        .is_some_and(|s| serde_json::from_str::<Value>(&s).is_ok());
+    if current_is_valid {
+        let _ = std::fs::copy(path, crate::store::backup_path(path));
+    }
+    crate::store::atomic_write(path, &out)
+}
+
+/// Serializes the config file's editors (the RPC editor, `setBootMovie`, sync),
+/// the way `store::update` does for the store.
+static CONFIG_FILE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Read-merge-write under the editors' lock: `f` edits the current object and
+/// the file is written back when something changed, so an edit made during a
+/// sync round is never reverted by the round's stale copy.
+pub fn update_config_object(
+    path: &Path,
+    f: impl FnOnce(&mut serde_json::Map<String, Value>),
+) -> std::io::Result<()> {
+    let _guard = CONFIG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let before = read_config_object(path);
+    let mut obj = before.clone();
+    f(&mut obj);
+    if obj == before {
+        return Ok(());
+    }
+    write_config_object(path, &obj)
+}
+
+/// The CEF debug ports to probe, in order: the configured one first, then
+/// Steam's known alternates (8080/8081), de-duplicated so the configured port is
+/// never probed twice. Shared by the loop's port discovery and `doctor`. Pure.
+pub fn cef_port_candidates(configured: u16) -> Vec<u16> {
+    let mut ports = vec![configured];
+    for p in [DEFAULT_CEF_PORT, 8081] {
+        if !ports.contains(&p) {
+            ports.push(p);
+        }
+    }
+    ports
 }
 
 /// Load the optional external config file (JSON): `SHELVES_CONFIG_FILE` if set,
@@ -520,7 +633,7 @@ fn steam_launcher_present() -> bool {
 /// target) has a native 1280x800 16:10 panel, so it gets the matching cut;
 /// desktop platforms get the 16:9 1080p cut.
 fn default_boot_movie() -> &'static str {
-    // Choose the cut by the ACTUAL panel on Linux (ARM-9), not just target_os: the
+    // Choose the cut by the ACTUAL panel on Linux, not just target_os: the
     // Deck's 1280x800 16:10 panel keeps the matching cut; a clearly-HD display (a Steam
     // Machine on a TV, or another device) gets the 1080p cut. Detection failure keeps the
     // Deck cut (the primary target). Desktop (macOS/Windows) always gets the 1080p cut.

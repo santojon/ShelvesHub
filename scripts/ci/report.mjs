@@ -227,16 +227,30 @@ export function collectQa() {
   }
 }
 
+// Parity is by key NAME against en-US, not by count: a renamed key is a miss plus an extra.
+function localeParity(file, en) {
+  const keys = new Set(Object.keys(JSON.parse(readFileSync(file, "utf8"))));
+  const missing = en.filter((k) => !keys.has(k));
+  const extra = [...keys].filter((k) => !en.includes(k));
+  const parts = [];
+  if (missing.length) parts.push(`missing ${missing.join(", ")}`);
+  if (extra.length) parts.push(`extra ${extra.join(", ")}`);
+  return parts.join("; ");
+}
+
 export function collectDocs() {
-  const out = { locales: 0, keys: 0, keyParity: true, docPairs: 0, docsUnpaired: 0 };
+  const out = { locales: 0, keys: 0, keyParity: true, parityProblems: [], docPairs: 0, docsUnpaired: 0 };
   try {
     const dir = join(ROOT, "runtime", "i18n");
-    out.keys = Object.keys(JSON.parse(readFileSync(join(dir, "en-US.json"), "utf8"))).length;
+    const en = Object.keys(JSON.parse(readFileSync(join(dir, "en-US.json"), "utf8")));
+    out.keys = en.length;
     for (const f of readdirSync(dir)) {
       if (!f.endsWith(".json")) continue;
       out.locales++;
-      if (Object.keys(JSON.parse(readFileSync(join(dir, f), "utf8"))).length !== out.keys) out.keyParity = false;
+      const problem = localeParity(join(dir, f), en);
+      if (problem) out.parityProblems.push(`${f}: ${problem}`);
     }
+    out.keyParity = out.parityProblems.length === 0;
   } catch {
     out.locales = 0;
   }

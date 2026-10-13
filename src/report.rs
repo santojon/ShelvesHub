@@ -7,6 +7,8 @@ use std::process::Command;
 
 use serde_json::{json, Value};
 
+use crate::config::{cef_port_candidates, Config};
+
 /// Run `cmd args...` and return trimmed stdout, or None on any failure/empty output.
 fn cmd_out(cmd: &str, args: &[&str]) -> Option<String> {
     let out = Command::new(cmd).args(args).output().ok()?;
@@ -114,6 +116,8 @@ pub fn status_report() -> Value {
     } else {
         None
     };
+    // The interpreter the daemon would actually spawn (`SHELVES_PYTHON` honoured).
+    let python_bin = Config::from_env().python_bin;
     json!({
         "shelveshub": {
             "version": env!("CARGO_PKG_VERSION"),
@@ -125,7 +129,8 @@ pub fn status_report() -> Value {
         },
         "runtime": {
             "glibc": glibc,
-            "python": cmd_out("python3", &["--version"]).map(|s| first_line(&s)),
+            "pythonBin": python_bin,
+            "python": cmd_out(&python_bin, &["--version"]).map(|s| first_line(&s)),
         },
         "device": device_block(),
     })
@@ -225,6 +230,19 @@ pub fn classify_steam(running: Option<bool>) -> (Status, Option<String>) {
     }
 }
 
+/// Classify the daemon RPC probe. Answering ⇒ Ok; not ⇒ Warn (the daemon is not
+/// up, or listens elsewhere — the service check says which). Pure.
+pub fn classify_rpc(reachable: bool) -> (Status, Option<String>) {
+    if reachable {
+        (Status::Ok, None)
+    } else {
+        (
+            Status::Warn,
+            Some("no daemon answering there — start the service, or check `rpc_port`".into()),
+        )
+    }
+}
+
 /// Classify the service-active probe. Active ⇒ Ok; inactive ⇒ Fail; unknown ⇒
 /// Warn (not installed as a service, or no probe). Pure.
 pub fn classify_service(active: Option<bool>) -> (Status, Option<String>) {
@@ -247,15 +265,38 @@ fn home_dir() -> Option<std::path::PathBuf> {
         .map(std::path::PathBuf::from)
 }
 
+/// Steam's install dir on Windows from the per-user registry key the installer
+/// also reads (`HKCU\Software\Valve\Steam\SteamPath`), else the default location.
+fn windows_steam_root() -> std::path::PathBuf {
+    let from_registry = cmd_out(
+        "reg",
+        &["query", r"HKCU\Software\Valve\Steam", "/v", "SteamPath"],
+    )
+    .and_then(|out| {
+        let line = out.lines().find(|l| l.contains("REG_SZ"))?;
+        let (_, value) = line.split_once("REG_SZ")?;
+        let value = value.trim();
+        (!value.is_empty()).then(|| std::path::PathBuf::from(value))
+    });
+    from_registry.unwrap_or_else(|| {
+        let base = std::env::var("ProgramFiles(x86)")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "C:\\Program Files (x86)".to_string());
+        std::path::PathBuf::from(base).join("Steam")
+    })
+}
+
 /// Steam roots that may hold the `.cef-enable-remote-debugging` flag, per OS.
 fn steam_roots() -> Vec<std::path::PathBuf> {
+    if cfg!(target_os = "windows") {
+        return vec![windows_steam_root()];
+    }
     let Some(home) = home_dir() else {
         return Vec::new();
     };
     if cfg!(target_os = "macos") {
         vec![home.join("Library/Application Support/Steam")]
-    } else if cfg!(target_os = "windows") {
-        Vec::new() // created by the Windows installer; doctor doesn't touch it
     } else {
         vec![
             home.join(".steam/steam"),
@@ -284,20 +325,33 @@ fn probe_cef_flag(fix: bool) -> (bool, bool) {
     (false, false)
 }
 
-/// True if the loopback CEF debug port answers a TCP connect (8080/8081).
-fn probe_cef_port() -> bool {
+/// True if `host:port` answers a TCP connect within 400 ms.
+fn tcp_answers(host: &str, port: u16) -> bool {
     use std::net::{TcpStream, ToSocketAddrs};
     use std::time::Duration;
-    for port in [8080u16, 8081u16] {
-        if let Ok(addrs) = (format!("127.0.0.1:{port}")).to_socket_addrs() {
-            for addr in addrs {
-                if TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok() {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    let Ok(addrs) = (host, port).to_socket_addrs() else {
+        return false;
+    };
+    addrs
+        .into_iter()
+        .any(|addr| TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok())
+}
+
+/// True if the CEF debug port answers on the configured host (any candidate port).
+fn probe_cef_port(host: &str, configured: u16) -> bool {
+    cef_port_candidates(configured)
+        .into_iter()
+        .any(|port| tcp_answers(host, port))
+}
+
+/// True if the daemon's RPC server answers at its configured `host:port`.
+fn probe_rpc_port(rpc_addr: &str) -> bool {
+    let Some((host, port)) = rpc_addr.rsplit_once(':') else {
+        return false;
+    };
+    port.parse()
+        .map(|port| tcp_answers(host.trim_matches(['[', ']']), port))
+        .unwrap_or(false)
 }
 
 fn probe_steam_running() -> Option<bool> {
@@ -314,11 +368,10 @@ fn probe_steam_running() -> Option<bool> {
 
 fn probe_service_active() -> Option<bool> {
     if cfg!(target_os = "linux") {
-        // is-active prints "active"/"inactive"; absent unit → None (unknown).
-        match cmd_out("systemctl", &["--user", "is-active", "shelveshub.service"]) {
-            Some(s) => Some(s == "active"),
-            None => Some(false),
-        }
+        // `cat` exits 0 only when the unit exists: absent → None (not managed, a
+        // note rather than a failure). Present: `is-active` exits 0 only while it runs.
+        cmd_out("systemctl", &["--user", "cat", "shelveshub.service"])?;
+        Some(cmd_out("systemctl", &["--user", "is-active", "shelveshub.service"]).is_some())
     } else if cfg!(target_os = "macos") {
         cmd_out(
             "launchctl",
@@ -338,7 +391,9 @@ fn current_uid() -> String {
 }
 
 /// Run every check (and apply the CEF-flag fix when `fix`), newest-first severity.
+/// Ports and addresses come from the same config resolution the daemon uses.
 pub fn run_doctor(fix: bool) -> Vec<Check> {
+    let config = Config::from_env();
     let (found, created) = probe_cef_flag(fix);
     let (cef_status, cef_fix) = classify_cef_flag(found, created);
     let cef_detail = if found {
@@ -349,8 +404,14 @@ pub fn run_doctor(fix: bool) -> Vec<Check> {
         "Steam CEF remote-debugging flag missing".into()
     };
 
-    let (port_status, port_fix) = classify_port(probe_cef_port());
+    let (port_status, port_fix) = classify_port(probe_cef_port(&config.cef_host, config.cef_port));
+    let ports = cef_port_candidates(config.cef_port)
+        .iter()
+        .map(u16::to_string)
+        .collect::<Vec<_>>()
+        .join("/");
     let (steam_status, steam_fix) = classify_steam(probe_steam_running());
+    let (rpc_status, rpc_fix) = classify_rpc(probe_rpc_port(&config.rpc_addr));
     let (svc_status, svc_fix) = classify_service(probe_service_active());
 
     vec![
@@ -363,7 +424,7 @@ pub fn run_doctor(fix: bool) -> Vec<Check> {
         Check {
             name: "Renderer debug port",
             status: port_status,
-            detail: "loopback CEF port (8080/8081)".into(),
+            detail: format!("CEF port on {} ({ports})", config.cef_host),
             fix: port_fix,
         },
         Check {
@@ -371,6 +432,12 @@ pub fn run_doctor(fix: bool) -> Vec<Check> {
             status: steam_status,
             detail: "Steam process".into(),
             fix: steam_fix,
+        },
+        Check {
+            name: "Daemon RPC",
+            status: rpc_status,
+            detail: format!("local RPC at {}", config.rpc_addr),
+            fix: rpc_fix,
         },
         Check {
             name: "ShelvesHub service",

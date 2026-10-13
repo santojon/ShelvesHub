@@ -66,13 +66,28 @@
     return function () { const i = notifyListeners.indexOf(fn); if (i >= 0) notifyListeners.splice(i, 1); };
   }
 
+  /* The copy of the bundle running here is the hub's own: as sole host, or under a
+     loader once the cooperative-bundle hand-over happened — the loader's copy stood
+     down (its defer signal, published before our copy boots) or our copy announced
+     its boot. Plain coexistence and plain cooperation run the loader's copy, so a
+     hub-driven swap would not take effect there. Read live: it changes during boot. */
+  function hubBundleRuns() {
+    if (!COEXIST) return true;
+    if (!COOP || SHELVES_CFG.coopBundle !== true) return false;
+    try {
+      const defer = window.__DECK_SHELVES_DEFER_TO_HOST__;
+      return typeof window.__DECK_SHELVES_HOST_BUNDLE_BOOTED__ === "string" || !!(defer && typeof defer === "object");
+    } catch (e) { return false; }
+  }
+
   // ── HostApi assembly ──────────────────────────────────────────────────────
   const mountHandlers = [], unmountHandlers = [];
   const host = {
     __shelvesRuntime: true,
     version: HOST_API_VERSION,
     // Identify this host + the capabilities it implements, so a bundle can adapt
-    // without feature-detecting each member (contract `HostHandshake`).
+    // without feature-detecting each member (contract `HostHandshake`). Computed per
+    // call, so a tab inserted or a hand-over settled after boot shows on a later read.
     handshake: function () {
       const hs = {
         hostKind: "shelveshub",
@@ -80,8 +95,8 @@
         hostApiVersion: HOST_API_VERSION,
         capabilities: {
           teardown: true,
-          selfUpdate: !COEXIST, // can install a PLUGIN update in place (see updates.canSelfInstall)
-          nativeQam: nativeUiOn(),
+          selfUpdate: hubBundleRuns(), // can install a PLUGIN update in place (see updates.canSelfInstall)
+          nativeQam: QamHost._tabPresent(),
           coexist: !!COEXIST,
           // Cooperative-bundle protocol (daemon `coop_bundle`): under force this
           // host runs its OWN copy of the bundle, so the loader's copy may stand
@@ -114,12 +129,16 @@
       onUnmount: function (cb) { if (typeof cb === "function") unmountHandlers.push(cb); },
       // Dispose the CURRENT bundle instance before a hot-swap re-evals a new one,
       // so two instances don't both own the Home. Runs the bundle's onUnmount
-      // handlers once; the loader calls this (via __SHELVES_TEARDOWN__) first.
+      // handlers once; the daemon calls this over CDP before it clears its marker.
       teardown: function () {
+        const pruning = _navPruneTimer !== null;
         const hs = unmountHandlers.splice(0, unmountHandlers.length);
         for (let i = 0; i < hs.length; i++) {
           try { hs[i](); } catch (e) { log("lifecycle.teardown handler:", e && e.message); }
         }
+        // The nav prune is the host's own and stops with the handlers above; the
+        // swapped-in bundle needs it again and nothing else re-arms it.
+        if (pruning) startNavPrune();
         return hs.length;
       },
     },
@@ -130,19 +149,20 @@
           .then(function (j) { if (!j.ok) throw new Error("rpc.call(" + method + "): " + j.error); return j.result; });
       },
     },
-    // The concrete router hook — the plugin resolves this (falling back from a
-    // loader's hook) to register its screens and patch the home. Exposed both as
-    // `routerHook` (what the plugin looks for by name) and behind `routes`.
+    /* The concrete router hook — the plugin resolves this (falling back from a
+       loader's hook) to register its screens and patch the home. Exposed both as
+       `routerHook` (what the plugin looks for by name) and behind `routes`, which
+       follows whatever `routerHook` holds (cooperation swaps in the loader's). */
     routerHook: routerHook,
     routes: {
       register: function (path, component) {
-        routerHook.addRoute(path, component);
-        return { dispose: function () { routerHook.removeRoute(path); } };
+        host.routerHook.addRoute(path, component);
+        return { dispose: function () { host.routerHook.removeRoute(path); } };
       },
-      addRoute: function (path, component, props) { routerHook.addRoute(path, component, props); },
-      removeRoute: function (path) { routerHook.removeRoute(path); },
-      addPatch: function (path, patch) { return routerHook.addPatch(path, patch); },
-      removePatch: function (path, patch) { return routerHook.removePatch(path, patch); },
+      addRoute: function (path, component, props) { host.routerHook.addRoute(path, component, props); },
+      removeRoute: function (path) { host.routerHook.removeRoute(path); },
+      addPatch: function (path, patch) { return host.routerHook.addPatch(path, patch); },
+      removePatch: function (path, patch) { return host.routerHook.removePatch(path, patch); },
     },
     notifications: {
       /* `logo` / `icon` (React elements the sender renders — what the plugin sends a loader)
@@ -177,18 +197,18 @@
       },
     },
     /* Self-install of a PLUGIN update: the daemon obtains the release asset and swaps
-       the injected bundle, so the plugin's update UX can offer "Install" (not just
-       "Download"). applyUpdate reloads once the swap succeeds, so the daemon re-injects
-       the new bundle and the plugin re-boots on it. */
+       the bundle file, so the plugin's update UX can offer "Install" (not just
+       "Download"). The daemon's file watch then hot-swaps the new bundle in place; a
+       page reload here would race the ticking daemon into a mid-boot injection. */
     updates: {
-      // True only when THIS host INJECTS the bundle (sole / true owner): only then
-      // does a hub-driven swap take effect. Under any loader the loader injects its
-      // own copy, so report false and let the plugin keep its own update banner.
-      canSelfInstall: function () { return !COEXIST; },
+      // True only while the copy that runs is the hub's own (hubBundleRuns): only then
+      // does a hub-driven swap take effect. While the loader's copy runs, report false
+      // and let the plugin keep its own update banner.
+      canSelfInstall: function () { return hubBundleRuns(); },
       applyUpdate: function (release) {
         return fetch(RPC_ENDPOINT, { method: "POST", headers: rpcHeaders(), body: JSON.stringify({ method: "applyUpdate", args: release == null ? null : release }) })
           .then(function (res) { if (!res.ok) throw new Error("applyUpdate HTTP " + res.status); return res.json(); })
-          .then(function (j) { if (!j.ok) throw new Error("applyUpdate: " + j.error); try { window.location.reload(); } catch (e) {} });
+          .then(function (j) { if (!j.ok) throw new Error("applyUpdate: " + j.error); return j.result; });
       },
     },
     qam: QamHost,
@@ -477,17 +497,27 @@
       if (touched) { try { root.m_bChildrenSorted = false; } catch (e) {} }
     } catch (e) {}
   }
+  // The Home is drawn by the gamepad UI's main window; its document says whether
+  // anything can be on screen. This context's own document is the fallback.
+  function homeWindowDocument() {
+    try {
+      const ws = window.SteamUIStore && window.SteamUIStore.WindowStore;
+      const bw = ws && ws.GamepadUIMainWindowInstance && ws.GamepadUIMainWindowInstance.m_BrowserWindow;
+      if (bw && bw.document && typeof bw.document.hidden === "boolean") return bw.document;
+    } catch (e) {}
+    return document;
+  }
   let _navPruneTimer = null;
   function stopNavPrune() {
     if (_navPruneTimer) { clearInterval(_navPruneTimer); _navPruneTimer = null; }
   }
   function startNavPrune() {
     if (_navPruneTimer) return;
-    // Pause the work while the document is hidden (game in front / UI off) so the
-    // poll costs nothing when it can't matter; register a stop path so a hot-swap
-    // teardown clears it instead of leaking a timer per re-eval.
+    // Pause the work while the Home's window is hidden (game in front / UI off) so
+    // the poll costs nothing when it can't matter; the stop path sits with the
+    // bundle's unmount handlers, and teardown re-arms it for the next bundle.
     _navPruneTimer = setInterval(function () {
-      try { if (document.hidden) return; } catch (e) {}
+      try { if (homeWindowDocument().hidden) return; } catch (e) {}
       pruneHiddenNavNodes();
     }, 500);
     unmountHandlers.push(stopNavPrune);

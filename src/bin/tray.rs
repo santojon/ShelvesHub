@@ -17,8 +17,10 @@ use serde_json::Value;
 
 const REFRESH: Duration = Duration::from_secs(5);
 
+/// The daemon's RPC address, resolved exactly as the daemon resolves it (env
+/// host/port, `SHELVES_RPC_ADDR`, the config file beside the binaries, default).
 fn rpc_addr() -> String {
-    std::env::var("SHELVES_RPC_ADDR").unwrap_or_else(|_| "127.0.0.1:60123".to_string())
+    shelveshub::config::rpc_addr()
 }
 
 fn token() -> Option<String> {
@@ -53,8 +55,8 @@ fn rpc(method: &str, args: Option<Value>) -> Option<Value> {
 }
 
 /// A short status line for the menu + tooltip, derived from getDiagnostics.
-/// `hosting` is the truth that the bundle is injected and running — the sole host
-/// does not always set `bundleReady`, so it must not gate the "active" label.
+/// `hosting` is the loop's own observation that the bundle is injected and
+/// running; nothing else gates the "active" label.
 fn status_line() -> String {
     match rpc("getDiagnostics", None) {
         Some(v) => {

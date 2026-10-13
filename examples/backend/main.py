@@ -6,9 +6,18 @@ project. Run it through the daemon with:
 
   SHELVES_BACKEND_DIR=examples/backend cargo run --bin shelveshub
 
-Then, from any HTTP client:
+Then, from any HTTP client. The RPC needs the daemon's per-boot bearer token
+(the `.rpc-token` file in its per-user install directory: `~/.local/share/shelveshub`
+on Linux/macOS, `%LOCALAPPDATA%\\shelveshub` on Windows) and a JSON content type,
+and only the methods on the daemon's allowlist (`BACKEND_METHODS` in src/rpc.rs)
+reach the backend — `get_settings` and `set_settings` are on it; `echo` and
+`boom` only exercise the runner (an answer, a raised error) and are refused
+over RPC:
 
-  curl -X POST 127.0.0.1:60123 -d '{"method":"echo","args":{"value":42}}'
+  TOKEN="$(cat ~/.local/share/shelveshub/.rpc-token)"
+  curl -X POST 127.0.0.1:60123 \\
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\
+    -d '{"method":"get_settings","args":{}}'
 """
 import json
 import os

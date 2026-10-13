@@ -1,6 +1,7 @@
 #!/bin/bash
 # Installer for generic Linux — a per-USER service (no root), matching SteamOS.
-# Run from the extracted package directory: bash installer/install.sh
+# Usage (online): bash <(curl -sL https://github.com/santojon/ShelvesHub/releases/latest/download/install-linux.sh)
+# Usage (from extracted package): bash installer/install.sh
 set -e
 
 # Per-user by design: refuse root so we never create a root-owned install that
@@ -13,6 +14,7 @@ if [[ "${EUID:-$(id -u)}" -eq 0 && "${SHELVES_ALLOW_ROOT:-}" != "1" ]]; then
   exit 1
 fi
 
+REPO="santojon/ShelvesHub"
 INSTALL_DIR="$HOME/.local/share/shelveshub"
 SERVICE_DIR="$HOME/.config/systemd/user"
 SERVICE_FILE="$SERVICE_DIR/shelveshub.service"
@@ -26,7 +28,20 @@ if mkdir -p "$INSTALL_DIR" 2>/dev/null && exec > >(tee "$LOGFILE") 2>&1; then
 fi
 trap 'rc=$?; [[ $rc -ne 0 ]] && { echo; echo "[!] Install failed (exit $rc). Full log: $LOGFILE"; }' EXIT
 
+# Pick the package for this CPU (x86_64 desktops; ARM64 devices are aarch64).
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64|amd64)   PACKAGE="shelveshub-linux.tar.gz" ;;
+  aarch64|arm64)  PACKAGE="shelveshub-linux-aarch64.tar.gz" ;;
+  *)
+    echo "[!] Unsupported architecture: $ARCH"
+    echo "    Supported Linux architectures: x86_64, aarch64"
+    exit 1
+    ;;
+esac
+
 echo "=== ShelvesHub — Linux Installer ==="
+echo "[i] Architecture: $ARCH"
 
 # Migrate any older ROOT/system install (/opt + a system unit, which ran the daemon
 # as root) to the current per-user service, and DROP root. Your Deck Shelves settings
@@ -62,16 +77,62 @@ if [[ -f /etc/systemd/system/shelveshub.service || -d /opt/shelveshub ]]; then
 fi
 set -e
 
-mkdir -p "$INSTALL_DIR/logs" "$SERVICE_DIR"
-cp "$BINARY" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/$BINARY"
+# ── Resolve download URL ───────────────────────────────────────────────────────
+if [[ -f "$BINARY" ]]; then
+  # Running from an already-extracted package — skip download
+  echo "[i] Binary found locally, skipping download."
+  EXTRACTED_DIR="."
+else
+  echo "[i] Fetching latest release from GitHub..."
+  API_URL="https://api.github.com/repos/$REPO/releases/latest"
+  API_JSON=$(curl -sL "$API_URL")
+  DOWNLOAD_URL=$(echo "$API_JSON" | grep '"browser_download_url"' | grep "$PACKAGE" | cut -d'"' -f4)
+  SUMS_URL=$(echo "$API_JSON" | grep '"browser_download_url"' | grep 'SHA256SUMS"' | cut -d'"' -f4)
 
-[[ -d bundle ]] && mkdir -p "$INSTALL_DIR/bundle" && cp -r bundle/. "$INSTALL_DIR/bundle/"
-[[ -d runtime ]] && mkdir -p "$INSTALL_DIR/runtime" && cp -r runtime/. "$INSTALL_DIR/runtime/"
+  if [[ -z "$DOWNLOAD_URL" ]]; then
+    echo "[!] Could not find $PACKAGE in the latest release."
+    echo "    Download manually from: https://github.com/$REPO/releases/latest"
+    exit 1
+  fi
+
+  TMPDIR=$(mktemp -d)
+  trap 'rc=$?; rm -rf "$TMPDIR"; [[ $rc -ne 0 ]] && { echo; echo "[!] Install failed (exit $rc). Full log: $LOGFILE"; }' EXIT
+
+  echo "[i] Downloading $PACKAGE..."
+  curl -fsL "$DOWNLOAD_URL" -o "$TMPDIR/$PACKAGE"
+
+  # Integrity: verify the download against the release's SHA256SUMS when present.
+  if [[ -n "$SUMS_URL" ]]; then
+    curl -fsL "$SUMS_URL" -o "$TMPDIR/SHA256SUMS"
+    EXPECTED=$(grep " $PACKAGE\$" "$TMPDIR/SHA256SUMS" | awk '{print $1}')
+    ACTUAL=$(sha256sum "$TMPDIR/$PACKAGE" | awk '{print $1}')
+    if [[ -n "$EXPECTED" && "$EXPECTED" != "$ACTUAL" ]]; then
+      echo "[!] Checksum mismatch for $PACKAGE — aborting (expected $EXPECTED, got $ACTUAL)."
+      exit 1
+    fi
+    [[ -n "$EXPECTED" ]] && echo "[i] Checksum verified."
+  fi
+
+  tar -xzf "$TMPDIR/$PACKAGE" -C "$TMPDIR"
+  EXTRACTED_DIR="$TMPDIR"
+fi
+
+# ── Install binary and bundle ──────────────────────────────────────────────────
+echo "[i] Installing to $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR/logs" "$SERVICE_DIR"
+# Stage next to the running binary and rename over it: a plain cp onto a running
+# executable can fail with "Text file busy"; a rename never does, and the service
+# is restarted onto the new file below.
+cp "$EXTRACTED_DIR/$BINARY" "$INSTALL_DIR/$BINARY.new"
+chmod +x "$INSTALL_DIR/$BINARY.new"
+mv -f "$INSTALL_DIR/$BINARY.new" "$INSTALL_DIR/$BINARY"
+
+[[ -d "$EXTRACTED_DIR/bundle" ]] && mkdir -p "$INSTALL_DIR/bundle" && cp -r "$EXTRACTED_DIR/bundle/." "$INSTALL_DIR/bundle/"
+[[ -d "$EXTRACTED_DIR/runtime" ]] && mkdir -p "$INSTALL_DIR/runtime" && cp -r "$EXTRACTED_DIR/runtime/." "$INSTALL_DIR/runtime/"
 # Config file: install it, but never overwrite one the user has already edited.
 CONFIG_WAS_FRESH=0
-if [[ -f shelveshub.config.json && ! -f "$INSTALL_DIR/shelveshub.config.json" ]]; then
-  cp shelveshub.config.json "$INSTALL_DIR/"; CONFIG_WAS_FRESH=1
+if [[ -f "$EXTRACTED_DIR/shelveshub.config.json" && ! -f "$INSTALL_DIR/shelveshub.config.json" ]]; then
+  cp "$EXTRACTED_DIR/shelveshub.config.json" "$INSTALL_DIR/"; CONFIG_WAS_FRESH=1
 fi
 
 # ── Optional setup choices ─────────────────────────────────────────────────────
@@ -132,11 +193,14 @@ fi
 # installs when the package ships the binary AND the user opts in; degrades to a
 # clear note otherwise. Autostart is an XDG entry (desktop sessions only).
 install_tray() {
-  if [[ ! -f shelveshub-tray ]]; then
+  if [[ ! -f "$EXTRACTED_DIR/shelveshub-tray" ]]; then
     echo "[i] Tray companion not bundled in this package — skipping."
     return
   fi
-  cp shelveshub-tray "$INSTALL_DIR/"; chmod +x "$INSTALL_DIR/shelveshub-tray"
+  # Stage + rename, like the daemon binary: the tray may be running right now.
+  cp "$EXTRACTED_DIR/shelveshub-tray" "$INSTALL_DIR/shelveshub-tray.new"
+  chmod +x "$INSTALL_DIR/shelveshub-tray.new"
+  mv -f "$INSTALL_DIR/shelveshub-tray.new" "$INSTALL_DIR/shelveshub-tray"
   mkdir -p "$HOME/.config/autostart"
   cat > "$HOME/.config/autostart/shelveshub-tray.desktop" <<EOF
 [Desktop Entry]
@@ -151,13 +215,13 @@ TRAY=$(ask "${SHELVES_TRAY:-}" "Install the ShelvesHub tray companion (desktop m
 [[ "$TRAY" == 1 ]] && install_tray
 
 # Optional data-backend payload: auto-detected by the service at <install>/backend.
-[[ -d backend ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r backend/. "$INSTALL_DIR/backend/"
+[[ -d "$EXTRACTED_DIR/backend" ]] && mkdir -p "$INSTALL_DIR/backend" && cp -r "$EXTRACTED_DIR/backend/." "$INSTALL_DIR/backend/"
 # Boot-animation source cuts — read from <install>/assets/boot by the boot_movie toggle.
-[[ -d assets ]] && mkdir -p "$INSTALL_DIR/assets" && cp -r assets/. "$INSTALL_DIR/assets/"
+[[ -d "$EXTRACTED_DIR/assets" ]] && mkdir -p "$INSTALL_DIR/assets" && cp -r "$EXTRACTED_DIR/assets/." "$INSTALL_DIR/assets/"
 # Keep the uninstaller alongside the install so it's available later.
-[[ -f installer/uninstall.sh ]] && cp installer/uninstall.sh "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall.sh"
+[[ -f "$EXTRACTED_DIR/installer/uninstall.sh" ]] && cp "$EXTRACTED_DIR/installer/uninstall.sh" "$INSTALL_DIR/" && chmod +x "$INSTALL_DIR/uninstall.sh"
 
-cp installer/shelveshub.service "$SERVICE_FILE"
+cp "$EXTRACTED_DIR/installer/shelveshub.service" "$SERVICE_FILE"
 chmod 644 "$SERVICE_FILE"
 
 systemctl --user daemon-reload

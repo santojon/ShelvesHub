@@ -104,16 +104,19 @@ Get-ScheduledTask -TaskName ShelvesHub
 
 ## Pacote (bundle)
 
-O slot `bundle/index.js` é preenchido pelo pipeline de lançamento do Deck Shelves. Em uma instalação nova do carregador, ele contém um placeholder; o instalador do Deck Shelves o substitui pelo pacote real. Se você estiver configurando manualmente, copie o pacote compilado do Deck Shelves para `<install_dir>/bundle/index.js`.
+O pacote traz `bundle/index.js` como um placeholder; o daemon preenche o slot sozinho na primeira inicialização — copia um Deck Shelves gerenciado por um carregador se houver um na máquina, senão baixa a versão mais recente do Deck Shelves — e o mantém atualizado com as atualizações automáticas ligadas (ligadas por padrão). Se você estiver configurando manualmente, copie um pacote compilado do Deck Shelves (o artefato `index.iife.js`) para `<install_dir>/bundle/index.js`.
 
 ## Servidor RPC
 
-O carregador expõe um endpoint HTTP JSON-RPC local em `127.0.0.1:60123`. Você pode testá-lo diretamente:
+O daemon expõe um endpoint HTTP JSON-RPC local em `127.0.0.1:60123` (`rpc_host` / `rpc_port` no arquivo de configuração; por serviço, `SHELVES_RPC_HOST` / `SHELVES_RPC_PORT`, ou `SHELVES_RPC_ADDR` quando esses dois não estão definidos). Toda requisição leva o tipo de conteúdo JSON e o token por inicialização que o daemon grava ao lado da instalação (`~/.local/share/shelveshub/.rpc-token`; `%LOCALAPPDATA%\shelveshub\.rpc-token` no Windows):
 
 ```bash
-curl -s 127.0.0.1:60123 -d '{"method":"ping"}'
+TOKEN="$(cat ~/.local/share/shelveshub/.rpc-token)"
+curl -s http://127.0.0.1:60123/ -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"ping"}'
 # → {"ok":true,"result":"pong"}
 
-curl -s 127.0.0.1:60123 -d '{"method":"getVersion"}'
-# → {"ok":true,"result":"0.1.0"}
+curl -s http://127.0.0.1:60123/ -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"getVersion"}'
+# → {"ok":true,"result":"0.6.0"}
 ```
+
+A lista de métodos e o formato de comunicação estão em [host-api.md](host-api.md#formato-de-comunicação-do-rpc).

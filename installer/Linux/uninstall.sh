@@ -1,13 +1,20 @@
 #!/bin/bash
 # Uninstaller for Linux — mirrors install.sh (a per-USER service).
 # Stops and disables the user service and removes the install directory. Also
-# cleans up an older system-wide (root) install if one is still present.
+# cleans up an older system-wide (root) install if one is still present. Leaves
+# your Deck Shelves settings (shared with other hosts) and Steam's CEF debug flag
+# in place unless --purge.
 #
-# Usage: bash uninstall.sh
+# Usage: bash uninstall.sh [--purge]
 set -e
 
 INSTALL_DIR="$HOME/.local/share/shelveshub"
 SERVICE_FILE="$HOME/.config/systemd/user/shelveshub.service"
+# Resolved the same way install.sh does, so --purge removes the directory the
+# install actually used.
+SETTINGS_DIR="${SHELVES_SETTINGS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/deck-shelves}"
+PURGE=0
+[[ "$1" == "--purge" ]] && PURGE=1
 
 echo "=== ShelvesHub — Linux Uninstaller ==="
 
@@ -39,7 +46,22 @@ else
   echo "[i] No install directory at $INSTALL_DIR."
 fi
 
-echo ""
-echo "[i] Per-user Deck Shelves settings (shared with other hosts) were kept:"
-echo "    ~/.local/share/deck-shelves"
+# The same Steam roots install.sh touches (including the Flatpak one).
+STEAM_ROOTS=("$HOME/.steam/steam" "$HOME/.local/share/Steam" \
+  "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam")
+if [[ "$PURGE" -eq 1 ]]; then
+  rm -rf "$SETTINGS_DIR" 2>/dev/null || true
+  for steam_root in "${STEAM_ROOTS[@]}"; do
+    rm -f "$steam_root/.cef-enable-remote-debugging" 2>/dev/null || true
+  done
+  echo "[OK] Purged Deck Shelves settings and Steam's CEF debug flag."
+  echo "     Restart Steam so it stops exposing the debug port."
+else
+  echo ""
+  echo "[i] Kept (remove manually for a clean slate):"
+  echo "    - Deck Shelves settings (shared): $SETTINGS_DIR"
+  echo "    - Steam CEF debug flag:           <steam root>/.cef-enable-remote-debugging"
+  echo "    Re-run with --purge to remove both (then restart Steam)."
+fi
+
 echo "[OK] ShelvesHub uninstalled."

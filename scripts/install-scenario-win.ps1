@@ -15,11 +15,13 @@ function Check($label, [bool]$ok) {
   if ($ok) { Write-Output "  [ok] $label" } else { Write-Output "  [X]  $label"; $script:FAILS++ }
 }
 
-# Run a packaged installer script in a child shell that FIRST defines no-op stubs
-# for the ScheduledTask cmdlets (a simple function with no param block swallows any
-# args), then cd's into the package dir (so install.ps1's `Test-Path shelveshub.exe`
-# finds the local binary and skips the download) and runs the script. Register-
-# ScheduledTask records to $env:SHTASK_LOG so we can assert it was attempted.
+# Run a packaged installer script in a child shell that FIRST defines stubs for
+# the ScheduledTask cmdlets (a function with no param block swallows any args),
+# then cd's into the package dir (so install.ps1's `Test-Path shelveshub.exe`
+# finds the local binary and skips the download) and runs the script. New-
+# ScheduledTaskSettingsSet answers a settings-shaped object like the real cmdlet
+# (the installer sets ExecutionTimeLimit on it); Register-ScheduledTask records
+# the limit it was handed to $env:SHTASK_LOG so we can assert on both.
 function Run-Pkg($scriptName, $argLine, $outFile) {
   # The child shell may write to stderr (benign). Under the script's Stop
   # preference PowerShell escalates native-command stderr to a terminating error,
@@ -41,17 +43,27 @@ function Run-Pkg($scriptName, $argLine, $outFile) {
 `$env:SHELVES_PLUGIN_PRERELEASE = '$($env:SHELVES_PLUGIN_PRERELEASE)'
 function New-ScheduledTaskAction {}
 function New-ScheduledTaskTrigger {}
-function New-ScheduledTaskSettingsSet {}
+function New-ScheduledTaskSettingsSet { [pscustomobject]@{ ExecutionTimeLimit = 'PT72H' } }
 function New-ScheduledTaskPrincipal {}
-function Register-ScheduledTask { 'Register-ScheduledTask' | Out-File -Append -LiteralPath `$env:SHTASK_LOG }
+function Register-ScheduledTask { `$i = [array]::IndexOf(`$args, '-Settings'); `$limit = if (`$i -ge 0) { `$args[`$i + 1].ExecutionTimeLimit } else { 'none' }; "Register-ScheduledTask limit=`$limit" | Out-File -Append -LiteralPath `$env:SHTASK_LOG }
 function Start-ScheduledTask {}
 function Stop-ScheduledTask {}
 function Unregister-ScheduledTask {}
 Set-Location -LiteralPath '$PKG'
 & '$PKG\installer\$scriptName' $argLine
+exit `$LASTEXITCODE
 "@ | Set-Content -LiteralPath $wrapper -Encoding utf8
   & powershell -NoProfile -ExecutionPolicy Bypass -File $wrapper *> $outFile
+  $code = $LASTEXITCODE
   Remove-Item -LiteralPath $wrapper -ErrorAction SilentlyContinue
+  # A terminating error or an explicit `exit N` in the installer surfaces as the
+  # child shell's exit code; a non-zero one fails the scenario with the output shown.
+  if ($code -ne 0) {
+    Write-Output "--- $scriptName $argLine output (exit code $code) ---"
+    Get-Content $outFile -ErrorAction SilentlyContinue | Write-Output
+  }
+  $label = ("$scriptName $argLine").Trim() + " exit code 0 (got $code)"
+  Check $label ($code -eq 0)
 }
 
 Write-Output "== Windows install / uninstall lifecycle =="
@@ -95,6 +107,7 @@ Check "config present"              (Test-Path $cfgPath)
 Check "runtime copied"              (Test-Path "$installPath\runtime\shelves-host.js")
 Check "install.log written"         (Test-Path "$installPath\install.log")
 Check "task registration attempted" ((Test-Path $env:SHTASK_LOG) -and [bool](Select-String -Path $env:SHTASK_LOG -Pattern "Register-ScheduledTask" -Quiet))
+Check "task registered with no run-time limit (PT0S)" ((Test-Path $env:SHTASK_LOG) -and [bool](Select-String -Path $env:SHTASK_LOG -Pattern "limit=PT0S" -Quiet) -and -not [bool](Select-String -Path $env:SHTASK_LOG -Pattern "limit=(PT72H|none)" -Quiet))
 $cfg = if (Test-Path $cfgPath) { Get-Content $cfgPath -Raw } else { "" }
 Check "force_owner flipped on"      ($cfg -match '"force_owner":\s*true')
 Check "native_qam flipped off"      ($cfg -match '"native_qam":\s*false')
