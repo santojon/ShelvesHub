@@ -224,8 +224,16 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   no idioma da captura) e lida com uma visão do hub
   que ficou aberta da captura anterior; as galerias do README, a página de vitrine (reescrita para
   o fluxo atual) e a galeria e a página de funcionalidades do site mostram o conjunto novo, e a
-  página de funcionalidades serve a Home em WebP como a página inicial
+  página de funcionalidades serve a Home em WebP como a página inicial. A rodada captura o painel
+  do plugin em inglês também, devolve as duas interfaces ao idioma do Steam depois de cada captura e
+  não conta mais como captura nova um arquivo deixado por uma rodada anterior
   (`scripts/deckprobe-ext/screenshots/scenarios/hub.py`, `docs/showcase.md`, `site/`).
+- **Os pop-ups de notificação num host sem carregador de plugins têm o fundo de toast do Steam.**
+  No Big Picture do macOS, Windows ou Linux desktop eles apareciam sem fundo (logo e texto soltos
+  sobre a tela): usavam o modelo da lista de notificações do Steam. Agora ficam sobre o fundo de
+  toast curto do Steam — fundo escuro, sombra, logo, título com o ícone sobre um corpo de duas
+  linhas — como os pop-ups curtos do próprio Steam; as entradas na lista de notificações do Steam
+  mantêm o visual de lista (`runtime/shelves-host-toast.js`).
 - **As linhas que abrem o painel lateral terminam com uma seta.** "Ver estado" e "Ver logs" em
   Solução de problemas terminam com um `>` alinhado à direita (16 px, opacidade 0,7), a mesma
   marca que o painel do próprio plugin usa na linha dele que abre um painel lateral

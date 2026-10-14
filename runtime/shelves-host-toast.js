@@ -9,6 +9,7 @@
     const TOAST_SOURCE_CLIENT = 1;
     const TOAST_TYPE_NEW = 0;      // ToastType.New
     const TOAST_SOUND_MISC = 6;    // the stock "ToastMisc" sound
+    const TOAST_LOCATION_POPUP = 1; // the location Steam's gamepad toast popup renders with
     const DISCOVERY_DELAY_MS = 2500;
     const QUEUE_CAP = 10;
     let state = "off";             // off | pending | active | failed
@@ -33,7 +34,9 @@
       const header = pick(chromeMod, function (s) { return s.indexOf("fnRenderTimestamp") >= 0; });
       const body = pick(chromeMod, function (s) { return s.indexOf("StandardNotificationDescription") >= 0 && s.indexOf("multiline") >= 0; });
       if (!renderer || !chrome || !header || !body) return null;
-      return { renderer: renderer, chrome: chrome, header: header, body: body };
+      // The plate Steam's short popup toasts use; without it popups keep the list-row look.
+      const short = findClassModule(["ShortTemplate", "TwoLine", "ShortLogoDimensions", "Content", "Title", "Body"]);
+      return { renderer: renderer, chrome: chrome, header: header, body: body, short: short };
     }
     /* Pre-flight: the renderer body must survive a run for OUR type under the SAME hook
        stubs the trampoline applies during construction (an empty group: elements only, no
@@ -141,12 +144,22 @@
         dangerouslySetInnerHTML: { __html: svg },
       });
     }
+    /* A popup entry on Steam's short-toast plate (dark, shadowed, up to two lines), the structure
+       Steam's own short popups have: logo, then title (with the per-type icon) over the body. */
+    function PopupToast(sc, d, icon, onActivate) {
+      return h("div", { className: sc.ShortTemplate + " " + sc.TwoLine, onClick: onActivate },
+        h("div", { key: "l", className: sc.ShortLogoDimensions }, logoNode(d)),
+        h("div", { key: "c", className: sc.Content + (sc.FullWidth ? " " + sc.FullWidth : "") },
+          h("div", { key: "h", className: sc.Header }, icon ? h("div", { key: "i", className: sc.Icon }, icon) : null, h("div", { key: "t", className: sc.Title }, d.title)),
+          h("div", { key: "b", className: sc.Body }, d.body)));
+    }
     // One of our entries, in Steam's chrome: frame + header (per-type icon, title, timestamp)
     // + body, the sender's logo on the left. Tapping it dismisses, as Steam's simple toasts do.
     function HostToast(props) {
       const n = props.notification, d = n.data || {};
       const onActivate = function () { if (typeof props.onDismiss === "function") props.onDismiss(); };
       const icon = isElement(d.icon) ? d.icon : undefined;
+      if (props.location === TOAST_LOCATION_POPUP && parts.short) return PopupToast(parts.short, d, icon, onActivate);
       return h(parts.chrome, { location: props.location, logo: logoNode(d), onActivate: onActivate, bNewIndicator: n.bNewIndicator },
         h(parts.header, { key: "h", icon: icon, title: d.title, location: props.location, timestamp: n.rtCreated }),
         h(parts.body, { key: "b", multiline: true }, d.body));
@@ -183,7 +196,7 @@
         const slot = injectTrampoline(found.renderer);
         if (!slot) { logWarn("NOTIFY", "native toasts: renderer already wrapped by another host — notifications stay in the hub view."); return; }
         replaceSlot(slot, handler);
-        parts = { slot: slot, chrome: found.chrome, header: found.header, body: found.body };
+        parts = { slot: slot, chrome: found.chrome, header: found.header, body: found.body, short: found.short };
         state = "active";
         logInfo("NOTIFY", "native toasts active (Steam's toast pipeline + chrome).");
       } catch (e) {

@@ -54,7 +54,10 @@ lists inside the pages from the README and the release notes (EN and pt-BR).
 The hub views are clipped from the menu document's left edge to the panel (`[data-fb-panel]`), or
 to the side panel's right edge when one is open (it sits to the right of the hub view), so the
 side-panel shots are wider. Captures are taken in English
-(`window.__SHELVES_LOCALE__`, `--locale` to change) regardless of Steam's language.
+(`window.__SHELVES_LOCALE__` for the hub's strings and the plugin's own `__dsSetLocale` hook for
+its panel; `--locale` to change) regardless of Steam's language, and each scenario hands both back
+to Steam's language afterwards. A scenario that could not take a fresh capture reports no output
+(an older file in `assets/screenshots/` is never counted).
 
 ## Capturing
 

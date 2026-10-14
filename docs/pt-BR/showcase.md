@@ -54,7 +54,10 @@ funcionalidades e de versões a partir do README e das notas de versão (EN e pt
 As visões do hub são recortadas da borda esquerda do documento do menu até o painel
 (`[data-fb-panel]`), ou até a borda direita do painel lateral quando ele está aberto (fica à direita
 da visão do hub), então as capturas do painel lateral são mais largas. As capturas são em
-inglês (`window.__SHELVES_LOCALE__`, `--locale` para trocar), seja qual for o idioma do Steam.
+inglês (`window.__SHELVES_LOCALE__` para os textos do hub e o hook `__dsSetLocale` do próprio plugin
+para o painel dele; `--locale` para trocar), seja qual for o idioma do Steam, e cada cenário devolve
+os dois ao idioma do Steam depois. Um cenário que não conseguiu uma captura nova não reporta saída
+(um arquivo antigo em `assets/screenshots/` nunca conta).
 
 ## Capturando
 

@@ -211,8 +211,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   capture language) and copes with a hub view that stayed open
   from the previous shot; the README galleries, the showcase page (rewritten for the current
   flow) and the site's gallery and features page show the new set, and the features page serves
-  the Home as WebP like the landing page (`scripts/deckprobe-ext/screenshots/scenarios/hub.py`,
+  the Home as WebP like the landing page. The run captures the plugin's panel in English too, hands
+  both UIs back to Steam's language after each shot, and no longer counts a file an earlier run
+  left as a fresh capture (`scripts/deckprobe-ext/screenshots/scenarios/hub.py`,
   `docs/showcase.md`, `site/`).
+- **Notification popups on a host without a plugin loader have Steam's toast plate.** In Big
+  Picture on macOS, Windows or desktop Linux they were drawn without a background (logo and text
+  floating over the screen): they used the template of Steam's notification list. Popups now sit
+  on Steam's short-toast plate — dark background, shadow, logo, title with its icon over a
+  two-line body — the way Steam's own short popups do; entries in Steam's notification list keep
+  the list look (`runtime/shelves-host-toast.js`).
 - **Rows that open the side panel end with a chevron.** "View status" and "View logs" in
   Troubleshooting end with a right-aligned `>` (16 px, 0.7 opacity), the same mark the plugin's
   own panel uses on its row that opens a side panel (`runtime/shelves-host-qam.js`).

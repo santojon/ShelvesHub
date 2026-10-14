@@ -25,7 +25,6 @@ from typing import Dict, Optional
 
 from deckprobe.screenshots.lib.nav import (
     navigate_to_ds_qam,
-    close_qam,
     navigate_home,
     home_via_mainmenu,
     _qam_eval,
@@ -81,17 +80,49 @@ def _click(host: str, port: int, sel: str) -> str:
     return _qam_eval(host, port, "(function(){var e=%s;if(!e)return 'no';e.click();return 'ok';})()" % _q(sel)) or "no"
 
 
+def _measures(host: str, port: int, sel: str) -> bool:
+    return _qam_eval(host, port, "(function(){var p=%s;if(!p)return false;var r=p.getBoundingClientRect();return r.width>50&&r.height>50;})()" % _q(sel)) is True
+
+
 def _panel_visible(host: str, port: int) -> bool:
-    return _qam_eval(host, port, "(function(){var p=%s;if(!p)return false;var r=p.getBoundingClientRect();return r.width>50&&r.height>50;})()" % _q("[data-fb-panel]")) is True
+    return _measures(host, port, "[data-fb-panel]")
 
 
 def _set_locale(sjc, host: str, port: int) -> None:
+    """The hub's strings follow `__SHELVES_LOCALE__`; the plugin's own panel follows its
+    `__dsSetLocale` hook (src/i18n.ts, shared context) — both, so the tab and its rows read in
+    the capture language whatever Steam's language is."""
     expr = "(function(){try{window.__SHELVES_LOCALE__=%s;}catch(e){}return 1;})()" % json.dumps(LOCALE)
     try:
         sjc.evaluate(expr)
+        sjc.evaluate("(function(){try{globalThis.__dsSetLocale&&globalThis.__dsSetLocale(%s);}catch(e){}return 1;})()" % json.dumps(LOCALE))
     except Exception:
         pass
     _qam_eval(host, port, expr)
+
+
+# Steam's language names (the renderer URL's LANGUAGE=<name>) → the locale codes both UIs use;
+# the same map as the runtime's I18N.STEAM_LANGUAGES.
+_STEAM_LANGUAGES = {
+    "english": "en-US", "brazilian": "pt-BR", "portuguese": "pt-PT", "spanish": "es-ES", "latam": "es-419",
+    "french": "fr-FR", "german": "de-DE", "italian": "it-IT", "dutch": "nl-NL", "polish": "pl-PL",
+    "russian": "ru-RU", "turkish": "tr-TR", "ukrainian": "uk-UA", "japanese": "ja-JP", "koreana": "ko-KR",
+    "schinese": "zh-CN", "tchinese": "zh-TW",
+}
+
+
+def _restore_locale(sjc, host: str, port: int) -> None:
+    """Hand both UIs back to Steam's language after a capture: drop the hub's override and
+    point the plugin's hook at the locale Steam's renderer URL names."""
+    drop = "(function(){try{delete window.__SHELVES_LOCALE__;}catch(e){}return 1;})()"
+    try:
+        sjc.evaluate(drop)
+        name = sjc.evaluate("(function(){var m=/[?&]LANGUAGE=([a-z_]+)/i.exec(String(location.href));return m?m[1].toLowerCase():'';})()")
+        code = _STEAM_LANGUAGES.get(name or "", "en-US")
+        sjc.evaluate("(function(){try{globalThis.__dsSetLocale&&globalThis.__dsSetLocale(%s);}catch(e){}return 1;})()" % json.dumps(code))
+    except Exception:
+        pass
+    _qam_eval(host, port, drop)
 
 
 def _qam_visible(host: str, port: int) -> bool:
@@ -114,47 +145,47 @@ def _ensure_qam(sjc, host: str, port: int, shown: bool) -> bool:
     return _qam_visible(host, port) == shown
 
 
-def _reach_panel(sjc, host: str, port: int) -> bool:
-    """Reach the DS tab and make sure the hub panel is visibly open (non-zero).
-
-    The hub view survives a menu close and a tab switch, so a previous scenario
-    can leave it open: go back to the editor first; let the nav helper reach the
-    tab only when the editor's scope is not already in the menu document (its
-    own toggling is blind); open the hub view once; then show the menu by its
-    observed state."""
-    dbg = _debug
-    dbg("start: panel=%s back=%s scope=%s open-hub=%s visible=%s" % (
-        _present(host, port, "[data-fb-panel]"), _present(host, port, '[data-fb="back"]'),
-        _present(host, port, ".deck-shelves-qam-scope"), _present(host, port, '[data-fb="open-hub"]'),
-        _qam_visible(host, port)))
-    if _present(host, port, "[data-fb-panel]") and _present(host, port, '[data-fb="back"]'):
-        dbg("back → %s" % _click(host, port, '[data-fb="back"]'))
-        time.sleep(0.6)
-    if not _present(host, port, ".deck-shelves-qam-scope"):
-        ok = navigate_to_ds_qam(sjc, host, port)
-        dbg("navigate_to_ds_qam → %s (scope now %s, visible %s)" % (ok, _present(host, port, ".deck-shelves-qam-scope"), _qam_visible(host, port)))
-        if not ok:
-            return False
-    _set_locale(sjc, host, port)
-    if not _present(host, port, "[data-fb-panel]") and _present(host, port, '[data-fb="open-hub"]'):
-        dbg("open-hub → %s" % _click(host, port, '[data-fb="open-hub"]'))
-        time.sleep(1.0)
-    shown = _ensure_qam(sjc, host, port, True)
-    dbg("ensure_qam(shown) → %s; panel=%s visible=%s" % (shown, _present(host, port, "[data-fb-panel]"), _qam_visible(host, port)))
-    if not shown:
+def _show_tab(sjc, host: str, port: int, sel: str) -> bool:
+    """Show the menu by its observed state, then select the Deck Shelves tab by its strip
+    entry until `sel` measures — Steam keeps every tab's DOM while showing another one."""
+    if not _ensure_qam(sjc, host, port, True):
         return False
-    # Steam keeps every tab's DOM while the menu shows another tab (0x0 for ours):
-    # select the Deck Shelves tab by its strip entry until the panel measures.
     for _ in range(3):
         time.sleep(0.6)
-        if _panel_visible(host, port):
-            dbg("panel visible")
+        if _measures(host, port, sel):
             return True
-        dbg("tab click → %s" % _qam_eval(host, port, _DS_OWN_TAB_CLICK))
+        _qam_eval(host, port, _DS_OWN_TAB_CLICK)
         time.sleep(1.0)
-    vis = _panel_visible(host, port)
-    dbg("panel_visible → %s" % vis)
-    return vis
+    return _measures(host, port, sel)
+
+
+def _leave_hub_view(host: str, port: int) -> None:
+    """The hub view survives a menu close and a tab switch: go back to the editor."""
+    if _present(host, port, "[data-fb-panel]") and _present(host, port, '[data-fb="back"]'):
+        _click(host, port, '[data-fb="back"]')
+        time.sleep(0.6)
+
+
+def _reach_editor(sjc, host: str, port: int) -> bool:
+    """The editor's scope in the menu document; the nav helper (whose own toggling is
+    blind) runs only when the scope is not there yet."""
+    _leave_hub_view(host, port)
+    scope = ".deck-shelves-qam-scope"
+    return _present(host, port, scope) or navigate_to_ds_qam(sjc, host, port)
+
+
+def _reach_panel(sjc, host: str, port: int) -> bool:
+    """Reach the tab, open the hub view once, then show it (non-zero)."""
+    if not _reach_editor(sjc, host, port):
+        _debug("editor not reached")
+        return False
+    _set_locale(sjc, host, port)
+    if not _present(host, port, "[data-fb-panel]") and _present(host, port, '[data-fb="open-hub"]'):
+        _click(host, port, '[data-fb="open-hub"]')
+        time.sleep(1.0)
+    shown = _show_tab(sjc, host, port, "[data-fb-panel]")
+    _debug("hub view shown: %s" % shown)
+    return shown
 
 
 def _set_sections(host: str, port: int, want_open: Dict[str, bool]) -> None:
@@ -188,7 +219,8 @@ def _capture_panel(host: str, port: int, out_path: Path):
                     except Exception:
                         pass
         time.sleep(0.7)
-    return out_path if out_path.exists() else None
+    # A file left by an earlier run is not a capture: report the failure.
+    return None
 
 
 def _shot(sjc, host, port, out_dir, want_open, name, extra=None):
@@ -202,32 +234,27 @@ def _shot(sjc, host, port, out_dir, want_open, name, extra=None):
     out = out_dir / name
     p = _capture_panel(host, port, out)
     _ensure_qam(sjc, host, port, False)
+    _restore_locale(sjc, host, port)
     return {name: p} if p else {}
 
 
 @register("qam_tab")
 def qam_tab(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
-    """The Deck Shelves editor tab in the QAM — its options (NOT the ShelvesHub
-    panel, which `hub_panel` captures). Registered FIRST so the full flow captures
-    it while the QAM is fresh — the hub scenarios' repeated navigation degrades the
-    QAM toggle for the rest of the run. Reaches the DS editor scope via
-    `navigate_to_ds_qam` (which owns the QAM toggling — a manual close-first
-    desyncs it), just WITHOUT clicking open-hub. Uses the helpers defined further
-    down (resolved at call time)."""
-    reached = False
-    for _ in range(4):
-        if navigate_to_ds_qam(sjc, host, port):
-            reached = True
-            break
-        time.sleep(1.0)
-    if not reached:
-        close_qam(sjc)
+    """The Deck Shelves editor tab in the QAM — its options (NOT the ShelvesHub panel,
+    which `hub_panel` captures). Registered FIRST so it runs while the menu is fresh; the
+    locale goes first so the editor renders in the capture language."""
+    _set_locale(sjc, host, port)
+    scope = ".deck-shelves-qam-scope"
+    if not _reach_editor(sjc, host, port) or not _show_tab(sjc, host, port, scope):
+        _debug("editor not shown")
+        _ensure_qam(sjc, host, port, False)
         return {}
     _set_locale(sjc, host, port)
-    time.sleep(0.6)
+    time.sleep(0.8)
     out = out_dir / "qam-tab.png"
-    p = _capture_scope(host, port, out, ".deck-shelves-qam-scope", max_h=760)
-    close_qam(sjc)
+    p = _capture_scope(host, port, out, scope, max_h=760)
+    _ensure_qam(sjc, host, port, False)
+    _restore_locale(sjc, host, port)
     return {"qam-tab.png": p} if p else {}
 
 
@@ -338,7 +365,8 @@ def _capture_scope(host: str, port: int, out_path: Path, sel: str, max_h: int = 
                     except Exception:
                         pass
         time.sleep(0.7)
-    return out_path if out_path.exists() else None
+    # A file left by an earlier run is not a capture: report the failure.
+    return None
 
 
 def _capture_bigpicture(host: str, port: int, out_path: Path):
@@ -363,19 +391,21 @@ def _capture_bigpicture(host: str, port: int, out_path: Path):
                         except Exception:
                             pass
         time.sleep(0.7)
-    return out_path if out_path.exists() else None
+    # A file left by an earlier run is not a capture: report the failure.
+    return None
 
 
 @register("home")
 def home(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
     """The Deck Shelves Home — the custom shelves this host injects, full-screen."""
     _set_locale(sjc, host, port)
-    close_qam(sjc)
+    _ensure_qam(sjc, host, port, False)
     if not home_via_mainmenu(sjc, host, port):
         navigate_home(sjc)
     time.sleep(2.0)
     out = out_dir / "home.png"
     p = _capture_bigpicture(host, port, out)
+    _restore_locale(sjc, host, port)
     if not p:
         return {}
     shots = {"home.png": p}
