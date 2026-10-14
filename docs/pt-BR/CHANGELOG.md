@@ -289,6 +289,10 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   agora pergunta ao Steam o modo de interface (o Big Picture responde 4, o cliente desktop outro
   valor) e só recorre à visibilidade da janela num cliente sem essa chamada
   (`src/loader/mod.rs`).
+- **macOS: o ícone da barra de menus volta depois de uma falha.** O agente do companheiro de bandeja
+  agora o relança quando ele termina de forma inesperada (um Sair pelo próprio menu continua valendo
+  até o próximo login), e um deploy de desenvolvimento atualiza o binário da bandeja e o reinicia em
+  vez de deixar um antigo (`installer/macOS/install_mac.sh`, `scripts/mac-deploy.sh`).
 - **Windows: o log do serviço fica em disco.** `%LOCALAPPDATA%\ShelvesHub\logs\out.log`,
   movido para `out.log.1` ao passar de 1 MiB, então um reinício não leva mais o log junto
   (`src/logger.rs`).

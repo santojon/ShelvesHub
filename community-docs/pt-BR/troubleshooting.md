@@ -112,7 +112,7 @@ simplesmente hospeda.
 | **Um carregador com Deck Shelves 2.0.0** (a cópia da loja, ou qualquer uma anterior à 3.2.0) | O carregador hospeda. A aba do hub mostra só a visão do hub, sem editor. Atualizações pelo carregador. Log: *cópia antiga*. | O carregador continua hospedando; a cópia antiga ignora o hub. O Estado pode dizer que o hub hospeda. Desligue e atualize. | Como forçado, e o hub fica atualizando uma cópia que nunca roda. Desligue os dois, ou atualize o plugin. |
 | **3.2.x** | O carregador hospeda. Só a visão do hub. O Estado avisa *anterior ao protocolo de coexistência*. Atualizações pelo carregador. | Numa partida normal, o mesmo. Recarregar o plugin com a posse forçada faz a cópia antiga se retirar: sem prateleiras até o Steam reiniciar. Desligue. | Como forçado; o hub atualiza uma cópia sem uso. Desligue os dois, ou atualize. |
 | **3.3.0** | O carregador hospeda. Editor dentro da aba do hub. O Estado avisa *anterior ao protocolo de coexistência* (sem versão). Atualizações pelo carregador. | Coexistência simples rotulada `cooperative`; uma recarga com o hub rodando vincula a cópia ao hub. Prefira os padrões. | Como forçado; sem transferência nesta versão, o hub atualiza uma cópia sem uso. |
-| **3.3.1 – 3.3.4** | O carregador hospeda. Editor na aba do hub, versão exibida, sem aviso. Atualizações pelo carregador. | Coexistência simples rotulada `cooperative`: o carregador reivindica primeiro. Prefira os padrões. | Coexistência numa partida normal. A 3.3.4 só transfere quando o plugin recarrega com o hub já presente; 3.3.1–3.3.3 nunca transferem. Enquanto isso o hub mantém a própria cópia atualizada. Atualize para a 3.4.0. |
+| **3.3.1 – 3.3.4** | O carregador hospeda. Editor na aba do hub, versão exibida, sem aviso. Atualizações pelo carregador. | Cooperativo: a cópia do carregador se vincula ao ShelvesHub (Estado `cooperative` / *ShelvesHub (este host)*), o hub fica só com a aba, as atualizações seguem com o carregador — medido num Deck numa partida fria e depois de um reinício do carregador. Nada se ganha sobre os padrões sem `coop_bundle`. | Coexistência numa partida normal. A 3.3.4 só transfere quando o plugin recarrega com o hub já presente; 3.3.1–3.3.3 nunca transferem. Enquanto isso o hub mantém a própria cópia atualizada. Atualize para a 3.4.0. |
 | **3.4.0 e mais novos** | Como 3.3.1 – 3.3.4. | Como 3.3.1 – 3.3.4; qualquer oferta antiga é retirada. | O hub hospeda a própria cópia a partir da próxima partida do Steam; a entrada do carregador vira uma nota; atualizações pelo hub. O jeito suportado de ter o hub hospedando ao lado de um carregador. |
 
 ### As células em detalhe
@@ -290,12 +290,16 @@ added alongside (host untouched).`; o editor na aba do hub; Estado `coexist`
 atualizações são gerenciadas pelo carregador de plugins aqui.* (o hub ainda
 atualiza a si mesmo); configurações compartilhadas entre as duas pastas.
 
-**`force_owner` ligado.** Coexistência simples rotulada `cooperative`: a
-cópia do carregador reivindica primeiro em toda partida do Steam, então o
-host do hub só entra em jogo se o plugin recarregar depois. Nada quebra, nada
-se ganha, e conflitos repetidos pausam a posse forçada pela sessão (*Modo
-cooperativo pausado …*). Correção: volte aos padrões, ou acrescente
-`coop_bundle` com a 3.4.0.
+**`force_owner` ligado.** Cooperativo: o hub grava sua preferência assim que
+as janelas do Steam existem, e a cópia do carregador — iniciando alguns
+segundos depois — reivindica o renderizador para o ShelvesHub: Estado
+`cooperative` / *ShelvesHub (este host)* / a versão, log `Coexisting with
+"shelveshub" — native QAM tab added alongside (host untouched).` O hub fica só
+com a aba e nunca carrega uma segunda cópia; as atualizações seguem com o
+carregador. Visto num Deck numa partida fria e de novo depois de um reinício
+do carregador (2026-10-14). Conflitos repetidos pausam a posse forçada pela
+sessão (*Modo cooperativo pausado …*). Nada se ganha sobre os padrões a não
+ser acrescentando `coop_bundle` com a 3.4.0.
 
 **`force_owner` + `coop_bundle`.** Numa partida normal: coexistência,
 rotulada `cooperative`. A transferência só existe na 3.3.4 e só por um

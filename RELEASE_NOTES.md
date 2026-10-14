@@ -18,6 +18,8 @@ is pushed — the notes below are picked up and published with the release.
   covering or minimizing Big Picture used to read as "back to the desktop client": the hub stood
   down and skipped updates until the window was in front again. It now asks Steam which interface
   is active.
+- **macOS: the menu-bar icon comes back on its own** after a crash; a Quit from its menu still
+  holds until the next login.
 - **Windows: a log file, no console window, restarts under the task.** The service writes
   `%LOCALAPPDATA%\ShelvesHub\logs\out.log`, starts hidden from the logon task (closing a window
   can no longer end it), comes back under that task after "Restart service" or a self-update, and

@@ -18,6 +18,8 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   desktop), cobrir ou minimizar o Big Picture era lido como "voltou ao cliente desktop": o hub se
   afastava e pulava atualizações até a janela voltar à frente. Agora ele pergunta ao Steam qual
   interface está ativa.
+- **macOS: o ícone da barra de menus volta sozinho** depois de uma falha; um Sair pelo menu dele
+  continua valendo até o próximo login.
 - **Windows: um arquivo de log, sem janela de console, reinícios pela tarefa.** O serviço grava
   `%LOCALAPPDATA%\ShelvesHub\logs\out.log`, inicia oculto pela tarefa de logon (fechar uma janela
   não o encerra mais), volta por essa tarefa depois de "Reiniciar serviço" ou de uma

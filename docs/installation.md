@@ -101,7 +101,9 @@ of its own: it shows whether ShelvesHub is hosting and offers quick actions
 daemon's **local RPC**. It authenticates with the per-boot token the daemon writes
 to a `0600` file next to the install, so no new network surface is opened — the RPC
 stays token-gated, loopback-only. If a package does not ship the tray binary, the
-opt-in degrades to a clear note and installs nothing.
+opt-in degrades to a clear note and installs nothing. On macOS its agent starts it at
+login and relaunches it after a crash or a kill; a Quit from its own menu sticks until the
+next login (`launchctl kickstart -k gui/$(id -u)/com.shelveshub.tray` brings it back sooner).
 
 ## Uninstalling
 

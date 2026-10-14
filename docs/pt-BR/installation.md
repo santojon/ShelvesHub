@@ -102,7 +102,10 @@ estado próprio: mostra se o ShelvesHub está hospedando e oferece ações rápi
 chamada ao **RPC local** do daemon. Ele se autentica com o token por-boot que o
 daemon grava num arquivo `0600` ao lado da instalação, então nenhuma superfície de
 rede nova é aberta — o RPC segue protegido por token, só em loopback. Se um pacote
-não traz o binário do tray, o opt-in degrada para um aviso claro e não instala nada.
+não traz o binário do tray, o opt-in degrada para um aviso claro e não instala nada. No
+macOS o agente dele o inicia no login e o relança depois de uma falha ou de um kill; um Sair
+pelo próprio menu vale até o próximo login (`launchctl kickstart -k
+gui/$(id -u)/com.shelveshub.tray` o traz de volta antes).
 
 ## Desinstalando
 

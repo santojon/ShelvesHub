@@ -105,7 +105,7 @@ and simply hosts.
 | **A loader with Deck Shelves 2.0.0** (the store's copy, or anything older than 3.2.0) | The loader hosts. The hub's tab shows the hub view only, no editor. Updates from the loader. Log: *legacy copy*. | The loader still hosts; the old copy ignores the hub. Status may claim the hub hosts. Turn it off and update. | As force, and the hub keeps updating a copy that never runs. Turn both off, or update the plugin. |
 | **3.2.x** | The loader hosts. Hub view only. Status warns *predates the coexistence protocol*. Updates from the loader. | At a normal start, the same. A plugin reload under force makes the old copy stand down: no shelves until Steam restarts. Turn it off. | As force; the hub updates an unused copy. Turn both off, or update. |
 | **3.3.0** | The loader hosts. Editor inside the hub's tab. Status warns *predates the coexistence protocol* (no version). Updates from the loader. | Plain coexistence labelled `cooperative`; a reload while the hub runs binds the copy to the hub. Prefer the defaults. | As force; no hand-over in this version, the hub updates an unused copy. |
-| **3.3.1 – 3.3.4** | The loader hosts. Editor in the hub's tab, version shown, no warning. Updates from the loader. | Plain coexistence labelled `cooperative`: the loader claims first. Prefer the defaults. | Coexistence at a normal start. 3.3.4 hands over only when the plugin reloads with the hub already there; 3.3.1–3.3.3 never do. The hub keeps its own copy updated meanwhile. Update to 3.4.0. |
+| **3.3.1 – 3.3.4** | The loader hosts. Editor in the hub's tab, version shown, no warning. Updates from the loader. | Cooperative: the loader's copy binds to ShelvesHub (Status `cooperative` / *ShelvesHub (this host)*), the hub keeps to its tab, updates stay with the loader — measured on a Deck at a cold start and after a loader restart. Nothing gained over the defaults without `coop_bundle`. | Coexistence at a normal start. 3.3.4 hands over only when the plugin reloads with the hub already there; 3.3.1–3.3.3 never do. The hub keeps its own copy updated meanwhile. Update to 3.4.0. |
 | **3.4.0 and newer** | As 3.3.1 – 3.3.4. | As 3.3.1 – 3.3.4; any old offer is withdrawn. | The hub hosts its own copy from the next Steam start; the loader's entry becomes a note; updates from the hub. The supported way to have the hub host next to a loader. |
 
 ### The cells in detail
@@ -274,11 +274,15 @@ tab added alongside (host untouched).`; the editor in the hub's tab; Status
 *Updates are managed by the plugin loader here.* (the hub still updates
 itself); settings shared between the two folders.
 
-**`force_owner` on.** Plain coexistence labelled `cooperative`: the loader's
-copy claims first at every Steam start, so the hub's host only comes into
-play if the plugin reloads later. Nothing breaks, nothing is gained, and
-repeated conflicts pause force for the session (*Cooperative mode paused …*).
-Fix: go back to the defaults, or add `coop_bundle` with 3.4.0.
+**`force_owner` on.** Cooperative: the hub stamps its preference as soon as
+Steam's windows exist, and the loader's copy — booting a few seconds later —
+claims the renderer for ShelvesHub: Status `cooperative` / *ShelvesHub (this
+host)* / the version, log `Coexisting with "shelveshub" — native QAM tab added
+alongside (host untouched).` The hub keeps to its tab and never loads a second
+copy; updates stay with the loader. Seen on a Deck at a cold start and again
+after a loader restart (2026-10-14). Repeated conflicts pause force for the
+session (*Cooperative mode paused …*). Nothing is gained over the defaults
+unless you add `coop_bundle` with 3.4.0.
 
 **`force_owner` + `coop_bundle`.** At a normal start: coexistence, labelled
 `cooperative`. The hand-over exists only in 3.3.4 and only through a live

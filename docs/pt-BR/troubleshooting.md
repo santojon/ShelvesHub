@@ -239,6 +239,15 @@ próprias proteções. Nesta ordem:
    do armazenamento local do renderizador (o registro do Modo Seguro é `ds-boot-outcomes-v1`).
 4. Reinicie o Steam.
 
+## O ícone de tray sumiu
+
+O tray é opcional e separado do serviço, então as prateleiras continuam funcionando sem ele.
+macOS: `launchctl kickstart -k gui/$(id -u)/com.shelveshub.tray` o inicia de novo (o agente o
+relança sozinho depois de uma falha; um Sair pelo menu dele vale até o próximo login); se o agente
+não existe, rode o instalador mais uma vez e marque a opção. Linux desktop: é uma entrada de
+autostart (`~/.config/autostart/shelveshub-tray.desktop`), e o Modo Gaming não tem tray. Windows:
+a tarefa de logon `ShelvesHubTray` (Agendador de Tarefas → executar, ou entre de novo).
+
 ## Lendo o log
 
 ```

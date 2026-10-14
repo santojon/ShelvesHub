@@ -228,6 +228,15 @@ In this order:
    `ds-boot-outcomes-v1`).
 4. Restart Steam.
 
+## The tray icon is gone
+
+The tray is optional and separate from the service, so the shelves keep working without it.
+macOS: `launchctl kickstart -k gui/$(id -u)/com.shelveshub.tray` starts it again (its agent
+relaunches it by itself after a crash; a Quit from its menu holds until the next login); if the
+agent is missing, run the installer once more and opt in. Linux desktop: it is an autostart entry
+(`~/.config/autostart/shelveshub-tray.desktop`), and Gaming Mode has no tray at all. Windows: the
+`ShelvesHubTray` logon task (Task Scheduler → run it, or sign in again).
+
 ## Reading the log
 
 ```

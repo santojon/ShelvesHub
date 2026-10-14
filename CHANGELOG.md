@@ -265,6 +265,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   bundle hot-swaps and polled fast until the window was in front again. The gate now asks Steam
   for its UI mode (Big Picture answers 4, the desktop client another value) and falls back to
   window visibility only on a client without that call (`src/loader/mod.rs`).
+- **macOS: the menu-bar icon comes back after a crash.** The tray companion's agent now relaunches
+  it when it ends unexpectedly (a Quit from its own menu still sticks until the next login), and a
+  development deploy refreshes the tray binary and restarts it instead of leaving an old one
+  (`installer/macOS/install_mac.sh`, `scripts/mac-deploy.sh`).
 - **Windows: the service log is on disk.** `%LOCALAPPDATA%\ShelvesHub\logs\out.log`, moved to
   `out.log.1` once it passes 1 MiB, so a restart no longer takes the log with it
   (`src/logger.rs`).

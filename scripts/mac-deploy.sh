@@ -20,4 +20,15 @@ chmod +x "$INSTALL_DIR/shelveshub"
 echo "[i] Restarting the daemon…"
 launchctl kickstart -k "gui/$(id -u)/com.shelveshub" 2>/dev/null || true
 
+# The tray companion, when its agent is installed: build it too, stage + rename the
+# binary (it may be running), and restart its agent so the menu-bar icon follows the build.
+if [[ -f "$HOME/Library/LaunchAgents/com.shelveshub.tray.plist" ]]; then
+  echo "[i] Refreshing the tray companion…"
+  cargo build --release --quiet --features tray --bin shelveshub-tray
+  cp target/release/shelveshub-tray "$INSTALL_DIR/shelveshub-tray.new"
+  chmod +x "$INSTALL_DIR/shelveshub-tray.new"
+  mv -f "$INSTALL_DIR/shelveshub-tray.new" "$INSTALL_DIR/shelveshub-tray"
+  launchctl kickstart -k "gui/$(id -u)/com.shelveshub.tray" 2>/dev/null || true
+fi
+
 echo "[OK] Soft deploy done — reload the renderer to pick it up (or run the :hard variant to bounce Steam)."
