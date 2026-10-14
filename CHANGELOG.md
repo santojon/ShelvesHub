@@ -197,6 +197,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   Ctrl+Shift+T, opens it on Status; the inline readout was squeezed between the other rows
   (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`; harness scenario
   `sole-host-status`).
+- **The deploy matrix ships the plugin's release build to the loader's copy on the Deck.** It used
+  to call the plugin's plain hard deploy, which installs a development bundle (slower on the device,
+  easily mistaken for a regression) while the hub's own copy was already the release build
+  (`scripts/deploy-matrix.sh`).
 - **The macOS performance run and the `local:*` devtools tasks stay local.** Both read
   `LOCAL_CEF_HOST` / `LOCAL_CEF_PORT` (default `127.0.0.1:8080`) instead of `SHELVES_CEF_*`, which
   a `.env` may point at a Deck for the daemon — the Mac run used to poll the Deck until its timeout

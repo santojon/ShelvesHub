@@ -210,6 +210,10 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   Solução de problemas, ou Ctrl+Shift+T, o abre em Estado; a leitura embutida ficava espremida
   entre as outras linhas (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`;
   cenário do harness `sole-host-status`).
+- **A matriz de deploy envia a build de release do plugin para a cópia do carregador no Deck.** Ela
+  chamava o deploy hard simples do plugin, que instala um bundle de desenvolvimento (mais lento no
+  aparelho, fácil de confundir com uma regressão), enquanto a cópia do próprio hub já era a build de
+  release (`scripts/deploy-matrix.sh`).
 - **A medição de desempenho no macOS e as tarefas de devtools `local:*` ficam locais.** As duas
   leem `LOCAL_CEF_HOST` / `LOCAL_CEF_PORT` (padrão `127.0.0.1:8080`) em vez de `SHELVES_CEF_*`, que
   um `.env` pode apontar para um Deck para o daemon — a medição no Mac consultava o Deck até o

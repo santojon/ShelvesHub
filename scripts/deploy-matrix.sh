@@ -108,7 +108,12 @@ REMOTE
 
 case "$PLAT" in
   deck)
-    if [[ "$PLUGIN" == 1 ]]; then need_plugin_dir; say "plugin → loader on the Deck"; ( cd "$PLUGIN_DIR" && pnpm run "deploy:deck$PSFX" ); fi
+    # Always the plugin's --release build: its plain deploy:deck / deploy:deck:hard ship a
+    # development bundle (__DEV__ hooks, noticeably slower on the device).
+    if [[ "$PLUGIN" == 1 ]]; then
+      need_plugin_dir; say "plugin → loader on the Deck (release build)"
+      if [[ "$HARD" == 1 ]]; then ( cd "$PLUGIN_DIR" && pnpm run deploy:deck:release ); else ( cd "$PLUGIN_DIR" && bash scripts/deploy/deploy-deck.sh --release ); fi
+    fi
     say "hub → Deck"
     # With the plugin included, the HUB's own bundle must be the freshly built one
     # too. `deck-deploy.sh` otherwise ships this repo's checked-in `bundle/index.js`,
