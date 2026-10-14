@@ -53,7 +53,8 @@ is pushed — the notes below are picked up and published with the release.
   small box under the buttons. The panel has two tabs, Logs and Notifications, with icons beside
   the ShelvesHub title to open either; it also opens like the plugin's own side panel — press
   right twice on the gamepad at the right edge of the hub view (left out of it closes) — or from
-  a keyboard with Ctrl+Shift+L or Ctrl+Shift+N. LB / RB switch tabs inside it, B closes it, and
+  a keyboard with Ctrl+Shift+N, Ctrl+Shift+S or Ctrl+Shift+L (Notifications, Status, Logs). LB /
+  RB switch tabs inside it, B closes it, and
   each notification shows its sender's mark like the Steam toast did.
 - **Notifications now look and behave like Steam's.** The notifications this host shows — Deck
   Shelves' too — go through Steam's own notification system: Steam's sound, position and in-game

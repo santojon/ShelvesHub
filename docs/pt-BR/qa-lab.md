@@ -219,7 +219,7 @@ as células menos na que remove esse plugin.
 | partida a frio | só carregador +15 s · coexistência +25 s · cooperativo (cópia do carregador no host do hub) +28 s · bundle cooperativo +15–26 s · ao lado de um carregador sem o plugin +18 s | Big Picture de volta 11 s após um reinício do Steam |
 | sair e voltar (5 ciclos, detalhes e biblioteca → Home) | média: só carregador 474 ms · coexistência 494 · cooperativo 396 · bundle cooperativo 492; uma raiz, sem montagem de fallback | não rodado (o gate dirige a navegação do carregador) |
 | seleção do gamepad mantida | 5/5 na sessão quente que começou com um card focado, e 5/5 na sessão de bundle cooperativo depois de semear o foco num card pela árvore de navegação do Steam (404 ms de média, deltas zero de vazamento); nada fica focado após partida a frio, então o gate precisa da semente | — |
-| atalhos de teclado do sidecar | — | Ctrl+Shift+L abre, Ctrl+Shift+N alterna, com eventos de tecla reais via CDP; o gesto do D-pad precisa do foco do gamepad no controle mais à direita da vista — checagem à mão |
+| atalhos de teclado do sidecar | — | Ctrl+Shift+L abre, Ctrl+Shift+N e Ctrl+Shift+S alternam, com eventos de tecla reais via CDP; o gesto do D-pad precisa do foco do gamepad no controle mais à direita da vista — checagem à mão |
 | hot-swap / desmontagem | bundle cooperativo 4 s, ao lado do carregador 3 s; um runtime, um dono | rollback do bundle → hot-swap em 2 s, desfazer igual |
 | dormir e acordar | 2/2 (20 s), Home de volta em até 1,2 s após acordar, cópia do hub mantida | — |
 | reinício do host | daemon reinicia sob systemd com o renderizador vivo; reinício do rollback do hub em 10 s, hold mantido | reinício do rollback do hub sob launchd, hold mantido |

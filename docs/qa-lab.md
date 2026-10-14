@@ -213,7 +213,7 @@ one that removes that plugin.
 | cold boot | loader-only +15 s · coexist +25 s · cooperative (loader copy on the hub's host) +28 s · cooperative bundle +15–26 s · beside a loader without the plugin +18 s | Big Picture back 11 s after a Steam restart |
 | route away → back (5 cycles, detail and library → Home) | avg: loader-only 474 ms · coexist 494 · cooperative 396 · cooperative bundle 492; one root, no fallback mount | not run (the gate drives the loader's navigation) |
 | gamepad selection retention | 5/5 in the warm session that started with a focused card, and 5/5 in the cooperative-bundle session once a card focus is seeded through Steam's nav tree (404 ms avg, zero leak deltas); nothing is focused after a cold boot, so the gate needs the seed | — |
-| sidecar keyboard shortcuts | — | Ctrl+Shift+L opens, Ctrl+Shift+N switches, with real key events over CDP; the D-pad gesture needs gamepad focus on the view's rightmost control — hand check |
+| sidecar keyboard shortcuts | — | Ctrl+Shift+L opens, Ctrl+Shift+N and Ctrl+Shift+S switch, with real key events over CDP; the D-pad gesture needs gamepad focus on the view's rightmost control — hand check |
 | hot-swap / teardown | cooperative bundle 4 s, beside-loader 3 s; one runtime, one owner | bundle rollback → hot-swap in 2 s, undo the same |
 | sleep-wake | 2/2 (20 s), home back within 1.2 s of resume, hub's copy kept | — |
 | host restart | daemon restarts under systemd with the renderer live; hub rollback restart in 10 s, hold kept | hub rollback restart under launchd, hold kept |
