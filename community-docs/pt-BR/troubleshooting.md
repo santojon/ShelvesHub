@@ -119,7 +119,7 @@ simplesmente hospeda.
 
 Cada bloco traz o que você vê, o que pode dar errado e a correção com sua
 alternativa. "A aba" é a aba do ShelvesHub no Menu de Acesso Rápido; "Estado"
-é a aba Estado do painel lateral, aberta por **Ver estado** em Solução de problemas ou Ctrl+Shift+S (*Modo de propriedade*, *Hospedado por*, *Versão do
+é a aba Estado do painel lateral, aberta por **Ver estado** em Solução de problemas ou Ctrl+Shift+T (*Modo de propriedade*, *Hospedado por*, *Versão do
 Deck Shelves*); "a visão do hub" é o painel do próprio hub, mostrado quando
 não há editor disponível.
 
@@ -414,7 +414,7 @@ Deck. Mantenha `interval_secs` em 45 ou menos.
    Windows: `%LOCALAPPDATA%\ShelvesHub\logs\out.log` (o arquivo anterior
    fica como `out.log.1`). O **Ver logs** da aba junta o serviço e o runtime
    injetado; os arquivos e o journal guardam só o lado do serviço.
-2. **Leia o Estado no painel lateral** (**Ver estado** em Solução de problemas, ou Ctrl+Shift+S). *Modo de propriedade*: `sole` (sem carregador),
+2. **Leia o Estado no painel lateral** (**Ver estado** em Solução de problemas, ou Ctrl+Shift+T). *Modo de propriedade*: `sole` (sem carregador),
    `coexist` (a cópia do carregador hospeda), `cooperative` (o host do hub
    está no lugar ao lado de um carregador, incluindo o caso do carregador sem
    Deck Shelves). *Hospedado por*: *ShelvesHub (este host)*, ou o nome do

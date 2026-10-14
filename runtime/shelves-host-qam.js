@@ -516,15 +516,15 @@
         const ver = uc.pending_hub_update;
         if (typeof ver !== "string" || !ver) return null;
         const staged = uc.hub_update_staged === true;
-        /* Once the update has been downloaded and staged over the binary, the
-           wording shifts from "restart to update" to "downloaded — restart to
-           finish": the automatic check stages under any service manager without
-           exiting, so the notice shows there too. A staged rollback says so; a release
-           merely held back by quiet updates has no restart to offer (status row). */
+        /* The button reads "Restart to update" whether the release is still pending or
+           already staged over the binary (the automatic check stages under any service
+           manager without exiting, so the notice shows there too); a staged rollback reads
+           "Restart to go back". No product name or version — the Updates section carries
+           those. A release merely held back by quiet updates has no restart to offer. */
         if (!staged && uc.update_deferred === true) return null;
-        const label = uc.hub_rollback_staged === true ? "hub_rollback_staged" : (staged ? "hub_update_staged" : "hub_update_restart");
+        const label = uc.hub_rollback_staged === true ? "hub_restart_rollback" : "hub_restart_update";
         return h("div", { key: "hubupd", style: { padding: "10px 14px 8px" } },
-          bannerButton("hub-update", restartLabel("hub", I18N.t(label) + " (" + ver + ")"), function () { armRestart("hub", doRestartDaemonOnly); }));
+          bannerButton("hub-update", restartLabel("hub", I18N.t(label)), function () { armRestart("hub", doRestartDaemonOnly); }));
       }
       // Release notes of a pending update, as a collapsed "What's new" section so the
       // user can read what changes before it applies. Headings/bullets flattened to lines.
@@ -622,12 +622,14 @@
       };
       // A flat, edge-to-edge action row (icon + label), same pattern as the other
       // rows so buttons and toggles read as one unified list.
-      function rowButton(id, iconKey, label, onClick) {
+      // Rows that open the side panel end with a 16 px chevron at 0.7 opacity, like the plugin's own.
+      const sideChevron = h("span", { key: "c", style: { display: "inline-flex", flex: "0 0 16px", width: "16px", height: "16px", opacity: 0.7 }, dangerouslySetInnerHTML: { __html: FALLBACK_ICONS.chevron } });
+      function rowButton(id, iconKey, label, onClick, trailing) {
         return clickable(onClick, { key: "act-" + id, "data-fb": id, focusClassName: "shelves-rowfocus", style: { display: "flex", alignItems: "center", gap: "10px", minHeight: "40px", width: "100%", boxSizing: "border-box", padding: "6px 16px", border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontSize: "13px", opacity: (busy && busy !== id) ? 0.5 : 1 } },
-          [fbIcon(iconKey), h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left" } }, label)]);
+          [fbIcon(iconKey), h("span", { key: "t", style: { flex: "1 1 auto", textAlign: "left" } }, label), trailing || null]);
       }
       function actionRow(id, iconKey, labelKey, method) {
-        return rowButton(id, iconKey, I18N.t(labelKey), function () { if (!busy) run(id, method); });
+        return rowButton(id, iconKey, I18N.t(labelKey), function () { if (!busy) run(id, method); }, SIDE_METHODS[method] ? sideChevron : null);
       }
       // Two-tap "go back" (same arming as the restart buttons): the first tap arms
       // the row, the second runs the rollback.

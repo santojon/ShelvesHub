@@ -249,15 +249,20 @@ rolável e marcada (mais recentes primeiro), com um controle de atualização.
 
 ## Dependências de terceiros e licenciamento
 
-Todos os crates de runtime têm licença dupla **MIT OR Apache-2.0**, compatível com a
-licença MIT deste projeto:
+Toda crate da árvore de dependências tem licença permissiva (MIT, Apache-2.0, Unlicense, ou uma
+escolha entre elas), compatível com a licença MIT deste projeto. As dependências diretas:
 
 | Crate | Uso | Licença |
 |---|---|---|
 | `tungstenite` | WebSocket bloqueante (transporte CDP) | MIT OR Apache-2.0 |
-| `serde` / `serde_json` | JSON (mensagens CDP, RPC) | MIT OR Apache-2.0 |
+| `serde` / `serde_json` | JSON (mensagens CDP, RPC, configuração) | MIT OR Apache-2.0 |
 | `clap` | CLI do `shelves-devtools` | MIT OR Apache-2.0 |
 | `chrono` | Timestamps de log | MIT OR Apache-2.0 |
+| `getrandom` | Nomes aleatórios para os diretórios de trabalho das atualizações | MIT OR Apache-2.0 |
+| `sha2` | SHA-256 dos downloads contra o `SHA256SUMS` da release | MIT OR Apache-2.0 |
+| `minisign-verify` | A checagem da assinatura da release antes de uma autoatualização | MIT |
+| `png`, `tray-icon`, `tao` | O companheiro de bandeja opcional no macOS e no Windows (feature `tray`): decodificação do ícone, o item da bandeja e seu loop de eventos | MIT OR Apache-2.0; `tao` Apache-2.0 |
+| `ksni` | O companheiro de bandeja opcional em desktops Linux (feature `tray`), via StatusNotifierItem | Unlicense |
 
 O cliente CDP é escrito do zero contra a especificação pública do protocolo; nenhum
 código-fonte de CDP ou de loader do Steam de terceiros é copiado ou adaptado.

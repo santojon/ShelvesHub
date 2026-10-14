@@ -1,7 +1,5 @@
 # Notice — Acknowledgements
 
-*[Leia em português](docs/pt-BR/NOTICE.md)*
-
 ShelvesHub (MIT) is the independent host for Deck Shelves — the process that
 injects Deck Shelves into Steam **and** the injected host runtime
 (`runtime/shelves-host.js`, the concrete `window.__SHELVES_HOST__`) that provides
@@ -38,6 +36,14 @@ license headers intact (the harness downloads them only when they are missing).
 They are a **development/test dependency only**: not part of the service, the
 injected runtime, or any release artifact, and their MIT license is compatible
 with this project's.
+
+## Project site
+
+The landing page under `site/` is self-contained static HTML, CSS and JavaScript written for
+this project, with no third-party library. When its visit counter is enabled
+(`site/analytics.json`), the published page loads the counter script of a privacy-respecting
+hosted service at view time and says so in its footer; nothing of that service is redistributed
+here.
 
 ## Steam / SteamOS
 

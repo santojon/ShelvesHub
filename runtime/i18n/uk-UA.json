@@ -1,7 +1,7 @@
 {
   "hub_title": "ShelvesHub",
-  "hub_update_restart": "Доступне оновлення ShelvesHub — перезапустіть, щоб застосувати",
-  "hub_update_staged": "Оновлення ShelvesHub завантажено — перезапустіть, щоб завершити",
+  "hub_restart_update": "Перезапустити для оновлення",
+  "hub_restart_rollback": "Перезапустити для повернення",
   "upd_uptodate": "Актуально",
   "upd_available": "Доступне оновлення",
   "upd_last_checked": "Остання перевірка",
@@ -62,7 +62,6 @@
   "action_rollback_plugin": "Повернутися до попередньої версії Deck Shelves",
   "action_rollback_hub": "Повернутися до попередньої версії ShelvesHub",
   "rollback_confirm": "Торкніться ще раз, щоб повернутися",
-  "hub_rollback_staged": "Попередню версію ShelvesHub відновлено — перезапустіть, щоб завершити",
   "update_quiet": "Чекати, поки не буде запущених ігор",
   "upd_deferred": "очікування, поки не буде запущених ігор",
   "upd_whats_new": "Що нового",

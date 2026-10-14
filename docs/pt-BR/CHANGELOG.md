@@ -9,6 +9,11 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **Uma declaração de transparência sobre como o projeto é feito** (`AI_USAGE.md`), o mesmo
+  tipo de arquivo que o plugin e o kit de sondas trazem; o `NOTICE.md`
+  ganha um parágrafo sobre o site do projeto (autocontido; o contador de visitas opcional é um
+  serviço hospedado, nada redistribuído), e a tabela de dependências da página de depuração lista
+  toda crate direta com sua licença.
 - **Uma matriz de compatibilidade na página de resolução de problemas da comunidade.** O hub
   0.6.0 sem carregador, com um carregador sem Deck Shelves, e com o Deck Shelves 2.0.0 (a cópia
   da loja), 3.2.x, 3.3.0, 3.3.1–3.3.4 e 3.4.0, nos padrões, com `force_owner` e com
@@ -202,7 +207,7 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 - **A leitura de Estado da visão do hub foi para o painel lateral.** A aba do Acesso Rápido fica
   com três áreas — Atualizações, Configurações, Solução de problemas — e o painel lateral tem três
   abas: Notificações, Estado e Logs, nessa ordem (LB / RB percorrem as abas). "Ver estado" em
-  Solução de problemas, ou Ctrl+Shift+S, o abre em Estado; a leitura embutida ficava espremida
+  Solução de problemas, ou Ctrl+Shift+T, o abre em Estado; a leitura embutida ficava espremida
   entre as outras linhas (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`;
   cenário do harness `sole-host-status`).
 - **A medição de desempenho no macOS e as tarefas de devtools `local:*` ficam locais.** As duas
@@ -217,6 +222,14 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   o fluxo atual) e a galeria e a página de funcionalidades do site mostram o conjunto novo, e a
   página de funcionalidades serve a Home em WebP como a página inicial
   (`scripts/deckprobe-ext/screenshots/scenarios/hub.py`, `docs/showcase.md`, `site/`).
+- **As linhas que abrem o painel lateral terminam com uma seta.** "Ver estado" e "Ver logs" em
+  Solução de problemas terminam com um `>` alinhado à direita (16 px, opacidade 0,7), a mesma
+  marca que o painel do próprio plugin usa na linha dele que abre um painel lateral
+  (`runtime/shelves-host-qam.js`).
+- **O banner de atualização diz "Reiniciar para atualizar".** O botão sob o título que reinicia o
+  serviço por uma atualização pendente ou preparada do ShelvesHub não traz mais o nome do produto
+  nem a versão ("Reiniciar para voltar" para um retorno preparado); a seção Atualizações continua
+  mostrando a versão (`runtime/i18n/*.json`).
 - **Código morto removido.** Uma cópia não compilada de um contrato antigo do host
   (`src/runtime/host/`) e a descoberta de UI de uma vez só, sem uso, do runtime se foram; a
   descoberta em partes é a única que resta.

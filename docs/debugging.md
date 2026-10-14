@@ -246,15 +246,20 @@ scrollable list (newest first) with a refresh control.
 
 ## Third-party dependencies & licensing
 
-All runtime crates are dual-licensed **MIT OR Apache-2.0**, compatible with this
-project's MIT license:
+Every crate in the dependency tree is permissively licensed (MIT, Apache-2.0, Unlicense, or a
+choice among them), compatible with this project's MIT license. The direct dependencies:
 
 | Crate | Use | License |
 |---|---|---|
 | `tungstenite` | Blocking WebSocket (CDP transport) | MIT OR Apache-2.0 |
-| `serde` / `serde_json` | JSON (CDP messages, RPC) | MIT OR Apache-2.0 |
+| `serde` / `serde_json` | JSON (CDP messages, RPC, config) | MIT OR Apache-2.0 |
 | `clap` | `shelves-devtools` CLI | MIT OR Apache-2.0 |
 | `chrono` | Log timestamps | MIT OR Apache-2.0 |
+| `getrandom` | Random names for the update work directories | MIT OR Apache-2.0 |
+| `sha2` | SHA-256 of downloads against the release's `SHA256SUMS` | MIT OR Apache-2.0 |
+| `minisign-verify` | The release signature check before a self-update | MIT |
+| `png`, `tray-icon`, `tao` | The optional tray companion on macOS and Windows (`tray` feature): icon decoding, the tray item and its event loop | MIT OR Apache-2.0; `tao` Apache-2.0 |
+| `ksni` | The optional tray companion on Linux desktops (`tray` feature), over StatusNotifierItem | Unlicense |
 
 The CDP client is written from scratch against the public protocol spec; no
 third-party CDP or Steam-loader source is copied or adapted.

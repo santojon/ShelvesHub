@@ -179,7 +179,10 @@ function ruleSelfCheck() {
 const GENERATED = /^site\/reports\/(?:(?:ci|release|local)\/|runs\.json$|qa\/matrix\.json$)/;
 function shippedFiles() {
   const roots = ["README.md", "CHANGELOG.md", "RELEASE_NOTES.md", "NOTICE.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "SECURITY.md", "build.rs", "Cargo.toml", "docs/", "src/", "runtime/", "scripts/", "examples/", "site/", "installer/", "docker/", ".github/"];
-  const ours = (f) => (roots.some((r) => f === r || f.startsWith(r)) || /^[^/]+\.json$/.test(f)) && !f.includes("/vendor/") && !GENERATED.test(f) && !/\.(png|jpg|webm|svg|pyc|ico|woff2?)$/.test(f);
+  // The transparency statement is the one shipped file that names assistant use (English only,
+  // like NOTICE.md and the plugin's own statement).
+  const statement = (f) => f === "AI_USAGE.md";
+  const ours = (f) => (roots.some((r) => f === r || f.startsWith(r)) || /^[^/]+\.json$/.test(f)) && !statement(f) && !f.includes("/vendor/") && !GENERATED.test(f) && !/\.(png|jpg|webm|svg|pyc|ico|woff2?)$/.test(f);
   return run("git ls-files -z").split("\0").filter((f) => f && ours(f));
 }
 

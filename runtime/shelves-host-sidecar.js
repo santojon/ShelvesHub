@@ -14,6 +14,7 @@
     refresh: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
     trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>',
     info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+    chevron: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>',
     // Tintable ShelvesHub mark: three books on a shelf over a hub node, single-
     // colour (currentColor). Three bigger books (vs the 4-book draft) + the hub
     // (the ShelvesHub identity), tuned to still read at 16px.
@@ -312,7 +313,7 @@
 
   const DPAD_LEFT = 22, DPAD_RIGHT = 23;
   // Ctrl+Shift + one of these opens the panel on that tab.
-  const KEY_TABS = { KeyN: SIDE_TAB_NOTIF, KeyS: SIDE_TAB_STATUS, KeyL: SIDE_TAB_LOGS };
+  const KEY_TABS = { KeyN: SIDE_TAB_NOTIF, KeyT: SIDE_TAB_STATUS, KeyL: SIDE_TAB_LOGS };
   const FOCUS_SELECTOR = ".shelves-gpfocus, .shelves-rowfocus, .gpfocus";
   const DOUBLE_KEY_MS = 400;
   // Steam's controller input stream: through the QAM document's opener, else this window.
@@ -342,7 +343,7 @@
   }
   /* Opens the panel without a pointer, like the plugin's sidecar: a second D-pad right on the
      same rightmost focusable of the hub view (the first only lands on it); D-pad left out of the
-     panel closes it. Keyboard: Ctrl+Shift + N (notifications), S (status) or L (logs); a double
+     panel closes it. Keyboard: Ctrl+Shift + N (notifications), T (status) or L (logs); a double
      ArrowRight only where the page gets arrow keys (the desktop clients keep them for Steam's own
      navigation). `api.current` is refreshed per render; listeners live while the view is mounted. */
   function useSidecarGestures(ref, api) {

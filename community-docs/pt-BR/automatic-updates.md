@@ -35,7 +35,7 @@ A ação **Atualizar o ShelvesHub** baixa a versão para o seu sistema, verifica
 binário e o troca por cima do que está rodando. Onde o gerenciador de serviços
 reinicia o daemon para você (serviço no macOS/Linux, tarefa agendada no
 Windows), ele então reinicia para concluir; caso contrário, mostra um aviso
-"baixado — reinicie para concluir".
+"Reiniciar para atualizar" sob o título da aba (dois toques).
 
 ## Canais de pré-lançamento
 

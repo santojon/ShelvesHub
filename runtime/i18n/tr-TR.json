@@ -1,7 +1,7 @@
 {
   "hub_title": "ShelvesHub",
-  "hub_update_restart": "ShelvesHub güncellemesi mevcut — uygulamak için yeniden başlatın",
-  "hub_update_staged": "ShelvesHub güncellemesi indirildi — tamamlamak için yeniden başlatın",
+  "hub_restart_update": "Güncellemek için yeniden başlat",
+  "hub_restart_rollback": "Geri dönmek için yeniden başlat",
   "upd_uptodate": "Güncel",
   "upd_available": "Güncelleme var",
   "upd_last_checked": "Son kontrol",
@@ -62,7 +62,6 @@
   "action_rollback_plugin": "Önceki Deck Shelves sürümüne dön",
   "action_rollback_hub": "Önceki ShelvesHub sürümüne dön",
   "rollback_confirm": "Geri dönmek için tekrar dokunun",
-  "hub_rollback_staged": "Önceki ShelvesHub geri yüklendi — bitirmek için yeniden başlatın",
   "update_quiet": "Hiçbir oyun çalışmayana kadar bekle",
   "upd_deferred": "hiçbir oyun çalışmayana kadar bekleniyor",
   "upd_whats_new": "Yenilikler",

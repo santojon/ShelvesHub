@@ -1,7 +1,7 @@
 {
   "hub_title": "ShelvesHub",
-  "hub_update_restart": "ShelvesHub-Update verfügbar – zum Anwenden neu starten",
-  "hub_update_staged": "ShelvesHub-Update heruntergeladen – zum Abschließen neu starten",
+  "hub_restart_update": "Zum Aktualisieren neu starten",
+  "hub_restart_rollback": "Zum Zurückgehen neu starten",
   "upd_uptodate": "Aktuell",
   "upd_available": "Update verfügbar",
   "upd_last_checked": "Zuletzt geprüft",
@@ -62,7 +62,6 @@
   "action_rollback_plugin": "Zum vorherigen Deck Shelves zurückkehren",
   "action_rollback_hub": "Zum vorherigen ShelvesHub zurückkehren",
   "rollback_confirm": "Erneut tippen, um zurückzukehren",
-  "hub_rollback_staged": "Vorheriges ShelvesHub wiederhergestellt — zum Abschließen neu starten",
   "update_quiet": "Warten, bis kein Spiel mehr läuft",
   "upd_deferred": "wartet, bis kein Spiel mehr läuft",
   "upd_whats_new": "Neuerungen",

@@ -112,7 +112,7 @@ and simply hosts.
 
 Each block gives what you see, what can go wrong, and the fix with its
 alternative. "The tab" is the ShelvesHub tab in the Quick Access Menu;
-"Status" is the side panel's Status tab, opened by **View status** in Troubleshooting or Ctrl+Shift+S (*Ownership mode*, *Hosted by*, *Deck Shelves
+"Status" is the side panel's Status tab, opened by **View status** in Troubleshooting or Ctrl+Shift+T (*Ownership mode*, *Hosted by*, *Deck Shelves
 version*); "the hub view" is the hub's own panel, shown when no editor is
 available.
 
@@ -392,7 +392,7 @@ below.
    file is kept as `out.log.1`). The tab's **View logs** merges the service
    and the injected runtime; the files and the journal hold the service side
    only.
-2. **Read Status in the side panel** (**View status** in Troubleshooting, or Ctrl+Shift+S). *Ownership mode*: `sole` (no loader),
+2. **Read Status in the side panel** (**View status** in Troubleshooting, or Ctrl+Shift+T). *Ownership mode*: `sole` (no loader),
    `coexist` (the loader's copy hosts), `cooperative` (the hub's host is in
    place next to a loader, including the loader-without-Deck-Shelves case).
    *Hosted by*: *ShelvesHub (this host)*, or the loader's name *(plugin

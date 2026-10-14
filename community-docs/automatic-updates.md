@@ -31,8 +31,8 @@ plugin loader owns the bundle instead, ShelvesHub leaves updates to that host
 The **Update ShelvesHub** action downloads the release for your OS, verifies
 the binary, and swaps it over the running one. Where the service manager
 relaunches the daemon for you (macOS/Linux service, Windows scheduled task) it
-then restarts to finish; otherwise it shows a "downloaded — restart to finish"
-notice.
+then restarts to finish; otherwise it shows a "Restart to update" button under
+the tab's title (two taps).
 
 ## Pre-release channels
 

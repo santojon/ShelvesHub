@@ -1,7 +1,7 @@
 {
   "hub_title": "ShelvesHub",
-  "hub_update_restart": "ShelvesHub 有可用更新 — 重新啟動以套用",
-  "hub_update_staged": "ShelvesHub 更新已下載 — 重新啟動以完成",
+  "hub_restart_update": "重新啟動以更新",
+  "hub_restart_rollback": "重新啟動以還原",
   "upd_uptodate": "已是最新",
   "upd_available": "有可用更新",
   "upd_last_checked": "上次檢查",
@@ -62,7 +62,6 @@
   "action_rollback_plugin": "回復到上一個 Deck Shelves",
   "action_rollback_hub": "回復到上一個 ShelvesHub",
   "rollback_confirm": "再點一次以回復",
-  "hub_rollback_staged": "已還原上一個 ShelvesHub — 重新啟動以完成",
   "update_quiet": "等到沒有遊戲執行時再更新",
   "upd_deferred": "等待沒有遊戲執行",
   "upd_whats_new": "更新內容",

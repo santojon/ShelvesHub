@@ -12,7 +12,7 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 - **O Estado ganha a própria aba no painel lateral.** A aba do ShelvesHub fica com três áreas —
   Atualizações, Configurações, Solução de problemas — e o painel lateral agora tem Notificações,
-  Estado e Logs: "Ver estado" em Solução de problemas (ou Ctrl+Shift+S) abre a leitura que antes
+  Estado e Logs: "Ver estado" em Solução de problemas (ou Ctrl+Shift+T) abre a leitura que antes
   ficava espremida embaixo das outras linhas.
 - **O Big Picture atrás de outra janela não pausa mais o ShelvesHub.** Num Mac (ou em qualquer
   desktop), cobrir ou minimizar o Big Picture era lido como "voltou ao cliente desktop": o hub se
@@ -58,7 +58,7 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   em vez de uma caixinha abaixo dos botões. O painel tem duas abas, Logs e Notificações, com
   ícones ao lado do título ShelvesHub para abrir qualquer uma; ele também abre como o painel
   lateral do próprio plugin — aperte direita duas vezes no controle na borda direita da visão do
-  hub (esquerda para fora dele fecha) — ou pelo teclado com Ctrl+Shift+N, Ctrl+Shift+S ou
+  hub (esquerda para fora dele fecha) — ou pelo teclado com Ctrl+Shift+N, Ctrl+Shift+T ou
   Ctrl+Shift+L (Notificações, Estado, Logs). LB / RB alternam as abas dentro dele, B fecha, e cada
   notificação mostra a marca do remetente como no toast do Steam.
 - **As notificações agora têm a cara e o comportamento das do Steam.** As notificações que este

@@ -12,7 +12,7 @@ is pushed — the notes below are picked up and published with the release.
 
 - **Status gets its own tab in the side panel.** The ShelvesHub tab keeps three areas — Updates,
   Settings, Troubleshooting — and the side panel now has Notifications, Status and Logs: "View
-  status" in Troubleshooting (or Ctrl+Shift+S) opens the readout that used to sit squeezed under
+  status" in Troubleshooting (or Ctrl+Shift+T) opens the readout that used to sit squeezed under
   the other rows.
 - **Big Picture behind another window no longer pauses ShelvesHub.** On a Mac (or any desktop),
   covering or minimizing Big Picture used to read as "back to the desktop client": the hub stood
@@ -53,7 +53,7 @@ is pushed — the notes below are picked up and published with the release.
   small box under the buttons. The panel has two tabs, Logs and Notifications, with icons beside
   the ShelvesHub title to open either; it also opens like the plugin's own side panel — press
   right twice on the gamepad at the right edge of the hub view (left out of it closes) — or from
-  a keyboard with Ctrl+Shift+N, Ctrl+Shift+S or Ctrl+Shift+L (Notifications, Status, Logs). LB /
+  a keyboard with Ctrl+Shift+N, Ctrl+Shift+T or Ctrl+Shift+L (Notifications, Status, Logs). LB /
   RB switch tabs inside it, B closes it, and
   each notification shows its sender's mark like the Steam toast did.
 - **Notifications now look and behave like Steam's.** The notifications this host shows — Deck

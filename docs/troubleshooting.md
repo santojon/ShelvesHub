@@ -168,7 +168,7 @@ ever misbehaves, turn the setting off and restart the service.
 
 ## Updates
 
-- **"ShelvesHub update downloaded — restart to finish" stays after turning updates off** — a
+- **The "Restart to update" button stays after turning updates off** — a
   downloaded update is already staged next to the binary and runs at the next restart whatever
   the switches say now, so its notice stays until then. Restart the service, or tap that notice
   in the tab twice (the first tap reads "Tap again to restart"), to finish it.

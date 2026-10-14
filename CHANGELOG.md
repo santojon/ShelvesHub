@@ -9,6 +9,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- **A transparency statement on how the project is made** (`AI_USAGE.md`), the same kind of
+  file the plugin and the probe toolkit carry; `NOTICE.md` gains a
+  paragraph on the project site (self-contained; the optional visit counter is a hosted service,
+  nothing redistributed), and the debugging page's dependency table lists every direct crate with
+  its license.
 - **A compatibility matrix on the community troubleshooting page.** Hub 0.6.0 beside no loader,
   a loader without Deck Shelves, and Deck Shelves 2.0.0 (the store's copy), 3.2.x, 3.3.0,
   3.3.1–3.3.4 and 3.4.0, under the defaults, `force_owner` and `force_owner` + `coop_bundle`:
@@ -189,7 +194,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - **The hub view's Status readout moved into the side panel.** The Quick Access tab keeps three
   areas — Updates, Settings, Troubleshooting — and the side panel has three tabs: Notifications,
   Status and Logs, in that order (LB / RB walk them). "View status" in Troubleshooting, or
-  Ctrl+Shift+S, opens it on Status; the inline readout was squeezed between the other rows
+  Ctrl+Shift+T, opens it on Status; the inline readout was squeezed between the other rows
   (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`; harness scenario
   `sole-host-status`).
 - **The macOS performance run and the `local:*` devtools tasks stay local.** Both read
@@ -204,6 +209,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   flow) and the site's gallery and features page show the new set, and the features page serves
   the Home as WebP like the landing page (`scripts/deckprobe-ext/screenshots/scenarios/hub.py`,
   `docs/showcase.md`, `site/`).
+- **Rows that open the side panel end with a chevron.** "View status" and "View logs" in
+  Troubleshooting end with a right-aligned `>` (16 px, 0.7 opacity), the same mark the plugin's
+  own panel uses on its row that opens a side panel (`runtime/shelves-host-qam.js`).
+- **The update banner reads "Restart to update".** The button under the title that restarts the
+  service for a pending or staged ShelvesHub update no longer carries the product name or the
+  version ("Restart to go back" for a staged rollback); the Updates section still shows the
+  release (`runtime/i18n/*.json`).
 - **Dead code removed.** An unbuilt copy of an old host contract (`src/runtime/host/`) and the
   runtime's unused all-at-once UI discovery are gone; the chunked discovery is the only one left.
 - **Two new desk proofs.** `pnpm run harness:daemon` runs the real daemon against a headless

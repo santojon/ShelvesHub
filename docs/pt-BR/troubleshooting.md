@@ -174,8 +174,7 @@ dia se comportar mal, desligue a opção e reinicie o serviço.
 
 ## Atualizações
 
-- **"Atualização do ShelvesHub baixada — reinicie para concluir" continua depois de desligar as
-  atualizações** — uma atualização baixada já está preparada ao lado do binário e roda no próximo
+- **O botão "Reiniciar para atualizar" continua depois de desligar as atualizações** — uma atualização baixada já está preparada ao lado do binário e roda no próximo
   reinício, seja o que for que os interruptores digam agora, então o aviso fica até lá. Reinicie o
   serviço, ou toque duas vezes nesse aviso na aba (o primeiro toque mostra "Toque de novo para
   reiniciar"), para concluí-la.
