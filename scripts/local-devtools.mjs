@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Cross-platform wrapper for the shelves-devtools CDP tasks against the LOCAL Steam Big Picture
-// (desktop counterpart to deck-devtools.mjs). Reads SHELVES_CEF_HOST / SHELVES_CEF_PORT (default
-// 127.0.0.1:8080) and runs the Rust devtools binary. Usage: node scripts/local-devtools.mjs <cmd>...
+// Wrapper for the shelves-devtools CDP tasks against the LOCAL Steam Big Picture (counterpart to
+// deck-devtools.mjs). Reads LOCAL_CEF_HOST / LOCAL_CEF_PORT (default 127.0.0.1:8080) — never
+// SHELVES_CEF_*, which .env may point at a Deck. Usage: node scripts/local-devtools.mjs <cmd>...
 import { spawnSync } from "node:child_process";
 
-const host = process.env.SHELVES_CEF_HOST || "127.0.0.1";
-const port = process.env.SHELVES_CEF_PORT || "8080";
+const host = process.env.LOCAL_CEF_HOST || "127.0.0.1";
+const port = process.env.LOCAL_CEF_PORT || "8080";
 
 const passthrough = process.argv.slice(2);
 const args = [

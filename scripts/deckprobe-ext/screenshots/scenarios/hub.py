@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Dict, Optional
@@ -29,6 +30,7 @@ from deckprobe.screenshots.lib.nav import (
     home_via_mainmenu,
     _qam_eval,
     OPEN_QAM_EXPR,
+    _DS_OWN_TAB_CLICK,
 )
 from deckprobe.screenshots.lib.capture import _capture
 from deckprobe.screenshots.lib.cdp import Session, list_targets
@@ -44,18 +46,27 @@ _SECTION_CHILD = {
     "sec-updates": '[data-fb="download"]',
     "sec-troubleshooting": '[data-fb="logs"]',
     "sec-config": '[data-fb="interval_secs+"]',
-    "sec-status": '[data-fb="ro-version"]',
 }
 
+# The hub panel, widened to the side panel when one is open: the side panel sits to
+# the RIGHT of the hub view in the menu document (x 348-854 at 854 wide), full height.
 _CLIP_EXPR = """
 (function(){
   var p = document.querySelector('[data-fb-panel]');
   if(!p) return null;
   var r = p.getBoundingClientRect();
   if(r.width < 50 || r.height < 50) return null;
-  return {x:0, y:0, width: Math.ceil(r.right)+8, height: Math.ceil(r.bottom)+4, scale:1};
+  var right = r.right, bottom = r.bottom;
+  var s = document.querySelector('[data-fb="sidecar"]');
+  if (s) { var q = s.getBoundingClientRect(); if (q.width > 50) { right = Math.max(right, q.right); bottom = Math.max(bottom, q.bottom); } }
+  return {x:0, y:0, width: Math.ceil(right)+8, height: Math.ceil(bottom)+4, scale:1};
 })()
 """
+
+
+def _debug(msg: str) -> None:
+    if os.environ.get("SHOTS_DEBUG"):
+        print("    [hub] " + msg, file=sys.stderr)
 
 
 def _q(sel: str) -> str:
@@ -83,24 +94,67 @@ def _set_locale(sjc, host: str, port: int) -> None:
     _qam_eval(host, port, expr)
 
 
-def _reach_panel(sjc, host: str, port: int) -> bool:
-    """Reach the DS tab and make sure the hub panel is visibly open (non-zero)."""
+def _qam_visible(host: str, port: int) -> bool:
+    """The menu document is `hidden` while the Quick Access menu is closed — the
+    one observable the blind toggle lacks."""
+    return _qam_eval(host, port, "document.visibilityState === 'visible'") is True
+
+
+def _ensure_qam(sjc, host: str, port: int, shown: bool) -> bool:
+    """Flip the menu toggle only while the document disagrees with `shown`, so a
+    close never lands on an already-closed menu (that desync skipped every shot)."""
     for _ in range(4):
-        navigate_to_ds_qam(sjc, host, port)
-        _set_locale(sjc, host, port)
-        # Open the hub view if the editor is showing.
-        if not _present(host, port, "[data-fb-panel]") and _present(host, port, '[data-fb="open-hub"]'):
-            _click(host, port, '[data-fb="open-hub"]')
-            time.sleep(1.0)
-        if _panel_visible(host, port):
+        if _qam_visible(host, port) == shown:
             return True
-        # Panel present but hidden (0x0) — the QAM is not visibly open; flip it.
         try:
             sjc.evaluate(OPEN_QAM_EXPR)
         except Exception:
             pass
-        time.sleep(1.4)
-    return _panel_visible(host, port)
+        time.sleep(1.2)
+    return _qam_visible(host, port) == shown
+
+
+def _reach_panel(sjc, host: str, port: int) -> bool:
+    """Reach the DS tab and make sure the hub panel is visibly open (non-zero).
+
+    The hub view survives a menu close and a tab switch, so a previous scenario
+    can leave it open: go back to the editor first; let the nav helper reach the
+    tab only when the editor's scope is not already in the menu document (its
+    own toggling is blind); open the hub view once; then show the menu by its
+    observed state."""
+    dbg = _debug
+    dbg("start: panel=%s back=%s scope=%s open-hub=%s visible=%s" % (
+        _present(host, port, "[data-fb-panel]"), _present(host, port, '[data-fb="back"]'),
+        _present(host, port, ".deck-shelves-qam-scope"), _present(host, port, '[data-fb="open-hub"]'),
+        _qam_visible(host, port)))
+    if _present(host, port, "[data-fb-panel]") and _present(host, port, '[data-fb="back"]'):
+        dbg("back → %s" % _click(host, port, '[data-fb="back"]'))
+        time.sleep(0.6)
+    if not _present(host, port, ".deck-shelves-qam-scope"):
+        ok = navigate_to_ds_qam(sjc, host, port)
+        dbg("navigate_to_ds_qam → %s (scope now %s, visible %s)" % (ok, _present(host, port, ".deck-shelves-qam-scope"), _qam_visible(host, port)))
+        if not ok:
+            return False
+    _set_locale(sjc, host, port)
+    if not _present(host, port, "[data-fb-panel]") and _present(host, port, '[data-fb="open-hub"]'):
+        dbg("open-hub → %s" % _click(host, port, '[data-fb="open-hub"]'))
+        time.sleep(1.0)
+    shown = _ensure_qam(sjc, host, port, True)
+    dbg("ensure_qam(shown) → %s; panel=%s visible=%s" % (shown, _present(host, port, "[data-fb-panel]"), _qam_visible(host, port)))
+    if not shown:
+        return False
+    # Steam keeps every tab's DOM while the menu shows another tab (0x0 for ours):
+    # select the Deck Shelves tab by its strip entry until the panel measures.
+    for _ in range(3):
+        time.sleep(0.6)
+        if _panel_visible(host, port):
+            dbg("panel visible")
+            return True
+        dbg("tab click → %s" % _qam_eval(host, port, _DS_OWN_TAB_CLICK))
+        time.sleep(1.0)
+    vis = _panel_visible(host, port)
+    dbg("panel_visible → %s" % vis)
+    return vis
 
 
 def _set_sections(host: str, port: int, want_open: Dict[str, bool]) -> None:
@@ -139,7 +193,7 @@ def _capture_panel(host: str, port: int, out_path: Path):
 
 def _shot(sjc, host, port, out_dir, want_open, name, extra=None):
     if not _reach_panel(sjc, host, port):
-        close_qam(sjc)
+        _ensure_qam(sjc, host, port, False)
         return {}
     _set_sections(host, port, want_open)
     if extra:
@@ -147,7 +201,7 @@ def _shot(sjc, host, port, out_dir, want_open, name, extra=None):
     time.sleep(0.5)
     out = out_dir / name
     p = _capture_panel(host, port, out)
-    close_qam(sjc)
+    _ensure_qam(sjc, host, port, False)
     return {name: p} if p else {}
 
 
@@ -186,27 +240,65 @@ def hub_panel(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
 
 @register("hub_troubleshooting")
 def hub_troubleshooting(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
-    """Troubleshooting section — Logs action + Disable-hub-until-restart toggle."""
+    """Troubleshooting section — View status, View logs, restart the backend,
+    the disable-until-restart toggle."""
     return _shot(sjc, host, port, out_dir, {"sec-troubleshooting": True}, "hub-troubleshooting.png")
 
 
 @register("hub_config")
 def hub_config(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
-    """Configuration (editable safe subset) + Status (read-only) sections."""
-    return _shot(sjc, host, port, out_dir, {"sec-config": True, "sec-status": True}, "hub-config.png")
+    """Configuration section (the editable safe subset); the read-only Status
+    lives in the side panel now (`hub_status`)."""
+    return _shot(sjc, host, port, out_dir, {"sec-config": True}, "hub-config.png")
+
+
+def _open_side(host: str, port: int, button: str, view: str) -> None:
+    """Click a row/icon that opens the side panel, wait for its view to mount."""
+    _click(host, port, '[data-fb="%s"]' % button)
+    for _ in range(10):
+        time.sleep(0.5)
+        if _present(host, port, '[data-fb="%s"]' % view):
+            break
+    time.sleep(0.6)
 
 
 @register("hub_logs")
 def hub_logs(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
-    """The merged host/runtime Logs viewer."""
-    def open_logs(host, port):
-        _click(host, port, '[data-fb="logs"]')
-        for _ in range(10):
-            time.sleep(0.5)
-            if _present(host, port, '[data-fb="logs-view"]'):
-                break
-        time.sleep(0.5)
-    return _shot(sjc, host, port, out_dir, {"sec-troubleshooting": True}, "hub-logs.png", extra=open_logs)
+    """The side panel's Logs tab — the merged host + runtime stream — opened
+    from "View logs" in Troubleshooting (the menu widens; the clip starts at the
+    document's left edge, so the panel is in the shot)."""
+    return _shot(sjc, host, port, out_dir, {"sec-troubleshooting": True}, "hub-logs.png",
+                 extra=lambda h, p: _open_side(h, p, "logs", "logs-view"))
+
+
+@register("hub_status")
+def hub_status(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
+    """The side panel's Status tab — mode, who hosts, versions, endpoints —
+    opened from "View status" in Troubleshooting."""
+    return _shot(sjc, host, port, out_dir, {"sec-troubleshooting": True}, "hub-status.png",
+                 extra=lambda h, p: _open_side(h, p, "status", "status-view"))
+
+
+@register("hub_notifications")
+def hub_notifications(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
+    """The side panel's Notifications tab, opened from the bell by the title.
+    The center is cleared and two generic entries posted first (through the
+    host's own `notifications.toast`, in the shared context where the host
+    object lives), so the shot is in the capture language whatever the plugin
+    posted in Steam's — the entries are transient, nothing is persisted."""
+    def seed(host, port):
+        try:
+            sjc.evaluate("(function(){try{window.__SHELVES_HOST__.notifications.clear();}catch(e){}return 1;})()")
+        except Exception:
+            pass
+        for body in ("Deck Shelves is up to date.", "Hosting Deck Shelves on this device."):
+            try:
+                sjc.evaluate("(function(){try{window.__SHELVES_HOST__.notifications.toast({title:'ShelvesHub',body:%s});}catch(e){}return 1;})()" % json.dumps(body))
+            except Exception:
+                pass
+            time.sleep(0.6)
+        _open_side(host, port, "open-notif", "notif-view")
+    return _shot(sjc, host, port, out_dir, {"sec-troubleshooting": True}, "hub-notifications.png", extra=seed)
 
 
 # ── Deck Shelves views (the tab this host opens + the Home it hosts) ─────────

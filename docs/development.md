@@ -98,7 +98,10 @@ needs the built bundle (a release asset), never the plugin's source tree.
 
 `local:run` builds the daemon and starts it against
 `SHELVES_CEF_HOST:SHELVES_CEF_PORT` (default `127.0.0.1:8080` — Steam's own
-localhost debug port). Like the product's `ensure_bundle`, an existing managed
+localhost debug port). The `local:*` devtools tasks (`local:eval`, `local:reload`, …) and
+the macOS leg of `perf:combined` talk to `LOCAL_CEF_HOST:LOCAL_CEF_PORT` (same default) and
+ignore `SHELVES_CEF_*`, so a `.env` that points the daemon's variables at a Deck does not
+send the "local" tasks there. Like the product's `ensure_bundle`, an existing managed
 bundle is kept across restarts (so a self-installed or previously-fetched build
 survives); `local:run:reseed` forces a refresh and reloads the renderer. The
 managed bundle and daemon log live under the OS data dir

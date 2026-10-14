@@ -205,6 +205,18 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   Solução de problemas, ou Ctrl+Shift+S, o abre em Estado; a leitura embutida ficava espremida
   entre as outras linhas (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`;
   cenário do harness `sole-host-status`).
+- **A medição de desempenho no macOS e as tarefas de devtools `local:*` ficam locais.** As duas
+  leem `LOCAL_CEF_HOST` / `LOCAL_CEF_PORT` (padrão `127.0.0.1:8080`) em vez de `SHELVES_CEF_*`, que
+  um `.env` pode apontar para um Deck para o daemon — a medição no Mac consultava o Deck até o
+  tempo esgotar e nunca media nada (`scripts/combined-host-run.sh`, `scripts/local-devtools.mjs`).
+- **O conjunto de capturas cobre o painel lateral.** `pnpm site:shots:hub` agora captura as abas
+  Estado, Logs e Notificações (`hub-status.png`, `hub-logs.png`, `hub-notifications.png`; a
+  central de notificações é limpa e duas entradas genéricas enviadas antes, para a captura ficar
+  no idioma da captura) e lida com uma visão do hub
+  que ficou aberta da captura anterior; as galerias do README, a página de vitrine (reescrita para
+  o fluxo atual) e a galeria e a página de funcionalidades do site mostram o conjunto novo, e a
+  página de funcionalidades serve a Home em WebP como a página inicial
+  (`scripts/deckprobe-ext/screenshots/scenarios/hub.py`, `docs/showcase.md`, `site/`).
 - **Código morto removido.** Uma cópia não compilada de um contrato antigo do host
   (`src/runtime/host/`) e a descoberta de UI de uma vez só, sem uso, do runtime se foram; a
   descoberta em partes é a única que resta.

@@ -99,7 +99,10 @@ precisa do pacote compilado (um artefato de lançamento), nunca da árvore de c�
 
 `local:run` compila o daemon e o inicia contra
 `SHELVES_CEF_HOST:SHELVES_CEF_PORT` (padrão `127.0.0.1:8080` — a própria porta de
-depuração local do Steam). Assim como o `ensure_bundle` do produto, um pacote gerenciado
+depuração local do Steam). As tarefas de devtools `local:*` (`local:eval`, `local:reload`, …) e a perna do
+macOS do `perf:combined` falam com `LOCAL_CEF_HOST:LOCAL_CEF_PORT` (mesmo padrão) e ignoram
+`SHELVES_CEF_*`, então um `.env` que aponta as variáveis do daemon para um Deck não manda as
+tarefas "locais" para lá. Assim como o `ensure_bundle` do produto, um pacote gerenciado
 existente é mantido entre reinícios (para que uma build autoinstalada ou obtida
 anteriormente sobreviva); `local:run:reseed` força uma atualização e recarrega o renderizador. O
 pacote gerenciado e o log do daemon ficam sob o diretório de dados do sistema operacional

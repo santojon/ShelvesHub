@@ -2,66 +2,86 @@
 
 *[Read in English](../showcase.md)*
 
-A landing page em [`site/`](../../site/) mostra uma galeria de capturas de tela. Esta página
-incorpora as capturas feitas e documenta como elas são produzidas e publicadas.
+A landing page em [`site/`](../../site/) e o [README](README.md) mostram o mesmo conjunto de
+capturas, feitas ao vivo numa sessão do Steam Big Picture num host em que o ShelvesHub roda. Esta
+página as incorpora e documenta como são produzidas e publicadas.
 
 ## Capturas de tela
 
 | | |
 | --- | --- |
-| ![Quick Access tab](../../assets/screenshots/hub-panel.png) | ![Config](../../assets/screenshots/hub-config.png) |
-| **Aba de Acesso Rápido** — o editor do Deck Shelves, aberto diretamente. | **Config** — configurações do host no painel. |
-| ![Troubleshooting](../../assets/screenshots/hub-troubleshooting.png) | ![Logs](../../assets/screenshots/hub-logs.png) |
-| **Solução de problemas** — ações de recuperação quando o pacote não consegue carregar. | **Logs** — o visualizador de logs embutido no painel. |
+| ![Aba do Quick Access](../../assets/screenshots/qam-tab.png) | ![Atualizações](../../assets/screenshots/hub-panel.png) |
+| **Aba do Quick Access** — o editor do Deck Shelves, aberto direto. | **Atualizações** — host + Deck Shelves, cada um com canal de pré-lançamento. |
+| ![Configuração](../../assets/screenshots/hub-config.png) | ![Solução de problemas](../../assets/screenshots/hub-troubleshooting.png) |
+| **Configuração** — o subconjunto seguro editável, cada campo descrito. | **Solução de problemas** — ver estado, ver logs, reiniciar o backend, pausar o host. |
+| ![Painel lateral, Estado](../../assets/screenshots/hub-status.png) | ![Painel lateral, Logs](../../assets/screenshots/hub-logs.png) |
+| **Painel lateral — Estado** — modo, quem hospeda, versões, endpoints. | **Painel lateral — Logs** — logs do host + runtime em um único fluxo. |
+| ![Painel lateral, Notificações](../../assets/screenshots/hub-notifications.png) | ![Home](../../assets/screenshots/home.webp) |
+| **Painel lateral — Notificações** — o que o host te contou, com contador de não lidas. | **Home** — a Home do Deck Shelves, hospedada pelo ShelvesHub. |
 
-## Como o site publica
+## Onde ficam e como o site publica
 
 ```mermaid
 flowchart LR
-  A[site/ landing page] --> P[Pages workflow]
-  I[site/img/*.png screenshots] --> P
+  C[pnpm site:shots:hub] --> A[assets/screenshots/*.png + home.webp]
+  A --> R[README + docs/showcase.md]
+  A -. "../assets/screenshots/ localmente,<br/>raw.githubusercontent.com quando publicado" .-> S[site/index.html + features.html]
+  S --> P[Workflow do Pages]
   P --> G[GitHub Pages<br/>santojon.github.io/ShelvesHub]
 ```
 
-`.github/workflows/pages.yml` publica `site/` a cada push em `main` que o
-altere (configuração única: repo Settings → Pages → Source: "GitHub Actions").
-A galeria renderiza quaisquer PNGs existentes em `site/img/` — sem etapa de build.
+`assets/screenshots/` é o único lugar canônico. O README e esta página incorporam os arquivos por
+caminho relativo; o site não guarda cópias — as páginas tentam primeiro o caminho relativo (uma
+prévia local a partir do repositório mostra as imagens na hora) e recorrem a
+`raw.githubusercontent.com/…/main/assets/screenshots/` no site publicado, então uma captura nova
+chega ao site assim que está na `main`. `.github/workflows/pages.yml` publica `site/` a cada push
+na `main` que a toque; `pnpm build:site` regenera, dentro das páginas, as listas bilíngues de
+funcionalidades e de versões a partir do README e das notas de versão (EN e pt-BR).
 
-## O conjunto de capturas de tela
+## O conjunto de capturas
 
-Coloque PNGs com estes nomes em `site/img/`; a galeria os detecta
-automaticamente (os que faltarem são simplesmente ignorados):
+| Arquivo | Cenário | Mostra |
+|---|---|---|
+| `qam-tab.png` | `qam_tab` | A aba nativa do Quick Access com o editor do Deck Shelves |
+| `hub-panel.png` | `hub_panel` | A visão do ShelvesHub, Atualizações aberta |
+| `hub-config.png` | `hub_config` | A seção Configuração |
+| `hub-troubleshooting.png` | `hub_troubleshooting` | A seção Solução de problemas (Ver estado, Ver logs, reiniciar o backend, pausar) |
+| `hub-status.png` | `hub_status` | O painel lateral na aba Estado |
+| `hub-logs.png` | `hub_logs` | O painel lateral na aba Logs |
+| `hub-notifications.png` | `hub_notifications` | O painel lateral na aba Notificações (a central é limpa e duas entradas genéricas enviadas antes, para a captura ficar no idioma da captura; nada é persistido) |
+| `home.png` → `home.webp` | `home` | A Home do Deck Shelves, janela inteira; o site serve o WebP (cerca de um décimo do PNG, gravado ao lado quando o Pillow está instalado) |
 
-| Arquivo | Mostra |
-|---|---|
-| `home.png` → `home.webp` | A Home do Deck Shelves, hospedada pelo ShelvesHub (o site serve o WebP, um décimo do tamanho do PNG; a captura grava os dois) |
-| `qam-tab.png` | A aba nativa de Acesso Rápido (o editor abre diretamente) |
-| `fallback.png` | O painel de fallback — ações de recuperação + o visualizador de logs |
-| `coexist.png` | As duas abas, coexistindo com outro host |
-
-Use um enquadramento próximo de 16:10 para combinar com os cartões da galeria.
+As visões do hub são recortadas da borda esquerda do documento do menu até o painel
+(`[data-fb-panel]`), ou até a borda direita do painel lateral quando ele está aberto (fica à direita
+da visão do hub), então as capturas do painel lateral são mais largas. As capturas são em
+inglês (`window.__SHELVES_LOCALE__`, `--locale` para trocar), seja qual for o idioma do Steam.
 
 ## Capturando
 
 ```mermaid
 flowchart TD
-  S[Steam Big Picture<br/>CEF debug port 8080] --> C{Capture method}
-  C -->|manual| M[Steam / OS screenshot → site/img/*.png]
-  C -->|scripted| D[scripts/site/capture-screenshots.mjs]
-  D --> O[site/img/&lt;name&gt;.png]
+  S[Steam Big Picture<br/>porta de depuração CEF 8080, daemon rodando] --> R[pnpm site:shots:hub<br/>runner de capturas do deckprobe]
+  R --> N[scripts/deckprobe-ext/screenshots/scenarios/hub.py<br/>uma função @register por captura]
+  N --> O[assets/screenshots/]
 ```
 
-- **Manual (confiável, qualquer plataforma):** tire uma captura de tela do Steam ou do
-  sistema operacional da tela desejada e salve-a em `site/img/` com o nome acima.
-- **Roteirizada (CDP):** `node scripts/site/capture-screenshots.mjs <name>` captura
-  a janela do Big Picture pela porta de depuração CEF, salvando em `site/img/<name>.png`. Abra
-  a tela primeiro, e **pare o daemon** durante a captura (um segundo cliente CDP pode
-  travar a porta). OBSERVAÇÃO: o suporte do `Page.captureScreenshot` na janela CEF do Big
-  Picture do Steam **ainda não foi validado no dispositivo** — se der timeout, use o
-  método manual. Validar isso (ou encontrar um caminho de captura via CDP que funcione) está sendo
-  acompanhado internamente.
+```sh
+pnpm site:shots:hub                       # o conjunto inteiro, a partir do Mac local (127.0.0.1:8080)
+bash scripts/site/capture-hub-screenshots.sh --only hub_status   # um cenário (o pnpm repassaria o `--`)
+DECK_CDP_HOST=192.168.x.x DECK_CDP_PORT=8081 pnpm site:shots:hub   # um Deck pela rede
+```
+
+- O daemon precisa estar rodando e o Big Picture aberto; no macOS traga o Steam para a frente
+  antes (uma janela coberta pode parar de pintar, e a captura dela volta em branco).
+- Cada cenário abre o menu de Acesso Rápido por CDP, chega à aba, abre a visão do ShelvesHub
+  (`open-hub`), ajusta as seções recolhíveis, abre o painel lateral quando a captura precisa, e
+  captura a partir do documento do QuickAccess; `qam_tab` roda primeiro, com o menu ainda fresco.
+- `node scripts/site/capture-screenshots.mjs <nome>` ainda captura a janela inteira do Big
+  Picture em `site/img/<nome>.png` para um caso avulso; a galeria não lê essa pasta.
 
 ## Prévia de desenvolvimento
 
-Abra `site/index.html` diretamente em um navegador para pré-visualizar a página localmente; é uma
-página estática autocontida (sem necessidade de servidor ou etapa de build).
+Abra `site/index.html` num navegador a partir do repositório (as imagens resolvem por caminho
+relativo), ou sirva a raiz do repositório (`python3 -m http.server`) e abra `/site/`. A troca de
+idioma guarda a escolha no `localStorage`; as legendas da galeria são traduzidas quando cada
+imagem carrega.

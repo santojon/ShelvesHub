@@ -38,7 +38,9 @@ done
 now_ms() { python3 -c 'import time;print(int(time.time()*1000))'; }
 
 set -o allexport; [[ -f .env ]] && source .env; set +o allexport
-PORT="${SHELVES_CEF_PORT:-8080}"
+# The Deck's CDP port as the Deck itself sees it; the Mac's local Steam. Never SHELVES_CEF_*:
+# .env may point those at a Deck for the daemon, which once made the mac run poll the Deck.
+if [[ "$TARGET" == "deck" ]]; then PORT="${DECK_CDP_PORT:-8080}"; else PORT="${LOCAL_CEF_PORT:-8080}"; fi
 
 ssh_deck() {
   local key="${DECK_SSH_KEY:-$HOME/.ssh/id_rsa}"; key="${key/#\~/$HOME}"
@@ -73,7 +75,7 @@ ready() {
     ssh_deck "journalctl --user -u shelveshub --since '@$RUN_START' --no-pager 2>/dev/null | grep -qiE '$READY_LOG_PATTERN'"
   else
     local out
-    out=$(pnpm -s run local:eval -- "$READY_EXPR" 2>/dev/null)
+    out=$(LOCAL_CEF_HOST=127.0.0.1 LOCAL_CEF_PORT="$PORT" node scripts/local-devtools.mjs --target SharedJSContext eval "$READY_EXPR" 2>/dev/null)
     printf '%s' "$out" | grep -qx 'true'
   fi
 }

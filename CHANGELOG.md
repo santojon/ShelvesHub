@@ -192,6 +192,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   Ctrl+Shift+S, opens it on Status; the inline readout was squeezed between the other rows
   (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`; harness scenario
   `sole-host-status`).
+- **The macOS performance run and the `local:*` devtools tasks stay local.** Both read
+  `LOCAL_CEF_HOST` / `LOCAL_CEF_PORT` (default `127.0.0.1:8080`) instead of `SHELVES_CEF_*`, which
+  a `.env` may point at a Deck for the daemon — the Mac run used to poll the Deck until its timeout
+  and never measured anything (`scripts/combined-host-run.sh`, `scripts/local-devtools.mjs`).
+- **The screenshot set covers the side panel.** `pnpm site:shots:hub` now captures the Status,
+  Logs and Notifications tabs (`hub-status.png`, `hub-logs.png`, `hub-notifications.png`; the
+  notification center is cleared and two generic entries posted first, so the shot is in the
+  capture language) and copes with a hub view that stayed open
+  from the previous shot; the README galleries, the showcase page (rewritten for the current
+  flow) and the site's gallery and features page show the new set, and the features page serves
+  the Home as WebP like the landing page (`scripts/deckprobe-ext/screenshots/scenarios/hub.py`,
+  `docs/showcase.md`, `site/`).
 - **Dead code removed.** An unbuilt copy of an old host contract (`src/runtime/host/`) and the
   runtime's unused all-at-once UI discovery are gone; the chunked discovery is the only one left.
 - **Two new desk proofs.** `pnpm run harness:daemon` runs the real daemon against a headless

@@ -30,6 +30,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
   }
   </script>
+<!-- analytics --><script data-goatcounter="https://shelveshub.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><!-- /analytics -->
 </head>
 <body>
   <!-- Language switcher: auto-detects the browser locale, remembers a manual
@@ -136,8 +137,10 @@
           var shots = [
             ["hub-panel.png", "The ShelvesHub panel — automatic updates for the host and Deck Shelves, with pre-release channels", "shots.cap.panel"],
             ["hub-troubleshooting.png", "Troubleshooting — view the logs or disable the host until the next restart", "shots.cap.trouble"],
-            ["hub-config.png", "Editable, safe configuration plus a read-only status readout", "shots.cap.config"],
-            ["hub-logs.png", "The merged host + runtime log viewer, right in the tab", "shots.cap.logs"],
+            ["hub-config.png", "Editable, safe configuration — each field described in your language", "shots.cap.config"],
+            ["hub-status.png", "The side panel's Status tab — mode, who hosts, versions and endpoints, read-only", "shots.cap.status"],
+            ["hub-logs.png", "The side panel's Logs tab — host + runtime logs in one stream", "shots.cap.logs"],
+            ["hub-notifications.png", "The side panel's Notifications tab — what the host told you, with an unread badge", "shots.cap.notif"],
             ["home.webp", "Your Deck Shelves Home, hosted by ShelvesHub", "shots.cap.home"],
             ["qam-tab.png", "The native Quick Access tab", "shots.cap.tab"]
           ];
@@ -309,6 +312,7 @@
       <hr class="foot-rule">
       <p class="foot-bottom" data-i18n="footer.copy">© 2026 ShelvesHub · MIT-licensed · built by Jonathan Santos</p>
     </div>
+<!-- analytics-notice --><p class="foot-bottom analytics-note" data-lang-variant="en">Page views are counted without cookies or personal data (GoatCounter) · <a href="https://shelveshub.goatcounter.com">public stats</a>.</p><p class="foot-bottom analytics-note" data-lang-variant="pt">As visitas são contadas sem cookies nem dados pessoais (GoatCounter) · <a href="https://shelveshub.goatcounter.com">estatísticas públicas</a>.</p><!-- /analytics-notice -->
 </footer>
 
   <script>
@@ -356,8 +360,10 @@
         "shots.lead": "Uma olhada no que faz do ShelvesHub mais que um carregador — o painel de gerenciamento dele no menu Quick Access do Steam: atualizações automáticas do host e do Deck Shelves, solução de problemas, configuração editável e um visualizador de logs unificado. Capturado de uma sessão real do Steam Big Picture.",
         "shots.cap.panel": "O painel do ShelvesHub — atualizações automáticas do host e do Deck Shelves, com canais de pré-lançamento",
         "shots.cap.trouble": "Solução de problemas — veja os logs ou desligue o host até o próximo reinício",
-        "shots.cap.config": "Configuração editável e segura, além de um status somente leitura",
-        "shots.cap.logs": "O visualizador de logs unificado (host + runtime), direto na aba",
+        "shots.cap.config": "Configuração editável e segura — cada campo descrito no seu idioma",
+        "shots.cap.status": "A aba Estado do painel lateral — modo, quem hospeda, versões e endpoints, somente leitura",
+        "shots.cap.logs": "A aba Logs do painel lateral — logs do host + runtime em um único fluxo",
+        "shots.cap.notif": "A aba Notificações do painel lateral — o que o host te contou, com contador de não lidas",
         "shots.cap.home": "Sua tela Inicial do Deck Shelves, hospedada pelo ShelvesHub",
         "shots.cap.tab": "A aba nativa do Quick Access",
         "releases.h2": "Novidades",
@@ -406,8 +412,10 @@
       var EN_CAPS = {
         "shots.cap.panel": "The ShelvesHub panel — automatic updates for the host and Deck Shelves, with pre-release channels",
         "shots.cap.trouble": "Troubleshooting — view the logs or disable the host until the next restart",
-        "shots.cap.config": "Editable, safe configuration plus a read-only status readout",
-        "shots.cap.logs": "The merged host + runtime log viewer, right in the tab",
+        "shots.cap.config": "Editable, safe configuration — each field described in your language",
+        "shots.cap.status": "The side panel's Status tab — mode, who hosts, versions and endpoints, read-only",
+        "shots.cap.logs": "The side panel's Logs tab — host + runtime logs in one stream",
+        "shots.cap.notif": "The side panel's Notifications tab — what the host told you, with an unread badge",
         "shots.cap.home": "Your Deck Shelves Home, hosted by ShelvesHub",
         "shots.cap.tab": "The native Quick Access tab"
       };

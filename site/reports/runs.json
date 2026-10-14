@@ -3243,5 +3243,163 @@
       "total": 14
     },
     "page": "local/2026-10-14_10-29-19.html"
+  },
+  {
+    "ts": "2026-10-14_12-38-09",
+    "scope": "local",
+    "version": "0.5.0",
+    "overall": "FAIL",
+    "tests": {
+      "passed": 154,
+      "failed": 0,
+      "skipped": 0,
+      "total": 154
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "fmt": {
+      "clean": true
+    },
+    "audit": {
+      "vulnerabilities": 0,
+      "clean": true
+    },
+    "harness": {
+      "passed": 20,
+      "failed": 0,
+      "total": 20
+    },
+    "eslint": {
+      "errors": 1,
+      "warnings": 0,
+      "problems": 1,
+      "byRule": {
+        "ds-local/comment-length": 1
+      }
+    },
+    "complexity": {
+      "level": 0,
+      "count": 0,
+      "max": 0,
+      "top": []
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 3163,
+    "rustCodeLines": {
+      "total": 9773,
+      "files": 35
+    },
+    "qa": {
+      "cells": 10,
+      "byStatus": {
+        "tested": 3,
+        "partial": 1,
+        "manual": 2,
+        "blocked": 4
+      },
+      "assembled": "2026-10-14T13:29:19Z"
+    },
+    "docs": {
+      "locales": 19,
+      "keys": 85,
+      "keyParity": true,
+      "parityProblems": [],
+      "docPairs": 12,
+      "docsUnpaired": 0
+    },
+    "durations": {
+      "tests": 4052,
+      "clippy": 1178,
+      "fmt": 106,
+      "audit": 1617,
+      "harness": 33801,
+      "eslint": 1151,
+      "complexity": 379,
+      "total": 42319
+    }
+  },
+  {
+    "ts": "2026-10-14_12-39-08",
+    "scope": "local",
+    "version": "0.5.0",
+    "overall": "PASS",
+    "tests": {
+      "passed": 154,
+      "failed": 0,
+      "skipped": 0,
+      "total": 154
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "fmt": {
+      "clean": true
+    },
+    "audit": {
+      "vulnerabilities": 0,
+      "clean": true
+    },
+    "harness": {
+      "passed": 20,
+      "failed": 0,
+      "total": 20
+    },
+    "eslint": {
+      "errors": 0,
+      "warnings": 0,
+      "problems": 0,
+      "byRule": {}
+    },
+    "complexity": {
+      "level": 0,
+      "count": 0,
+      "max": 0,
+      "top": []
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 3163,
+    "rustCodeLines": {
+      "total": 9773,
+      "files": 35
+    },
+    "qa": {
+      "cells": 10,
+      "byStatus": {
+        "tested": 3,
+        "partial": 1,
+        "manual": 2,
+        "blocked": 4
+      },
+      "assembled": "2026-10-14T13:29:19Z"
+    },
+    "docs": {
+      "locales": 19,
+      "keys": 85,
+      "keyParity": true,
+      "parityProblems": [],
+      "docPairs": 12,
+      "docsUnpaired": 0
+    },
+    "durations": {
+      "tests": 767,
+      "clippy": 111,
+      "fmt": 94,
+      "audit": 1462,
+      "harness": 34055,
+      "eslint": 557,
+      "complexity": 369,
+      "total": 37441
+    }
   }
 ]

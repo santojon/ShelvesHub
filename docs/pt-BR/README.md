@@ -102,8 +102,12 @@ O ShelvesHub adiciona seu próprio painel de gerenciamento ao menu de Acesso Rá
 <td align="center" width="50%"><img src="../../assets/screenshots/hub-troubleshooting.png" alt="Troubleshooting section" width="240"><br><sub><b>Solução de problemas</b> — veja os logs, ou desative o host até o próximo reinício</sub></td>
 </tr>
 <tr>
-<td align="center" width="50%"><img src="../../assets/screenshots/hub-config.png" alt="Configuration and status" width="240"><br><sub><b>Configuração + Status</b> — um subconjunto seguro e editável, e uma leitura somente para consulta</sub></td>
-<td align="center" width="50%"><img src="../../assets/screenshots/hub-logs.png" alt="Merged log viewer" width="240"><br><sub><b>Visualizador de logs</b> — os logs do host e do runtime em um único fluxo</sub></td>
+<td align="center" width="50%"><img src="../../assets/screenshots/hub-config.png" alt="Configuration" width="240"><br><sub><b>Configuração</b> — um subconjunto seguro e editável, e uma leitura somente para consulta</sub></td>
+<td align="center" width="50%"><img src="../../assets/screenshots/hub-logs.png" alt="Side panel, Logs tab" width="240"><br><sub><b>Painel lateral — Logs</b> — os logs do host e do runtime em um único fluxo</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="../../assets/screenshots/hub-status.png" alt="Side panel, Status tab" width="240"><br><sub><b>Painel lateral — Estado</b> — modo, quem hospeda, versões e endpoints</sub></td>
+<td align="center" width="50%"><img src="../../assets/screenshots/hub-notifications.png" alt="Side panel, Notifications tab" width="240"><br><sub><b>Painel lateral — Notificações</b> — o que o host te contou, com contador de não lidas</sub></td>
 </tr>
 </table>
 </div>

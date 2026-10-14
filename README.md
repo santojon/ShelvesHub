@@ -102,8 +102,12 @@ ShelvesHub adds its own management panel to the Steam Quick Access menu — the 
 <td align="center" width="50%"><img src="assets/screenshots/hub-troubleshooting.png" alt="Troubleshooting section" width="240"><br><sub><b>Troubleshooting</b> — view logs, or disable the host until restart</sub></td>
 </tr>
 <tr>
-<td align="center" width="50%"><img src="assets/screenshots/hub-config.png" alt="Configuration and status" width="240"><br><sub><b>Configuration + Status</b> — an editable safe subset, and a read-only readout</sub></td>
-<td align="center" width="50%"><img src="assets/screenshots/hub-logs.png" alt="Merged log viewer" width="240"><br><sub><b>Log viewer</b> — the host and runtime logs in one stream</sub></td>
+<td align="center" width="50%"><img src="assets/screenshots/hub-config.png" alt="Configuration" width="240"><br><sub><b>Configuration</b> — an editable safe subset, each field described</sub></td>
+<td align="center" width="50%"><img src="assets/screenshots/hub-logs.png" alt="Side panel, Logs tab" width="240"><br><sub><b>Side panel — Logs</b> — the host and runtime logs in one stream</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="assets/screenshots/hub-status.png" alt="Side panel, Status tab" width="240"><br><sub><b>Side panel — Status</b> — mode, who hosts, versions and endpoints</sub></td>
+<td align="center" width="50%"><img src="assets/screenshots/hub-notifications.png" alt="Side panel, Notifications tab" width="240"><br><sub><b>Side panel — Notifications</b> — what the host told you, with an unread badge</sub></td>
 </tr>
 </table>
 </div>

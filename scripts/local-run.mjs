@@ -147,6 +147,8 @@ console.log(`[OK] daemon started (PID ${child.pid}) → CEF ${env.SHELVES_CEF_HO
 // ── Optionally reload the renderer so the fresh bundle re-injects ────────────
 if (has("--reload")) {
   console.log("[i] Reloading the renderer via shelves-devtools...");
-  const dt = spawnSync("node", [join(ROOT, "scripts", "local-devtools.mjs"), "reload"], { cwd: ROOT, env, stdio: "inherit" });
+  // The wrapper reads LOCAL_CEF_*: point it at the Steam this daemon injects into.
+  const dtEnv = { ...env, LOCAL_CEF_HOST: env.SHELVES_CEF_HOST, LOCAL_CEF_PORT: env.SHELVES_CEF_PORT };
+  const dt = spawnSync("node", [join(ROOT, "scripts", "local-devtools.mjs"), "reload"], { cwd: ROOT, env: dtEnv, stdio: "inherit" });
   if (dt.status !== 0) console.warn("[!] reload failed — reload Big Picture manually if the fresh bundle isn't live.");
 }
