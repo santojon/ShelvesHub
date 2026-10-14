@@ -16,12 +16,12 @@
 ARG BASE_IMAGE=rust:1-slim-bookworm
 FROM ${BASE_IMAGE}
 
-# Chromium (the headless browser the harness drives), python3 (the static file
-# server the runtime harness serves the mock over), and curl/ca-certificates
-# (React fetch + DevTools probing).
+# Chromium (the headless browser the harnesses drive), python3 (their static file servers),
+# node (the runtime harness's unit checks), procps (the daemon harness's browser cleanup) and
+# curl/ca-certificates (DevTools probing; React is fetched only when a checkout lacks its copy).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      chromium python3 curl ca-certificates \
+      chromium python3 nodejs procps curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 # The harness resolves the browser via $BROWSER; Chromium as root needs the

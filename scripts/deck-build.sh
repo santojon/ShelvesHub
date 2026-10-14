@@ -32,7 +32,7 @@ if command -v cargo-zigbuild >/dev/null 2>&1; then
   cargo zigbuild --release --target "${TARGET}.${GLIBC}"
 else
   echo "[!] cargo-zigbuild not found — falling back to plain cargo build."
-  echo "    On macOS this usually fails to link; run 'pnpm setup' to install it."
+  echo "    On macOS this usually fails to link; run 'pnpm run setup' to install it."
   cargo build --release --target "$TARGET"
 fi
 

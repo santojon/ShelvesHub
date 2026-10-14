@@ -8,6 +8,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, copyFileSync, statSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { homedir, platform } from "node:os";
+import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -33,6 +34,10 @@ const DATA = dataDir();
 mkdirSync(DATA, { recursive: true });
 const MANAGED = join(DATA, "bundle.js");
 const LOG = join(DATA, "daemon.log");
+// Its own control port and token file, so an installed service keeps 127.0.0.1:60123 and its
+// token; SHELVES_RPC_PORT / SHELVES_RPC_TOKEN_FILE override them.
+const RPC_PORT = process.env.SHELVES_RPC_PORT || "60124";
+const TOKEN_FILE = process.env.SHELVES_RPC_TOKEN_FILE || join(DATA, ".rpc-token");
 
 // ── Resolve the plugin bundle to seed from ──────────────────────────────────
 const devBundle = process.env.SHELVES_BUNDLE_PATH
@@ -90,6 +95,29 @@ function seedConfig() {
 }
 seedConfig();
 
+// ── An installed service on 60123 injects into this same Steam ──────────────
+// The stop below does not hold for it: its service manager starts it again.
+function answers(port) {
+  return new Promise((done) => {
+    const s = connect({ host: "127.0.0.1", port });
+    const end = (yes) => { s.destroy(); done(yes); };
+    s.setTimeout(500, () => end(false));
+    s.once("connect", () => end(true));
+    s.once("error", () => end(false));
+  });
+}
+function serviceStopHint() {
+  if (isWin) return "schtasks /End /TN ShelvesHub";
+  if (platform() === "darwin") return `launchctl bootout gui/${process.getuid()}/com.shelveshub`;
+  return "systemctl --user stop shelveshub";
+}
+if (await answers(60123)) {
+  console.error("[!] A ShelvesHub answers on 127.0.0.1:60123, most likely the installed service. Its service manager");
+  console.error("    restarts it after a stop, and two daemons on one Steam break each other's RPC token.");
+  console.error(`    Stop it for this session first (it starts again at your next login): ${serviceStopHint()}`);
+  process.exit(1);
+}
+
 // ── Stop any previous instance ──────────────────────────────────────────────
 stopDaemon();
 
@@ -100,6 +128,8 @@ const env = {
   SHELVES_CEF_PORT: process.env.SHELVES_CEF_PORT || "8080",
   SHELVES_HOST_RUNTIME_PATH: process.env.SHELVES_HOST_RUNTIME_PATH || join(ROOT, "runtime", "shelves-host.js"),
   SHELVES_BUNDLE_PATH: MANAGED,
+  SHELVES_RPC_PORT: RPC_PORT,
+  SHELVES_RPC_TOKEN_FILE: TOKEN_FILE,
   /* force_owner / native_qam / owner_settle come from the seeded config FILE
      (see seedConfig) so the hub's config editor can change them persistently —
      env vars would override the file every boot. A caller can still force any
@@ -112,7 +142,7 @@ const env = {
 const logFd = openSync(LOG, "a");
 const child = spawn(bin, [], { cwd: ROOT, env, detached: true, stdio: ["ignore", logFd, logFd] });
 child.unref();
-console.log(`[OK] daemon started (PID ${child.pid}) → CEF ${env.SHELVES_CEF_HOST}:${env.SHELVES_CEF_PORT}. Log: ${LOG}`);
+console.log(`[OK] daemon started (PID ${child.pid}) → CEF ${env.SHELVES_CEF_HOST}:${env.SHELVES_CEF_PORT}, RPC port ${RPC_PORT} (token in ${TOKEN_FILE}). Log: ${LOG}`);
 
 // ── Optionally reload the renderer so the fresh bundle re-injects ────────────
 if (has("--reload")) {

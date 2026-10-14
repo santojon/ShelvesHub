@@ -209,7 +209,7 @@
       try { const o = window.__DECK_SHELVES_OWNER__; return !!(o && o !== "shelveshub"); } catch (e) { return false; }
     }
     function coopBundleOn() {
-      try { return SHELVES_CFG.coopBundle === true; } catch (e) { return false; }
+      try { return liveCfg().coopBundle === true; } catch (e) { return false; }
     }
     /* Whether the loader's copy of the plugin is the one that runs here (so its
        updates are the loader's business): plain coexistence, or cooperative
@@ -223,9 +223,9 @@
       const st = React.useState(null);
       const busy = st[0], setBusy = st[1];
       // null = still loading; then the full update-preference object mirrors the
-      // store: the master switch, the per-target switches, and their beta
-      // channels. Per-target switches default ON (see HubSettings::default).
-      const DEFAULT_UPD = { auto_update: false, auto_update_hub: true, hub_prerelease: false, auto_update_plugin: true, plugin_prerelease: false, quiet_updates: true, config_sync: true };
+      // store: the master switch, the per-target switches, and their beta channels.
+      // Every switch defaults ON except the beta channels (HubSettings::default).
+      const DEFAULT_UPD = { auto_update: true, auto_update_hub: true, hub_prerelease: false, auto_update_plugin: true, plugin_prerelease: false, quiet_updates: true, config_sync: true };
       const au = React.useState(null);
       const cfg = au[0], setCfg = au[1];
       // null = not fetched; an array = the merged daemon+runtime log lines for the Logs tab.
@@ -238,6 +238,7 @@
       const lastTabRef = React.useRef(SIDE_TAB_LOGS);
       const openSeqRef = React.useRef(0);
       const titleRef = React.useRef(null);
+      const cfgBusy = React.useRef(false);
       const gestureApi = React.useRef({ seq: 0, isOpen: function () { return false; }, open: function () {}, close: function () {}, tabFor: function () { return SIDE_TAB_LOGS; } });
       useSidecarGestures(titleRef, gestureApi);
       // Advanced section: `rc` holds the runtime-config mirror (getRuntimeConfig),
@@ -245,7 +246,9 @@
       // to apply" note shows. The collapsible open state lives in HubCollapsible.
       const rcS = React.useState(null);
       const rc = rcS[0], setRc = rcS[1];
-      const rd = React.useState(false);
+      // `dirtyMarks` counts the marks, so a refused edit can tell whether a boot-movie flip marked
+      // the note while it was in flight before it clears it.
+      const rd = React.useState(false), dirtyMarks = React.useRef(0);
       const rcDirty = rd[0], setRcDirty = rd[1];
       // Live coexistence state (getDiagnostics): whether auto-safe-mode stood force
       // down this session, so the Status readout can explain it. Fetched once on open.
@@ -270,20 +273,23 @@
         const unsub = host.notifications.subscribe(function () { setNotifTick(function (n) { return n + 1; }); });
         return function () { alive = false; unsub(); };
       }, []);
-      function mergeRc(patch) { const n = {}; if (rc) for (const k in rc) n[k] = rc[k]; for (const p in patch) n[p] = patch[p]; setRc(n); }
+      function mergeRc(patch) { setRc(function (cur) { const n = {}; for (const k in cur) n[k] = cur[k]; for (const p in patch) n[p] = patch[p]; return n; }); }
       function applyPaused(v) { mergeRc({ paused: v }); hostRpc("setHostingPaused", v).then(function () {}, function () {}); }
       // The boot animation is a live toggle: the daemon installs/removes the movie
       // on the spot. The movie itself is only read by Steam on its next start, so
       // surface the "restart to apply" banner (Steam replays the startup movie).
-      function applyBootMovie(v) { mergeRc({ boot_movie: v }); setRcDirty(true); hostRpc("setBootMovie", v).then(function () {}, function () {}); }
-      // Optimistic edit; a refusal (out of range, busy) puts the row back on the value the file kept.
+      function applyBootMovie(v) { mergeRc({ boot_movie: v }); dirtyMarks.current++; setRcDirty(true); hostRpc("setBootMovie", v).then(function () {}, function () {}); }
+      // Optimistic edit; a refusal (out of range, busy) puts only this row back on the value the
+      // file kept: a switch flipped while the edit was in flight keeps its value and its restart
+      // note. Config edits go one at a time, so a refusal never rolls back a later one the file took.
       function applyCfg(key, val) {
-        const prev = rc, wasDirty = rcDirty;
+        if (cfgBusy.current) return; cfgBusy.current = true;
+        const prevVal = rc ? rc[key] : undefined, wasDirty = rcDirty;
         mergeRc((function () { const o = {}; o[key] = val; return o; })());
-        setRcDirty(true);
-        const revert = function (why) { setRc(prev); setRcDirty(wasDirty); logWarn("RPC", "setRuntimeConfig " + key + " refused: " + why); };
+        const mark = ++dirtyMarks.current; setRcDirty(true);
+        const revert = function (why) { cfgBusy.current = false; mergeRc((function () { const o = {}; o[key] = prevVal; return o; })()); if (dirtyMarks.current === mark) setRcDirty(wasDirty); logWarn("RPC", "setRuntimeConfig " + key + " refused: " + why); };
         hostRpc("setRuntimeConfig", { key: key, value: val }).then(function (r) {
-          if (!(r && r.ok)) revert((r && r.error) || "no answer");
+          if (r && r.ok) cfgBusy.current = false; else revert((r && r.error) || "no answer");
         }, function (e) { revert((e && e.message) || "request failed"); });
       }
       /* Apply pending config edits: restart the daemon so it re-reads the config
@@ -453,7 +459,7 @@
       /* Buttons while focus is inside the sidecar: B (2) closes it, the bumpers (LB 5 / RB 6)
          move between its tabs. Absorbed like B elsewhere, so the QAM router and Steam's own
          bumper handling never see them. */
-      const SIDE_TABS = [SIDE_TAB_LOGS, SIDE_TAB_NOTIF];
+      const SIDE_TABS = [SIDE_TAB_NOTIF, SIDE_TAB_STATUS, SIDE_TAB_LOGS];
       function absorbGamepadEvent(evt, d) {
         try { evt.preventDefault(); evt.stopImmediatePropagation(); } catch (e) {}
         try { const inner = d.event; if (inner) { inner.preventDefault(); inner.stopImmediatePropagation(); } } catch (e) {}
@@ -504,17 +510,16 @@
         }
         return React.createElement.apply(React, [focusableComp || "div", props].concat(kids));
       }
-      // "Restart to update" notice: shown when the daemon has detected a newer
-      // ShelvesHub release it can't self-replace in place yet (getConfig reports
-      // `pending_hub_update`). Informational — the user restarts the service to apply.
+      // "Restart to update" notice: the daemon saw a newer ShelvesHub release (getConfig
+      // reports `pending_hub_update`); its button restarts only the daemon (doRestartDaemonOnly).
       function hubUpdateNotice() {
         const ver = uc.pending_hub_update;
         if (typeof ver !== "string" || !ver) return null;
         const staged = uc.hub_update_staged === true;
         /* Once the update has been downloaded and staged over the binary, the
            wording shifts from "restart to update" to "downloaded — restart to
-           finish" (a relaunching service applies it on its own, so this only ever
-           shows for a manually-run daemon). A staged rollback says so; a release
+           finish": the automatic check stages under any service manager without
+           exiting, so the notice shows there too. A staged rollback says so; a release
            merely held back by quiet updates has no restart to offer (status row). */
         if (!staged && uc.update_deferred === true) return null;
         const label = uc.hub_rollback_staged === true ? "hub_rollback_staged" : (staged ? "hub_update_staged" : "hub_update_restart");
@@ -580,7 +585,7 @@
         ]);
       }
       // The "Advanced" area: a plugin-style collapsible whose content is grouped
-      // into collapsible sub-sections (Troubleshooting / Configuration / Status),
+      // into collapsible sub-sections (Configuration / Troubleshooting),
       // with localized labels, centered steppers, and focusable rows.
       const advRowStyle = { display: "flex", alignItems: "center", gap: "10px", minHeight: "40px", width: "100%", boxSizing: "border-box", padding: "6px 16px", border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontSize: "13px" };
       // Short explanatory subtext under a field label (localized). Muted + tight.
@@ -615,18 +620,6 @@
           : h("div", { key: "st", style: groupStyle }, groupKids);
         return h("div", { key: key, style: { display: "flex", alignItems: "center", gap: "8px", minHeight: "40px", boxSizing: "border-box", padding: "6px 16px", fontSize: "13px" } }, [advLabelCol(label, sub), group]);
       };
-      // Read-only status rows: focusable (so the gamepad can walk them), whole-row
-      // highlight, label left + value right for a clean two-column read.
-      const advRoRow = function (key, label, val) {
-        const body = [
-          h("span", { key: "l", style: { flex: "0 0 auto", color: "rgba(255,255,255,0.72)" } }, label),
-          h("span", { key: "v", style: { flex: "1 1 auto", textAlign: "right", fontFamily: "monospace", wordBreak: "break-all", color: "rgba(255,255,255,0.92)" } }, String(val)),
-        ];
-        const st = { display: "flex", alignItems: "center", gap: "10px", minHeight: "36px", boxSizing: "border-box", padding: "6px 16px", fontSize: "12px" };
-        return focusableComp
-          ? h(focusableComp, { key: key, "data-fb": "ro-" + key, onActivate: function () {}, focusClassName: "shelves-rowfocus", style: st }, body)
-          : h("div", { key: key, style: st }, body);
-      };
       // A flat, edge-to-edge action row (icon + label), same pattern as the other
       // rows so buttons and toggles read as one unified list.
       function rowButton(id, iconKey, label, onClick) {
@@ -655,8 +648,8 @@
         return rows;
       }
       // The whole panel body as top-level collapsible sections (no "Advanced"
-      // wrapper) in the plugin's flat QAM style: Updates, Troubleshooting,
-      // Configuration, Status. Each carries a count badge when collapsed.
+      // wrapper) in the plugin's flat QAM style: Updates, Configuration,
+      // Troubleshooting. Each carries a count badge when collapsed.
       function buildSections(useNative, TF) {
         const sections = [];
         /* Updates split by responsibility:
@@ -686,7 +679,8 @@
           updCount = upd.length;
         }
         sections.push(h(HubCollapsible, { key: "sec-upd", id: "sec-updates", title: I18N.t("sec_updates"), count: updCount, initialOpen: true }, upd));
-        const trouble = [actionRow("logs", "logs", "action_logs", "getLogs")];
+        if (rc) sections.push(buildConfigSection());
+        const trouble = [actionRow("status", "info", "action_status", "showStatus"), actionRow("logs", "logs", "action_logs", "getLogs")];
         // Restart ONLY the Python backend (not the daemon) — recovers a wedged
         // backend without bouncing hosting. Shown only when a backend is configured.
         if (rc && rc.backend) trouble.push(actionRow("restart-backend", "update", "action_restart_backend", "restartBackend"));
@@ -695,7 +689,6 @@
           if (rc.paused === true) trouble.push(h("div", { key: "pn", style: { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_paused")));
         }
         sections.push(h(HubCollapsible, { key: "sec-tr", id: "sec-troubleshooting", title: I18N.t("adv_sec_troubleshooting"), count: trouble.length }, trouble));
-        if (rc) { sections.push(buildConfigSection()); sections.push(buildStatusSection()); }
         return sections;
       }
       // Config section (rc present). Only genuine operational config — `native_qam` and
@@ -717,42 +710,10 @@
         if (rcDirty) conf.push(h("div", { key: "rn", style: { padding: "6px 16px 2px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("adv_restart_note")));
         return h(HubCollapsible, { key: "sec-cf", id: "sec-config", title: I18N.t("adv_sec_config"), count: confCount }, conf);
       }
-      // Amber status warnings (legacy loader bundle; cooperative auto-paused), as
-      // their own list so buildStatusSection stays within the complexity budget.
-      function statusWarnings(hd, cx) {
-        const amber = { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" };
-        const w = [];
-        if (hd.legacy) w.push(h("div", { key: "legacy", style: amber }, I18N.t("legacy_bundle_warning")));
-        if (cx && cx.forceReceded) w.push(h("div", { key: "coopreceded", style: amber }, I18N.t("coop_receded_warning")));
-        return w;
-      }
       // When the settings last met the roaming copy: off, never ("—"), or an age.
       function syncAge() {
         if (uc.config_sync === false) return "off";
         return uc.sync_last_at > 0 ? (agoText(Date.now() - uc.sync_last_at) || "—") : "—";
-      }
-      // Read-only Status readout (rc present): mode + key config + the warnings above.
-      function buildStatusSection() {
-        const onOff = function (v) { return v ? "on" : "off"; };
-        const modeLabel = function () { return COOP ? "cooperative" : (coexist ? "coexist" : "sole"); };
-        const hd = hostDetection();
-        const status = [
-          advRoRow("mode", I18N.t("cfg_mode"), modeLabel()),
-          advRoRow("hostedby", I18N.t("cfg_hosted_by"), hd.label),
-          advRoRow("dsver", I18N.t("cfg_ds_version"), hd.dsVersion || "—"),
-        ].concat(statusWarnings(hd, coex));
-        if (!rc.loader_possible) status.push(advRoRow("force", I18N.t("cfg_force_owner"), onOff(rc.force_owner)));
-        status.push(advRoRow("sync", I18N.t("cfg_config_sync"), syncAge()));
-        status.push(
-          advRoRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),
-          advRoRow("rpc", I18N.t("cfg_rpc"), rc.rpc_addr || ""),
-          advRoRow("recover", I18N.t("cfg_recover_cmd"), rc.recover_cmd == null ? "—" : rc.recover_cmd),
-          advRoRow("bundle", I18N.t("cfg_bundle"), rc.bundle_path || ""),
-          advRoRow("backend", I18N.t("cfg_backend"), onOff(rc.backend)),
-          advRoRow("boot", I18N.t("cfg_boot_movie"), onOff(rc.boot_movie)),
-          advRoRow("version", I18N.t("cfg_version"), rc.version || "")
-        );
-        return h(HubCollapsible, { key: "sec-st", id: "sec-status", title: I18N.t("adv_sec_status"), count: status.length }, status);
       }
       // Full re-read of the config (after an action that changes what the rows show).
       function refreshCfg() {
@@ -760,8 +721,10 @@
           if (r && r.ok && r.result && typeof r.result === "object") setCfg(r.result);
         }, function () {});
       }
+      // The two Troubleshooting rows that open the sidecar instead of calling the daemon.
+      const SIDE_METHODS = { getLogs: SIDE_TAB_LOGS, showStatus: SIDE_TAB_STATUS };
       function run(id, method) {
-        if (method === "getLogs") { openSide(SIDE_TAB_LOGS); return; }
+        if (SIDE_METHODS[method]) { openSide(SIDE_METHODS[method]); return; }
         setBusy(id);
         hostRpc(method).then(function () { setBusy(null); if (id.indexOf("rollback") === 0) refreshCfg(); }, function () { setBusy(null); });
       }
@@ -820,7 +783,7 @@
          newest first, like the plugin's Advanced → Logs; or the notification center.
          Beside the hub view, which stays visible; the gamepad walks it in the normal flow. */
       function buildSidecarView() {
-        const isLogs = sideTab === SIDE_TAB_LOGS;
+        const isLogs = sideTab === SIDE_TAB_LOGS, isStatus = sideTab === SIDE_TAB_STATUS;
         const parseLine = function (line) {
           const m = /^\[(\w+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+([\s\S]*)$/.exec(String(line));
           return m ? { level: m[1].toUpperCase(), ts: m[2], scope: m[3], msg: m[4] }
@@ -868,12 +831,13 @@
         const iconBtnStyle = { width: "36px", padding: "0" };
         const ctrls = [
           ctrlBtn("back", backToHub, [fbIcon("back")], iconBtnStyle, I18N.t("action_back")),
+          sidecarTab(SIDE_TAB_NOTIF, I18N.t("sec_notifications"), sideTab === SIDE_TAB_NOTIF, function () { openSide(SIDE_TAB_NOTIF); }, host.notifications.unread()),
+          sidecarTab(SIDE_TAB_STATUS, I18N.t("adv_sec_status"), isStatus, function () { openSide(SIDE_TAB_STATUS); }, 0),
           sidecarTab(SIDE_TAB_LOGS, I18N.t("logs_title"), isLogs, function () { openSide(SIDE_TAB_LOGS); }, 0),
-          sidecarTab(SIDE_TAB_NOTIF, I18N.t("sec_notifications"), !isLogs, function () { openSide(SIDE_TAB_NOTIF); }, host.notifications.unread()),
           h("div", { key: "sp", style: { flex: "1 1 auto" } }),
         ];
         if (isLogs) ctrls.push(ctrlBtn("refresh", function () { viewLogs(); }, [fbIcon("refresh")], iconBtnStyle, I18N.t("logs_refresh")));
-        ctrls.push(ctrlBtn("clear", isLogs ? clearLogs : function () { host.notifications.clear(); }, [fbIcon("trash")], iconBtnStyle, I18N.t("logs_clear")));
+        if (!isStatus) ctrls.push(ctrlBtn("clear", isLogs ? clearLogs : function () { host.notifications.clear(); }, [fbIcon("trash")], iconBtnStyle, I18N.t("logs_clear")));
         const header = React.createElement.apply(React, [
           focusableComp || "div",
           focusableComp
@@ -888,10 +852,14 @@
         const listProps = focusableComp
           ? { "flow-children": "vertical", onButtonDown: sidecarButtonDown, onCancel: backToHub, style: listStyle }
           : { style: listStyle };
-        const list = isLogs
-          ? React.createElement.apply(React, [focusableComp || "div", listProps].concat(logRows()))
-          : notificationsList(listProps);
-        return h("div", { key: "side-view", style: { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: "0", paddingTop: "8px" }, "data-fb": isLogs ? "logs-view" : "notif-view" },
+        // The Status tab is built in shelves-host-sidecar.js from what this view knows.
+        const sidecarList = function () {
+          if (isLogs) return React.createElement.apply(React, [focusableComp || "div", listProps].concat(logRows()));
+          if (isStatus) return statusList(listProps, { rc: rc, mode: COOP ? "cooperative" : (coexist ? "coexist" : "sole"), hd: hostDetection(), coex: coex, syncAge: syncAge() });
+          return notificationsList(listProps);
+        };
+        const list = sidecarList();
+        return h("div", { key: "side-view", style: { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: "0", paddingTop: "8px" }, "data-fb": sideTab + "-view" },
           header,
           h("div", { key: "gap", style: { height: "8px" } }),
           list);
@@ -930,18 +898,21 @@
         out.push(hubVersionFooter(uc.version));
         return out;
       }
-      // The sidecar opens beside the hub view (the menu widens) on the Logs or the
-      // Notifications tab; B, the back control or the menu hiding closes it.
+      // The sidecar opens beside the hub view (the menu widens) on the Notifications,
+      // Status or Logs tab; B, the back control or the menu hiding closes it.
       const rootKids = buildBody();
       if (sideTab !== null) rootKids.push(h(Sidecar.Panel, { key: "sidecar", onClose: backToHub, onButtonDown: sidecarButtonDown }, buildSidecarView()));
       return panelRoot({ className: "shelves-hub-root", "data-shelves-expanded": sideTab !== null ? "1" : "0", style: { padding: "8px 0 0" }, "data-fb-panel": "1" }, rootKids);
     }
+    // Steam unmounts a tab's content when another tab is picked, so whether the hub view is
+    // open lives here, not in PanelSlot: a remount starts from it; the back action clears it.
+    let hubViewOpen = false;
     // Our tab: the plugin's editor when present, plus a ShelvesHub row pinned at
     // the end that opens the host's hub view (the same actions as the fallback) —
     // so the host's own options are reachable even while Deck Shelves is loaded.
     function PanelSlot() {
       useSlotRefresh();
-      const hub = React.useState(false);
+      const hub = React.useState(hubViewOpen);
       const showHub = hub[0], setShowHub = hub[1];
       // A pending hub update surfaces as a small dot on the ShelvesHub button so
       // it's noticeable without opening the hub view. Cheap: read getConfig once on
@@ -971,7 +942,7 @@
       // The pinned ShelvesHub button (opens the hub view), with a pending-update dot — native
       // DialogButton when available, else the subtle inset clickable fallback.
       function renderHubButton() {
-        const openHub = function () { setShowHub(true); };
+        const openHub = function () { hubViewOpen = true; setShowHub(true); };
         const updDot = pendingUpd
           ? h("span", { key: "ud", title: I18N.t("upd_available") + " (" + pendingUpd + ")", style: { width: "8px", height: "8px", borderRadius: "50%", background: "#ffcf6b", flex: "0 0 auto" } })
           : null;
@@ -993,11 +964,12 @@
       // No registered panel → the hub view IS the content (the fallback).
       if (!s) body = h(FallbackPanel, null);
       // Hub view opened from the plugin editor → show it with a back button.
-      else if (showHub) body = h(FallbackPanel, { onBack: function () { setShowHub(false); } });
+      else if (showHub) body = h(FallbackPanel, { onBack: function () { hubViewOpen = false; setShowHub(false); } });
       // Plugin editor + the pinned ShelvesHub button. Natural flow (no flex column/overflow) so no
       // ancestor clips the plugin's IntersectionObserver; inset the button to align with its rows.
       else body = h("div", null, contentEl(s), h("div", { style: { padding: "0 14px" } }, renderHubButton()));
-      const inner = ErrorBoundary ? h(ErrorBoundary, null, body) : body;
+      // A hub view that failed to render is not brought back by the next remount: the editor is.
+      const inner = ErrorBoundary ? h(ErrorBoundary, { onError: function () { hubViewOpen = false; } }, body) : body;
       // Focus ring: Steam draws no ring for our injected panel, so we render the ring CSS into
       // the panel (QAM document, not SharedJSContext), scoped to `.shelves-panel`. Ring ONLY
       // buttons + our plain clickables — toggles/titles already get Steam's own row highlight.
@@ -1324,11 +1296,11 @@
       log("QAM panel registered:", spec.id, NATIVE_QAM_ENABLED ? (patched ? "(native)" : "(patch pending)") : "(native disabled)");
       return function () { delete specs[spec.id]; if (NATIVE_QAM_ENABLED) notifySlots(); };
     }
-    // Diagnostic surface: which QAM path is live, and why.
+    // Diagnostic surface: which QAM path is live ("panel": no native tab, registered panels only recorded).
     function mode() {
       if (tripped) return "tripped";
       if (NATIVE_QAM_ENABLED && patched) return confirmed ? "native" : "native-arming";
-      return "overlay";
+      return "panel";
     }
     // Our tab really sits in the menu's strip this session (inserted, breaker not tripped).
     function tabPresent() { return confirmed && !tripped; }

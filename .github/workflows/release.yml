@@ -10,7 +10,19 @@ permissions:
   contents: write
 
 jobs:
+  # Fails in seconds when the signing key is missing instead of after the build
+  # matrix; the publish step's own refusal stays the authoritative gate.
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Signing key present
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          [ -n "${MINISIGN_SECRET_KEY:-}" ] || { echo "::error::MINISIGN_SECRET_KEY is not set - the publish step would refuse this release; set the secret, then re-run."; exit 1; }
+
   build:
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:
@@ -189,7 +201,7 @@ jobs:
           mkdir -p dist/bundle dist/runtime dist/installer dist/assets/boot
           cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/
           cp target/${{ matrix.target }}/release/shelves-devtools dist/
-          # Tray companion when it was built for this target (not aarch64 Linux).
+          # Tray companion: the step above builds it on every leg; the guard only covers a leg that skipped it.
           [ -f target/${{ matrix.target }}/release/shelveshub-tray ] && cp target/${{ matrix.target }}/release/shelveshub-tray dist/ || true
           cp shelveshub.config.json dist/
           cp assets/boot/deck_startup.webm assets/boot/deck_startup_1280x800.webm dist/assets/boot/
@@ -299,7 +311,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Install-ShelvesHub-app
-          path: dist-app/Install ShelvesHub.app.zip
+          path: dist-app/Install-ShelvesHub.app.zip
 
       - name: Build Windows installer (NSIS)
         if: runner.os == 'Windows'

@@ -64,7 +64,7 @@ system_info = decode(os.environ.get("SYSINFO", ""))
 if isinstance(system_info, dict):
     system_info = {k: system_info[k] for k in SYSTEM_KEYS if k in system_info}
 record = {
-    "ts": time.strftime("%Y-%m-%d_%H-%M-%S"), "kind": "steam-container", "os": "linux",
+    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "steam-container", "os": "linux",
     "arch": os.uname().machine, "channel": os.environ["CHANNEL"],
     "client_manifest": os.environ["CLIENT_VERSION"], "flags": os.environ["FLAGS"],
     "overall": "FAIL" if "fail" in steps.values() else "PASS", "steps": steps,

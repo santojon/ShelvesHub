@@ -45,36 +45,81 @@ fn finds_iife_asset_url() {
     );
 }
 
+/// A hub release asset as the API lists it, downloaded from `url`.
+fn hub_asset(name: &str, url: &str) -> serde_json::Value {
+    serde_json::json!({ "name": name, "browser_download_url": url })
+}
+
 #[test]
 fn hub_update_finds_platform_package_in_priority_order() {
-    let release: serde_json::Value = serde_json::from_str(
-        r#"{"assets":[
-            {"name":"shelveshub-linux.tar.gz","browser_download_url":"https://x/linux"},
-            {"name":"shelveshub-steamos.tar.gz","browser_download_url":"https://x/steamos"},
-            {"name":"shelveshub-macos.tar.gz","browser_download_url":"https://x/mac"}
-        ]}"#,
-    )
-    .unwrap();
+    let url = |name: &str| format!("{TRUSTED_HUB_PREFIX}v0.6.0-beta.1/{name}");
+    let release = serde_json::json!({ "assets": [
+        hub_asset("shelveshub-linux.tar.gz", &url("shelveshub-linux.tar.gz")),
+        hub_asset("shelveshub-steamos.tar.gz", &url("shelveshub-steamos.tar.gz")),
+        hub_asset("shelveshub-macos.tar.gz", &url("shelveshub-macos.tar.gz")),
+    ]});
     // First name in the list wins; a missing preferred name falls back.
     assert_eq!(
         find_asset_url_by_names(
             &release,
             &["shelveshub-steamos.tar.gz", "shelveshub-linux.tar.gz"]
-        )
-        .as_deref(),
-        Some("https://x/steamos")
+        ),
+        Some(url("shelveshub-steamos.tar.gz"))
     );
     assert_eq!(
         find_asset_url_by_names(
             &release,
             &["shelveshub-windows.zip", "shelveshub-macos.tar.gz"]
-        )
-        .as_deref(),
-        Some("https://x/mac")
+        ),
+        Some(url("shelveshub-macos.tar.gz"))
     );
     assert!(find_asset_url_by_names(&release, &["shelveshub-windows.zip"]).is_none());
     // The running OS always has at least one candidate name.
     assert!(!hub_package_candidates().is_empty());
+}
+
+#[test]
+fn hub_update_takes_assets_only_from_its_own_release_downloads() {
+    let name = "shelveshub-macos.tar.gz";
+    for elsewhere in [
+        format!("https://evil.example.com/{name}"),
+        format!("https://github.com/evil/ShelvesHub/releases/download/v0.6.0/{name}"),
+        format!("{TRUSTED_BUNDLE_PREFIX}v0.6.0/{name}"),
+        format!("{TRUSTED_HUB_PREFIX}v0.6.0/other.tar.gz"),
+        format!("{TRUSTED_HUB_PREFIX}v0.6.0/x/{name}"),
+        format!("{TRUSTED_HUB_PREFIX}v0.6.0/{name}?x=1"),
+        format!("{TRUSTED_HUB_PREFIX}../{name}"),
+        format!("{TRUSTED_HUB_PREFIX}v1%2F/{name}"),
+    ] {
+        let release = serde_json::json!({ "assets": [hub_asset(name, &elsewhere)] });
+        assert_eq!(
+            find_asset_url_by_names(&release, &[name]),
+            None,
+            "{elsewhere}"
+        );
+    }
+    // A checksum file outside the hub's releases is refused before anything is fetched.
+    let release = serde_json::json!({ "assets": [
+        hub_asset("SHA256SUMS", "https://evil.example.com/SHA256SUMS"),
+    ]});
+    let err = verify_release_archive(&release, name, Path::new("/x")).unwrap_err();
+    assert!(err.contains("refusing update"), "unexpected error: {err}");
+}
+
+#[test]
+fn trusted_bundle_url_gate_refuses_a_release_pointing_elsewhere() {
+    // What download_latest_iife accepts from each channel's API answer.
+    let foreign = r#"{"assets":[{"name":"index.iife.js",
+        "browser_download_url":"https://evil.example.com/index.iife.js"}]}"#;
+    assert!(trusted_iife_url(foreign, false).is_err());
+    assert!(trusted_iife_url(&format!("[{foreign}]"), true).is_err());
+    let pinned = format!(
+        r#"{{"assets":[{{"name":"index.iife.js",
+        "browser_download_url":"{TRUSTED_BUNDLE_PREFIX}v3.4.0/index.iife.js"}}]}}"#
+    );
+    let want = Ok(format!("{TRUSTED_BUNDLE_PREFIX}v3.4.0/index.iife.js"));
+    assert_eq!(trusted_iife_url(&pinned, false), want);
+    assert_eq!(trusted_iife_url(&format!("[{pinned}]"), true), want);
 }
 
 #[test]
@@ -109,6 +154,20 @@ fn stage_binary_swap_replaces_the_target_in_place() {
         assert!(exe.with_extension("old").exists());
     }
     let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn relaunch_line_runs_the_windows_task_and_falls_back_to_the_binary() {
+    let exe = r"C:\Users\me\AppData\Local\ShelvesHub\shelveshub.exe";
+    let win = relaunch_line(exe, true);
+    assert_eq!(
+        win,
+        format!("timeout /t 2 >nul & schtasks /Run /TN ShelvesHub >nul 2>&1 || \"{exe}\"")
+    );
+    assert_eq!(
+        relaunch_line("/opt/shelveshub/shelveshub", false),
+        "sleep 2; exec \"/opt/shelveshub/shelveshub\""
+    );
 }
 
 #[test]
@@ -291,17 +350,81 @@ fn backend_refresh_is_due_until_the_same_release_is_recorded() {
     // A URL that names no release leaves the marker alone.
     record_backend_tag(&dir, "https://example.com/deck-shelves-backend.tar.gz");
     assert!(!backend_refresh_due(&dir, "v3.3.1"));
-    // The bundle of the same release: nothing to fetch (no network is touched).
+    // The release already installed: nothing to fetch (no network is touched).
     assert!(matches!(
-        refresh_backend(
-            &dir,
-            "https://github.com/santojon/Deck-Shelves/releases/download/v3.3.1/index.iife.js"
-        ),
+        refresh_backend(&dir, "v3.3.1"),
         Ok(BackendRefresh::Unchanged)
     ));
-    // A bundle URL outside the release-download shape names no release to match.
-    assert!(refresh_backend(&dir, "https://example.com/index.iife.js").is_err());
+    // Anything that is not a plain release tag is refused before any request.
+    for bad in [
+        "",
+        "..",
+        "../v3.4.0",
+        "v3.4.0/x",
+        "v3.4.0?x=1",
+        "v3.4.0#x",
+        "v%2e",
+    ] {
+        assert!(refresh_backend(&dir, bad).is_err(), "{bad:?}");
+    }
     let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn pinned_release_tag_reads_only_the_projects_release_downloads() {
+    assert_eq!(
+        pinned_release_tag(
+            "https://github.com/santojon/Deck-Shelves/releases/download/v3.4.0/index.iife.js"
+        ),
+        Some("v3.4.0")
+    );
+    assert_eq!(
+        pinned_release_tag(
+            "https://github.com/santojon/Deck-Shelves/releases/download/v3.4.0-beta.1/x.zip"
+        ),
+        Some("v3.4.0-beta.1")
+    );
+    // Another repository, owner or host names no release of ours.
+    for other in [
+        "https://github.com/evil/Deck-Shelves/releases/download/v3.4.0/index.iife.js",
+        "https://github.com/santojon/Other/releases/download/v3.4.0/index.iife.js",
+        "https://example.com/releases/download/v3.4.0/index.iife.js",
+        TRUSTED_BUNDLE_PREFIX,
+    ] {
+        assert_eq!(pinned_release_tag(other), None, "{other}");
+    }
+    // A tag that would reshape the API URL it goes into.
+    for smuggled in ["..", "v1?x=1", "v1#x", "v%2e%2e"] {
+        let url = format!("{TRUSTED_BUNDLE_PREFIX}{smuggled}/index.iife.js");
+        assert_eq!(pinned_release_tag(&url), None, "{url}");
+    }
+}
+
+#[test]
+fn trusted_backend_url_gate() {
+    let good =
+        "https://github.com/santojon/Deck-Shelves/releases/download/v3.4.0/deck-shelves-backend.tar.gz";
+    assert!(is_trusted_backend_url(good));
+    assert!(is_trusted_backend_url(
+        "https://github.com/santojon/Deck-Shelves/releases/download/v3.4.0/backend.TGZ"
+    ));
+    // A release answering with an archive outside the pinned repository is refused.
+    let foreign = r#"{"assets":[{"name":"deck-shelves-backend.tar.gz",
+        "browser_download_url":"https://evil.example.com/deck-shelves-backend.tar.gz"}]}"#;
+    let url = find_backend_asset_url(foreign).unwrap();
+    assert!(!is_trusted_backend_url(&url));
+    assert!(!is_trusted_backend_url(
+        "https://github.com/evil/Deck-Shelves/releases/download/v3.4.0/deck-shelves-backend.tar.gz"
+    ));
+    // Not an archive, or a query / fragment / traversal smuggled in.
+    assert!(!is_trusted_backend_url(
+        "https://github.com/santojon/Deck-Shelves/releases/download/v3.4.0/index.iife.js"
+    ));
+    assert!(!is_trusted_backend_url(&format!("{good}?x=1")));
+    assert!(!is_trusted_backend_url(&format!("{good}#x")));
+    assert!(!is_trusted_backend_url(
+        "https://github.com/santojon/Deck-Shelves/releases/download/../evil/backend.tar.gz"
+    ));
 }
 
 #[test]

@@ -1,15 +1,17 @@
 # Vitrine e capturas de tela
 
-A landing page em [`site/`](../site/) mostra uma galeria de capturas de tela. Esta página
+*[Read in English](../showcase.md)*
+
+A landing page em [`site/`](../../site/) mostra uma galeria de capturas de tela. Esta página
 incorpora as capturas feitas e documenta como elas são produzidas e publicadas.
 
 ## Capturas de tela
 
 | | |
 | --- | --- |
-| ![Quick Access tab](../assets/screenshots/hub-panel.png) | ![Config](../assets/screenshots/hub-config.png) |
+| ![Quick Access tab](../../assets/screenshots/hub-panel.png) | ![Config](../../assets/screenshots/hub-config.png) |
 | **Aba de Acesso Rápido** — o editor do Deck Shelves, aberto diretamente. | **Config** — configurações do host no painel. |
-| ![Troubleshooting](../assets/screenshots/hub-troubleshooting.png) | ![Logs](../assets/screenshots/hub-logs.png) |
+| ![Troubleshooting](../../assets/screenshots/hub-troubleshooting.png) | ![Logs](../../assets/screenshots/hub-logs.png) |
 | **Solução de problemas** — ações de recuperação quando o pacote não consegue carregar. | **Logs** — o visualizador de logs embutido no painel. |
 
 ## Como o site publica

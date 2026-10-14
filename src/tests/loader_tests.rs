@@ -63,15 +63,6 @@ fn coop_offer_scripts_carry_the_key_and_the_bundle_we_offer() {
 }
 
 #[test]
-fn port_candidates_probe_configured_first_then_alternates_deduped() {
-    // Configured is always tried first; the known alternates follow, and the
-    // configured port is never listed twice.
-    assert_eq!(port_candidates(8080), vec![8080, 8081]);
-    assert_eq!(port_candidates(8081), vec![8081, 8080]);
-    assert_eq!(port_candidates(9999), vec![9999, 8080, 8081]);
-}
-
-#[test]
 fn version_is_newer_uses_semver_precedence() {
     // Core comparison.
     assert!(version_is_newer("v0.2.0", "0.1.0"));
@@ -145,6 +136,14 @@ setTimeout(() => { ctx.__SHELVES_UI_READY__ = true;
 
 #[test]
 fn the_bundle_gate_keeps_one_poll_interval_per_renderer() {
+    // Static floor, checked with or without node: the gate clears an earlier poll,
+    // keeps its own handle, boots at once when the scan already landed, and gives up
+    // after 600 tries.
+    assert!(BUNDLE_GATE_SUFFIX.contains("clearInterval(window.__SHELVES_BUNDLE_GATE__)"));
+    assert!(BUNDLE_GATE_SUFFIX.contains("window.__SHELVES_BUNDLE_GATE__=__biv;"));
+    assert!(BUNDLE_GATE_SUFFIX
+        .starts_with("\n}\nif(window.__SHELVES_UI_READY__){__shelvesBootBundle();}"));
+    assert!(BUNDLE_GATE_SUFFIX.contains("++__bn>600"));
     // Two gated evaluations overlapping inside the poll window: the second clears the
     // first one's interval, so the scan landing boots the bundle once and leaves no
     // interval behind (an orphan would re-run the bundle every 20 ms). Needs node.
@@ -161,7 +160,8 @@ fn the_bundle_gate_keeps_one_poll_interval_per_renderer() {
         .output();
     let _ = fs::remove_dir_all(&dir);
     let Ok(out) = run else {
-        return; // no node on this machine: nothing to run
+        eprintln!("skipped: node not available, the overlap run did not execute");
+        return;
     };
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
@@ -170,11 +170,33 @@ fn the_bundle_gate_keeps_one_poll_interval_per_renderer() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert_eq!(stdout.trim(), r#"{"boots":1,"handle":true}"#);
-    // The gate still boots at once when the UI scan already landed, and still stops
-    // polling after the bounded 600 tries.
-    assert!(BUNDLE_GATE_SUFFIX
-        .starts_with("\n}\nif(window.__SHELVES_UI_READY__){__shelvesBootBundle();}"));
-    assert!(BUNDLE_GATE_SUFFIX.contains("++__bn>600"));
+}
+
+#[test]
+fn a_newer_release_never_unstages_the_one_already_staged() {
+    let _serial = crate::state::UPDATE_GUARD_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    state::set_hub_rollback_staged(false);
+    state::set_hub_update_staged(true);
+    state::set_pending_hub_update(Some("v90.0.0".to_string()));
+    state::set_pending_hub_notes(Some("staged notes".to_string()));
+    // A newer release while a game runs: the staged binary still runs at the next
+    // restart, so its flag, notice and notes stay (deferred, so no download).
+    handle_hub_release("v90.1.0", "newer notes".to_string(), "", false, true);
+    assert!(state::hub_update_staged());
+    assert_eq!(state::pending_hub_update().as_deref(), Some("v90.0.0"));
+    assert_eq!(state::pending_hub_notes().as_deref(), Some("staged notes"));
+    // Nothing staged: the deferred release becomes the pending one, with its notes.
+    state::set_hub_update_staged(false);
+    handle_hub_release("v90.1.0", "newer notes".to_string(), "", false, true);
+    assert!(!state::hub_update_staged());
+    assert_eq!(state::pending_hub_update().as_deref(), Some("v90.1.0"));
+    assert_eq!(state::pending_hub_notes().as_deref(), Some("newer notes"));
+    // A held-back release clears an un-staged notice.
+    handle_hub_release("v90.1.0", "newer notes".to_string(), "v90.1.0", false, true);
+    assert!(state::pending_hub_update().is_none());
+    assert!(state::pending_hub_notes().is_none());
 }
 
 #[test]
@@ -332,4 +354,25 @@ fn idents_after<'a>(source: &'a str, prefix: &str) -> Vec<&'a str> {
         rest = &tail[len..];
     }
     out
+}
+
+#[test]
+fn the_desktop_gate_trusts_steams_ui_mode_before_window_visibility() {
+    // Big Picture open but occluded (macOS marks the window hidden): still on screen.
+    assert!(gamepad_ui_on_screen(&json!({ "mode": 4, "shown": false })));
+    // The desktop client, even with a visible window: stand down.
+    assert!(!gamepad_ui_on_screen(&json!({ "mode": 7, "shown": true })));
+    assert!(!gamepad_ui_on_screen(&json!({ "mode": 0, "shown": true })));
+    // No mode (an older client, or an unknown answer): the visibility decides.
+    assert!(gamepad_ui_on_screen(
+        &json!({ "mode": null, "shown": true })
+    ));
+    assert!(!gamepad_ui_on_screen(
+        &json!({ "mode": -1, "shown": false })
+    ));
+    // Nothing readable at all fails open, like a probe error.
+    assert!(gamepad_ui_on_screen(
+        &json!({ "mode": null, "shown": null })
+    ));
+    assert!(gamepad_ui_on_screen(&json!({})));
 }

@@ -11,7 +11,8 @@
 # Scenarios (18):
 #   coexist-mirror    — foreign loader + a plugin panel → our tab MIRRORS it
 #   coexist-fallback  — foreign loader, no plugin panel → our tab shows FALLBACK
-#   sole-host         — no loader → host installed, tab present, capabilities live, teardown re-arms the prune
+#   sole-host         — no loader → host installed, tab present, capabilities live, teardown re-arms the prune,
+#                       a hooked component fake-renders outside a React render (the dispatcher put back as it was)
 #   sole-host-mirror  — no loader + a plugin panel → host published, panel mirrored
 #   sole-host-fallback — no loader, no plugin panel → full fallback (download + config sections)
 #   coexist-late      — QAM mounted before the runtime → re-point still lands it
@@ -22,17 +23,23 @@
 #   coop-fallback     — same, no plugin panel → fallback with the plugin updates delegated
 #   coop-bundle       — same + the cooperative-bundle hand-over → self-install capability follows the hand-over
 #   sole-host-sidecar — "View logs" opens the sidecar (menu widened), back closes it (narrowed)
+#   sole-host-status — "View status" opens the sidecar on its Status tab (no Status section inline); tabs Notifications, Status, Logs; Ctrl+Shift+S reopens it
 #   sole-host-notify  — a toast → hub-view entry + bell badge + Steam's Notifications tab entry (no DOM toast)
 #   sole-host-gesture — two D-pad rights open the Logs sidecar; Ctrl+Shift+N opens Notifications
 #   sole-host-locale  — LANGUAGE=brazilian in the renderer URL → the hub view reads the pt-BR strings
-#   sole-host-config  — the interval stepper stops at the daemon's floor (never sends 0); a refused edit reverts the row
+#   sole-host-config  — the interval stepper stops at the daemon's floor (never sends 0); a refused edit reverts only
+#                       its row (a switch flipped while it was in flight stays), and a press while it is still in flight
+#                       is not sent
 #   sole-host-tabswitch — a plugin panel; leaving the tab and coming back (Steam remounts it) keeps the
-#                       hub view opened from the editor and its gestures; an open sidecar is not restored
+#                       hub view opened from the editor and its gestures; an open sidecar is not restored,
+#                       nor a hub view that failed to render
 #
 # Before the browser runs, examples/harness/runtime-unit.js evaluates the assembled runtime
 # in node for what a page cannot show (teardown re-arm, routes delegation, the locale pick,
-# the capabilities, the Quick Access mode, the daemon's bundle boot gate). It is reported as one
-# more result, runtime-unit (19 results where node exists; skipped with a notice where it is absent).
+# the capabilities, the Quick Access mode, the daemon's bundle boot gate, the handshake's live
+# stamp, the fake render outside a React render in both React shapes). It is one more result,
+# runtime-unit, not a scenario (19 results where node exists; skipped with a notice where it is
+# absent). The summary reports it apart from the scenarios; a failure in either exits 1.
 #
 # Usage:  scripts/harness.sh            (headless)
 #         HEADLESS=0 scripts/harness.sh (show the browser window)
@@ -124,7 +131,7 @@ assert_for() {
     coexist-mirror)   echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.owner==="decky"&&r.qamOwner==="shelveshub"&&r.specs.indexOf("deck-shelves")>=0&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     coexist-fallback) echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var uiOk=!!(fu&&fu.panel&&fu.coexistNote&&!fu.download&&fu.update&&fu.updateToggles>=1&&fu.sections.indexOf("sec-updates")>=0&&fu.sections.indexOf("sec-troubleshooting")>=0&&fu.version);var ok=r.bridge&&!r.hostInstalled&&r.specs.length===0&&r.shelvesTabPresent&&!/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&uiOk;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     # Also: the capabilities read live (tab inserted, sole host self-installs) and a teardown re-arms the nav prune.
-    sole-host)        echo 'var r=__HARNESS_REPORT__();var hst=window.__SHELVES_HOST__;var c=r.handshake&&r.handshake.capabilities;var n1=hst.lifecycle.teardown();var n2=hst.lifecycle.teardown();var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.shelvesTabPresent&&!!c&&c.nativeQam===true&&c.selfUpdate===true&&c.coexist===false&&r.canSelfInstall===true&&n1>=1&&n2>=1;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+" teardown="+n1+","+n2+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
+    sole-host)        echo 'new Promise(function(res){var hst=window.__SHELVES_HOST__;var t0=Date.now();(function wait(){var ui=hst&&hst.ui;if(!(ui&&typeof ui.fakeRenderComponent==="function")&&Date.now()-t0<4000)return setTimeout(wait,80);var r=__HARNESS_REPORT__();var c=r.handshake&&r.handshake.capabilities;var n1=hst.lifecycle.teardown();var n2=hst.lifecycle.teardown();var d=window.React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;var slot=d&&d.ReactCurrentDispatcher;var before=slot?slot.current:undefined;var bs=before?before.useState:null;var fr;try{fr=ui.fakeRenderComponent(function(){var s=window.React.useState(7);window.React.useEffect(function(){});return s[0];});}catch(e){fr="threw "+e.message;}var restored=!!slot&&slot.current===before&&(!before||before.useState===bs);var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.shelvesTabPresent&&!!c&&c.nativeQam===true&&c.selfUpdate===true&&c.coexist===false&&r.canSelfInstall===true&&n1>=1&&n2>=1&&fr===7&&restored;res((ok?"PASS ":"FAIL ")+JSON.stringify(r)+" teardown="+n1+","+n2+" fakeRender="+fr+" dispatcherRestored="+restored+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):""));})();})' ;;
     sole-host-mirror) echo 'var r=__HARNESS_REPORT__();var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.specs.indexOf("deck-shelves")>=0&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&r.openHub;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     sole-host-fallback) echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var uiOk=!!(fu&&fu.panel&&!fu.coexistNote&&fu.download&&fu.update&&fu.updateToggles>=1&&fu.sections.indexOf("sec-updates")>=0&&fu.sections.indexOf("sec-troubleshooting")>=0&&fu.sections.indexOf("sec-config")>=0&&fu.version);var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.specs.length===0&&r.shelvesTabPresent&&uiOk&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     coexist-late)     echo 'var r=__HARNESS_REPORT__();var ok=r.bridge&&!r.hostInstalled&&r.shelvesTabPresent;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
@@ -137,17 +144,20 @@ assert_for() {
     coop-fallback)    echo 'var r=__HARNESS_REPORT__();var fu=r.fallbackUi;var c=r.handshake&&r.handshake.capabilities;var uiOk=!!(fu&&fu.panel&&fu.coexistNote&&!fu.download&&fu.update&&fu.updateToggles>=1&&fu.sections.indexOf("sec-updates")>=0&&fu.version);var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.specs.length===0&&r.shelvesTabPresent&&uiOk&&!!c&&c.selfUpdate===false&&r.canSelfInstall===false&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify(r)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     # The hand-over: the stood-down loader copy's defer signal (stamped by the page) or our copy's boot stamp flips self-install on; neither, off.
     coop-bundle)      echo 'var r=__HARNESS_REPORT__();var hst=window.__SHELVES_HOST__;var c=r.handshake&&r.handshake.capabilities;var offered=!!c&&c.coopBundle===true&&c.selfUpdate===true&&r.canSelfInstall===true;delete window.__DECK_SHELVES_DEFER_TO_HOST__;var cleared=hst.handshake().capabilities.selfUpdate===false&&hst.updates.canSelfInstall()===false;window.__DECK_SHELVES_HOST_BUNDLE_BOOTED__="0.0.1";var booted=hst.handshake().capabilities.selfUpdate===true&&hst.updates.canSelfInstall()===true;var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.bridge&&r.specs.indexOf("deck-shelves")>=0&&r.shelvesTabPresent&&/DECK SHELVES EDITOR/.test(r.shelvesTabText)&&offered&&cleared&&booted&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify({offered:offered,cleared:cleared,booted:booted,caps:c,errors:r.errors})+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
-    # Eight "−" presses from 30: the RPC sees 25…5 then the floor 1 (never 0, nothing below); a refused "+" puts the row back and logs a WARN.
-    sole-host-config) echo 'new Promise(function(res){var sec=document.querySelector("[data-fb=\"sec-sec-config\"]");if(!sec)return res("FAIL no config section");sec.click();var minus=function(){return document.querySelector("[data-fb=\"interval_secs−\"]");};var shown=function(){var b=minus();return b&&b.nextSibling?b.nextSibling.textContent:"";};var sent=function(){return (window.__HARNESS_RPC_CALLS__||[]).filter(function(c){return c.method==="setRuntimeConfig"&&c.args&&c.args.key==="interval_secs";}).map(function(c){return c.args.value;}).join(",");};var i=0;setTimeout(function down(){var b=minus();if(!b)return res("FAIL no step button");b.click();if(++i<8)return setTimeout(down,40);setTimeout(function(){var afterDown=sent(),floor=shown();window.__HARNESS_REFUSE_CONFIG__=true;document.querySelector("[data-fb=\"interval_secs+\"]").click();setTimeout(function(){var warned=(window.__SHELVES_LOG__||[]).some(function(e){return e.level==="WARN"&&/setRuntimeConfig interval_secs refused/.test(e.msg);});var errs=__HARNESS_REPORT__().errors;var ok=afterDown==="25,20,15,10,5,1"&&floor==="1"&&sent()==="25,20,15,10,5,1,6"&&shown()==="1"&&warned&&errs.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify({afterDown:afterDown,floor:floor,sent:sent(),shown:shown(),warned:warned,errors:errs}));},80);},60);},100);})' ;;
+    # Eight "−" presses from 30: the RPC sees 25…5 then the floor 1 (never 0, nothing below); a refused "+" puts the row back and logs a WARN;
+    # a "+" pressed while a refused one is still in flight is not sent, so the revert lands on the value the file kept.
+    sole-host-config) echo 'new Promise(function(res){var sec=document.querySelector("[data-fb=\"sec-sec-config\"]");if(!sec)return res("FAIL no config section");sec.click();var minus=function(){return document.querySelector("[data-fb=\"interval_secs−\"]");};var plus=function(){return document.querySelector("[data-fb=\"interval_secs+\"]");};var shown=function(){var b=minus();return b&&b.nextSibling?b.nextSibling.textContent:"";};var sent=function(){return (window.__HARNESS_RPC_CALLS__||[]).filter(function(c){return c.method==="setRuntimeConfig"&&c.args&&c.args.key==="interval_secs";}).map(function(c){return c.args.value;}).join(",");};var i=0;setTimeout(function down(){var b=minus();if(!b)return res("FAIL no step button");b.click();if(++i<8)return setTimeout(down,40);setTimeout(function(){var afterDown=sent(),floor=shown();window.__HARNESS_REFUSE_CONFIG__=true;plus().click();setTimeout(function(){var warned=(window.__SHELVES_LOG__||[]).some(function(e){return e.level==="WARN"&&/setRuntimeConfig interval_secs refused/.test(e.msg);});var refused=sent(),back=shown();window.__HARNESS_RPC_DELAY__=60;plus().click();window.__HARNESS_REFUSE_CONFIG__=false;setTimeout(function(){plus().click();var bm=document.querySelector("[data-fb=\"cfg-boot_movie\"]");if(bm)bm.click();setTimeout(function(){var raced=sent(),after=shown();var bootOn=(function(){var b=document.querySelector("[data-fb=\"cfg-boot_movie\"]");return b?b.getAttribute("data-on"):null;})();var bootSent=(window.__HARNESS_RPC_CALLS__||[]).filter(function(c){return c.method==="setBootMovie";}).map(function(c){return String(c.args);}).join(",");var errs=__HARNESS_REPORT__().errors;var ok=afterDown==="25,20,15,10,5,1"&&floor==="1"&&refused==="25,20,15,10,5,1,6"&&back==="1"&&warned&&raced==="25,20,15,10,5,1,6,6"&&after==="1"&&bootOn==="1"&&bootSent==="true"&&errs.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify({afterDown:afterDown,floor:floor,refused:refused,back:back,warned:warned,raced:raced,after:after,bootOn:bootOn,bootSent:bootSent,errors:errs}));},150);},20);},80);},60);},100);})' ;;
     # The hub view's "View logs" title button carries the pt-BR string from the shipped dictionary.
     sole-host-locale) echo 'var r=__HARNESS_REPORT__();var b=document.querySelector("[data-fb=\"open-logs\"]");var title=b?b.getAttribute("title"):"";var ok=r.hostInstalled&&r.owner==="shelveshub"&&r.shelvesTabPresent&&title==="Ver logs"&&r.errors.length===0;(ok?"PASS ":"FAIL ")+JSON.stringify({title:title,href:location.href,errors:r.errors})+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):"")' ;;
     # Interactions are async (RPC stub + React commits), so these return a Promise the eval awaits.
     sole-host-sidecar) echo 'new Promise(function(res){var sec=document.querySelector("[data-fb=\"sec-sec-troubleshooting\"]");if(sec)sec.click();setTimeout(function(){var btn=document.querySelector("[data-fb=\"logs\"]");if(!btn)return res("FAIL no logs button");btn.click();setTimeout(function(){var side=document.querySelector("[data-fb=\"sidecar\"]");var root=document.querySelector(".shelves-hub-root");var expanded=!!(root&&root.getAttribute("data-shelves-expanded")==="1");var rows=document.querySelectorAll("[data-fb=\"sidecar\"] [data-fb=\"logs-view\"]").length;var m1=(window.__HARNESS_COMPOSITOR__||[]).slice();var back=document.querySelector("[data-fb=\"logs-back\"]");if(back)back.click();setTimeout(function(){var closed=!document.querySelector("[data-fb=\"sidecar\"]");var narrow=!!(root&&root.getAttribute("data-shelves-expanded")==="0");var m2=(window.__HARNESS_COMPOSITOR__||[]).slice();var errs=__HARNESS_REPORT__().errors;var ok=!!side&&expanded&&rows===1&&m1.indexOf("QamFriendsExpanded")>=0&&closed&&narrow&&m2[m2.length-1]==="QamFriendsHidden"&&errs.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify({side:!!side,expanded:expanded,rows:rows,msgs:m2,closed:closed,narrow:narrow,errors:errs}));},150);},300);},100);})' ;;
+    sole-host-status) echo 'new Promise(function(res){var q=function(s){return document.querySelector(s);};var go=function(){var btn=q("[data-fb=\"status\"]");if(!btn)return res("FAIL no status button");btn.click();setTimeout(function(){var s={};var tab=q("[data-fb=\"sidecar\"] [data-fb=\"sidecar-tab-status\"]");s.active=!!(tab&&tab.getAttribute("data-active")==="1");var view=q("[data-fb=\"sidecar\"] [data-fb=\"status-view\"]");s.rows=view?view.querySelectorAll("[data-fb^=\"ro-\"]").length:0;s.mode=!!view&&view.textContent.indexOf("sole")>=0;s.noInline=!q("[data-fb=\"sec-sec-status\"]");s.order=Array.prototype.map.call(document.querySelectorAll("[data-fb=\"sidecar\"] [data-fb^=\"sidecar-tab-\"]"),function(t){return t.getAttribute("data-fb").slice(12);}).join(",");var back=q("[data-fb=\"logs-back\"]");if(back)back.click();setTimeout(function(){s.closed=!q("[data-fb=\"sidecar\"]");document.dispatchEvent(new KeyboardEvent("keydown",{key:"S",code:"KeyS",ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));setTimeout(function(){var t2=q("[data-fb=\"sidecar\"] [data-fb=\"sidecar-tab-status\"]");s.keyed=!!(t2&&t2.getAttribute("data-active")==="1");var r=__HARNESS_REPORT__();s.errors=r.errors;var ok=s.active&&s.rows>=5&&s.mode&&s.noInline&&s.order==="notif,status,logs"&&s.closed&&s.keyed&&r.errors.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify(s)+(window.__HARNESS_ERROR__?(" ERR="+window.__HARNESS_ERROR__):""));},400);},300);},400);};if(q("[data-fb=\"status\"]"))go();else{var sec=q("[data-fb=\"sec-sec-troubleshooting\"]");if(sec)sec.click();setTimeout(go,300);}})' ;;
     sole-host-notify) echo 'new Promise(function(res){var host=window.__SHELVES_HOST__;host.notifications.toast({title:"Hello",body:"World"});var notified=typeof window.__SHELVES_NOTIFY__==="function"&&window.__SHELVES_NOTIFY__("notice_recovered",{});setTimeout(function(){var bell=document.querySelector("[data-fb=\"open-notif\"]");var badge=bell?bell.textContent.trim():"";if(bell)bell.click();setTimeout(function(){var r=__HARNESS_REPORT__();var listed=host.notifications.list().length;var rowsInSide=document.querySelectorAll("[data-fb=\"sidecar\"] [data-fb=\"notif-view\"] [data-fb=\"notif-row\"]").length;var tab=document.querySelector("[data-fb=\"sidecar-tab-notif\"]");var active=!!(tab&&tab.getAttribute("data-active")==="1");var inHub=document.querySelectorAll("[data-fb-panel] > [data-fb=\"notif-row\"]").length;var mode=host.notifications.mode();var ok=listed===2&&notified===true&&badge==="2"&&rowsInSide===2&&active&&inHub===0&&mode==="failed"&&r.errors.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify({listed:listed,notified:notified,badge:badge,rowsInSide:rowsInSide,active:active,inHub:inHub,mode:mode,errors:r.errors}));},200);},200);})' ;;
     sole-host-gesture) echo 'new Promise(function(res){var pad=window.__HARNESS_PAD__;var row=document.querySelector("[data-fb=\"sec-sec-updates\"]");if(!pad||!row)return res("FAIL pad="+!!pad+" row="+!!row);row.classList.add("shelves-rowfocus");pad(0,23,true);pad(0,23,false);pad(0,23,true);setTimeout(function(){var side1=!!document.querySelector("[data-fb=\"sidecar\"]");var t1=document.querySelector("[data-fb=\"sidecar-tab-logs\"]");var logsActive=!!(t1&&t1.getAttribute("data-active")==="1");var back=document.querySelector("[data-fb=\"logs-back\"]");if(back)back.click();setTimeout(function(){var closed=!document.querySelector("[data-fb=\"sidecar\"]");document.dispatchEvent(new KeyboardEvent("keydown",{key:"N",code:"KeyN",ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));setTimeout(function(){var side2=!!document.querySelector("[data-fb=\"sidecar\"]");var t2=document.querySelector("[data-fb=\"sidecar-tab-notif\"]");var notifActive=!!(t2&&t2.getAttribute("data-active")==="1");var errs=__HARNESS_REPORT__().errors;var ok=side1&&logsActive&&closed&&side2&&notifActive&&errs.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify({side1:side1,logsActive:logsActive,closed:closed,side2:side2,notifActive:notifActive,errors:errs}));},150);},150);},250);})' ;;
     # Leaving our tab unmounts its panel (an open sidecar closes, the menu narrows); coming back shows the hub view again,
-    # where two D-pad rights and Ctrl+Shift+L open the sidecar; the back action returns to the editor for good.
-    sole-host-tabswitch) echo 'new Promise(function(res){var q=function(s){return document.querySelector(s);};var fb=function(id){return q("[data-fb=\""+id+"\"]");};var hubShown=function(){return !!q("[data-fb-panel]")&&!!fb("back")&&!q(".ds-editor");};var sideTab=function(){var t=q("[data-fb=\"sidecar\"] [data-fb^=\"sidecar-tab-\"][data-active=\"1\"]");return t?t.getAttribute("data-fb"):"";};var keyL=function(){document.dispatchEvent(new KeyboardEvent("keydown",{key:"L",code:"KeyL",ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));};var sel=window.__HARNESS_SELECT_TAB__;var open=fb("open-hub");if(!sel||!open)return res("FAIL select="+!!sel+" openHub="+!!open);var s={};open.click();setTimeout(function(){s.opened=hubShown();keyL();setTimeout(function(){s.sideBefore=sideTab();sel(4);setTimeout(function(){var m=window.__HARNESS_COMPOSITOR__||[];s.away=!q("[data-fb-panel]")&&!q("[data-fb=\"sidecar\"]");s.narrowed=m[m.length-1]==="QamFriendsHidden";sel(900);setTimeout(function(){s.back=hubShown();s.sideRestored=!!q("[data-fb=\"sidecar\"]");var pad=window.__HARNESS_PAD__,row=fb("sec-sec-updates");s.pad=!!pad;if(row)row.classList.add("shelves-rowfocus");if(pad){pad(0,23,true);pad(0,23,false);pad(0,23,true);}setTimeout(function(){s.padTab=sideTab();var lb=fb("logs-back");if(lb)lb.click();setTimeout(function(){s.closed=!q("[data-fb=\"sidecar\"]");keyL();setTimeout(function(){s.keyTab=sideTab();var b=fb("back");if(b)b.click();setTimeout(function(){sel(4);sel(900);s.reset=!!q(".ds-editor")&&!q("[data-fb-panel]");s.errors=__HARNESS_REPORT__().errors;var ok=s.opened&&s.sideBefore==="sidecar-tab-logs"&&s.away&&s.narrowed&&s.back&&!s.sideRestored&&s.pad&&s.padTab==="sidecar-tab-logs"&&s.closed&&s.keyTab==="sidecar-tab-logs"&&s.reset&&s.errors.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify(s));},150);},150);},150);},250);},150);},100);},150);},150);})' ;;
+    # where two D-pad rights and Ctrl+Shift+L open the sidecar; the back action returns to the editor for good, and a hub
+    # view that fails to render shows the error line once, then the next remount brings the editor back.
+    sole-host-tabswitch) echo 'new Promise(function(res){var q=function(s){return document.querySelector(s);};var fb=function(id){return q("[data-fb=\""+id+"\"]");};var hubShown=function(){return !!q("[data-fb-panel]")&&!!fb("back")&&!q(".ds-editor");};var editorShown=function(){return !!q(".ds-editor")&&!q("[data-fb-panel]");};var sideTab=function(){var t=q("[data-fb=\"sidecar\"] [data-fb^=\"sidecar-tab-\"][data-active=\"1\"]");return t?t.getAttribute("data-fb"):"";};var keyL=function(){document.dispatchEvent(new KeyboardEvent("keydown",{key:"L",code:"KeyL",ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));};var sel=window.__HARNESS_SELECT_TAB__;var open=fb("open-hub");if(!sel||!open)return res("FAIL select="+!!sel+" openHub="+!!open);var s={};open.click();setTimeout(function(){s.opened=hubShown();keyL();setTimeout(function(){s.sideBefore=sideTab();sel(4);setTimeout(function(){var m=window.__HARNESS_COMPOSITOR__||[];s.away=!q("[data-fb-panel]")&&!q("[data-fb=\"sidecar\"]");s.narrowed=m[m.length-1]==="QamFriendsHidden";sel(900);setTimeout(function(){s.back=hubShown();s.sideRestored=!!q("[data-fb=\"sidecar\"]");var pad=window.__HARNESS_PAD__,row=fb("sec-sec-updates");s.pad=!!pad;if(row)row.classList.add("shelves-rowfocus");if(pad){pad(0,23,true);pad(0,23,false);pad(0,23,true);}setTimeout(function(){s.padTab=sideTab();var lb=fb("logs-back");if(lb)lb.click();setTimeout(function(){s.closed=!q("[data-fb=\"sidecar\"]");keyL();setTimeout(function(){s.keyTab=sideTab();var b=fb("back");if(b)b.click();setTimeout(function(){sel(4);sel(900);s.reset=editorShown();var n=window.__SHELVES_HOST__.notifications,unread=n.unread;n.unread=function(){throw new Error("harness: the hub view fails to render");};var o=fb("open-hub");if(o)o.click();setTimeout(function(){var p=q(".qam-tab[data-tabkey=\"900\"] .qam-tab-panel");s.broken=!!p&&/could not render/.test(p.textContent);sel(4);sel(900);s.recovered=editorShown();n.unread=unread;s.errors=__HARNESS_REPORT__().errors;var ok=s.opened&&s.sideBefore==="sidecar-tab-logs"&&s.away&&s.narrowed&&s.back&&!s.sideRestored&&s.pad&&s.padTab==="sidecar-tab-logs"&&s.closed&&s.keyTab==="sidecar-tab-logs"&&s.reset&&s.broken&&s.recovered&&s.errors.length===0;res((ok?"PASS ":"FAIL ")+JSON.stringify(s));},150);},150);},150);},150);},250);},150);},100);},150);},150);})' ;;
   esac
 }
 
@@ -202,15 +212,17 @@ run_scenario() {
     --disable-background-networking "$url" >/dev/null 2>&1 &
   local pid=$!
   local ready="" i
+  # The host is pinned (shelves-devtools would otherwise take SHELVES_CEF_HOST from the caller's
+  # environment), and a probe a renderer accepts but never answers gives up after 3 s.
   for i in $(seq 1 60); do
     sleep 0.3
-    ready="$("$DEVTOOLS" --port "$PORT" --target harness eval 'String(!!window.__HARNESS_READY__)' 2>/dev/null | tr -d '"')"
+    ready="$("$DEVTOOLS" --host 127.0.0.1 --timeout 3 --port "$PORT" --target harness eval 'String(!!window.__HARNESS_READY__)' 2>/dev/null | tr -d '"')"
     [[ "$ready" == "true" ]] && break
   done
   local out
-  out="$("$DEVTOOLS" --port "$PORT" --target harness eval "$(assert_for "$sc")" 2>/dev/null)"
+  out="$("$DEVTOOLS" --host 127.0.0.1 --port "$PORT" --target harness eval "$(assert_for "$sc")" 2>/dev/null)"
   if [[ -n "$JSON_OUT" ]]; then
-    "$DEVTOOLS" --port "$PORT" --target harness eval 'JSON.stringify(__HARNESS_REPORT__())' >"$EVIDENCE_DIR/$sc.report" 2>/dev/null
+    "$DEVTOOLS" --host 127.0.0.1 --port "$PORT" --target harness eval 'JSON.stringify(__HARNESS_REPORT__())' >"$EVIDENCE_DIR/$sc.report" 2>/dev/null
   fi
   kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
   rm -rf "$udir"
@@ -224,29 +236,38 @@ run_scenario() {
   return 1
 }
 
-FAILED=0
-# The unit layer is one counted result (and an evidence entry), so a broken check turns the run red.
+# The unit layer is one counted result (and an evidence entry), kept apart from the scenarios.
+UNIT="skipped, node not found"
 if command -v node >/dev/null 2>&1; then
   echo "[i] Runtime unit checks (node vm)…"
   if node "$HARNESS_DIR/runtime-unit.js" "$ROOT"; then
-    echo PASS >"$EVIDENCE_DIR/runtime-unit.result"; printf '  \033[32mPASS\033[0m  runtime-unit\n'
+    UNIT=passed; echo PASS >"$EVIDENCE_DIR/runtime-unit.result"; printf '  \033[32mPASS\033[0m  runtime-unit\n'
   else
-    echo FAIL >"$EVIDENCE_DIR/runtime-unit.result"; printf '  \033[31mFAIL\033[0m  runtime-unit\n'; FAILED=$((FAILED + 1))
+    UNIT=failed; echo FAIL >"$EVIDENCE_DIR/runtime-unit.result"; printf '  \033[31mFAIL\033[0m  runtime-unit\n'
   fi
 else
   echo "[i] node not found — runtime unit checks skipped"
 fi
 
+SCENARIOS=(coexist-mirror coexist-fallback sole-host sole-host-mirror sole-host-fallback coexist-late coexist-native
+  coexist-fallback-native coexist-idle coop-mirror coop-fallback coop-bundle sole-host-sidecar sole-host-status sole-host-notify
+  sole-host-gesture sole-host-locale sole-host-config sole-host-tabswitch)
+FAILED=0
 echo "[i] Running scenarios…"
-for sc in coexist-mirror coexist-fallback sole-host sole-host-mirror sole-host-fallback coexist-late coexist-native coexist-fallback-native coexist-idle coop-mirror coop-fallback coop-bundle sole-host-sidecar sole-host-notify sole-host-gesture sole-host-locale sole-host-config sole-host-tabswitch; do
+for sc in "${SCENARIOS[@]}"; do
   run_scenario "$sc" || FAILED=$((FAILED + 1))
 done
 write_evidence
 
+# No upper-case PASS / FAIL below: scripts/ci/report.mjs counts those words in this output.
 echo ""
-if [[ "$FAILED" -eq 0 ]]; then
-  echo "[OK] all scenarios passed"
+TOTAL=${#SCENARIOS[@]}
+if [[ "$UNIT" == "failed" && "$FAILED" -eq 0 ]]; then
+  echo "[X] runtime-unit failed (the node unit checks above); all $TOTAL scenarios passed"
+elif [[ "$FAILED" -gt 0 ]]; then
+  echo "[X] $FAILED of $TOTAL scenario(s) failed; runtime-unit $UNIT"
+else
+  echo "[OK] all results passed ($TOTAL scenarios; runtime-unit $UNIT)"
   exit 0
 fi
-echo "[X] $FAILED scenario(s) failed"
 exit 1

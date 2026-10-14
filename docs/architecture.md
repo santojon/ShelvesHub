@@ -144,7 +144,10 @@ and the `shelves-devtools` CLI. See [debugging.md](./debugging.md).
 
 ### RPC server (`src/rpc.rs`)
 
-Minimal blocking HTTP/1.1 server on `127.0.0.1:60123` (configurable). The bundle
+Minimal blocking HTTP/1.1 server on `127.0.0.1:60123` (configurable). The daemon
+binds it before anything else and exits when it cannot (usually because another ShelvesHub, or
+another process, holds the port), so a second daemon never injects nor replaces the running
+one's token. The bundle
 reaches it with a `fetch` POST of `{ method, args }` from inside the renderer, so
 it emits CORS headers and handles preflight. Every request must carry
 `Content-Type: application/json` (anything else answers 415) and
@@ -157,7 +160,7 @@ any dispatch. Methods, by group:
 | Group | Methods |
 |---|---|
 | Health and handshake | `ping`, `getVersion`, `getHostApiVersion`, `isInjected`, `getDiagnostics` |
-| Hosted backend | `getBackendStatus`, `restartBackend`, and the plugin backend's public API names (the `BACKEND_METHODS` allowlist, 34 names) |
+| Hosted backend | `getBackendStatus`, `restartBackend`, and the plugin backend's public API names (the `BACKEND_METHODS` allowlist, 35 names) |
 | Plugin bundle | `populateBundle`, `applyUpdate` (URL-pinned to the Deck Shelves releases), `rollbackBundle` |
 | Hub binary | `checkUpdates`, `selfUpdate`, `rollbackHub`, `restartService` |
 | Hub settings store | `getConfig`, `setAutoUpdate`, `setUpdatePref`, `setConfigSync` |
@@ -169,8 +172,9 @@ and only while backend hosting is configured; anything else answers an
 `unknown method` error. The manual bundle and hub actions (`populateBundle`,
 `applyUpdate`, `rollbackBundle`, `rollbackHub`, `selfUpdate`) share the loop's
 single-flight update guard and answer `busy` while a check runs; `selfUpdate`
-reports `current` when nothing newer is published, and `rollbackHub` is refused
-while a hub binary is staged. Each connection is served on its own thread (at
+reports `current` when nothing newer is published or `staged` when that release
+already waits for a restart, and `rollbackHub` is refused while a hub binary is
+staged. Each connection is served on its own thread (at
 most 64 at once, 503 beyond; request lines and headers capped at 8 KiB and 64
 headers, 400 beyond) so a slow data call never delays probes, and the log keeps
 only the method name of a request, never its body. See
@@ -179,8 +183,13 @@ recipe.
 
 ### Backend host (`src/backend.rs` + `runtime/backend/`)
 
-Optionally hosts the Deck Shelves Python data backend as a supervised child
-process (`SHELVES_BACKEND_DIR`; unset = disabled). The daemon spawns
+Hosts the Deck Shelves Python data backend as a supervised child process: the
+one in `SHELVES_BACKEND_DIR`, else the copy in its install folder (`backend/`),
+which the daemon obtains on a first start (from a loader-managed Deck Shelves,
+else the release download) and, after every Deck Shelves update, brings to that
+same release and restarts — a directory set with `SHELVES_BACKEND_DIR` is never
+replaced. Without either, the data methods stay off and local shelves still
+work. The daemon spawns
 `runtime/backend/shelveshub_backend.py` (standard library only), which loads
 the backend's `Plugin` class and serves its public methods over
 line-delimited JSON on stdio — an object argument is applied as keyword
@@ -259,15 +268,16 @@ as the current user so they share the Steam session.
 
 ## Pending work (ShelvesHub mode)
 
-All of the original host-API surface is implemented in
-`runtime/shelves-host.js`; this checklist is complete.
+All of the original host-API surface is implemented as `window.__SHELVES_HOST__`
+(the `host` object built in `runtime/shelves-host-api.js`, assembled with the
+other runtime parts into the one script the daemon injects); this checklist is
+complete.
 
 - [x] Replace the `is_injected()` placeholder with a real CEF probe
 - [x] Replace the shell-call injection with the WebSocket/CDP injection
       mechanism into the Steam renderer
-- [x] Implement `ShelvesHostApi.lifecycle.*` (`register` / `onMount` / `onUnmount`)
-- [x] Implement `ShelvesHostApi.routes.*` (Steam-side route registration via the
+- [x] Implement `__SHELVES_HOST__.lifecycle.*` (`register` / `onMount` / `onUnmount`)
+- [x] Implement `__SHELVES_HOST__.routes.*` (Steam-side route registration via the
       concrete `routerHook` — `addRoute` / `removeRoute` / `addPatch`)
-- [x] Implement `ShelvesHostApi.notifications.*` (`toast` / `send` via
-      `SteamClient.Notifications`)
-- [x] Implement `ShelvesHostApi.platform.navigateToApp` (`SteamClient.Apps.RunGame`)
+- [x] Implement `__SHELVES_HOST__.notifications.*` (`toast` / `send`)
+- [x] Implement `__SHELVES_HOST__.platform.navigateToApp` (`SteamClient.Apps.RunGame`)

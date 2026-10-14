@@ -6,22 +6,24 @@
 
 `pnpm` is the single entry point for the whole project — it installs the
 toolchain, builds/runs the Rust binaries, drives the local debug harness, and
-deploys/debugs against a Steam Deck. `pnpm setup` bootstraps the toolchain on
+deploys/debugs against a Steam Deck. `pnpm run setup` bootstraps the toolchain on
 **macOS, Linux/SteamOS, and Windows**; you only need Node + pnpm to start.
+`setup`, `update` and `run` need the explicit `pnpm run`: plain `pnpm setup` and
+`pnpm update` are pnpm's own commands, and a bare `pnpm run` only lists the scripts.
 
 ```bash
-pnpm setup           # one-time toolchain install, auto-dispatched per OS:
+pnpm run setup       # one-time toolchain install, auto-dispatched per OS:
                      #   macOS   → Homebrew (rustup, zig+cargo-zigbuild, Chromium)
                      #   Linux   → rustup.rs + Corepack (SteamOS/Arch/Ubuntu/Fedora/…)
                      #   Windows → winget/rustup + Corepack
                      # then adds the Deck target, installs JS deps, creates .env
-pnpm update          # update the managed toolchain + deps
+pnpm run update      # update the managed toolchain + deps
 
 pnpm build           # cargo build (loader + shelves-devtools)
 pnpm build:release   # release build
 pnpm test            # cargo test
 pnpm lint            # cargo clippy -- -D warnings  (same as CI)
-pnpm run             # run the loader locally
+pnpm run run         # run the loader locally
 pnpm devtools targets      # run shelves-devtools (args follow directly)
 
 pnpm debug:local     # full end-to-end run against a throwaway Chromium (no Steam)
@@ -46,6 +48,14 @@ pnpm deck:reload     # reload the Deck renderer
 pnpm deck:console    # stream the Deck renderer console
 pnpm deck:reinject   # clear markers so the loader re-injects an updated runtime/bundle
 ```
+
+With the ShelvesHub service installed and running, stop it for the session before `pnpm run run`
+(`systemctl --user stop shelveshub`, `launchctl bootout gui/$(id -u)/com.shelveshub` or
+`schtasks /End /TN ShelvesHub`, then `taskkill /IM shelveshub.exe` if the process is still there;
+it comes back at the next login): it holds port `60123`, so the
+dev copy would exit at once, and on another port (`SHELVES_RPC_PORT`) both would inject into the
+same Steam. `pnpm local:run` and `pnpm debug:local` run their daemon on port `60124` with their
+own token file.
 
 ### Supported platforms
 
@@ -94,6 +104,11 @@ survives); `local:run:reseed` forces a refresh and reloads the renderer. The
 managed bundle and daemon log live under the OS data dir
 (`~/Library/Application Support/shelveshub-dev/` on macOS,
 `%APPDATA%\shelveshub-dev\` on Windows, `$XDG_DATA_HOME/shelveshub-dev/` on Linux).
+Its control RPC listens on `127.0.0.1:60124`, its token in that same folder (`.rpc-token`;
+`SHELVES_RPC_PORT` / `SHELVES_RPC_TOKEN_FILE` override them), so an installed service keeps
+`60123` and its own token. That service would still inject into the same Steam, and its service
+manager would start it again after a stop: when one answers on `60123`, `local:run` refuses to
+start and prints the command that stops it for the session (it comes back at the next login).
 
 Connection and CDP settings live in `.env`. The `deck:*` tasks connect directly
 to `DECK_CDP_HOST:DECK_CDP_PORT` (no tunnel needed when the Deck's CEF port is
@@ -174,13 +189,20 @@ journalctl --user -u shelveshub -f
 
 The host RPC server speaks HTTP (the bundle reaches it with `fetch` from inside
 the renderer). Once the loader is running, probe it from the Deck or from your
-dev machine (if SSH-forwarded):
+dev machine (if SSH-forwarded); every request carries the JSON content type and
+the per-boot token from the device's `~/.local/share/shelveshub/.rpc-token`
+(see [host-api.md](host-api.md#rpc-wire-format)):
 
 ```bash
-curl -s 127.0.0.1:60123 -d '{"method":"ping"}'
-curl -s 127.0.0.1:60123 -d '{"method":"getVersion"}'
-curl -s 127.0.0.1:60123 -d '{"method":"isInjected"}'
+TOKEN="$(cat ~/.local/share/shelveshub/.rpc-token)"
+# from the dev machine over the SSH forward: TOKEN="$(ssh deck@deck.local cat .local/share/shelveshub/.rpc-token)"
+curl -s 127.0.0.1:60123 -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"ping"}'
+curl -s 127.0.0.1:60123 -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"getVersion"}'
+curl -s 127.0.0.1:60123 -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"isInjected"}'
 ```
+
+A dev daemon started with `pnpm local:run` answers on port `60124` instead, with the token in
+its data folder (see above).
 
 ## Debugging the injection / DevTools
 
@@ -192,8 +214,9 @@ debug harness (`scripts/local-debug.sh`), and the on-Deck SSH workflow
 
 `pnpm validate` runs every CI gate as a recorded step — rustfmt, clippy, the Rust tests,
 `cargo audit` (skipped when not installed), ESLint, the runtime's complexity debt, JavaScript
-syntax, data files + localization parity, the one-click launchers, the shipped-text rule and
-the runtime harness (skipped without a Chromium-family browser); `--docker` and `--qa` add the
+syntax, data files + localization parity, the one-click launchers, the shipped-text rule, the
+runtime harness and the daemon scenarios (both skipped without a Chromium-family browser);
+`--docker` and `--qa` add the
 container harness and the QA matrix, `--no-cargo` skips the Rust gates. Each step's status,
 duration and log tail go into `site/reports/<scope>/<timestamp>.json` and a page
 (`<timestamp>.html`, every step expandable), the scope's `index.html` lists its history, and
@@ -201,9 +224,9 @@ duration and log tail go into `site/reports/<scope>/<timestamp>.json` and a page
 reports** workflow runs (scope `release` on a release, else `ci`). `pnpm report` (add
 `--harness` to include the runtime scenarios, `--no-cargo` to skip the Rust gates) records the
 same signals without step logs. Each run records: the gates (`cargo test`, clippy, `cargo fmt
---check`, ESLint, the runtime harness, `cargo audit` when installed) with an overall PASS/FAIL
-that also fails on any failed step; ESLint problems by rule and the
-suppression baseline; the complexity debt of the shipped runtime (sum of the scores of every
+--check`, ESLint, the runtime harness, the daemon scenarios in a `pnpm validate` run, `cargo audit`
+when installed) with an overall PASS/FAIL that also fails on any failed step; ESLint problems by
+rule and the suppression baseline; the complexity debt of the shipped runtime (sum of the scores of every
 function over the limit, their count and the worst one, measured with
 `scripts/ci/complexity.eslint.config.mjs`); code lines of the runtime and of the service;
 the QA matrix cells by status; locales, key parity and EN ↔ pt-BR doc pairs; and how long

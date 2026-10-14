@@ -135,9 +135,45 @@ fn removal_leaves_another_tools_files_alone() {
     if last != first {
         assert!(!movies.join(last).exists(), "our slot is removed");
     }
-    // A recorded name is removed even when its content is no longer readable as ours.
+    // A recorded regular file is removed even when its bytes changed (our copy).
     remove_ours(&movies, &[first.to_string()], &src).unwrap();
     assert!(!movies.join(first).exists());
+    // A recorded name another tool has since linked to its own file stays; a hub link
+    // to the movie under an older path (same bytes, or another cut beside the source)
+    // is still ours.
+    #[cfg(unix)]
+    {
+        let relink_and_remove = |target: &Path| {
+            let _ = fs::remove_file(movies.join(first));
+            std::os::unix::fs::symlink(target, movies.join(first)).unwrap();
+            remove_ours(&movies, &[first.to_string()], &src).unwrap();
+            fs::symlink_metadata(movies.join(first)).is_ok()
+        };
+        fs::create_dir_all(root.join("tool")).unwrap();
+        let other = root.join("tool").join("other.webm");
+        fs::write(&other, b"ANOTHER TOOLS MOVIE").unwrap();
+        assert!(relink_and_remove(&other), "another tool's link stays");
+        assert_eq!(
+            fs::read(movies.join(first)).unwrap(),
+            b"ANOTHER TOOLS MOVIE"
+        );
+
+        fs::create_dir_all(root.join("old-install")).unwrap();
+        let moved = root.join("old-install").join("src.webm");
+        fs::write(&moved, b"WEBMDATA").unwrap();
+        assert!(
+            !relink_and_remove(&moved),
+            "a link to our movie elsewhere is removed"
+        );
+
+        let other_cut = root.join("src_1280x800.webm");
+        fs::write(&other_cut, b"OTHER CUT").unwrap();
+        assert!(
+            !relink_and_remove(&other_cut),
+            "a link to another cut is removed"
+        );
+        assert_eq!(fs::read(&moved).unwrap(), b"WEBMDATA", "only the link goes");
+    }
     fs::remove_dir_all(&root).ok();
 }
 

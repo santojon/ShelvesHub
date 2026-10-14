@@ -402,8 +402,8 @@ pub fn run(config: &Config) {
             .collect();
         (base, stamps)
     });
-    // The round's decisions land on a fresh copy under the store lock, so a
-    // switch the user flipped meanwhile (over RPC) survives the round.
+    // The round's decisions land on a fresh copy under the store lock: a switch the
+    // user flipped meanwhile (over RPC) survives unless this round adopts that key.
     let saved = crate::store::update(&config.hub_config_path, |s| {
         for (key, value) in &decided.adopt {
             if let Some(b) = value.as_bool() {

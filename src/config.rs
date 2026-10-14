@@ -104,13 +104,14 @@ pub struct Config {
     /// host settings, persisted with atomic writes + a backup (see `store`).
     pub hub_config_path: PathBuf,
     /// When true (`SHELVES_BOOT_MOVIE=1` / `boot_movie` in the config file), the
-    /// host installs its startup animation into Steam's own startup-movie slot
-    /// (`config/uioverrides/movies/deck_startup.webm`) so the Deck UI plays it on
-    /// launch; when false, it removes the file it installed. Off by default. See
-    /// `bootmovie`.
+    /// host installs its startup animation into Steam's startup-movie override
+    /// slots under `config/uioverrides/movies/` — every name the platform might
+    /// play: five on Linux / SteamOS, `bigpicture_startup.webm` alone on macOS and
+    /// Windows (`bootmovie::slot_names`) — so Steam plays it on launch; when false,
+    /// it removes the ones it installed. Off by default. See `bootmovie`.
     pub boot_movie: bool,
-    /// Source WebM copied into the startup-movie slot (`SHELVES_BOOT_MOVIE_FILE`;
-    /// default `<exe_dir>/assets/boot/deck_startup.webm`).
+    /// Source WebM placed in the slots (`SHELVES_BOOT_MOVIE_FILE`; the default is a
+    /// cut under `<exe_dir>/assets/boot/`, chosen by display: `default_boot_movie`).
     pub boot_movie_path: PathBuf,
 }
 

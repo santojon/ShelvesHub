@@ -7,8 +7,8 @@
 # upgrade everything it manages.
 #
 # Usage (via pnpm):
-#   pnpm setup      # install / repair the toolchain
-#   pnpm update     # update the toolchain + project deps
+#   pnpm run setup    # install / repair the toolchain
+#   pnpm run update   # update the toolchain + project deps
 #
 # Installed: rustup (+ Linux target), zig + cargo-zigbuild (reliable mac->Deck
 # cross-compile), the Chromium browser (local debug harness), and the project's

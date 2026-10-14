@@ -50,6 +50,12 @@
     try { const c = window.__SHELVES_CONFIG__; if (c && c.rpcToken) return c.rpcToken; } catch (e) {}
     return RPC_TOKEN;
   }
+  // Every injection stamps a fresh object (a hot-swap carries the new bundle version), so the
+  // handshake reads the stamp per call as well; the boot-time capture answers without the global.
+  function liveCfg() {
+    try { const c = window.__SHELVES_CONFIG__; if (c && typeof c === "object") return c; } catch (e) {}
+    return SHELVES_CFG;
+  }
   function rpcHeaders() {
     const h = { "Content-Type": "application/json" };
     const token = rpcToken();
@@ -248,9 +254,9 @@
       } catch (e) { logWarn("HOST", "webpack capture failed: " + (e && e.message)); }
     }
 
-    // Read already-instantiated modules from the require CACHE (`req.c`) WITHOUT a force-require,
-    // so we never run an unloaded factory nor walk the graph (that block starved the plugin →
-    // React #31). Returns true when the cache yielded modules.
+    // Read already-instantiated modules from the require CACHE (`req.c`) without running any
+    // factory (a force-require walk once starved the plugin → React #31). Returns true when the
+    // cache yielded modules; current Steam builds expose no `req.c`, so this answers false there.
     function readFromCache() {
       const cache = req.c;
       if (!cache || typeof cache !== "object") return false;
@@ -261,7 +267,8 @@
       }
       return modules.size > 0;
     }
-    // Last resort (cache empty — nothing loaded yet): force-require every module. Heavy.
+    // The path that runs on current Steam (no module cache): require every module id. Heavy, so
+    // only ever on a settled renderer — the post-settle inject, never during Steam's boot.
     function forceRequireAll() {
       if (!req.m) return;
       const ids = Object.keys(req.m);
@@ -725,6 +732,7 @@
       componentDidCatch(e, info) {
         logWarn("UI", "panel render error: " + (e && e.message));
         try { window.__SHELVES_NATIVE_ERR__ = { message: e && e.message, stack: e && e.stack, componentStack: info && info.componentStack }; } catch (x) {}
+        try { if (this.props.onError) this.props.onError(e); } catch (x) {}
       }
       render() {
         if (!this.state.err) return this.props.children;

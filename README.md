@@ -9,7 +9,7 @@
 
 [![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
 [![Release](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml)
-[![Tests](https://img.shields.io/badge/cargo%20test-80%20passed-brightgreen?logo=rust&logoColor=white)](src/)
+[![Tests](https://img.shields.io/badge/cargo%20test-150%20passed-brightgreen?logo=rust&logoColor=white)](src/)
 [![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-SteamOS%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-purple?logo=steamdeck&logoColor=white)](https://github.com/ValveSoftware/SteamOS)
 [![Downloads](https://img.shields.io/github/downloads/santojon/ShelvesHub/total.svg?label=downloads&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
@@ -80,14 +80,14 @@ The service also **keeps itself and the bundle current**: with automatic updates
 - **Version-skew safe settings** — the host's own settings store preserves keys it doesn't recognise, so running mixed versions across machines never silently drops a setting.
 - **Gamepad UI aware** — by default it hosts only while the gamepad / Big Picture UI is on screen; an experimental toggle (macOS / Windows) also injects into the plain desktop client.
 - **Restart to apply, in one click** — changing a setting that needs a restart surfaces a button that restarts the host and Steam together so the change takes effect.
-- **Editable safe configuration** — a curated subset of the operational config is editable in the tab, with a read-only status readout of the effective values.
-- **Side panel with Logs and Notifications tabs** — host + runtime logs in one gamepad-navigable, colour-coded stream, newest first, and the notification center with an unread badge; it opens beside the tab (the menu widens, like Steam's friends list) from the icons by the title, from two D-pad rights at the hub view's right edge (like the plugin's own side panel) or Ctrl+Shift+L / Ctrl+Shift+N on a keyboard, and B takes you back.
+- **Editable safe configuration** — a curated subset of the operational config is editable in the tab, with a read-only status readout of the effective values in the side panel's Status tab.
+- **Side panel with Notifications, Status and Logs tabs** — host + runtime logs in one gamepad-navigable, colour-coded stream, newest first, and the notification center with an unread badge; it opens beside the tab (the menu widens, like Steam's friends list) from the icons by the title, from two D-pad rights at the hub view's right edge (like the plugin's own side panel) or Ctrl+Shift+L / Ctrl+Shift+N on a keyboard, and B takes you back. Switching to another Quick Access tab closes it; back on the hub's tab, the hub view you opened is still there.
 - **Notifications through Steam's own system** — the host's notifications (Deck Shelves' and ShelvesHub's own, each with its mark) are Steam toasts with an entry in Steam's Notifications tab; ShelvesHub tells you when it updated, rolled back, paused cooperative mode or restarted a collapsed Steam interface. The side panel keeps the last ones in its Notifications tab.
 - **Settings that follow your Steam account** — the hub's own choices (the update switches, quiet updates, Steam notifications, the boot animation) sync across the devices you sign in on; for each setting the most recent change wins, device-local operation (ports, paths, ownership, intervals, the recovery command) never leaves the device, and a switch in Configuration turns it off.
 - **Disable until restart** — a troubleshooting switch stands the host down until the next service restart without uninstalling anything.
 - **One shared contract** — the `@deck-shelves/host` API defines what the host provides, so one Deck Shelves build runs under this host or under a plugin loader unchanged.
 - **Localized** — the host tab is translated into 19 languages.
-- **No-device verification** — a Docker simulation harness runs the runtime, a daemon → headless-Chromium injection smoke, the install / uninstall lifecycle, and the Deck Shelves cross-OS backend probes under the host in a container (on Linux x86_64 and ARM64 via emulation).
+- **No-device verification** — a Docker simulation harness runs the runtime, a daemon → headless-Chromium injection smoke, the daemon's collapse-and-recovery scenarios, the install / uninstall lifecycle, and the Deck Shelves cross-OS backend probes under the host in a container (on Linux x86_64 and ARM64 via emulation).
 
 ---
 
@@ -144,7 +144,7 @@ Installs to `~/.local/share/shelveshub` and registers a user-level `shelveshub.s
 
 ### macOS
 
-Download **`Install ShelvesHub.app`** (a clickable installer app carrying the ShelvesHub icon) from the latest release and double-click it. On first run, right-click → Open to bypass Gatekeeper. A plain `install-mac.command` script is also published. The macOS build is a **universal binary**, so it runs natively on both Apple Silicon and Intel Macs.
+Download **`Install-ShelvesHub.app.zip`** from the latest release, unzip it and double-click **`Install ShelvesHub.app`** (a clickable installer app carrying the ShelvesHub icon). On first run, right-click → Open to bypass Gatekeeper. A plain `install-mac.command` script is also published. The macOS build is a **universal binary**, so it runs natively on both Apple Silicon and Intel Macs.
 
 ### Windows
 
@@ -252,7 +252,7 @@ Each release publishes the per-platform packages, one-click scripts, and clickab
 | `shelveshub-linux.desktop` | Linux one-click installer — same architecture auto-detection |
 | `install-mac.command` | macOS one-click script |
 | `install-windows.bat` | Windows one-click script |
-| `Install ShelvesHub.app` (zipped) | macOS clickable installer app (with icon) |
+| `Install-ShelvesHub.app.zip` | macOS clickable installer app `Install ShelvesHub.app` (with icon), zipped |
 | `shelveshub-setup.exe` | Windows setup program (with icon) |
 
 ---

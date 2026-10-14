@@ -6,7 +6,7 @@
 # macOS, icon.icns. Run whenever assets/icon.svg changes.
 #
 # Requires: rsvg-convert (SVG->PNG) + Python Pillow (.ico). macOS also uses the
-# built-in iconutil for .icns. On pnpm setup these come from Homebrew (librsvg)
+# built-in iconutil for .icns. On pnpm run setup these come from Homebrew (librsvg)
 # and pip (Pillow).
 set -euo pipefail
 

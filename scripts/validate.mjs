@@ -1,18 +1,28 @@
 #!/usr/bin/env node
 /* Full validation, every CI gate as a recorded step (rustfmt, clippy, Rust tests,
    cargo audit, ESLint, complexity debt, JS syntax, data files + localization, the
-   launchers, the shipped-text rule, the runtime harness; container harness and QA
-   matrix on request), written as site/reports/<scope>/<ts>.json + .html. Usage:
+   launchers, the shipped-text rule, the runtime harness, the daemon scenarios; container
+   harness and QA matrix on request), as site/reports/<scope>/<ts>.json + .html. Usage:
    pnpm validate [--docker] [--qa] [--no-cargo] [--scope s] · pnpm validate:ci */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { Harness, runCommand, timestamp } from "./ci/lib/harness.mjs";
 import {
   CMD, ROOT, SCOPES, auditAvailable, cheapSignals, collectDocs, logSummary, parseAudit, parseClippy,
-  parseComplexity, parseEslint, parseFmt, parseHarness, parseTests, describe, recordRun, run,
+  parseComplexity, parseEslint, parseFmt, parseHarness, parseScenarioLines, parseTests, describe, recordRun, run,
 } from "./ci/report.mjs";
 
 const args = process.argv.slice(2);
+// Anything else (a typo, --help, --list) prints the usage instead of running and recording a
+// full pass.
+const VALUED = ["--scope", "--only"];
+const stray = args.filter((a, i) => !["--", "--docker", "--qa", "--no-cargo", "--ci", ...VALUED].includes(a) && !VALUED.includes(args[i - 1]));
+const noValue = VALUED.filter((f) => args.includes(f) && !/^[^-]/.test(args[args.indexOf(f) + 1] || ""));
+if (stray.length || noValue.length) {
+  console.error(`validate: unknown or incomplete argument(s): ${[...stray, ...noValue].join(" ")}`);
+  console.error("usage: pnpm validate [--docker] [--qa] [--no-cargo] [--scope local|ci|release] [--only step,…] · pnpm validate:ci");
+  process.exit(2);
+}
 const flag = (n) => args.includes(n);
 const opt = (n, d) => {
   const i = args.indexOf(n);
@@ -103,9 +113,19 @@ const OWNER_PAIR = new RegExp("^\\s*\"owner\": \"de" + "cky\",?$");
    codes, identifiers, and SVG path data on a line that carries a path. */
 const LABEL = /(?<![\w#%./-])(?:[A-Z]{1,3}-\d{1,3}|[A-Z]{1,2}\d{1,2})(?![\w-])/g;
 const NOT_LABEL = /^(?:SHA|UTF|ISO|CVE|AES|RFC|MD|DSI|DP|HDMI|VGA|DVI|LVDS)-/;
-// Product and key names shaped like a label: Apple silicon, function keys, consoles, a codec,
-// release candidates, TLS versions, the X display server (split so this line passes too).
-const NOT_TOKEN = new RegExp("^(?:M[1-4]|F" + "1[0-2]|PS[45]|AV" + "1|RC\\d|TLS-\\d|X" + "11)$");
+// Product names shaped like a label: consoles, a codec, release candidates, TLS versions,
+// the X display server (split so this line passes too).
+const NOT_TOKEN = new RegExp("^(?:PS[45]|AV" + "1|RC\\d|TLS-\\d|X" + "11)$");
+// Apple silicon and function keys share the planning labels' shape, so they pass only in that
+// context ("Apple M1", "the F12 key", pt-BR "a tecla F12"); the bare token still reads as a label.
+const IN_CONTEXT = [
+  { token: /^M[1-4]$/, before: /\bApple $/ },
+  { token: /^F\d{1,2}$/, after: /^ key\b/ },
+  { token: /^F\d{1,2}$/, before: /\btecla $/ },
+];
+function inContext(m, line, at) {
+  return IN_CONTEXT.some((c) => c.token.test(m) && (c.before ? c.before.test(line.slice(0, at)) : c.after.test(line.slice(at + m.length))));
+}
 const SVG_PATH = /\bd=["']|<path\b/;
 // Portuguese that leaked outside the deliberate translations (docs/pt-BR, runtime/i18n,
 // the site's own pt-BR strings). Each word carries a `~` so this line never matches itself.
@@ -113,7 +133,7 @@ const PORTUGUESE = new RegExp("(?<![a-zá-ú])(?:" + "n~ão|vo~cê|tam~bém|atra
 
 function phaseLabel(line) {
   if (SVG_PATH.test(line)) return null;
-  for (const m of line.match(LABEL) || []) if (!NOT_LABEL.test(m) && !NOT_TOKEN.test(m)) return m;
+  for (const { 0: m, index } of line.matchAll(LABEL)) if (!NOT_LABEL.test(m) && !NOT_TOKEN.test(m) && !inContext(m, line, index)) return m;
   return null;
 }
 
@@ -130,7 +150,11 @@ function textProblem(line, translated, evidence) {
    (null = clean; a third entry marks an evidence file), with the flagged pieces split
    so this file stays clean — so a loosened or over-eager pattern fails the step here. */
 const SAMPLES = [
-  ["Apple M1 and M2 Macs, press F12, a PS5 pad, RC1, TLS-1.3 only, X11 or Wayland", null],
+  ["Apple M1 Macs, the F12 key, a PS5 pad, RC1, TLS-1.3 only, X11 or Wayland", null],
+  ["Apple notes: audit " + "M" + "1 is open", "internal phase label " + "M" + "1"],
+  ["phase " + "F" + "12 lands after the key review", "internal phase label " + "F" + "12"],
+  ["pressione a tecla F12 para abrir", null],
+  ["fase " + "F" + "12 depois da tecla", "internal phase label " + "F" + "12"],
   ["ES2020 UTF-8 ISO-8601 ARM64 HDMI-A-1 E0502 #DEADBEEF v1.2.3 HTTP 404 MUI2 %C2%B7", null],
   ["<path d=\"M1 2 L3 4\"/>", null],
   ["phase " + "F" + "4 of the plan", "internal phase label " + "F" + "4"],
@@ -226,8 +250,11 @@ check("syntax", "JavaScript syntax (node --check)", jsSyntax);
 check("data", "Data files + localization parity", dataFiles);
 check("launchers", "One-click launchers (.desktop Exec)", launchers);
 check("shipped-text", "Shipped-text rule", shippedText);
-if (browserAvailable()) gate("harness", "Runtime harness (headless Chromium)", CMD.harness, parseHarness);
+const browser = browserAvailable();
+if (browser) gate("harness", "Runtime harness (headless Chromium)", CMD.harness, parseHarness);
 else skip("harness", "Runtime harness (headless Chromium)", "no Chromium-family browser found");
+if (!browser) skip("harness-daemon", "Daemon scenarios (headless Chromium)", "no Chromium-family browser found");
+else if (wanted("harness-daemon")) signals.daemonScenarios = parseScenarioLines(h.step("harness-daemon", "Daemon scenarios (headless Chromium)", "bash scripts/harness-daemon.sh 2>&1"));
 if (flag("--docker") && wanted("docker")) h.step("docker", "Container harness", "bash scripts/harness-docker.sh 2>&1");
 if (flag("--qa") && wanted("qa-matrix")) h.step("qa-matrix", "QA matrix (containers + host harness)", "bash scripts/qa-matrix.sh 2>&1");
 

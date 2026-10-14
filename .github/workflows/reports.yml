@@ -1,7 +1,7 @@
 name: "Ops · Quality reports"
 
 # Records a quality snapshot (every gate as a step: Rust tests, clippy, ESLint,
-# the runtime harness, lint and complexity debt, code lines) into
+# the runtime harness, the daemon scenarios, lint and complexity debt, code lines) into
 # site/reports/<scope>/<ts>.json and rebuilds the aggregate site/reports/runs.json
 # the dashboard reads. Commits the snapshot back to main with SUBMIT_TOKEN (a PAT
 # with push access), like Ops · Site stats — a failing run is recorded too, and
@@ -41,7 +41,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - uses: pnpm/action-setup@v4
 

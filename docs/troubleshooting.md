@@ -17,17 +17,29 @@ key to fall back to its default.
 
 ### The RPC port (60123) is already in use
 
-Symptom: the log shows `Failed to bind the control endpoint 127.0.0.1:60123: … Another
-process (a second ShelvesHub, or something else) holds the port, so settings CANNOT be
-saved.` The daemon keeps injecting without its RPC, but nothing can be saved until the
-port is free. Fix — stop the other process, or pick a free port:
+Symptom: ShelvesHub exits right after it starts and the log shows `Failed to bind the control
+endpoint 127.0.0.1:60123: … Another ShelvesHub is probably running (or another process holds
+the port), so this one exits.` A hub that cannot open its control endpoint never injects —
+nothing could be saved through it — and the one already holding the port keeps running with its
+own token. The usual cause is a second ShelvesHub, one started by hand or a second install: the
+copy that starts second is the one that exits. When that copy is the service, systemd (every 10 s)
+and launchd keep restarting it and the line repeats until the port is free. Stop the other
+ShelvesHub; when something else holds the port, find it (`ss -ltnp | grep 60123` on Linux,
+`lsof -iTCP:60123 -sTCP:LISTEN` on macOS, `netstat -ano | findstr :60123` on Windows) and stop
+it, or pick a free port and restart the service:
 
 ```json
-{ "rpc_port": 60124 }
+{ "rpc_port": 60125 }
 ```
 
 The injected runtime uses the same port automatically (the daemon stamps it in), so
 you only change it in one place.
+
+Any other error in that line comes with a hint to check `rpc_host` / `rpc_port` in
+`shelveshub.config.json` instead — an `rpc_host` that is not an address of this machine, or a
+port this user may not open (a port below 1024 on Linux, or one inside a range Windows reserves
+for its own services); the hub exits the same way until they are fixed and the service is
+started again.
 
 ### Steam's debug port (8080) is wrong or unreachable
 
@@ -47,11 +59,13 @@ You can also move the host with `cef_host` if debugging a remote endpoint.
 
 ShelvesHub coexists with another host (for example another plugin loader): it
 never loads the plugin twice and adds only its own tab. When the loader's own Deck
-Shelves is older than 3.3.1 it never claims the renderer, so nothing tells the hub it
-is there — ShelvesHub still sees it in the loader's plugin list and keeps to its tab
-(the log says `Coexisting with "plugin loader (Deck Shelves <version>, no ownership
-claim …)"`); update Deck Shelves in the loader to get the editor inside the hub's tab
-and settings shared between the two. The loader's plugin store can lag far behind the
+Shelves is older than 3.2.0 (the store's 2.0.0 among them) it never claims the renderer,
+so nothing tells the hub it is there — ShelvesHub still sees it in the loader's plugin
+list and keeps to its tab (the log says `Coexisting with "plugin loader (Deck Shelves
+<version>, no ownership claim …)"`); 3.2.x and 3.3.0 claim it without a version stamp, so
+the tab shows an amber warning and `—` as the version. Update Deck Shelves in the loader
+(3.3.1 or newer) to get the editor inside the hub's tab and settings shared between the
+two; the community troubleshooting page carries a matrix of every version and setting. The loader's plugin store can lag far behind the
 releases (it listed 2.0.0 while 3.3.4 was current), so install the release zip from the Deck
 Shelves releases page when the store offers nothing newer than 3.3.0. Hosting a second copy
 next to a loader-managed
@@ -134,7 +148,7 @@ adds nothing to the Quick Access menu — there is no on-screen panel to fall ba
 and on a sole host the Deck Shelves panel has nowhere else to appear — so keep it on
 unless the tab itself misbehaves. From the Steam debug console,
 `__SHELVES_QAM__.mode()` (present in every mode, including beside a loader) answers
-`native`, `native-arming`, `tripped`, or `overlay` when the tab is not installed.
+`native`, `native-arming`, `tripped`, or `panel` when the tab is not installed.
 
 ## Notifications
 
@@ -151,6 +165,24 @@ When the path cannot install, the reason is in the
 log (`native toasts: …`); from the Steam debug console,
 `__SHELVES_HOST__.notifications.mode()` answers `active`, `pending`, `failed` or `off`. If it
 ever misbehaves, turn the setting off and restart the service.
+
+## Updates
+
+- **"ShelvesHub update downloaded — restart to finish" stays after turning updates off** — a
+  downloaded update is already staged next to the binary and runs at the next restart whatever
+  the switches say now, so its notice stays until then. Restart the service, or tap that notice
+  in the tab twice (the first tap reads "Tap again to restart"), to finish it.
+- **Switching the Deck Shelves pre-release channel** — the hub's switch and Deck Shelves' own
+  beta switch are read at every update check, so a change applies at the next check without a
+  restart.
+- **The data backend after a Deck Shelves update** — when the hub hosts the backend from its own
+  install folder, every Deck Shelves update brings it to the same release and restarts it (the
+  log says `Backend refreshed to <tag>`); if that download fails the previous backend keeps
+  running and the log says `backend not refreshed with the bundle: …`. A backend directory set
+  with `SHELVES_BACKEND_DIR` is never replaced. On a first start the hub obtains the backend
+  itself (from a loader-managed Deck Shelves, else the release download); the hub view's
+  **Data backend** row reads on once hosting has started, and `getBackendStatus` over RPC tells
+  whether it runs.
 
 ## Settings sync
 
@@ -199,10 +231,18 @@ In this order:
 ## Reading the log
 
 ```
-journalctl --user -u shelveshub -f      # SteamOS / Linux user service
+journalctl --user -u shelveshub -f                  # SteamOS, desktop Linux, Linux ARM64 (systemd user service)
+tail -f ~/.local/share/shelveshub/logs/out.log      # macOS (errors in error.log next to it)
+%LOCALAPPDATA%\ShelvesHub\logs\out.log              # Windows (the previous file is out.log.1)
 ```
 
 Every error path writes a log line, so the log is the first place to look.
+
+The service is the same systemd user unit on every Linux — SteamOS, a desktop distribution or
+an ARM64 board (the packages differ only by architecture) — so the journal line is the same
+there. A daemon run by hand (`shelveshub` in a terminal, `pnpm run run`) prints to that terminal
+instead. On every platform the tab's **View logs** shows the service and the injected runtime
+together; the files and the journal hold the service side only.
 
 On SteamOS / Linux the service log lives in the systemd journal, so it survives
 removing the install directory: `journalctl --user -u shelveshub -n 500 --no-pager >

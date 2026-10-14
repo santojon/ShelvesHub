@@ -75,7 +75,8 @@ $TOOL preload --script my-script.js        # register a document-start script on
 ```
 
 Global flags / env: `--host` (`SHELVES_CEF_HOST`), `--port` (`SHELVES_CEF_PORT`),
-`--target` (`SHELVES_TARGET`). `inject` evaluates the file as-is and stamps the
+`--target` (`SHELVES_TARGET`), `--timeout N` (give up after N seconds with exit code 124; 0,
+the default, waits forever). `inject` evaluates the file as-is and stamps the
 loader marker — it adds no config stamp (so no RPC token) and no host runtime, so
 it is for pushing a bundle into a renderer the daemon already prepared. `preload`
 uses browser-level auto-attach: the script is registered on each matching page
@@ -105,6 +106,11 @@ harness (`examples/harness/`) stubs `window.SteamClient` and a local
 the lifecycle, the RPC channel, route/notification calls, and renders sample
 shelves.
 
+The loader runs sealed off in a temporary folder — a copy of the bundle, its own settings, hub
+store (updates and settings sync off), token file and an empty backend folder, with the boot
+movie and auto-recovery off — on RPC port `60124` (`SHELVES_RPC_PORT` overrides), so it downloads
+nothing and touches neither an installed service's port and files nor this machine's Steam.
+
 To drive it by hand against the harness on port 9222:
 
 ```bash
@@ -120,7 +126,10 @@ shelves-devtools --port 9222 --target harness eval "window.__SHELVES_DEMO__"
 headless browser, once per scenario, and asserts the outcome — the native tab,
 coexistence mirroring, the sole-host path and the fallback panel are all covered
 without a device. It is hermetic (the host RPC endpoint is stubbed in the mock),
-so it needs no running daemon.
+so it needs no running daemon. Its service-side counterpart, `pnpm run harness:daemon`,
+runs the real daemon against a headless Chromium whose pages stand in for Steam's
+windows and checks the collapse → recovery path (see
+[QA lab](qa-lab.md#daemon-scenarios)).
 
 ```bash
 pnpm harness            # headless
@@ -129,13 +138,16 @@ HEADLESS=0 pnpm harness  # show the browser window
 
 ### Simulation harness in Docker (Linux)
 
-`pnpm harness:docker` builds a small Linux image and runs four checks against a
+`pnpm harness:docker` builds a small Linux image and runs five checks against a
 headless Chromium in a container: the scenario harness above, the
 **SteamOS/Linux install + uninstall lifecycle** (a recording `systemctl` stub
 stands in — it validates the scripts' file lay-down/tear-down and settings
-preservation, not systemd itself), a **daemon → headless-Chromium injection
-smoke** (the real daemon discovers the target over CDP and injects), and the
-**plugin backend probes** (the Deck Shelves backend's OS-coupled probes running
+preservation, not systemd itself — and a stubbed `curl` serving a fake release,
+so the generic Linux installer's download + SHA256SUMS branch, an upgrade over a
+running daemon and `--purge` are covered offline), a **daemon → headless-Chromium injection
+smoke** (the real daemon, offline on a copy of the example bundle, discovers the target over CDP
+and injects), the
+**daemon scenarios** above, and the **plugin backend probes** (the Deck Shelves backend's OS-coupled probes running
 under the host). Cross-platform validation without a device; wired into CI.
 arm64 via `PLATFORM=linux/arm64 pnpm harness:docker`.
 
@@ -164,8 +176,8 @@ shelves-devtools --port 9222 --target harness \
   eval "window.__SHELVES_HOST__.qam.mode() + ' ' + Object.keys(window.__SHELVES_HOST__.qam._specs)"
 ```
 
-`mode()` answers `native` (tab confirmed), `native-arming`, `tripped`, or the
-legacy label `overlay` when the tab is not installed. The scenario harness
+`mode()` answers `native` (tab confirmed), `native-arming`, `tripped`, or
+`panel` when the tab is not installed. The scenario harness
 (`pnpm harness`) is the place to see the tab render against the Steam mock.
 
 ---
@@ -200,6 +212,10 @@ Logs on the Deck:
 ```bash
 ssh deck@deck.local 'journalctl --user -u shelveshub -f'
 ```
+
+On macOS the service log is `~/.local/share/shelveshub/logs/out.log` (errors in `error.log`
+next to it); on Windows `%LOCALAPPDATA%\ShelvesHub\logs\out.log`, moved to `out.log.1` once it
+passes 1 MiB.
 
 ### Log structure and the in-app viewer
 

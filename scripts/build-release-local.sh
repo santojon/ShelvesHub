@@ -7,7 +7,7 @@
 # cross-compile, and macOS is this host's arch, not a universal binary).
 #
 # Needs: a Rust toolchain with the targets below, cargo-zigbuild + zig for the
-# Linux/Windows cross-compiles (from `pnpm setup`), and makensis for setup.exe.
+# Linux/Windows cross-compiles (from `pnpm run setup`), and makensis for setup.exe.
 # Each target is best-effort: a missing toolchain skips that artifact.
 #
 # Usage:
@@ -52,7 +52,7 @@ echo "== macOS ($(uname -m)) =="
 if bin_build native native; then
   assemble native shelveshub-macos.tar.gz installer/macOS "" tar
   bash scripts/build-mac-app.sh "$ROOT/$OUT" >/dev/null 2>&1 \
-    && echo "  [ok]   Install ShelvesHub.app(.zip)" || echo "  [skip] mac app (iconutil required)"
+    && echo "  [ok]   Install ShelvesHub.app (Install-ShelvesHub.app.zip)" || echo "  [skip] mac app (iconutil required)"
 fi
 
 echo "== Linux / SteamOS x86_64 =="

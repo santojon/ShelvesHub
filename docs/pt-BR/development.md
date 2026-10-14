@@ -6,22 +6,24 @@
 
 O `pnpm` é o ponto de entrada único para todo o projeto — ele instala a
 ferramentagem, compila/roda os binários Rust, conduz o ambiente de depuração local, e
-faz o deploy/depuração contra um Steam Deck. `pnpm setup` prepara a ferramentagem no
+faz o deploy/depuração contra um Steam Deck. `pnpm run setup` prepara a ferramentagem no
 **macOS, Linux/SteamOS e Windows**; você só precisa de Node + pnpm para começar.
+`setup`, `update` e `run` precisam do `pnpm run` explícito: `pnpm setup` e `pnpm update`
+sozinhos são comandos do próprio pnpm, e um `pnpm run` sem nome só lista os scripts.
 
 ```bash
-pnpm setup           # one-time toolchain install, auto-dispatched per OS:
+pnpm run setup       # one-time toolchain install, auto-dispatched per OS:
                      #   macOS   → Homebrew (rustup, zig+cargo-zigbuild, Chromium)
                      #   Linux   → rustup.rs + Corepack (SteamOS/Arch/Ubuntu/Fedora/…)
                      #   Windows → winget/rustup + Corepack
                      # then adds the Deck target, installs JS deps, creates .env
-pnpm update          # update the managed toolchain + deps
+pnpm run update      # update the managed toolchain + deps
 
 pnpm build           # cargo build (loader + shelves-devtools)
 pnpm build:release   # release build
 pnpm test            # cargo test
 pnpm lint            # cargo clippy -- -D warnings  (same as CI)
-pnpm run             # run the loader locally
+pnpm run run         # run the loader locally
 pnpm devtools targets      # run shelves-devtools (args follow directly)
 
 pnpm debug:local     # full end-to-end run against a throwaway Chromium (no Steam)
@@ -46,6 +48,14 @@ pnpm deck:reload     # reload the Deck renderer
 pnpm deck:console    # stream the Deck renderer console
 pnpm deck:reinject   # clear markers so the loader re-injects an updated runtime/bundle
 ```
+
+Com o serviço do ShelvesHub instalado e rodando, pare-o durante a sessão antes de `pnpm run run`
+(`systemctl --user stop shelveshub`, `launchctl bootout gui/$(id -u)/com.shelveshub` ou
+`schtasks /End /TN ShelvesHub` e depois `taskkill /IM shelveshub.exe` se o processo ainda estiver
+lá; ele volta no próximo login): ele ocupa a porta `60123`, então a
+cópia de desenvolvimento sairia na hora, e em outra porta (`SHELVES_RPC_PORT`) as duas
+injetariam no mesmo Steam. `pnpm local:run` e `pnpm debug:local` rodam o daemon deles na porta
+`60124`, com o próprio arquivo de token.
 
 ### Plataformas suportadas
 
@@ -95,6 +105,11 @@ anteriormente sobreviva); `local:run:reseed` força uma atualização e recarreg
 pacote gerenciado e o log do daemon ficam sob o diretório de dados do sistema operacional
 (`~/Library/Application Support/shelveshub-dev/` no macOS,
 `%APPDATA%\shelveshub-dev\` no Windows, `$XDG_DATA_HOME/shelveshub-dev/` no Linux).
+O RPC de controle dele escuta em `127.0.0.1:60124`, com o token nessa mesma pasta (`.rpc-token`;
+`SHELVES_RPC_PORT` / `SHELVES_RPC_TOKEN_FILE` os substituem), então um serviço instalado mantém a
+`60123` e o próprio token. Esse serviço ainda injetaria no mesmo Steam, e o gerenciador de
+serviços o iniciaria de novo depois de uma parada: quando um responde na `60123`, o `local:run`
+se recusa a iniciar e mostra o comando que o para durante a sessão (ele volta no próximo login).
 
 As configurações de conexão e CDP ficam em `.env`. As tarefas `deck:*` se conectam diretamente
 a `DECK_CDP_HOST:DECK_CDP_PORT` (sem necessidade de túnel quando a porta CEF do Deck está
@@ -175,13 +190,20 @@ journalctl --user -u shelveshub -f
 
 O servidor RPC do host fala HTTP (o pacote o alcança com `fetch` de dentro
 do renderizador). Uma vez que o loader esteja rodando, teste-o a partir do Deck ou da sua
-máquina de desenvolvimento (se encaminhado via SSH):
+máquina de desenvolvimento (se encaminhado via SSH); toda requisição leva o tipo de conteúdo
+JSON e o token por inicialização do `~/.local/share/shelveshub/.rpc-token` do dispositivo
+(veja [host-api.md](host-api.md#formato-de-comunicação-do-rpc)):
 
 ```bash
-curl -s 127.0.0.1:60123 -d '{"method":"ping"}'
-curl -s 127.0.0.1:60123 -d '{"method":"getVersion"}'
-curl -s 127.0.0.1:60123 -d '{"method":"isInjected"}'
+TOKEN="$(cat ~/.local/share/shelveshub/.rpc-token)"
+# from the dev machine over the SSH forward: TOKEN="$(ssh deck@deck.local cat .local/share/shelveshub/.rpc-token)"
+curl -s 127.0.0.1:60123 -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"ping"}'
+curl -s 127.0.0.1:60123 -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"getVersion"}'
+curl -s 127.0.0.1:60123 -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"isInjected"}'
 ```
+
+Um daemon de desenvolvimento iniciado com `pnpm local:run` responde na porta `60124`, com o token
+na pasta de dados dele (veja acima).
 
 ## Depurando a injeção / DevTools
 
@@ -194,8 +216,8 @@ de depuração local (`scripts/local-debug.sh`), e o fluxo via SSH no Deck
 `pnpm validate` roda toda verificação do CI como uma etapa registrada — rustfmt, clippy, os
 testes Rust, `cargo audit` (pulado quando não está instalado), ESLint, a dívida de complexidade
 do runtime, sintaxe JavaScript, arquivos de dados + paridade de localização, os lançadores de um
-clique, a regra de texto publicado e o harness do runtime (pulado sem um navegador da família
-Chromium); `--docker` e `--qa` acrescentam o harness em contêiner e a matriz de QA, `--no-cargo`
+clique, a regra de texto publicado, o harness do runtime e os cenários do daemon (os dois pulados
+sem um navegador da família Chromium); `--docker` e `--qa` acrescentam o harness em contêiner e a matriz de QA, `--no-cargo`
 pula as verificações Rust. O status, a duração e o fim do log de cada etapa vão para
 `site/reports/<escopo>/<timestamp>.json` e para uma página (`<timestamp>.html`, cada etapa
 expansível), o `index.html` do escopo lista o histórico, e `site/reports/runs.json` alimenta o
@@ -203,9 +225,9 @@ dashboard. `pnpm validate:ci` é o que o workflow **Ops · Quality reports** rod
 `release` numa release, senão `ci`). `pnpm report` (adicione `--harness` para incluir os
 cenários do runtime, `--no-cargo` para pular as verificações Rust) grava os mesmos sinais sem
 os logs das etapas. Cada rodada registra: as verificações (`cargo test`, clippy, `cargo fmt
---check`, ESLint, o harness do runtime, `cargo audit` quando instalado) com um PASS/FAIL geral
-que também falha com qualquer etapa falhando; os problemas do ESLint por regra e a linha de base de
-supressões; a dívida de complexidade do runtime distribuído (soma das pontuações de toda
+--check`, ESLint, o harness do runtime, os cenários do daemon numa rodada do `pnpm validate`,
+`cargo audit` quando instalado) com um PASS/FAIL geral que também falha com qualquer etapa
+falhando; os problemas do ESLint por regra e a linha de base de supressões; a dívida de complexidade do runtime distribuído (soma das pontuações de toda
 função acima do limite, quantas são e a pior, medida com
 `scripts/ci/complexity.eslint.config.mjs`); linhas de código do runtime e do serviço; as
 células da matriz de QA por status; locales, paridade de chaves e pares de docs EN ↔ pt-BR; e

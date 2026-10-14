@@ -17,11 +17,20 @@ if (-not (Test-Path $binary)) { Write-Error "shelveshub.exe not found at $Instal
 # the machine unplugs, or end it after 72 hours (PT0S = no time limit).
 $settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
   -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+# RestartCount / RestartInterval: a run whose result (the action's exit code) is not
+# 0 counts as failed and is started again, up to 3 times a minute apart. The daemon
+# exits with 1 when its control port is taken, so a duplicate copy gives up soon.
 $settings.ExecutionTimeLimit = "PT0S"
 
 # Per-user task: runs as YOU at logon (interactive, no elevation) so the daemon
-# can write under the install dir, self-update, and reach your Steam.
-$action    = New-ScheduledTaskAction -Execute $binary
+# can write under the install dir, self-update, and reach your Steam. The setup
+# ran migrate.ps1 first, so an admin-era task of this name is already gone.
+$exeQuoted = $binary -replace "'", "''"
+# The daemon is a console program; started by the task in your session it would
+# get a visible console window. A hidden PowerShell starts it instead, waits, and
+# passes its exit code on; `status` / `doctor` stay usable from any console.
+$action    = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+  -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -Command "& ''{0}''; exit $LASTEXITCODE"' -f $exeQuoted)
 $trigger   = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null

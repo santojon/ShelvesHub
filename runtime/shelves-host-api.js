@@ -73,7 +73,7 @@
      hub-driven swap would not take effect there. Read live: it changes during boot. */
   function hubBundleRuns() {
     if (!COEXIST) return true;
-    if (!COOP || SHELVES_CFG.coopBundle !== true) return false;
+    if (!COOP || liveCfg().coopBundle !== true) return false;
     try {
       const defer = window.__DECK_SHELVES_DEFER_TO_HOST__;
       return typeof window.__DECK_SHELVES_HOST_BUNDLE_BOOTED__ === "string" || !!(defer && typeof defer === "object");
@@ -86,12 +86,13 @@
     __shelvesRuntime: true,
     version: HOST_API_VERSION,
     // Identify this host + the capabilities it implements, so a bundle can adapt
-    // without feature-detecting each member (contract `HostHandshake`). Computed per
-    // call, so a tab inserted or a hand-over settled after boot shows on a later read.
+    // without feature-detecting each member (contract `HostHandshake`). Computed per call,
+    // so a tab inserted, a hand-over settled or a stamp rewritten after boot shows on a later read.
     handshake: function () {
+      const cfg = liveCfg();
       const hs = {
         hostKind: "shelveshub",
-        hostVersion: SHELVES_CFG.hostVersion || HOST_API_VERSION,
+        hostVersion: cfg.hostVersion || HOST_API_VERSION,
         hostApiVersion: HOST_API_VERSION,
         capabilities: {
           teardown: true,
@@ -101,14 +102,14 @@
           // Cooperative-bundle protocol (daemon `coop_bundle`): under force this
           // host runs its OWN copy of the bundle, so the loader's copy may stand
           // down (contract 1.4.0 `coopBundle`).
-          coopBundle: SHELVES_CFG.coopBundle === true,
+          coopBundle: cfg.coopBundle === true,
         },
       };
       // Additive (contract 1.4.0): device identity + the bundle version this host
-      // carries, both stamped by the daemon into __SHELVES_CONFIG__. Omitted when the
-      // daemon is older (the bundle falls back to its own detection).
-      if (SHELVES_CFG.device) hs.device = SHELVES_CFG.device;
-      if (SHELVES_CFG.bundleVersion) hs.bundleVersion = SHELVES_CFG.bundleVersion;
+      // carries, both from the daemon's current stamp (a hot-swap rewrites it). Omitted
+      // when the daemon is older (the bundle falls back to its own detection).
+      if (cfg.device) hs.device = cfg.device;
+      if (cfg.bundleVersion) hs.bundleVersion = cfg.bundleVersion;
       return hs;
     },
     // Steam's React stack, discovered from webpack in owner mode — the bundle's
@@ -296,14 +297,25 @@
   function internalHooks() {
     return hooksFromSecretInternals() || hooksFromClientInternals();
   }
-  let _savedHooks = null;
-  function applyHookStubs(customHooks) {
-    const h = internalHooks();
-    if (!h) return null;
-    _savedHooks = {
-      useContext: h.useContext, useCallback: h.useCallback, useLayoutEffect: h.useLayoutEffect,
-      useEffect: h.useEffect, useMemo: h.useMemo, useRef: h.useRef, useState: h.useState,
-    };
+  let _savedHooks = null, _tempSlot = null;
+  /* Outside a render the slot can hold no dispatcher (React 19 keeps `H` null; React 18
+     `ReactCurrentDispatcher.current` until its first render), so a component's first hook
+     would throw: a stub dispatcher goes into that slot for the fake render and the old value
+     comes back after it (the toast pre-flight does the same around its own run). */
+  function installTempDispatcher() {
+    let slot = null;
+    try {
+      const ci = React && React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+      const d = React && React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+      if (ci && "H" in ci) slot = { obj: ci, key: "H" };
+      else if (d && d.ReactCurrentDispatcher) slot = { obj: d.ReactCurrentDispatcher, key: "current" };
+    } catch (e) {}
+    if (!slot) return null;
+    slot.had = slot.obj[slot.key];
+    _tempSlot = slot;
+    return (slot.obj[slot.key] = {});
+  }
+  function stubHooks(h, customHooks) {
     h.useCallback = function (cb) { return cb; };
     h.useContext = function (cb) { return cb && cb._currentValue; };
     h.useLayoutEffect = function () {};
@@ -314,7 +326,17 @@
     if (customHooks) { for (const ck in customHooks) h[ck] = customHooks[ck]; }
     return h;
   }
+  function applyHookStubs(customHooks) {
+    const h = internalHooks();
+    if (!h) { const t = installTempDispatcher(); return t ? stubHooks(t, customHooks) : null; }
+    _savedHooks = {
+      useContext: h.useContext, useCallback: h.useCallback, useLayoutEffect: h.useLayoutEffect,
+      useEffect: h.useEffect, useMemo: h.useMemo, useRef: h.useRef, useState: h.useState,
+    };
+    return stubHooks(h, customHooks);
+  }
   function removeHookStubs() {
+    if (_tempSlot) { _tempSlot.obj[_tempSlot.key] = _tempSlot.had; _tempSlot = null; return; }
     const h = internalHooks();
     if (h && _savedHooks) { for (const k in _savedHooks) h[k] = _savedHooks[k]; }
     _savedHooks = null;

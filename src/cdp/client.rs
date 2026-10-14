@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use tungstenite::client::IntoClientRequest;
 use tungstenite::{Message, WebSocket};
 
-use super::{discover_targets, find_renderer, CdpError, Result};
+use super::{connect_bounded, discover_targets, find_renderer, CdpError, Result};
 
 use crate::constants::timers::WS_TIMEOUT;
 
@@ -22,8 +22,7 @@ impl CdpClient {
     /// Open a session against a target's `webSocketDebuggerUrl`.
     pub fn connect(ws_url: &str) -> Result<Self> {
         let (host, port) = parse_ws_authority(ws_url)?;
-        let stream = TcpStream::connect((host.as_str(), port))
-            .map_err(|e| CdpError::new(format!("tcp connect {host}:{port}: {e}")))?;
+        let stream = connect_bounded(host.as_str(), port, WS_TIMEOUT)?;
         stream
             .set_read_timeout(Some(WS_TIMEOUT))
             .map_err(|e| CdpError::new(format!("set read timeout: {e}")))?;

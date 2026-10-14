@@ -1,18 +1,21 @@
 {
-  "ts": "2026-10-13_12-53-40",
+  "ts": "2026-10-14T13:28:19Z",
   "kind": "runtime-scenarios",
   "os": "linux",
   "arch": "aarch64",
   "browser": "chromium",
-  "passed": 14,
+  "passed": 20,
   "failed": 0,
-  "total": 14,
+  "total": 20,
   "scenarios": [
     {
       "name": "coexist-fallback",
       "result": "PASS",
       "report": {
         "hostInstalled": false,
+        "handshake": null,
+        "canSelfInstall": null,
+        "routerCalls": [],
         "owner": "decky",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -27,40 +30,40 @@
           "6"
         ],
         "shelvesTabPresent": true,
-        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config6\u25bcadv_sec_status12\u25bcShelvesHub \u00b7 v0.0.1",
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting3\u25bcShelvesHub \u00b7 v0.0.1",
         "log": [
           {
-            "t": 1791896003057,
+            "t": 1791984482908,
             "level": "INFO",
             "scope": "HOST",
             "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
           },
           {
-            "t": 1791896003058,
+            "t": 1791984482908,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
           },
           {
-            "t": 1791896003058,
+            "t": 1791984482908,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896003058,
+            "t": 1791984482908,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896003058,
+            "t": 1791984482908,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
           },
           {
-            "t": 1791896003060,
+            "t": 1791984482911,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
@@ -77,13 +80,16 @@
             "3": 60000
           }
         },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
+        },
         "fallbackUi": {
           "panel": true,
           "sections": [
             "sec-updates",
-            "sec-troubleshooting",
             "sec-config",
-            "sec-status"
+            "sec-troubleshooting"
           ],
           "download": false,
           "update": true,
@@ -101,6 +107,9 @@
       "result": "PASS",
       "report": {
         "hostInstalled": false,
+        "handshake": null,
+        "canSelfInstall": null,
+        "routerCalls": [],
         "owner": "decky",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -115,52 +124,52 @@
           "6"
         ],
         "shelvesTabPresent": true,
-        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config6\u25bcadv_sec_status12\u25bcShelvesHub \u00b7 v0.0.1",
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting3\u25bcShelvesHub \u00b7 v0.0.1",
         "log": [
           {
-            "t": 1791896009040,
+            "t": 1791984486815,
             "level": "INFO",
             "scope": "HOST",
             "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
           },
           {
-            "t": 1791896009041,
+            "t": 1791984486816,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
           },
           {
-            "t": 1791896009041,
+            "t": 1791984486816,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896009041,
+            "t": 1791984486816,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896009041,
+            "t": 1791984486816,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
           },
           {
-            "t": 1791896009043,
+            "t": 1791984486818,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
           },
           {
-            "t": 1791896010816,
+            "t": 1791984488599,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "UI scan complete in 272ms (8 steps)."
+            "msg": "UI scan complete in 277ms (8 steps)."
           },
           {
-            "t": 1791896010816,
+            "t": 1791984488600,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM Focusable: not found."
@@ -176,13 +185,16 @@
             "3": 60000
           }
         },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": false
+        },
         "fallbackUi": {
           "panel": true,
           "sections": [
             "sec-updates",
-            "sec-troubleshooting",
             "sec-config",
-            "sec-status"
+            "sec-troubleshooting"
           ],
           "download": false,
           "update": true,
@@ -200,6 +212,9 @@
       "result": "PASS",
       "report": {
         "hostInstalled": false,
+        "handshake": null,
+        "canSelfInstall": null,
+        "routerCalls": [],
         "owner": "decky",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -219,55 +234,55 @@
         "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
         "log": [
           {
-            "t": 1791896013447,
+            "t": 1791984488995,
             "level": "INFO",
             "scope": "HOST",
             "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
           },
           {
-            "t": 1791896013448,
+            "t": 1791984488995,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
           },
           {
-            "t": 1791896013448,
+            "t": 1791984488995,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896013448,
+            "t": 1791984488996,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896013448,
+            "t": 1791984488996,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM panel registered: deck-shelves (native)"
           },
           {
-            "t": 1791896013448,
+            "t": 1791984488996,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
           },
           {
-            "t": 1791896013450,
+            "t": 1791984488998,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
           },
           {
-            "t": 1791896015229,
+            "t": 1791984490774,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "UI scan complete in 278ms (8 steps)."
+            "msg": "UI scan complete in 276ms (8 steps)."
           },
           {
-            "t": 1791896015230,
+            "t": 1791984490774,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM Focusable: not found."
@@ -280,6 +295,10 @@
           "intervalTicks": 4,
           "observerCbs": 0,
           "live": {}
+        },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": true
         },
         "fallbackUi": null,
         "openHub": true
@@ -290,6 +309,9 @@
       "result": "PASS",
       "report": {
         "hostInstalled": false,
+        "handshake": null,
+        "canSelfInstall": null,
+        "routerCalls": [],
         "owner": "decky",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -309,49 +331,49 @@
         "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
         "log": [
           {
-            "t": 1791896004327,
+            "t": 1791984484299,
             "level": "INFO",
             "scope": "HOST",
             "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
           },
           {
-            "t": 1791896004327,
+            "t": 1791984484300,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
           },
           {
-            "t": 1791896004327,
+            "t": 1791984484300,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896004327,
+            "t": 1791984484300,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896004327,
+            "t": 1791984484301,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: re-pointed already-mounted consumer."
           },
           {
-            "t": 1791896004328,
+            "t": 1791984484301,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM panel registered: deck-shelves (native)"
           },
           {
-            "t": 1791896004328,
+            "t": 1791984484301,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
           },
           {
-            "t": 1791896004328,
+            "t": 1791984484302,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
@@ -366,6 +388,10 @@
           "live": {
             "1": 250
           }
+        },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
         },
         "fallbackUi": null,
         "openHub": true
@@ -376,6 +402,9 @@
       "result": "PASS",
       "report": {
         "hostInstalled": false,
+        "handshake": null,
+        "canSelfInstall": null,
+        "routerCalls": [],
         "owner": "decky",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -395,43 +424,43 @@
         "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
         "log": [
           {
-            "t": 1791896002830,
+            "t": 1791984482615,
             "level": "INFO",
             "scope": "HOST",
             "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
           },
           {
-            "t": 1791896002831,
+            "t": 1791984482615,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
           },
           {
-            "t": 1791896002831,
+            "t": 1791984482615,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896002831,
+            "t": 1791984482615,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896002831,
+            "t": 1791984482616,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM panel registered: deck-shelves (native)"
           },
           {
-            "t": 1791896002831,
+            "t": 1791984482616,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
           },
           {
-            "t": 1791896002834,
+            "t": 1791984482618,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
@@ -447,6 +476,10 @@
             "1": 250
           }
         },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
+        },
         "fallbackUi": null,
         "openHub": true
       }
@@ -456,6 +489,9 @@
       "result": "PASS",
       "report": {
         "hostInstalled": false,
+        "handshake": null,
+        "canSelfInstall": null,
+        "routerCalls": [],
         "owner": "decky",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -475,55 +511,55 @@
         "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
         "log": [
           {
-            "t": 1791896004657,
+            "t": 1791984484597,
             "level": "INFO",
             "scope": "HOST",
             "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
           },
           {
-            "t": 1791896004657,
+            "t": 1791984484598,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM UI: borrowed from loader (no scan) \u2014 0 components."
           },
           {
-            "t": 1791896004657,
+            "t": 1791984484598,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896004657,
+            "t": 1791984484598,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896004657,
+            "t": 1791984484598,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM panel registered: deck-shelves (native)"
           },
           {
-            "t": 1791896004657,
+            "t": 1791984484598,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming coexist(tab-only)"
           },
           {
-            "t": 1791896004659,
+            "t": 1791984484600,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
           },
           {
-            "t": 1791896006441,
+            "t": 1791984486368,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "UI scan complete in 282ms (8 steps)."
+            "msg": "UI scan complete in 265ms (8 steps)."
           },
           {
-            "t": 1791896006442,
+            "t": 1791984486369,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM Focusable: not found."
@@ -537,6 +573,108 @@
           "observerCbs": 0,
           "live": {}
         },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": true
+        },
+        "fallbackUi": null,
+        "openHub": true
+      }
+    },
+    {
+      "name": "coop-bundle",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": true,
+            "coopBundle": true
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [
+          "deck-shelves"
+        ],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
+        "log": [
+          {
+            "t": 1791984491817,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
+          },
+          {
+            "t": 1791984491818,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 3 components."
+          },
+          {
+            "t": 1791984491818,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791984491818,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791984491818,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM panel registered: deck-shelves (native)"
+          },
+          {
+            "t": 1791984491818,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[definePlugin,QuickAccessTab,routerHook] qam=native-arming coexist(tab-only)"
+          },
+          {
+            "t": 1791984491820,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 1,
+          "observers": 0,
+          "intervalTicks": 0,
+          "observerCbs": 0,
+          "live": {
+            "1": 250
+          }
+        },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
+        },
         "fallbackUi": null,
         "openHub": true
       }
@@ -546,6 +684,20 @@
       "result": "PASS",
       "report": {
         "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": false,
+            "nativeQam": true,
+            "coexist": true,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": false,
+        "routerCalls": [],
         "owner": "shelveshub",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -560,40 +712,40 @@
           "6"
         ],
         "shelvesTabPresent": true,
-        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config6\u25bcadv_sec_status11\u25bcShelvesHub \u00b7 v0.0.1",
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2updates_managed_elsewhereAutomatic updatesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting3\u25bcShelvesHub \u00b7 v0.0.1",
         "log": [
           {
-            "t": 1791896018167,
+            "t": 1791984491535,
             "level": "INFO",
             "scope": "HOST",
             "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
           },
           {
-            "t": 1791896018168,
+            "t": 1791984491535,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "QAM UI: borrowed from loader (no scan) \u2014 2 components."
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 3 components."
           },
           {
-            "t": 1791896018168,
+            "t": 1791984491535,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896018168,
+            "t": 1791984491535,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896018168,
+            "t": 1791984491535,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "runtime ready v1.1.0 (Steam) ui[definePlugin,QuickAccessTab] qam=native-arming coexist(tab-only)"
+            "msg": "runtime ready v1.1.0 (Steam) ui[definePlugin,QuickAccessTab,routerHook] qam=native-arming coexist(tab-only)"
           },
           {
-            "t": 1791896018170,
+            "t": 1791984491537,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
@@ -610,13 +762,16 @@
             "3": 60000
           }
         },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
+        },
         "fallbackUi": {
           "panel": true,
           "sections": [
             "sec-updates",
-            "sec-troubleshooting",
             "sec-config",
-            "sec-status"
+            "sec-troubleshooting"
           ],
           "download": false,
           "update": true,
@@ -634,6 +789,25 @@
       "result": "PASS",
       "report": {
         "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": false,
+            "nativeQam": true,
+            "coexist": true,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": false,
+        "routerCalls": [
+          "addRoute /x",
+          "removeRoute /x",
+          "addPatch /library/home",
+          "removePatch /library/home"
+        ],
         "owner": "shelveshub",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -653,43 +827,43 @@
         "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
         "log": [
           {
-            "t": 1791896017999,
+            "t": 1791984491179,
             "level": "INFO",
             "scope": "HOST",
             "msg": "Another plugin loader detected \u2014 coexistence mode: adding OUR tab only, NOT taking over the host (its Deck Shelves is left untouched)."
           },
           {
-            "t": 1791896017999,
+            "t": 1791984491180,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "QAM UI: borrowed from loader (no scan) \u2014 2 components."
+            "msg": "QAM UI: borrowed from loader (no scan) \u2014 3 components."
           },
           {
-            "t": 1791896017999,
+            "t": 1791984491180,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896017999,
+            "t": 1791984491180,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896017999,
+            "t": 1791984491180,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM panel registered: deck-shelves (native)"
           },
           {
-            "t": 1791896017999,
+            "t": 1791984491180,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "runtime ready v1.1.0 (Steam) ui[definePlugin,QuickAccessTab] qam=native-arming coexist(tab-only)"
+            "msg": "runtime ready v1.1.0 (Steam) ui[definePlugin,QuickAccessTab,routerHook] qam=native-arming coexist(tab-only)"
           },
           {
-            "t": 1791896018001,
+            "t": 1791984491182,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
@@ -705,15 +879,38 @@
             "1": 250
           }
         },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
+        },
         "fallbackUi": null,
         "openHub": true
       }
+    },
+    {
+      "name": "runtime-unit",
+      "result": "PASS",
+      "report": null
     },
     {
       "name": "sole-host",
       "result": "PASS",
       "report": {
         "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
         "owner": "shelveshub",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -728,38 +925,162 @@
           "6"
         ],
         "shelvesTabPresent": true,
-        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config6\u25bcadv_sec_status11\u25bcShelvesHub \u00b7 v0.0.1",
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting3\u25bcShelvesHub \u00b7 v0.0.1",
         "log": [
           {
-            "t": 1791896003366,
+            "t": 1791984483231,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896003366,
+            "t": 1791984483231,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896003366,
+            "t": 1791984483231,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
           },
           {
-            "t": 1791896003368,
+            "t": 1791984483233,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791984483478,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 248ms (8 steps)."
           }
         ],
         "errors": [],
         "idle": {
           "intervals": 3,
           "observers": 0,
-          "intervalTicks": 0,
+          "intervalTicks": 1,
+          "observerCbs": 0,
+          "live": {
+            "1": 250,
+            "5": 60000,
+            "16": 500
+          }
+        },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": false
+        },
+        "fallbackUi": {
+          "panel": true,
+          "sections": [
+            "sec-updates",
+            "sec-config",
+            "sec-troubleshooting"
+          ],
+          "download": true,
+          "update": true,
+          "logs": false,
+          "disableHub": false,
+          "coexistNote": false,
+          "version": true,
+          "updateToggles": 1
+        },
+        "openHub": false
+      }
+    },
+    {
+      "name": "sole-host-config",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubadv_restart_applyThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_config\u25b2cfg_config_synccfg_config_sync_subcfg_force_ownercfg_force_owner_subcfg_owner_settlecfg_owner_settle_sub\u22120+cfg_boot_moviecfg_boot_movie_subcfg_native_notificationscfg_native_notifications_subcfg_intervalcfg_interval_sub\u22121+adv_restart_noteadv_sec_troubleshooting3\u25bcShelvesHub \u00b7 v0.0.1",
+        "log": [
+          {
+            "t": 1791984496784,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791984496784,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791984496784,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
+          },
+          {
+            "t": 1791984496786,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791984497029,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 246ms (8 steps)."
+          },
+          {
+            "t": 1791984497286,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
+          },
+          {
+            "t": 1791984497420,
+            "level": "WARN",
+            "scope": "RPC",
+            "msg": "setRuntimeConfig interval_secs refused: refused by the harness"
+          },
+          {
+            "t": 1791984497568,
+            "level": "WARN",
+            "scope": "RPC",
+            "msg": "setRuntimeConfig interval_secs refused: refused by the harness"
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 3,
+          "observers": 0,
+          "intervalTicks": 4,
           "observerCbs": 0,
           "live": {
             "1": 250,
@@ -767,13 +1088,16 @@
             "5": 60000
           }
         },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": false
+        },
         "fallbackUi": {
           "panel": true,
           "sections": [
             "sec-updates",
-            "sec-troubleshooting",
             "sec-config",
-            "sec-status"
+            "sec-troubleshooting"
           ],
           "download": true,
           "update": true,
@@ -791,6 +1115,20 @@
       "result": "PASS",
       "report": {
         "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
         "owner": "shelveshub",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -805,28 +1143,28 @@
           "6"
         ],
         "shelvesTabPresent": true,
-        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config6\u25bcadv_sec_status11\u25bcShelvesHub \u00b7 v0.0.1",
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting3\u25bcShelvesHub \u00b7 v0.0.1",
         "log": [
           {
-            "t": 1791896004004,
+            "t": 1791984483962,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896004004,
+            "t": 1791984483963,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896004005,
+            "t": 1791984483963,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
           },
           {
-            "t": 1791896004006,
+            "t": 1791984483964,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
@@ -844,13 +1182,16 @@
             "5": 60000
           }
         },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
+        },
         "fallbackUi": {
           "panel": true,
           "sections": [
             "sec-updates",
-            "sec-troubleshooting",
             "sec-config",
-            "sec-status"
+            "sec-troubleshooting"
           ],
           "download": true,
           "update": true,
@@ -868,6 +1209,20 @@
       "result": "PASS",
       "report": {
         "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
         "owner": "shelveshub",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -882,40 +1237,40 @@
           "6"
         ],
         "shelvesTabPresent": true,
-        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config6\u25bcadv_sec_status11\u25bcShelvesHub \u00b7 v0.0.1logs_titlesec_notificationsnotif_empty",
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting3\u25bcShelvesHub \u00b7 v0.0.1sec_notificationsadv_sec_statuslogs_titlenotif_empty",
         "log": [
           {
-            "t": 1791896020156,
+            "t": 1791984495566,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896020156,
+            "t": 1791984495566,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896020156,
+            "t": 1791984495566,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
           },
           {
-            "t": 1791896020158,
+            "t": 1791984495568,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
           },
           {
-            "t": 1791896020405,
+            "t": 1791984495811,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "UI scan complete in 250ms (8 steps)."
+            "msg": "UI scan complete in 247ms (8 steps)."
           },
           {
-            "t": 1791896020665,
+            "t": 1791984496063,
             "level": "INFO",
             "scope": "HOST",
             "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
@@ -933,13 +1288,110 @@
             "5": 60000
           }
         },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": false
+        },
         "fallbackUi": {
           "panel": true,
           "sections": [
             "sec-updates",
-            "sec-troubleshooting",
             "sec-config",
-            "sec-status"
+            "sec-troubleshooting"
+          ],
+          "download": true,
+          "update": true,
+          "logs": false,
+          "disableHub": false,
+          "coexistNote": false,
+          "version": true,
+          "updateToggles": 1
+        },
+        "openHub": false
+      }
+    },
+    {
+      "name": "sole-host-locale",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubO pacote do Deck Shelves n\u00e3o p\u00f4de ser iniciado neste host.Atualiza\u00e7\u00f5es\u25b2Atualiza\u00e7\u00f5es autom\u00e1ticasBaixar o Deck Shelves mais recenteAtualizar o ShelvesHubConfigura\u00e7\u00f5es6\u25bcSolu\u00e7\u00e3o de problemas3\u25bcShelvesHub \u00b7 v0.0.1",
+        "log": [
+          {
+            "t": 1791984496459,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791984496459,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791984496459,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
+          },
+          {
+            "t": 1791984496460,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 3,
+          "observers": 0,
+          "intervalTicks": 0,
+          "observerCbs": 0,
+          "live": {
+            "1": 250,
+            "4": 500,
+            "5": 60000
+          }
+        },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
+        },
+        "fallbackUi": {
+          "panel": true,
+          "sections": [
+            "sec-updates",
+            "sec-config",
+            "sec-troubleshooting"
           ],
           "download": true,
           "update": true,
@@ -957,6 +1409,20 @@
       "result": "PASS",
       "report": {
         "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
         "owner": "shelveshub",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -976,31 +1442,31 @@
         "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
         "log": [
           {
-            "t": 1791896003703,
+            "t": 1791984483640,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896003704,
+            "t": 1791984483641,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896003704,
+            "t": 1791984483641,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM panel registered: deck-shelves (native)"
           },
           {
-            "t": 1791896003704,
+            "t": 1791984483641,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
           },
           {
-            "t": 1791896003705,
+            "t": 1791984483643,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
@@ -1017,6 +1483,10 @@
             "4": 500
           }
         },
+        "nativeUi": {
+          "discovered": false,
+          "rendered": false
+        },
         "fallbackUi": null,
         "openHub": true
       }
@@ -1026,6 +1496,20 @@
       "result": "PASS",
       "report": {
         "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
         "owner": "shelveshub",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -1040,58 +1524,58 @@
           "6"
         ],
         "shelvesTabPresent": true,
-        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHub2The Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_troubleshooting2\u25bcadv_sec_config6\u25bcadv_sec_status11\u25bcShelvesHub \u00b7 v0.0.1logs_titlesec_notifications2ShelvesHubnotice_recoveredupd_just_nowHelloWorldupd_just_now",
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHub2The Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting3\u25bcShelvesHub \u00b7 v0.0.1sec_notifications2adv_sec_statuslogs_titleShelvesHubnotice_recoveredupd_just_nowHelloWorldupd_just_now",
         "log": [
           {
-            "t": 1791896019416,
+            "t": 1791984494805,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896019416,
+            "t": 1791984494806,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896019416,
+            "t": 1791984494806,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
           },
           {
-            "t": 1791896019416,
+            "t": 1791984494806,
             "level": "WARN",
             "scope": "NOTIFY",
             "msg": "native toasts: React globals not ready \u2014 notifications stay in the hub view."
           },
           {
-            "t": 1791896019418,
+            "t": 1791984494807,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
           },
           {
-            "t": 1791896019561,
+            "t": 1791984494976,
             "level": "WARN",
             "scope": "NOTIFY",
             "msg": "kept in the hub view only: Hello - World"
           },
           {
-            "t": 1791896019561,
+            "t": 1791984494976,
             "level": "WARN",
             "scope": "NOTIFY",
             "msg": "kept in the hub view only: ShelvesHub - notice_recovered"
           },
           {
-            "t": 1791896019661,
+            "t": 1791984495065,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "UI scan complete in 246ms (8 steps)."
+            "msg": "UI scan complete in 261ms (8 steps)."
           },
           {
-            "t": 1791896019923,
+            "t": 1791984495325,
             "level": "INFO",
             "scope": "HOST",
             "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
@@ -1109,13 +1593,16 @@
             "6": 60000
           }
         },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": false
+        },
         "fallbackUi": {
           "panel": true,
           "sections": [
             "sec-updates",
-            "sec-troubleshooting",
             "sec-config",
-            "sec-status"
+            "sec-troubleshooting"
           ],
           "download": true,
           "update": true,
@@ -1133,6 +1620,20 @@
       "result": "PASS",
       "report": {
         "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
         "owner": "shelveshub",
         "bridge": true,
         "qamOwner": "shelveshub",
@@ -1147,40 +1648,40 @@
           "6"
         ],
         "shelvesTabPresent": true,
-        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_troubleshooting\u25b2View logsadv_disable_hubadv_disable_hub_subadv_sec_config6\u25bcadv_sec_status11\u25bcShelvesHub \u00b7 v0.0.1",
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting\u25b2View statusView logsadv_disable_hubadv_disable_hub_subShelvesHub \u00b7 v0.0.1",
         "log": [
           {
-            "t": 1791896018480,
+            "t": 1791984492135,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM enum registered: key 900 = ShelvesHub."
           },
           {
-            "t": 1791896018481,
+            "t": 1791984492135,
             "level": "INFO",
             "scope": "HOST",
             "msg": "QAM native: consumer patched."
           },
           {
-            "t": 1791896018481,
+            "t": 1791984492135,
             "level": "INFO",
             "scope": "HOST",
             "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
           },
           {
-            "t": 1791896018482,
+            "t": 1791984492136,
             "level": "INFO",
             "scope": "QAM",
             "msg": "tab inserted, healthy."
           },
           {
-            "t": 1791896018724,
+            "t": 1791984492383,
             "level": "INFO",
             "scope": "HOST",
-            "msg": "UI scan complete in 245ms (8 steps)."
+            "msg": "UI scan complete in 250ms (8 steps)."
           },
           {
-            "t": 1791896018975,
+            "t": 1791984492639,
             "level": "INFO",
             "scope": "HOST",
             "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
@@ -1190,7 +1691,7 @@
         "idle": {
           "intervals": 3,
           "observers": 0,
-          "intervalTicks": 3,
+          "intervalTicks": 4,
           "observerCbs": 0,
           "live": {
             "1": 250,
@@ -1198,13 +1699,16 @@
             "5": 60000
           }
         },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": false
+        },
         "fallbackUi": {
           "panel": true,
           "sections": [
             "sec-updates",
-            "sec-troubleshooting",
             "sec-config",
-            "sec-status"
+            "sec-troubleshooting"
           ],
           "download": true,
           "update": true,
@@ -1215,6 +1719,227 @@
           "updateToggles": 1
         },
         "openHub": false
+      }
+    },
+    {
+      "name": "sole-host-status",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}ShelvesHubThe Deck Shelves bundle could not be brought up on this host.sec_updates\u25b2Automatic updatesDownload the latest Deck ShelvesUpdate ShelvesHubadv_sec_config6\u25bcadv_sec_troubleshooting\u25b2View statusView logsadv_disable_hubadv_disable_hub_subShelvesHub \u00b7 v0.0.1sec_notificationsadv_sec_statuslogs_titlecfg_modesolecfg_hosted_byhost_selfcfg_ds_version\u2014cfg_config_sync\u2014cfg_cef:cfg_rpccfg_recover_cmdcfg_bundlecfg_backendoffcfg_boot_movieoffcfg_version",
+        "log": [
+          {
+            "t": 1791984493077,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791984493078,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791984493078,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
+          },
+          {
+            "t": 1791984493080,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791984493324,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 249ms (8 steps)."
+          },
+          {
+            "t": 1791984493584,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
+          },
+          {
+            "t": 1791984494584,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM Focusable: not found."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 2,
+          "observers": 0,
+          "intervalTicks": 7,
+          "observerCbs": 0,
+          "live": {
+            "4": 500,
+            "5": 60000
+          }
+        },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": false
+        },
+        "fallbackUi": {
+          "panel": true,
+          "sections": [
+            "sec-updates",
+            "sec-config",
+            "sec-troubleshooting"
+          ],
+          "download": true,
+          "update": true,
+          "logs": true,
+          "disableHub": true,
+          "coexistNote": false,
+          "version": true,
+          "updateToggles": 1
+        },
+        "openHub": false
+      }
+    },
+    {
+      "name": "sole-host-tabswitch",
+      "result": "PASS",
+      "report": {
+        "hostInstalled": true,
+        "handshake": {
+          "hostKind": "shelveshub",
+          "hostVersion": "1.1.0",
+          "hostApiVersion": "1.1.0",
+          "capabilities": {
+            "teardown": true,
+            "selfUpdate": true,
+            "nativeQam": true,
+            "coexist": false,
+            "coopBundle": false
+          }
+        },
+        "canSelfInstall": true,
+        "routerCalls": [],
+        "owner": "shelveshub",
+        "bridge": true,
+        "qamOwner": "shelveshub",
+        "mode": "native",
+        "specs": [
+          "deck-shelves"
+        ],
+        "pending": 0,
+        "tabKeys": [
+          "0",
+          "4",
+          "5",
+          "900",
+          "6"
+        ],
+        "shelvesTabPresent": true,
+        "shelvesTabText": ".shelves-panel .DialogButton.gpfocus,.shelves-panel .shelves-gpfocus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 12px 2px rgba(90,160,255,.6)!important;border-radius:4px;}.shelves-panel .shelves-rowfocus{background:rgba(255,255,255,.1)!important;}.shelves-sidecar{position:fixed;left:348px;top:14px;width:503px;height:440px;box-sizing:border-box;z-index:5;display:flex;flex-direction:column;background:transparent;border-left:1px solid rgba(255,255,255,.06);}.shelves-sidecar-inner{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}DECK SHELVES EDITOR (mirrored)ShelvesHub",
+        "log": [
+          {
+            "t": 1791984497845,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM enum registered: key 900 = ShelvesHub."
+          },
+          {
+            "t": 1791984497845,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM native: consumer patched."
+          },
+          {
+            "t": 1791984497845,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM panel registered: deck-shelves (native)"
+          },
+          {
+            "t": 1791984497845,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "runtime ready v1.1.0 (Steam) ui[] qam=native-arming owner"
+          },
+          {
+            "t": 1791984497847,
+            "level": "INFO",
+            "scope": "QAM",
+            "msg": "tab inserted, healthy."
+          },
+          {
+            "t": 1791984498096,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "UI scan complete in 252ms (8 steps)."
+          },
+          {
+            "t": 1791984498355,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "host.ui augmented with loader-equivalent helpers (neutral, no global)."
+          },
+          {
+            "t": 1791984499314,
+            "level": "WARN",
+            "scope": "UI",
+            "msg": "panel render error: harness: the hub view fails to render"
+          },
+          {
+            "t": 1791984499348,
+            "level": "INFO",
+            "scope": "HOST",
+            "msg": "QAM Focusable: not found."
+          }
+        ],
+        "errors": [],
+        "idle": {
+          "intervals": 1,
+          "observers": 0,
+          "intervalTicks": 7,
+          "observerCbs": 0,
+          "live": {
+            "4": 500
+          }
+        },
+        "nativeUi": {
+          "discovered": true,
+          "rendered": false
+        },
+        "fallbackUi": null,
+        "openHub": true
       }
     }
   ]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# In-container harness entrypoint. Runs four Linux validations against a headless
+# In-container harness entrypoint. Runs five Linux validations against a headless
 # Chromium, with no Steam Deck:
 #   1. the runtime scenario harness (scripts/harness.sh) — the native tab,
 #      coexistence, sole-host and fallback paths against a mock of Steam's UI;
@@ -8,7 +8,9 @@
 #      (docker/install-scenario.sh) over service-manager and download stubs;
 #   3. a daemon-injection smoke — the real ShelvesHub daemon discovers the
 #      headless target over CDP and injects its runtime + an example bundle;
-#   4. the plugin's backend probes under the host (docker/plugin-probes.py).
+#   4. the daemon scenarios (scripts/harness-daemon.sh) — the real daemon's
+#      behaviour against the headless renderer, scenario by scenario;
+#   5. the plugin's backend probes under the host (docker/plugin-probes.py).
 #
 # Exits non-zero if any fails, so it drops straight into CI.
 set -uo pipefail
@@ -17,7 +19,7 @@ ROOT="${SHELVES_ROOT:-/work}"
 cd "$ROOT" || { echo "error: repo not found at $ROOT (mount it or COPY it)"; exit 1; }
 [[ -f Cargo.toml ]] || { echo "error: $ROOT has no Cargo.toml"; exit 1; }
 
-# Which checks to run: all (default) | scenarios | smoke | install.
+# Which checks to run: all (default) | scenarios | install | smoke | daemon | plugin.
 MODE="${1:-all}"
 
 BROWSER_BIN="${BROWSER:-/usr/bin/chromium}"
@@ -32,7 +34,7 @@ FAIL=0
 # skipped) and the per-scenario reports are written there as JSON.
 EVIDENCE="${QA_EVIDENCE_DIR:-}"
 ARCH="$(uname -m)"
-S_SCEN=skipped S_INSTALL=skipped S_SMOKE=skipped S_PLUGIN=skipped
+S_SCEN=skipped S_INSTALL=skipped S_SMOKE=skipped S_DAEMON=skipped S_PLUGIN=skipped
 [[ -n "$EVIDENCE" ]] && mkdir -p "$EVIDENCE"
 
 # ── 1. Runtime scenario harness ─────────────────────────────────────────────
@@ -87,11 +89,21 @@ daemon_smoke() {
   done
   if [[ -z "$up" ]]; then echo "  DevTools endpoint never came up"; kill "$bpid" 2>/dev/null; rm -rf "$prof"; return 1; fi
 
+  # A copy of the example bundle and updates off: the update check would otherwise
+  # download a release bundle beside the repo's example and swap it in. The empty
+  # backend directory keeps the first-boot backend obtain (a download) from running.
+  local work; work="$(mktemp -d)"
+  cp "$ROOT/examples/bundle/shelves-example.js" "$work/bundle.js"
+  echo '{ "auto_update": false, "config_sync": false }' >"$work/hub.json"
+  mkdir -p "$work/backend" "$work/settings"
+
   # SHELVES_DESKTOP_UI=1: the smoke injects into a plain headless Chromium, not
   # the Steam gamepad / Big Picture UI, so the default gamepad-only gate would
   # (correctly) stand down. Opt into desktop injection so the smoke can verify it.
   SHELVES_CEF_PORT="$port" SHELVES_RPC_ADDR="127.0.0.1:60123" \
-    SHELVES_BUNDLE_PATH="$ROOT/examples/bundle/shelves-example.js" \
+    SHELVES_BUNDLE_PATH="$work/bundle.js" SHELVES_HUB_CONFIG="$work/hub.json" \
+    SHELVES_BACKEND_DIR="$work/backend" SHELVES_SETTINGS_DIR="$work/settings" \
+    SHELVES_RPC_TOKEN_FILE="$work/rpc-token" \
     SHELVES_TARGET="harness" SHELVES_INTERVAL_SECS=2 SHELVES_DESKTOP_UI=1 \
     "$daemon" >/tmp/shelveshub-daemon.log 2>&1 &
   dpid=$!
@@ -100,8 +112,12 @@ daemon_smoke() {
     sleep 1
     if [[ "$("$dt" --port "$port" --target harness probe 2>/dev/null)" == "injected: true" ]]; then ok=1; break; fi
   done
+  # Both obtains run before the first inject, so by now the log would show either one.
+  if [[ -n "$ok" ]] && grep -qE "downloading from|Backend ready via|No backend obtained" /tmp/shelveshub-daemon.log; then
+    echo "  the daemon went for a download or a backend obtain"; ok=""
+  fi
 
-  kill "$dpid" "$bpid" 2>/dev/null; wait "$dpid" 2>/dev/null; rm -rf "$prof"
+  kill "$dpid" "$bpid" 2>/dev/null; wait "$dpid" 2>/dev/null; rm -rf "$prof" "$work"
   [[ -n "$ok" ]]
 }
 if daemon_smoke; then
@@ -115,7 +131,21 @@ else
 fi
 fi
 
-# ── 4. Plugin backend probes (the plugin running UNDER the host) ─────────────
+# ── 4. Daemon scenarios ─────────────────────────────────────────────────────
+if [[ "$MODE" == "all" || "$MODE" == "daemon" ]]; then
+echo ""
+echo "[daemon] Daemon scenarios (scripts/harness-daemon.sh)…"
+if HARNESS_JSON="${EVIDENCE:+$EVIDENCE/daemon-scenarios-$ARCH.json}" HARNESS_NO_SANDBOX=1 HEADLESS=1 BROWSER="$BROWSER_BIN" bash scripts/harness-daemon.sh; then
+  echo "[ok] daemon scenarios passed"
+  S_DAEMON=pass
+else
+  echo "[X] daemon scenarios failed"
+  S_DAEMON=fail
+  FAIL=1
+fi
+fi
+
+# ── 5. Plugin backend probes (the plugin running UNDER the host) ─────────────
 # ShelvesHub hosts the plugin's Python backend, so its OS-coupled probes get real
 # coverage on this container's OS/arch (incl. ARM64) here — not only the plugin
 # repo's own x86_64 runner. Skips cleanly when the plugin isn't checked out.
@@ -135,8 +165,8 @@ fi
 
 if [[ -n "$EVIDENCE" ]]; then
   OVERALL=PASS; [[ "$FAIL" -eq 0 ]] || OVERALL=FAIL
-  printf '{\n  "ts": "%s",\n  "kind": "container",\n  "os": "linux",\n  "arch": "%s",\n  "mode": "%s",\n  "overall": "%s",\n  "steps": { "scenarios": "%s", "install": "%s", "smoke": "%s", "plugin": "%s" }\n}\n' \
-    "$(date +%Y-%m-%d_%H-%M-%S)" "$ARCH" "$MODE" "$OVERALL" "$S_SCEN" "$S_INSTALL" "$S_SMOKE" "$S_PLUGIN" \
+  printf '{\n  "ts": "%s",\n  "kind": "container",\n  "os": "linux",\n  "arch": "%s",\n  "mode": "%s",\n  "overall": "%s",\n  "steps": { "scenarios": "%s", "install": "%s", "smoke": "%s", "daemon": "%s", "plugin": "%s" }\n}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ARCH" "$MODE" "$OVERALL" "$S_SCEN" "$S_INSTALL" "$S_SMOKE" "$S_DAEMON" "$S_PLUGIN" \
     >"$EVIDENCE/container-$ARCH.json"
   echo "[i] Evidence written to $EVIDENCE/container-$ARCH.json"
 fi

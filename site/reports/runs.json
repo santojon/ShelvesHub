@@ -2694,5 +2694,554 @@
       "complexity": 371,
       "total": 31422
     }
+  },
+  {
+    "ts": "2026-10-14_00-19-38",
+    "scope": "local",
+    "version": "0.5.0",
+    "overall": "PASS",
+    "fmt": {
+      "clean": true
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "tests": {
+      "passed": 150,
+      "failed": 0,
+      "skipped": 0,
+      "total": 150
+    },
+    "audit": {
+      "vulnerabilities": 0,
+      "clean": true
+    },
+    "eslint": {
+      "errors": 0,
+      "warnings": 0,
+      "problems": 0,
+      "byRule": {}
+    },
+    "complexity": {
+      "level": 0,
+      "count": 0,
+      "max": 0,
+      "top": []
+    },
+    "harness": {
+      "passed": 19,
+      "failed": 0,
+      "total": 19
+    },
+    "daemonScenarios": {
+      "passed": 3,
+      "failed": 0,
+      "total": 3
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 3130,
+    "rustCodeLines": {
+      "total": 9640,
+      "files": 34
+    },
+    "qa": {
+      "cells": 10,
+      "byStatus": {
+        "tested": 3,
+        "partial": 1,
+        "manual": 2,
+        "blocked": 4
+      },
+      "assembled": "2026-10-14T03:19:38Z"
+    },
+    "docs": {
+      "locales": 19,
+      "keys": 84,
+      "keyParity": true,
+      "parityProblems": [],
+      "docPairs": 12,
+      "docsUnpaired": 0
+    },
+    "durations": {
+      "fmt": 100,
+      "clippy": 1161,
+      "tests": 923,
+      "audit": 2245,
+      "eslint": 1305,
+      "complexity": 871,
+      "syntax": 2023,
+      "data": 6,
+      "launchers": 45,
+      "shipped-text": 85,
+      "harness": 35599,
+      "harness-daemon": 24970,
+      "docker": 47327,
+      "qa-matrix": 290476,
+      "total": 407136
+    },
+    "steps": [
+      {
+        "key": "fmt",
+        "label": "rustfmt (cargo fmt --check)",
+        "status": "pass",
+        "durationMs": 100
+      },
+      {
+        "key": "clippy",
+        "label": "clippy (-D warnings)",
+        "status": "pass",
+        "durationMs": 1161
+      },
+      {
+        "key": "tests",
+        "label": "Rust unit tests (cargo test)",
+        "status": "pass",
+        "durationMs": 923
+      },
+      {
+        "key": "audit",
+        "label": "cargo audit",
+        "status": "pass",
+        "durationMs": 2245
+      },
+      {
+        "key": "eslint",
+        "label": "ESLint",
+        "status": "pass",
+        "durationMs": 1305
+      },
+      {
+        "key": "complexity",
+        "label": "Complexity debt of the runtime",
+        "status": "pass",
+        "durationMs": 871
+      },
+      {
+        "key": "syntax",
+        "label": "JavaScript syntax (node --check)",
+        "status": "pass",
+        "durationMs": 2023
+      },
+      {
+        "key": "data",
+        "label": "Data files + localization parity",
+        "status": "pass",
+        "durationMs": 6
+      },
+      {
+        "key": "launchers",
+        "label": "One-click launchers (.desktop Exec)",
+        "status": "pass",
+        "durationMs": 45
+      },
+      {
+        "key": "shipped-text",
+        "label": "Shipped-text rule",
+        "status": "pass",
+        "durationMs": 85
+      },
+      {
+        "key": "harness",
+        "label": "Runtime harness (headless Chromium)",
+        "status": "pass",
+        "durationMs": 35599
+      },
+      {
+        "key": "harness-daemon",
+        "label": "Daemon scenarios (headless Chromium)",
+        "status": "pass",
+        "durationMs": 24970
+      },
+      {
+        "key": "docker",
+        "label": "Container harness",
+        "status": "pass",
+        "durationMs": 47327
+      },
+      {
+        "key": "qa-matrix",
+        "label": "QA matrix (containers + host harness)",
+        "status": "pass",
+        "durationMs": 290476
+      }
+    ],
+    "stepsSummary": {
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "total": 14
+    },
+    "page": "local/2026-10-14_00-19-38.html"
+  },
+  {
+    "ts": "2026-10-14_10-26-25",
+    "scope": "local",
+    "version": "0.5.0",
+    "overall": "FAIL",
+    "fmt": {
+      "clean": true
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "tests": {
+      "passed": 154,
+      "failed": 0,
+      "skipped": 0,
+      "total": 154
+    },
+    "audit": {
+      "vulnerabilities": 0,
+      "clean": true
+    },
+    "eslint": {
+      "errors": 0,
+      "warnings": 0,
+      "problems": 0,
+      "byRule": {}
+    },
+    "complexity": {
+      "level": 0,
+      "count": 0,
+      "max": 0,
+      "top": []
+    },
+    "harness": {
+      "passed": 19,
+      "failed": 1,
+      "total": 20
+    },
+    "daemonScenarios": {
+      "passed": 3,
+      "failed": 0,
+      "total": 3
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 3169,
+    "rustCodeLines": {
+      "total": 9773,
+      "files": 35
+    },
+    "qa": {
+      "cells": 10,
+      "byStatus": {
+        "partial": 3,
+        "tested": 1,
+        "manual": 2,
+        "blocked": 4
+      },
+      "assembled": "2026-10-14T13:26:25Z"
+    },
+    "docs": {
+      "locales": 19,
+      "keys": 85,
+      "keyParity": true,
+      "parityProblems": [],
+      "docPairs": 12,
+      "docsUnpaired": 0
+    },
+    "durations": {
+      "fmt": 189,
+      "clippy": 1095,
+      "tests": 869,
+      "audit": 2563,
+      "eslint": 673,
+      "complexity": 369,
+      "syntax": 969,
+      "data": 5,
+      "launchers": 15,
+      "shipped-text": 54,
+      "harness": 33014,
+      "harness-daemon": 24481,
+      "docker": 48426,
+      "qa-matrix": 220972,
+      "total": 333694
+    },
+    "steps": [
+      {
+        "key": "fmt",
+        "label": "rustfmt (cargo fmt --check)",
+        "status": "pass",
+        "durationMs": 189
+      },
+      {
+        "key": "clippy",
+        "label": "clippy (-D warnings)",
+        "status": "pass",
+        "durationMs": 1095
+      },
+      {
+        "key": "tests",
+        "label": "Rust unit tests (cargo test)",
+        "status": "pass",
+        "durationMs": 869
+      },
+      {
+        "key": "audit",
+        "label": "cargo audit",
+        "status": "pass",
+        "durationMs": 2563
+      },
+      {
+        "key": "eslint",
+        "label": "ESLint",
+        "status": "pass",
+        "durationMs": 673
+      },
+      {
+        "key": "complexity",
+        "label": "Complexity debt of the runtime",
+        "status": "pass",
+        "durationMs": 369
+      },
+      {
+        "key": "syntax",
+        "label": "JavaScript syntax (node --check)",
+        "status": "pass",
+        "durationMs": 969
+      },
+      {
+        "key": "data",
+        "label": "Data files + localization parity",
+        "status": "pass",
+        "durationMs": 5
+      },
+      {
+        "key": "launchers",
+        "label": "One-click launchers (.desktop Exec)",
+        "status": "pass",
+        "durationMs": 15
+      },
+      {
+        "key": "shipped-text",
+        "label": "Shipped-text rule",
+        "status": "pass",
+        "durationMs": 54
+      },
+      {
+        "key": "harness",
+        "label": "Runtime harness (headless Chromium)",
+        "status": "fail",
+        "durationMs": 33014
+      },
+      {
+        "key": "harness-daemon",
+        "label": "Daemon scenarios (headless Chromium)",
+        "status": "pass",
+        "durationMs": 24481
+      },
+      {
+        "key": "docker",
+        "label": "Container harness",
+        "status": "fail",
+        "durationMs": 48426
+      },
+      {
+        "key": "qa-matrix",
+        "label": "QA matrix (containers + host harness)",
+        "status": "fail",
+        "durationMs": 220972
+      }
+    ],
+    "stepsSummary": {
+      "passed": 11,
+      "failed": 3,
+      "skipped": 0,
+      "total": 14
+    },
+    "page": "local/2026-10-14_10-26-25.html"
+  },
+  {
+    "ts": "2026-10-14_10-29-19",
+    "scope": "local",
+    "version": "0.5.0",
+    "overall": "PASS",
+    "fmt": {
+      "clean": true
+    },
+    "clippy": {
+      "warnings": 0,
+      "errors": 0,
+      "clean": true
+    },
+    "tests": {
+      "passed": 154,
+      "failed": 0,
+      "skipped": 0,
+      "total": 154
+    },
+    "audit": {
+      "vulnerabilities": 0,
+      "clean": true
+    },
+    "eslint": {
+      "errors": 0,
+      "warnings": 0,
+      "problems": 0,
+      "byRule": {}
+    },
+    "complexity": {
+      "level": 0,
+      "count": 0,
+      "max": 0,
+      "top": []
+    },
+    "harness": {
+      "passed": 20,
+      "failed": 0,
+      "total": 20
+    },
+    "daemonScenarios": {
+      "passed": 3,
+      "failed": 0,
+      "total": 3
+    },
+    "suppressions": {
+      "total": 0,
+      "byRule": {}
+    },
+    "runtimeCodeLines": 3169,
+    "rustCodeLines": {
+      "total": 9773,
+      "files": 35
+    },
+    "qa": {
+      "cells": 10,
+      "byStatus": {
+        "tested": 3,
+        "partial": 1,
+        "manual": 2,
+        "blocked": 4
+      },
+      "assembled": "2026-10-14T13:29:19Z"
+    },
+    "docs": {
+      "locales": 19,
+      "keys": 85,
+      "keyParity": true,
+      "parityProblems": [],
+      "docPairs": 12,
+      "docsUnpaired": 0
+    },
+    "durations": {
+      "fmt": 281,
+      "clippy": 296,
+      "tests": 1324,
+      "audit": 1508,
+      "eslint": 929,
+      "complexity": 400,
+      "syntax": 1630,
+      "data": 4,
+      "launchers": 25,
+      "shipped-text": 74,
+      "harness": 34179,
+      "harness-daemon": 28162,
+      "docker": 45453,
+      "qa-matrix": 224686,
+      "total": 338951
+    },
+    "steps": [
+      {
+        "key": "fmt",
+        "label": "rustfmt (cargo fmt --check)",
+        "status": "pass",
+        "durationMs": 281
+      },
+      {
+        "key": "clippy",
+        "label": "clippy (-D warnings)",
+        "status": "pass",
+        "durationMs": 296
+      },
+      {
+        "key": "tests",
+        "label": "Rust unit tests (cargo test)",
+        "status": "pass",
+        "durationMs": 1324
+      },
+      {
+        "key": "audit",
+        "label": "cargo audit",
+        "status": "pass",
+        "durationMs": 1508
+      },
+      {
+        "key": "eslint",
+        "label": "ESLint",
+        "status": "pass",
+        "durationMs": 929
+      },
+      {
+        "key": "complexity",
+        "label": "Complexity debt of the runtime",
+        "status": "pass",
+        "durationMs": 400
+      },
+      {
+        "key": "syntax",
+        "label": "JavaScript syntax (node --check)",
+        "status": "pass",
+        "durationMs": 1630
+      },
+      {
+        "key": "data",
+        "label": "Data files + localization parity",
+        "status": "pass",
+        "durationMs": 4
+      },
+      {
+        "key": "launchers",
+        "label": "One-click launchers (.desktop Exec)",
+        "status": "pass",
+        "durationMs": 25
+      },
+      {
+        "key": "shipped-text",
+        "label": "Shipped-text rule",
+        "status": "pass",
+        "durationMs": 74
+      },
+      {
+        "key": "harness",
+        "label": "Runtime harness (headless Chromium)",
+        "status": "pass",
+        "durationMs": 34179
+      },
+      {
+        "key": "harness-daemon",
+        "label": "Daemon scenarios (headless Chromium)",
+        "status": "pass",
+        "durationMs": 28162
+      },
+      {
+        "key": "docker",
+        "label": "Container harness",
+        "status": "pass",
+        "durationMs": 45453
+      },
+      {
+        "key": "qa-matrix",
+        "label": "QA matrix (containers + host harness)",
+        "status": "pass",
+        "durationMs": 224686
+      }
+    ],
+    "stepsSummary": {
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "total": 14
+    },
+    "page": "local/2026-10-14_10-29-19.html"
   }
 ]

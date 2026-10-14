@@ -1,7 +1,8 @@
 /* examples/harness/runtime-unit.js — evaluates the runtime the way the daemon assembles it (one
    IIFE) in a node vm with stubbed renderer globals, for what a page cannot show: the nav prune
-   across a teardown, host.routes following host.routerHook, the locale pick, the capabilities
-   and the daemon's bundle boot gate. Usage: node runtime-unit.js [repo root]; exit 1 on a problem. */
+   across a teardown, host.routes following host.routerHook, the locale pick, the capabilities, the
+   Quick Access mode without a native tab, the bundle boot gate, the handshake following the daemon's
+   stamp, a fake render outside a React render. Usage: node runtime-unit.js [repo root]; exit 1 on a problem. */
 
 "use strict";
 const fs = require("fs");
@@ -10,8 +11,9 @@ const vm = require("vm");
 
 const ROOT = process.argv[2] || path.join(__dirname, "..", "..");
 const PARTS = ["shelves-host.js", "shelves-host-qam.js", "shelves-host-api.js", "shelves-host-sidecar.js", "shelves-host-toast.js"];
-const SOURCE = "(function () {\n\"use strict\";\n" +
-  PARTS.map(function (p) { return fs.readFileSync(path.join(ROOT, "runtime", p), "utf8"); }).join("\n") + "\n})();\n";
+const BODY = PARTS.map(function (p) { return fs.readFileSync(path.join(ROOT, "runtime", p), "utf8"); }).join("\n");
+// `probe` is test-only source appended inside the closure: the one way at a private helper.
+function source(probe) { return "(function () {\n\"use strict\";\n" + BODY + "\n" + (probe || "") + "\n})();\n"; }
 
 const results = [];
 function check(name, ok, detail) { results.push({ name: name, ok: !!ok, detail: detail }); }
@@ -35,7 +37,7 @@ function boot(opts) {
   w.__SHELVES_I18N__ = opts.dicts || {};
   Object.keys(opts.globals || {}).forEach(function (k) { w[k] = opts.globals[k]; });
   vm.createContext(w);
-  vm.runInContext(SOURCE, w, { filename: "shelves-host.js" });
+  vm.runInContext(source(opts.probe), w, { filename: "shelves-host.js" });
   return { w: w, timers: timers };
 }
 function liveIntervals(timers, ms) {
@@ -94,6 +96,13 @@ function routesChecks(host) {
   check("routes: host.routes follows whatever host.routerHook holds", calls.join("|") === want && p === comp, calls.join("|"));
 }
 
+// Without the native tab in the menu (switched off, or the menu not found yet) the mode reads "panel".
+function qamModeChecks() {
+  const off = boot({}).w.__SHELVES_QAM__.mode();
+  const pending = boot({ globals: { __SHELVES_NATIVE_QAM__: true } }).w.__SHELVES_QAM__.mode();
+  check("qam: mode() reads panel while no native tab is in the menu", off === "panel" && pending === "panel", off + "/" + pending);
+}
+
 function localeOf(href, navLang) {
   const dicts = { "en-US": { hub_title: "en-US" }, "pt-BR": { hub_title: "pt-BR" }, "pt-PT": { hub_title: "pt-PT" }, "zh-CN": { hub_title: "zh-CN" } };
   const b = boot({ href: href, navLang: navLang, dicts: dicts });
@@ -138,6 +147,62 @@ function cooperativeChecks() {
   check("coop bundle: self-install once the loader's copy stood down or our copy booted", offered && cleared && booted, offered + "/" + cleared + "/" + booted);
   const noConfig = boot({ globals: { DFL: dfl, __SHELVES_FORCE_OWNER__: "shelveshub", __DECK_SHELVES_DEFER_TO_HOST__: defer } });
   check("coop bundle: a stale defer signal without the config stays false", noConfig.w.__SHELVES_HOST__.handshake().capabilities.selfUpdate === false, "");
+}
+
+// The handshake reads the daemon's stamp per call: a re-injection writes a new object (a hot-swap
+// carries the new bundle version); without the global, the object captured at boot answers.
+function stampChecks() {
+  const b = boot({ config: { hostVersion: "0.6.0", bundleVersion: "v3.4.0", device: { kind: "desktop", arch: "aarch64" } } });
+  const host = b.w.__SHELVES_HOST__;
+  const first = host.handshake();
+  b.w.__SHELVES_CONFIG__ = Object.assign({}, b.w.__SHELVES_CONFIG__, { hostVersion: "0.6.1", bundleVersion: "v3.4.1", device: { kind: "deck", arch: "x86_64" }, coopBundle: true });
+  const swapped = host.handshake();
+  delete b.w.__SHELVES_CONFIG__;
+  const fallback = host.handshake();
+  check("stamp: the handshake follows a rewritten config stamp",
+    swapped.hostVersion === "0.6.1" && swapped.bundleVersion === "v3.4.1" && swapped.device.kind === "deck" && swapped.capabilities.coopBundle === true, JSON.stringify(swapped));
+  check("stamp: the capture at boot answers without the global",
+    first.bundleVersion === "v3.4.0" && fallback.hostVersion === "0.6.0" && fallback.bundleVersion === "v3.4.0" && fallback.device.arch === "aarch64" && fallback.capabilities.coopBundle === false, JSON.stringify(fallback));
+}
+
+// A React stand-in in each internals shape: its hooks read the dispatcher slot (null outside a
+// render), which is where the runtime's fake render must put its stub — React 19 the client
+// internals' `H`, React 18 the secret internals' `ReactCurrentDispatcher.current`.
+function fakeReact(major) {
+  const ci = { H: null, A: null, T: null, S: null, V: null };
+  const d = { ReactCurrentDispatcher: { current: null } };
+  const R = { version: major + ".0.0", createElement: function (t, p) { return { type: t, props: p || {} }; }, Fragment: "f", Component: function () {} };
+  if (major === 19) R.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = ci;
+  else R.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = d;
+  R.slot = function () { return major === 19 ? ci.H : d.ReactCurrentDispatcher.current; };
+  R.install = function (h) { if (major === 19) ci.H = h; else d.ReactCurrentDispatcher.current = h; };
+  ["useState", "useEffect", "useRef", "useMemo", "useCallback", "useContext", "useLayoutEffect"].forEach(function (n) {
+    R[n] = function () { const h = R.slot(); return h[n].apply(h, arguments); };
+  });
+  return R;
+}
+// The private helper, reached through the probe; a boot failure answers as the render's result.
+function fakeRenderHelper(R) {
+  try {
+    const b = boot({ probe: "window.__UNIT__ = { fakeRenderComponent: fakeRenderComponent };", globals: { SP_REACT: R } });
+    return b.w.__UNIT__.fakeRenderComponent;
+  } catch (e) { return function () { return "boot threw: " + (e && e.message); }; }
+}
+function fakeRenderChecks() {
+  [18, 19].forEach(function (major) {
+    const R = fakeReact(major);
+    const fr = fakeRenderHelper(R);
+    const Hooked = function () { const s = R.useState(7); R.useEffect(function () {}); return s[0]; };
+    const outside = fr(Hooked);
+    check("fake render " + major + ": a hooked component renders outside a render, the slot put back", outside === 7 && R.slot() === null, outside + "/" + R.slot());
+    // Inside a render the stubs go onto the installed dispatcher and its members come back after.
+    const live = { useState: function () { return ["live"]; }, useEffect: function () {} };
+    const saved = { useState: live.useState, useEffect: live.useEffect };
+    R.install(live);
+    const inside = fr(Hooked);
+    const restored = R.slot() === live && live.useState === saved.useState && live.useEffect === saved.useEffect;
+    check("fake render " + major + ": an installed dispatcher is stubbed in place and restored", inside === 7 && restored, inside + "/" + restored);
+  });
 }
 
 // The daemon's gate around the bundle, read from src/loader/mod.rs: an overlapping evaluation
@@ -190,6 +255,9 @@ function report() {
 }
 
 soleHostChecks();
+qamModeChecks();
 localeChecks();
 cooperativeChecks();
+stampChecks();
+fakeRenderChecks();
 gateChecks(report);

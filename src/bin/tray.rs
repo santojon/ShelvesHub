@@ -9,6 +9,9 @@
 //! loop); Linux uses `ksni` (a pure-Rust StatusNotifierItem over DBus, hosted
 //! natively by KDE/SteamOS — no gtk/appindicator/xdo).
 
+// A tray icon needs no console: without this the logon task opens one on Windows.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -126,6 +129,9 @@ mod desktop {
         }
         #[cfg(target_os = "windows")]
         {
+            use std::os::windows::process::CommandExt;
+            // CREATE_NO_WINDOW: a console child of a windowless process would
+            // otherwise open its own console window at every check.
             let out = std::process::Command::new("reg")
                 .args([
                     "query",
@@ -133,6 +139,7 @@ mod desktop {
                     "/v",
                     "SystemUsesLightTheme",
                 ])
+                .creation_flags(0x0800_0000)
                 .output()
                 .ok();
             // 0x0 = dark taskbar; default to dark (light glyph) when unknown.

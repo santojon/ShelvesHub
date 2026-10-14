@@ -1,0 +1,148 @@
+{
+  "ts": "2026-10-14T13:28:44Z",
+  "kind": "daemon-scenarios",
+  "os": "linux",
+  "arch": "aarch64",
+  "browser": "chromium",
+  "passed": 3,
+  "failed": 0,
+  "total": 3,
+  "scenarios": [
+    {
+      "name": "recovered",
+      "result": "PASS",
+      "report": {
+        "reason": "",
+        "checks": {
+          "bundle": "local file taken as is, no download",
+          "backend": "empty test directory, no obtain",
+          "order": "collapse #1, collapse #2, threshold error, recovery launched, collapse #3, collapse #4, windows back, active again: log lines 16 17 18 19 20 21 24 25",
+          "once": "one threshold error and one recovery launch over the whole collapse",
+          "notice": "recovered notice listed by the host's notification center",
+          "platform": "no platform command run (stand-ins first on the daemon's PATH)"
+        },
+        "page": {
+          "notice": "RECOVERED",
+          "runtime": {
+            "host": true,
+            "notify": true,
+            "injectedAt": 1791984504816,
+            "notifications": [
+              "ShelvesHub: The Steam interface collapsed — ShelvesHub restarted it"
+            ]
+          }
+        },
+        "log": [
+          "[INFO] [2026-10-14 13:28:24] [main] ShelvesHub starting...",
+          "[INFO] [2026-10-14 13:28:24] [main] Version: 0.5.0",
+          "[INFO] [2026-10-14 13:28:24] [rpc] Listening on 127.0.0.1:60177",
+          "[INFO] [2026-10-14 13:28:24] [main] Config: cef=127.0.0.1:9555 rpc=127.0.0.1:60177 host_runtime=/work/runtime/shelves-host.js bundle=/tmp/tmp.ThvmFKsVK3/recovered/bundle.js target=daemon-harness-3959-25053 interval=1s backend=/tmp/tmp.ThvmFKsVK3/recovered/backend settings=/tmp/tmp.ThvmFKsVK3/recovered/settings hub_config=/tmp/tmp.ThvmFKsVK3/recovered/hub.json native_qam=on recover_cmd=set",
+          "[INFO] [2026-10-14 13:28:24] [backend] Backend started (pid 4162).",
+          "[INFO] [2026-10-14 13:28:24] [loader] Bundle ready via local (/tmp/tmp.ThvmFKsVK3/recovered/bundle.js).",
+          "[INFO] [2026-10-14 13:28:24] [loader] Injection loop started.",
+          "[INFO] [2026-10-14 13:28:24] [loader] Native QAM stamp set.",
+          "[INFO] [2026-10-14 13:28:24] [loader] Native notifications stamp set.",
+          "[WARN] [2026-10-14 13:28:24] [loader] Bundle not detected — injecting.",
+          "[INFO] [2026-10-14 13:28:24] [backend-py] ERROR shelveshub-backend: SHELVES_BACKEND_DIR does not contain main.py: '/tmp/tmp.ThvmFKsVK3/recovered/backend'",
+          "[INFO] [2026-10-14 13:28:24] [loader] Host runtime injected.",
+          "[INFO] [2026-10-14 13:28:24] [loader] Bundle injected (v0.5.0).",
+          "[INFO] [2026-10-14 13:28:24] [loader] Inject timing: bundle read 0ms, runtime eval 30ms, bundle eval 1ms. (Bundle boot is then gated on the runtime's UI scan — see the runtime's \"UI scan complete\" line.)",
+          "[INFO] [2026-10-14 13:28:24] [loader] Bundle active in renderer.",
+          "[WARN] [2026-10-14 13:28:25] [loader] Steam UI windows absent (only SharedJSContext) — collapse #1; screen is likely black. Injection paused.",
+          "[WARN] [2026-10-14 13:28:26] [loader] Steam UI windows absent (only SharedJSContext) — collapse #2; screen is likely black. Injection paused.",
+          "[ERROR] [2026-10-14 13:28:26] [loader] Steam UI windows have collapsed. NOT calling StartRestart (it worsens this) — recover by restarting steam-launcher.service on the device.",
+          "[INFO] [2026-10-14 13:28:26] [loader] Recovery command launched: sleep 4; curl -s -o /dev/null -X PUT \"http://127.0.0.1:9555/json/new?http://127.0.0.1:8577/big-picture.html\"",
+          "[WARN] [2026-10-14 13:28:27] [loader] Steam UI windows absent (only SharedJSContext) — collapse #3; screen is likely black. Injection paused.",
+          "[WARN] [2026-10-14 13:28:28] [loader] Steam UI windows absent (only SharedJSContext) — collapse #4; screen is likely black. Injection paused.",
+          "[WARN] [2026-10-14 13:28:29] [loader] Steam UI windows absent (only SharedJSContext) — collapse #5; screen is likely black. Injection paused.",
+          "[WARN] [2026-10-14 13:28:30] [loader] Steam UI windows absent (only SharedJSContext) — collapse #6; screen is likely black. Injection paused.",
+          "[INFO] [2026-10-14 13:28:31] [loader] Steam UI windows are back — resuming injection.",
+          "[INFO] [2026-10-14 13:28:31] [loader] Bundle active in renderer."
+        ]
+      }
+    },
+    {
+      "name": "recovery-off",
+      "result": "PASS",
+      "report": {
+        "reason": "",
+        "checks": {
+          "bundle": "local file taken as is, no download",
+          "backend": "empty test directory, no obtain",
+          "order": "collapse #1, collapse #2, threshold error, recovery disabled, collapse #3, collapse #4: log lines 16 17 18 19 20 21",
+          "once": "one threshold error and one opt-out line through collapse #4",
+          "paused": "nothing injected from collapse #1 on",
+          "notice": "none (recovery off)",
+          "platform": "no platform command run (stand-ins first on the daemon's PATH)"
+        },
+        "page": {
+          "notice": "NONE",
+          "runtime": {
+            "host": true,
+            "notify": true,
+            "injectedAt": 1791984512677,
+            "notifications": []
+          }
+        },
+        "log": [
+          "[INFO] [2026-10-14 13:28:32] [main] ShelvesHub starting...",
+          "[INFO] [2026-10-14 13:28:32] [main] Version: 0.5.0",
+          "[INFO] [2026-10-14 13:28:32] [rpc] Listening on 127.0.0.1:60177",
+          "[INFO] [2026-10-14 13:28:32] [main] Config: cef=127.0.0.1:9555 rpc=127.0.0.1:60177 host_runtime=/work/runtime/shelves-host.js bundle=/tmp/tmp.ThvmFKsVK3/recovery-off/bundle.js target=daemon-harness-3959-25053 interval=1s backend=/tmp/tmp.ThvmFKsVK3/recovery-off/backend settings=/tmp/tmp.ThvmFKsVK3/recovery-off/settings hub_config=/tmp/tmp.ThvmFKsVK3/recovery-off/hub.json native_qam=on",
+          "[INFO] [2026-10-14 13:28:32] [backend] Backend started (pid 4469).",
+          "[INFO] [2026-10-14 13:28:32] [loader] Bundle ready via local (/tmp/tmp.ThvmFKsVK3/recovery-off/bundle.js).",
+          "[INFO] [2026-10-14 13:28:32] [loader] Injection loop started.",
+          "[INFO] [2026-10-14 13:28:32] [loader] Native QAM stamp set.",
+          "[INFO] [2026-10-14 13:28:32] [loader] Native notifications stamp set.",
+          "[WARN] [2026-10-14 13:28:32] [loader] Bundle not detected — injecting.",
+          "[INFO] [2026-10-14 13:28:32] [backend-py] ERROR shelveshub-backend: SHELVES_BACKEND_DIR does not contain main.py: '/tmp/tmp.ThvmFKsVK3/recovery-off/backend'",
+          "[INFO] [2026-10-14 13:28:32] [loader] Host runtime injected.",
+          "[INFO] [2026-10-14 13:28:32] [loader] Bundle injected (v0.5.0).",
+          "[INFO] [2026-10-14 13:28:32] [loader] Inject timing: bundle read 0ms, runtime eval 42ms, bundle eval 1ms. (Bundle boot is then gated on the runtime's UI scan — see the runtime's \"UI scan complete\" line.)",
+          "[INFO] [2026-10-14 13:28:32] [loader] Bundle active in renderer.",
+          "[WARN] [2026-10-14 13:28:33] [loader] Steam UI windows absent (only SharedJSContext) — collapse #1; screen is likely black. Injection paused.",
+          "[WARN] [2026-10-14 13:28:34] [loader] Steam UI windows absent (only SharedJSContext) — collapse #2; screen is likely black. Injection paused.",
+          "[ERROR] [2026-10-14 13:28:34] [loader] Steam UI windows have collapsed. NOT calling StartRestart (it worsens this) — recover by restarting steam-launcher.service on the device.",
+          "[ERROR] [2026-10-14 13:28:34] [loader] Auto-recovery disabled — run scripts/recover-deck.sh, or set SHELVES_RECOVER_CMD (e.g. `systemctl --user restart steam-launcher.service`).",
+          "[WARN] [2026-10-14 13:28:35] [loader] Steam UI windows absent (only SharedJSContext) — collapse #3; screen is likely black. Injection paused.",
+          "[WARN] [2026-10-14 13:28:36] [loader] Steam UI windows absent (only SharedJSContext) — collapse #4; screen is likely black. Injection paused.",
+          "[INFO] [2026-10-14 13:28:37] [loader] Steam UI windows are back — resuming injection.",
+          "[INFO] [2026-10-14 13:28:37] [loader] Bundle active in renderer."
+        ]
+      }
+    },
+    {
+      "name": "booting",
+      "result": "PASS",
+      "report": {
+        "reason": "",
+        "checks": {
+          "bundle": "local file taken as is, no download",
+          "backend": "empty test directory, no obtain",
+          "booting": "waiting line once, no collapse, nothing injected; page A read with no host runtime and no injection marker",
+          "platform": "no platform command run (stand-ins first on the daemon's PATH)"
+        },
+        "page": {
+          "notice": "NONE",
+          "runtime": {
+            "host": false,
+            "notify": false,
+            "injectedAt": null,
+            "notifications": []
+          }
+        },
+        "log": [
+          "[INFO] [2026-10-14 13:28:40] [main] ShelvesHub starting...",
+          "[INFO] [2026-10-14 13:28:40] [main] Version: 0.5.0",
+          "[INFO] [2026-10-14 13:28:40] [rpc] Listening on 127.0.0.1:60177",
+          "[INFO] [2026-10-14 13:28:40] [main] Config: cef=127.0.0.1:9555 rpc=127.0.0.1:60177 host_runtime=/work/runtime/shelves-host.js bundle=/tmp/tmp.ThvmFKsVK3/booting/bundle.js target=daemon-harness-3959-25053 interval=1s backend=/tmp/tmp.ThvmFKsVK3/booting/backend settings=/tmp/tmp.ThvmFKsVK3/booting/settings hub_config=/tmp/tmp.ThvmFKsVK3/booting/hub.json native_qam=on",
+          "[INFO] [2026-10-14 13:28:40] [backend] Backend started (pid 4749).",
+          "[INFO] [2026-10-14 13:28:40] [loader] Bundle ready via local (/tmp/tmp.ThvmFKsVK3/booting/bundle.js).",
+          "[INFO] [2026-10-14 13:28:40] [loader] Injection loop started.",
+          "[INFO] [2026-10-14 13:28:40] [loader] Steam is still bringing up its UI windows — waiting.",
+          "[INFO] [2026-10-14 13:28:40] [backend-py] ERROR shelveshub-backend: SHELVES_BACKEND_DIR does not contain main.py: '/tmp/tmp.ThvmFKsVK3/booting/backend'"
+        ]
+      }
+    }
+  ]
+}

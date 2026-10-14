@@ -19,10 +19,8 @@ type Semver = ((u64, u64, u64), Vec<String>);
 
 fn parse_semver(s: &str) -> Option<Semver> {
     let s = s.trim().trim_start_matches('v');
-    let (core, pre) = match s.split_once('-') {
-        Some((c, p)) => (c, p.split('+').next().unwrap_or("")),
-        None => (s.split('+').next().unwrap_or(s), ""),
-    };
+    let s = s.split('+').next().unwrap_or(s);
+    let (core, pre) = s.split_once('-').unwrap_or((s, ""));
     let mut it = core.split('.');
     let major = it.next()?.parse().ok()?;
     let minor = it.next()?.parse().ok()?;

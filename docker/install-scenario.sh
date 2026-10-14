@@ -194,22 +194,26 @@ cat > "$FAKE/api.json" <<'EOF'
   ]
 }
 EOF
+echo "Not Found" > "$FAKE/404.html"
 # An offline curl: the release API answers api.json; any other URL is served as
-# the file of that basename from the fake release (missing → curl's exit 22).
+# the file of that basename from the fake release. A missing one is a 404: curl's
+# exit 22 under -f, else the error page saved as the download, as the real curl does.
 cat > "$STUB/curl" <<'STUBEOF'
 #!/usr/bin/env bash
-out=""; url=""
+out=""; url=""; fail=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -o) out="$2"; shift 2 ;;
     -H|--connect-timeout|--max-time) shift 2 ;;
-    -*) shift ;;
+    --fail) fail=1; shift ;;
+    --*) shift ;;
+    -*) [[ "$1" == *f* ]] && fail=1; shift ;;
     *) url="$1"; shift ;;
   esac
 done
 [[ "$url" == *api.github.com* ]] && { cat "$FAKE_RELEASE/api.json"; exit 0; }
 f="$FAKE_RELEASE/$(basename "$url")"
-[[ -f "$f" ]] || exit 22
+if [[ ! -f "$f" ]]; then [[ "$fail" == 1 ]] && exit 22; f="$FAKE_RELEASE/404.html"; fi
 if [[ -n "$out" ]]; then cp "$f" "$out"; else cat "$f"; fi
 STUBEOF
 chmod +x "$STUB/curl"
@@ -269,6 +273,7 @@ check "mismatch reported"                   grep -q "Checksum mismatch" /tmp/lin
 check "nothing installed on mismatch"       test ! -e "$INSTALL_DIR/shelveshub"
 
 echo "[11] Linux install.sh fails cleanly when the package download fails"
+rm -rf "$INSTALL_DIR" "$SERVICE_DIR" "$SETTINGS_DIR"
 rm -f "$FAKE"/shelveshub-linux*.tar.gz
 rc=0; run_linux "$EMPTY" "$PKG_LINUX/installer/install.sh" >/tmp/linux-404.out 2>&1 || rc=$?
 check "download failure surfaces as curl's exit 22" test "$rc" -eq 22
@@ -279,7 +284,7 @@ echo "[12] uninstall.sh --purge honours XDG_DATA_HOME / SHELVES_SETTINGS_DIR and
 rm -rf "$INSTALL_DIR" "$SERVICE_DIR" "$SETTINGS_DIR"
 XDG="$FAKEHOME/xdg-data"
 ( cd "$PKG_LINUX" && HOME="$FAKEHOME" XDG_DATA_HOME="$XDG" PATH="$STUB:$PATH" SCLOG_TARGET="$SCLOG" \
-    SHELVES_ALLOW_ROOT=1 bash installer/install.sh >/dev/null 2>&1 )
+    SHELVES_ALLOW_ROOT=1 bash installer/install.sh >/tmp/linux-xdg.out 2>&1 ) || { echo "  install (XDG_DATA_HOME) exited non-zero"; cat /tmp/linux-xdg.out; FAILS=$((FAILS+1)); }
 check "prefs seeded under XDG_DATA_HOME"    test -f "$XDG/deck-shelves/shelveshub.json"
 mkdir -p "$SETTINGS_DIR"; echo '{"other":true}' > "$SETTINGS_DIR/settings.json"
 STEAM_ROOTS=("$FAKEHOME/.steam/steam" "$FAKEHOME/.local/share/Steam" \
@@ -295,10 +300,10 @@ for root in "${STEAM_ROOTS[@]}"; do
 done
 CUSTOM="$FAKEHOME/custom-settings"
 ( cd "$PKG_LINUX" && HOME="$FAKEHOME" SHELVES_SETTINGS_DIR="$CUSTOM" PATH="$STUB:$PATH" SCLOG_TARGET="$SCLOG" \
-    SHELVES_ALLOW_ROOT=1 bash installer/install.sh >/dev/null 2>&1 )
+    SHELVES_ALLOW_ROOT=1 bash installer/install.sh >/tmp/linux-custom.out 2>&1 ) || { echo "  install (SHELVES_SETTINGS_DIR) exited non-zero"; cat /tmp/linux-custom.out; FAILS=$((FAILS+1)); }
 check "prefs seeded under SHELVES_SETTINGS_DIR" test -f "$CUSTOM/shelveshub.json"
 ( cd "$PKG_LINUX" && HOME="$FAKEHOME" SHELVES_SETTINGS_DIR="$CUSTOM" PATH="$STUB:$PATH" SCLOG_TARGET="$SCLOG" \
-    bash "$INSTALL_DIR/uninstall.sh" --purge >/dev/null 2>&1 )
+    bash "$INSTALL_DIR/uninstall.sh" --purge >/tmp/linux-custom-purge.out 2>&1 ) || { echo "  purge (SHELVES_SETTINGS_DIR) exited non-zero"; cat /tmp/linux-custom-purge.out; FAILS=$((FAILS+1)); }
 check "purge removed SHELVES_SETTINGS_DIR"  test ! -e "$CUSTOM"
 check "purge left the default dir alone (again)" test -f "$SETTINGS_DIR/settings.json"
 

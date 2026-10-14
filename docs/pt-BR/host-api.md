@@ -128,11 +128,10 @@ de Acesso Rápido (chave `900` no enum de abas do Steam, inserida depois de Dese
 que a barra do Steam trata como uma das suas. Ela está presente desde o boot, antes de
 qualquer painel ser registrado; o painel registrado (o editor do Deck Shelves) a
 preenche quando `registerPanel` dispara, e sem um ela mostra a visão própria do hub
-(status, atualizações, configuração, logs). Não existe uma sobreposição separada: com
+(status, atualizações, configuração, logs). Nada é desenhado fora da aba: com
 `native_qam` desligado, ou enquanto a aba não pode ser instalada (o disjuntor, ou o
 construtor da lista de abas ainda ausente), o hub não desenha nada e `qam.mode()`
-informa isso (`native`, `native-arming`, `tripped`, ou o rótulo legado `overlay` para
-"não instalada").
+informa isso (`native`, `native-arming`, `tripped`, ou `panel` para "não instalada").
 
 #### Handshake de posse de aba — `window.__SHELVES_QAM_OWNER__`
 
@@ -157,8 +156,8 @@ registrada. Não implementado por este host; o pacote o detecta.
 
 | Método | Assinatura | Notas |
 |---|---|---|
-| `canSelfInstall` | `() => boolean` | Verdadeiro quando este host consegue instalar uma atualização do plugin no lugar (falso ao lado de um carregador, que é dono da cópia do plugin) |
-| `applyUpdate` | `({ version, assetUrl?, assetName? }) => Promise<void>` | Obtém a release pelo RPC `applyUpdate` (URL fixada nas releases do Deck Shelves) e troca o pacote |
+| `canSelfInstall` | `() => boolean` | Verdadeiro enquanto a cópia do pacote que roda é a deste host: como host único, ou sob um carregador depois da passagem do pacote cooperativo (a cópia do carregador se recolheu ou a cópia deste host subiu); falso na coexistência simples e na cooperação simples, onde roda a cópia do carregador |
+| `applyUpdate` | `({ version, assetUrl?, assetName? }) => Promise<void>` | Obtém a release pelo RPC `applyUpdate` (URL fixada nas releases do Deck Shelves) e troca o pacote; rejeita com `applyUpdate: busy: …` enquanto a própria verificação de atualização do daemon roda (tente de novo em instantes) |
 
 ### `handshake?(): HostHandshake` *(adicionado na 1.3.0)*
 
@@ -167,7 +166,13 @@ Identifica o host para que um pacote se adapte sem detectar cada membro: `hostKi
 `capabilities` (`teardown`, `selfUpdate`, `nativeQam`, `coexist`, `coopBundle`;
 `pointerInput` e `xr` estão definidos mas não são reportados por este host) e, desde a
 1.4.0, `device` (`{ kind, arch, model? }` da detecção própria do daemon) e
-`bundleVersion` (a release do Deck Shelves que este host carrega).
+`bundleVersion` (a release do Deck Shelves que este host instalou por último, senão — com o
+pacote cooperativo ligado — a versão que o arquivo do pacote embute; ausente até uma das duas
+ser conhecida). `nativeQam` só é verdadeiro enquanto a aba própria deste host está na faixa
+do menu (inserida, disjuntor não acionado) e `selfUpdate` é igual a
+`updates.canSelfInstall()`; os dois são calculados a cada chamada. `hostVersion`, `device`,
+`bundleVersion` e `coopBundle` também são lidos a cada chamada do `window.__SHELVES_CONFIG__`
+atual que o daemon escreve, então um pacote trocado no lugar reporta a sua própria versão.
 
 ---
 
@@ -245,7 +250,7 @@ curl -s http://127.0.0.1:60123/ \
 | Grupo | Métodos |
 |---|---|
 | Saúde e handshake | `ping`, `getVersion`, `getHostApiVersion`, `isInjected`, `getDiagnostics` |
-| Backend hospedado | `getBackendStatus`, `restartBackend`, e os nomes da API pública do backend do plugin (a lista permitida `BACKEND_METHODS`, 34 nomes), repassados só enquanto a hospedagem do backend está configurada |
+| Backend hospedado | `getBackendStatus`, `restartBackend`, e os nomes da API pública do backend do plugin (a lista permitida `BACKEND_METHODS`, 35 nomes), repassados só enquanto a hospedagem do backend está configurada |
 | Pacote do plugin | `populateBundle`, `applyUpdate` (URL fixada nas releases do Deck Shelves), `rollbackBundle` |
 | Binário do hub | `checkUpdates`, `selfUpdate`, `rollbackHub`, `restartService` |
 | Store de configurações do hub | `getConfig`, `setAutoUpdate`, `setUpdatePref`, `setConfigSync` |
@@ -258,8 +263,12 @@ Respostas que vale a pena conhecer: `populateBundle`, `applyUpdate`, `rollbackBu
 `rollbackHub` e `selfUpdate` respondem `busy: an update check is in flight, try again
 shortly` enquanto a própria verificação do daemon roda (tente de novo em instantes);
 `selfUpdate` responde `{"updated":false,"reason":"current"}` quando nada mais novo foi
-publicado; `rollbackHub` é recusado enquanto uma atualização ou reversão do ShelvesHub já
-está preparada (reinicie antes). Na camada HTTP, uma linha de requisição ou um cabeçalho
+publicado e `"staged"` enquanto essa mesma release já espera um reinício; `rollbackHub` é
+recusado enquanto uma atualização ou reversão do ShelvesHub já está preparada (reinicie
+antes). Depois que `populateBundle` ou `applyUpdate` troca uma release, ou que `rollbackBundle`
+devolve a anterior, o hub também leva o backend Python da sua pasta de instalação para essa
+mesma release e o reinicia (um diretório de backend configurado em outro lugar com
+`SHELVES_BACKEND_DIR` nunca é tocado). Na camada HTTP, uma linha de requisição ou um cabeçalho
 maior que 8 KiB, ou mais de 64 cabeçalhos, responde **400**, e o servidor atende no máximo
 64 conexões ao mesmo tempo — além disso responde **503**. O log do daemon registra só o
 nome do método de uma requisição, nunca o corpo, e as consultas de saúde, status e logs

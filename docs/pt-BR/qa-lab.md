@@ -9,8 +9,8 @@ com um status honesto em vez de um palpite. Um comando roda tudo que é
 automatizável e monta a matriz.
 
 O que o laboratório prova: o host compila e instala, o ciclo de vida do serviço, o
-RPC local, o daemon injetando seu runtime num Chromium headless, os cenários do
-runtime (aba nativa, coexistência, host único, propriedade cooperativa, painel de
+RPC local, o daemon injetando seu runtime num Chromium headless e lidando com uma
+interface colapsada (os cenários do daemon), os cenários do runtime (aba nativa, coexistência, host único, propriedade cooperativa, painel de
 fallback, custo ocioso, o painel lateral de logs, notificações e os gestos de
 controle/teclado) e as sondas do backend do plugin em cada SO/arquitetura.
 
@@ -42,9 +42,10 @@ ambos enviam sua evidência como artefato do workflow.
 
 | Arquivo | Escrito por | Contém |
 |---|---|---|
-| `site/reports/qa/evidence/container-<arch>.json` | `docker/entrypoint.sh` | um veredito por etapa: cenários do runtime, ciclo instalar/desinstalar, smoke de injeção do daemon, sondas do backend do plugin (`pass` / `fail` / `skipped`) |
+| `site/reports/qa/evidence/container-<arch>.json` | `docker/entrypoint.sh` | um veredito por etapa: cenários do runtime, ciclo instalar/desinstalar, smoke de injeção do daemon, cenários do daemon, sondas do backend do plugin (`pass` / `fail` / `skipped`); `ts` em ISO 8601 UTC |
 | `site/reports/qa/evidence/scenarios-<arch>.json`, `scenarios-host-<os>-<arch>.json` | `scripts/harness.sh` (`HARNESS_JSON`) | o veredito de cada cenário e seu relatório completo (host instalado, dono, bridge, aba, UI de fallback, erros, contadores ociosos); `ts` em ISO 8601 UTC |
-| `site/reports/qa/matrix.json` | `scripts/ci/qa-matrix.mjs` | as células abaixo com o status calculado, se cada uma decide o veredito geral (`gate`), a idade da evidência (`ageDays`, e `stale` quando mais velha que o `staleDays` da raiz, 30 dias — o status da célula passa a ser `stale`), os arquivos de evidência por trás de cada uma — a célula do harness no host tira plataforma e arquitetura do seu registro de evidência mais novo — e `ts` / `version` / `overall` como as execuções de qualidade em `site/reports/runs.json`; todo `ts` é ISO 8601 UTC |
+| `site/reports/qa/evidence/daemon-scenarios-<arch>.json` | `scripts/harness-daemon.sh` (`HARNESS_JSON`, nas execuções em contêiner) | o veredito de cada cenário do daemon e seu relatório — as verificações que fez, o que leu da página do runtime e o log do daemon; `ts` em ISO 8601 UTC |
+| `site/reports/qa/matrix.json` | `scripts/ci/qa-matrix.mjs` | as células abaixo com o status calculado, se cada uma decide o veredito geral (`gate`), a idade da evidência (`ageDays`, e `stale` quando mais velha que o `staleDays` da raiz, 30 dias — o status da célula passa a ser `stale`), os arquivos de evidência por trás de cada uma (`missing` nomeia um arquivo listado que falta; com os outros registros da célula presentes e recentes, ela então fica `partial` — uma célula sem nenhum registro continua `not-run`, uma antiga `stale`) — a célula do harness no host tira plataforma e arquitetura do seu registro de evidência mais novo — e `ts` / `version` / `overall` como as execuções de qualidade em `site/reports/runs.json`; todo `ts` é ISO 8601 UTC |
 
 Uma etapa pulada (por exemplo as sondas do plugin sem um checkout do plugin) é
 registrada como `skipped`, nunca como aprovada; a célula então fica `partial`.
@@ -52,14 +53,15 @@ registrada como `skipped`, nunca como aprovada; a célula então fica `partial`.
 ## A matriz
 
 Legenda: **tested** — evidência presente, tudo verde · **partial** — evidência com
-uma etapa falha ou pulada · **stale** — evidência com mais de 30 dias (conta como
-partial no veredito geral) · **not-run** — automatizável, ainda sem evidência ·
+uma etapa falha ou pulada, ou um arquivo de evidência ausente · **stale** — evidência com mais de
+30 dias (conta como partial no veredito geral) · **not-run** — automatizável, ainda sem evidência
+(também conta como partial quando alguma célula que decide o veredito tem evidência) ·
 **blocked** — precisa de um laboratório indisponível · **manual** — hardware real,
 executado por uma pessoa.
 
 | Plataforma | Arq. | Tipo | Cobre | Status |
 |---|---|---|---|---|
-| Linux | x86_64 | contêiner | build, ciclo de instalação, RPC, smoke de injeção, cenários do runtime, sondas do plugin | pela evidência (CI a cada push) |
+| Linux | x86_64 | contêiner | build, ciclo de instalação, RPC, smoke de injeção, cenários do runtime, cenários do daemon, sondas do plugin | pela evidência (CI a cada push) |
 | Linux | aarch64 | contêiner (QEMU) | o mesmo, emulado | pela evidência (CI por disparo, ou local) |
 | esta máquina | host | harness do host | cenários do runtime num Chromium headless | pela evidência |
 | Linux | aarch64 | contêiner do cliente Steam | o cliente Steam nativo ARM64 da Valve, sem tela: boot, porta de depuração, janelas do Big Picture, o portão do daemon, injeção, backend e o boot do bundle; comportamento com sessão autenticada com uma sessão guardada | pela evidência (`pnpm lab:steam-arm64`, host Docker arm64) |
@@ -111,19 +113,67 @@ energia e suspensão. Isso fica com as células de dispositivo.
 
 ## Cenários do runtime
 
+Antes dos cenários no navegador, `examples/harness/runtime-unit.js` avalia o runtime montado numa
+vm do node para o que uma página não mostra — o rearme da poda de navegação a cada teardown, a
+delegação de `host.routes`, a escolha do idioma, as capacidades em cada modo, o rótulo de modo do
+Acesso Rápido e o portão de boot do pacote do daemon (lido de `src/loader/mod.rs`) — e conta como
+mais um resultado, `runtime-unit` (uma verificação com falha reprova a rodada), pulado com um aviso
+onde não há node. Uma rodada informa os 18 cenários no navegador abaixo mais esse resultado.
+
 | Cenário | Montagem | Verifica |
 |---|---|---|
 | `coexist-mirror` | outro carregador presente, seu plugin registra um painel | host não publicado, o dono continua o carregador, nossa aba espelha o editor |
 | `coexist-fallback` | carregador presente, sem painel do plugin | nossa aba mostra o painel de fallback com as atualizações do plugin delegadas ao carregador |
-| `sole-host` / `sole-host-mirror` / `sole-host-fallback` | sem carregador | host publicado e com dono, aba presente; editor espelhado ou fallback completo (download, atualização, configuração) |
+| `sole-host` / `sole-host-mirror` / `sole-host-fallback` | sem carregador | host publicado e com dono, aba presente; editor espelhado ou fallback completo (download, atualização, configuração); `sole-host` também lê `nativeQam` e `selfUpdate` verdadeiros e roda dois teardowns, cada um encontrando a poda de navegação rearmada |
 | `coexist-late` | o menu de Acesso Rápido montou antes do runtime | o re-apontamento ainda posiciona a aba |
 | `coexist-native` / `coexist-fallback-native` | componentes nativos da UI do Steam disponíveis | espelho / fallback renderizados com componentes nativos, sem erros |
 | `coexist-idle` | host combinado assentado | nenhum timer permanente abaixo de um segundo, observers limitados |
-| `coop-mirror` | carregador presente **e** propriedade forçada para o ShelvesHub | host publicado, dono `shelveshub`, bridge ativa, editor espelhado, sem erros |
-| `coop-fallback` | o mesmo, sem painel do plugin | painel de fallback com as atualizações do plugin delegadas (a cópia do carregador roda), host com dono |
+| `coop-mirror` | carregador presente **e** propriedade forçada para o ShelvesHub | host publicado, dono `shelveshub`, bridge ativa, editor espelhado, `selfUpdate` / `canSelfInstall` falsos (a cópia do carregador roda), rotas e patches chegam ao router hook do carregador, sem erros |
+| `coop-fallback` | o mesmo, sem painel do plugin | painel de fallback com as atualizações do plugin delegadas (a cópia do carregador roda, `selfUpdate` falso), host com dono |
+| `coop-bundle` | carregador presente, propriedade forçada, o carimbo de configuração `coopBundle` do daemon e o sinal de recuo da cópia do carregador | host publicado, editor espelhado, `selfUpdate` / `canSelfInstall` verdadeiros; falsos quando o sinal de recuo é limpo; verdadeiros de novo com o carimbo de boot da cópia do host |
 | `sole-host-sidecar` | host único, visão do hub aberta | "Ver logs" em Solução de problemas abre o painel lateral (o menu alarga — `QamFriendsExpanded` enviado) com uma vista de logs; Voltar o fecha (estreitado, `QamFriendsHidden` por último), sem erros |
+| `sole-host-status` | host único, visão do hub aberta | "Ver estado" em Solução de problemas abre o painel lateral na aba Estado (as linhas de modo, host e versão; nenhuma seção Estado sobra na aba); as abas são Notificações, Estado, Logs; Voltar o fecha; Ctrl+Shift+S o reabre em Estado, sem erros |
 | `sole-host-notify` | host único; um toast por `host.notifications.toast` e um aviso do hub por `__SHELVES_NOTIFY__` | os dois listados, selo do sino `2`, as duas linhas na aba Notificações do painel lateral (ativa), nenhuma inline na visão do hub, `notifications.mode()` é `failed` (a simulação não tem o pipeline de toast do Steam), sem erros |
 | `sole-host-gesture` | host único, uma linha da visão do hub focada | o gesto do D-pad (direita, duas vezes) abre o painel lateral em Logs; Voltar o fecha; Ctrl+Shift+N o reabre em Notificações, sem erros |
+| `sole-host-locale` | host único; a URL da página carrega `LANGUAGE=brazilian` como a URL do renderizador do Steam | a visão do hub lê os textos pt-BR distribuídos (o título de Ver logs é `Ver logs`) |
+| `sole-host-config` | host único; oito toques em `−` no seletor de intervalo a partir de 30, depois um `+` que o stub de RPC recusa, depois outro `+` recusado com resposta lenta e um terceiro `+` enquanto esse está em andamento | o RPC recebe 25, 20, 15, 10, 5, 1 e nada abaixo do piso; uma edição recusada devolve a linha a 1 e registra um WARN; o toque feito com uma edição em andamento nunca é enviado |
+| `sole-host-tabswitch` | host único com um painel do plugin; a visão do hub aberta a partir do editor, com o painel lateral aberto | sair da aba (o Steam desmonta o conteúdo dela) fecha o painel lateral e estreita o menu; ao voltar, a visão do hub aparece de novo, sem o painel lateral, e dois D-pad direita e Ctrl+Shift+L o abrem em Logs; depois da ação de voltar da visão do hub, uma troca de aba mostra o editor; uma visão do hub que falhou ao renderizar também não volta — a aba retorna no editor; sem erros |
+
+## Cenários do daemon
+
+`bash scripts/harness-daemon.sh` (`pnpm run harness:daemon`) conduz o daemon real, compilado
+deste checkout, contra um Chromium headless cujas páginas (`examples/daemon-harness/`) fazem o
+papel das do Steam: uma com o título `SharedJSContext`, o renderizador em que o daemon injeta, e
+outra no lugar de uma janela do Big Picture. Cada cenário sobe o próprio perfil de navegador e o
+próprio daemon, isolados da máquina: home, configurações, store do hub, arquivo de token e portas
+só seus (um serviço instalado fica de fora), um arquivo de configuração próprio que nomeia o
+comando de recuperação do harness (nunca o distribuído, em que um `recover_cmd` vazio significa a
+recuperação real da plataforma: fechar e reabrir o Steam), um pacote local e uma pasta de backend
+vazia, então nada é baixado, e um filtro de alvo que só a própria página atende, então um Steam
+rodando na mesma máquina nunca é tocado. A primeira pasta no `PATH` do daemon guarda substitutos
+das ferramentas que a recuperação de uma plataforma usa (`launchctl`, `systemctl`, `open`,
+`osascript`, `pkill`, `killall`, `steam`), que só registram a chamada: um cenário falha se o daemon
+fez alguma (fora a consulta somente leitura de unidade da sondagem de dispositivo dele no Linux).
+Ele verifica as linhas do log do próprio daemon, em ordem, o que chegou ao runtime, e que o daemon
+continua rodando quando as verificações terminam.
+
+| Cenário | Montagem | Verifica |
+|---|---|---|
+| `recovered` | o pacote ativo no contexto compartilhado, depois a janela fecha; o comando de recuperação a abre de novo quatro segundos depois de disparado, enquanto o colapso continua | dois ciclos de colapso, o erro de limite uma vez, o comando de recuperação disparado uma vez enquanto o colapso dura além dele (os colapsos #3 e #4 vêm depois do disparo), a injeção retomada quando a janela volta, o aviso de recuperação na central de notificações do runtime |
+| `recovery-off` | o mesmo com `SHELVES_RECOVER_CMD=off`, o colapso mantido por quatro ciclos | o erro de limite e a dica de recuperação automática desligada uma vez cada e nenhum comando de recuperação; injeção pausada durante o colapso, e nenhum aviso de recuperação mesmo quando a janela é reaberta à mão |
+| `booting` | só o contexto compartilhado, nenhuma janela ainda | o daemon espera o Steam subir as janelas: a linha de espera uma vez, sem colapso, nada injetado (a página não tem runtime do host nem marcador de injeção) |
+
+Precisa de cargo, python3, curl e um navegador da família Chromium (`BROWSER` escolhe um);
+`HEADLESS=0` mostra o navegador, `DAEMON_HARNESS_CDP_PORT` / `DAEMON_HARNESS_RPC_PORT` /
+`DAEMON_HARNESS_HTTP_PORT` mudam as portas (9555 / 60177 / 8577 por padrão, mostradas no início)
+e `HARNESS_JSON=<caminho>` grava um registro de evidência `daemon-scenarios`.
+`HARNESS_NO_SANDBOX=1` acrescenta `--no-sandbox --disable-dev-shm-usage` para contêineres e root.
+As execuções em contêiner o rodam como mais uma etapa e guardam o registro como
+`daemon-scenarios-<arch>.json`, anexado às células de contêiner; `pnpm validate` o roda nesta
+máquina. O que ele prova é o lado do daemon num colapso — a detecção, o limite, o comando
+disparado uma vez, o recuo e a retomada, o aviso; se um Steam de verdade colapsa desse jeito e
+volta com o comando de recuperação da plataforma continua sendo uma observação em dispositivo
+(veja [Validação em dispositivo](device-validation.md)).
 
 ## Células de dispositivo — modelo de evidência
 
@@ -169,7 +219,7 @@ as células menos na que remove esse plugin.
 | partida a frio | só carregador +15 s · coexistência +25 s · cooperativo (cópia do carregador no host do hub) +28 s · bundle cooperativo +15–26 s · ao lado de um carregador sem o plugin +18 s | Big Picture de volta 11 s após um reinício do Steam |
 | sair e voltar (5 ciclos, detalhes e biblioteca → Home) | média: só carregador 474 ms · coexistência 494 · cooperativo 396 · bundle cooperativo 492; uma raiz, sem montagem de fallback | não rodado (o gate dirige a navegação do carregador) |
 | seleção do gamepad mantida | 5/5 na sessão quente que começou com um card focado, e 5/5 na sessão de bundle cooperativo depois de semear o foco num card pela árvore de navegação do Steam (404 ms de média, deltas zero de vazamento); nada fica focado após partida a frio, então o gate precisa da semente | — |
-| atalhos de teclado do sidecar | — | Ctrl+Shift+L abre, Ctrl+Shift+N alterna, com eventos de tecla reais via CDP; o ArrowRight duplo e o gesto do D-pad precisam do foco do gamepad no controle mais à direita da vista — checagem à mão |
+| atalhos de teclado do sidecar | — | Ctrl+Shift+L abre, Ctrl+Shift+N alterna, com eventos de tecla reais via CDP; o gesto do D-pad precisa do foco do gamepad no controle mais à direita da vista — checagem à mão |
 | hot-swap / desmontagem | bundle cooperativo 4 s, ao lado do carregador 3 s; um runtime, um dono | rollback do bundle → hot-swap em 2 s, desfazer igual |
 | dormir e acordar | 2/2 (20 s), Home de volta em até 1,2 s após acordar, cópia do hub mantida | — |
 | reinício do host | daemon reinicia sob systemd com o renderizador vivo; reinício do rollback do hub em 10 s, hold mantido | reinício do rollback do hub sob launchd, hold mantido |

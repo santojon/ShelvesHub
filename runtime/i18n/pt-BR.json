@@ -14,6 +14,7 @@
   "action_download": "Baixar o Deck Shelves mais recente",
   "action_update_hub": "Atualizar o ShelvesHub",
   "action_logs": "Ver logs",
+  "action_status": "Ver estado",
   "logs_title": "Logs",
   "action_auto_update": "Atualizações automáticas",
   "update_hub": "ShelvesHub",

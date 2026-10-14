@@ -1,0 +1,4 @@
+# The Windows binaries link the C runtime statically, so they start on a machine
+# without the Visual C++ redistributable. Every other target keeps its defaults.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

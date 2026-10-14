@@ -328,7 +328,8 @@
         var ev = (cell.evidence || [])[0];
         if (!ev) return cell.note ? esc(cell.note) : "no evidence yet";
         var what = ev.scenarios ? "scenarios " + esc(ev.scenarios) : (ev.steps ? Object.keys(ev.steps).map(function (k) { return esc(k) + " " + esc(ev.steps[k]); }).join(", ") : "");
-        return esc(String(ev.ts || "").slice(0, 10)) + (what ? " · " + what : "");
+        var missing = (cell.missing || []).length ? " · missing " + cell.missing.map(esc).join(", ") : "";
+        return esc(String(ev.ts || "").slice(0, 10)) + (what ? " · " + what : "") + missing;
       }
       fetch("qa/matrix.json", { cache: "no-store" })
         .then(function (r) { return r.ok ? r.json() : null; })

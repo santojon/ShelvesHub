@@ -160,6 +160,9 @@ if (Test-Path "$extractedDir\assets") {
 # the machine unplugs, or end it after 72 hours (PT0S = no time limit).
 $taskSettings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
   -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+# RestartCount / RestartInterval: a run whose result (the action's exit code) is not
+# 0 counts as failed and is started again, up to 3 times a minute apart. The daemon
+# exits with 1 when its control port is taken, so a duplicate copy gives up soon.
 $taskSettings.ExecutionTimeLimit = "PT0S"
 
 # Optional tray companion (opt-in, OFF by default): a system-tray icon over the
@@ -187,8 +190,13 @@ if ($tray) {
 
 # Per-user task: runs as YOU at logon (interactive, no elevation) so it can write
 # under %LOCALAPPDATA%, self-update, and reach your Steam. Registering a task for
-# the current user needs no admin rights.
-$action    = New-ScheduledTaskAction -Execute "$installPath\$binary"
+# the current user needs no admin rights (migrate.ps1 removed an admin-era one).
+$exeQuoted = "$installPath\$binary" -replace "'", "''"
+# The daemon is a console program; started by the task in your session it would
+# get a visible console window. A hidden PowerShell starts it instead, waits, and
+# passes its exit code on; `status` / `doctor` stay usable from any console.
+$action    = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+  -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -Command "& ''{0}''; exit $LASTEXITCODE"' -f $exeQuoted)
 $trigger   = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName "ShelvesHub" -Action $action -Trigger $trigger -Settings $taskSettings -Principal $principal -Force | Out-Null

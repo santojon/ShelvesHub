@@ -6,8 +6,10 @@ ShelvesHub (MIT) is the independent host for Deck Shelves — the process that
 injects Deck Shelves into Steam **and** the injected host runtime
 (`runtime/shelves-host.js`, the concrete `window.__SHELVES_HOST__`) that provides
 the Steam UI layer and the Quick Access Menu tab. It was written independently
-(clean-room): no third-party source is copied, and no third-party packages are
-redistributed.
+(clean-room): no third-party source is copied into it. The service builds on
+permissively licensed Rust crates (declared in `Cargo.toml`), the injected runtime
+uses no third-party package, and the test harness's React builds kept in the
+repository are covered below.
 
 ## Techniques
 

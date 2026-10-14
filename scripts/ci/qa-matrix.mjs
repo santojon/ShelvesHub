@@ -16,14 +16,14 @@ const EVIDENCE = join(QA, "evidence");
 const STALE_DAYS = 30;
 
 const CONTAINER_PROVES =
-  "host build, install/uninstall lifecycle, RPC, daemon injection into a headless Chromium, runtime scenarios, plugin backend probes";
+  "host build, install/uninstall lifecycle, RPC, daemon injection into a headless Chromium, runtime scenarios, daemon scenarios, plugin backend probes";
 
 // Cells the lab can clear on its own: their status comes from the evidence files.
 // `gate: false` shows without deciding the matrix; `fromEvidence` takes platform and
 // architecture from the newest record, since the host harness runs wherever the lab runs.
 const AUTOMATED = [
-  { id: "linux-x86_64-container", platform: "Linux", arch: "x86_64", kind: "container", files: ["container-x86_64", "scenarios-x86_64"], proves: CONTAINER_PROVES },
-  { id: "linux-aarch64-container", platform: "Linux", arch: "aarch64", kind: "container (QEMU)", files: ["container-aarch64", "scenarios-aarch64"], proves: CONTAINER_PROVES },
+  { id: "linux-x86_64-container", platform: "Linux", arch: "x86_64", kind: "container", files: ["container-x86_64", "scenarios-x86_64", "daemon-scenarios-x86_64"], proves: CONTAINER_PROVES },
+  { id: "linux-aarch64-container", platform: "Linux", arch: "aarch64", kind: "container (QEMU)", files: ["container-aarch64", "scenarios-aarch64", "daemon-scenarios-aarch64"], proves: CONTAINER_PROVES },
   { id: "host-harness", platform: process.platform, arch: process.arch, fromEvidence: true, kind: "host harness", files: ["scenarios-host-"], proves: "runtime scenarios (native tab, coexistence, sole host, cooperative, fallback panel, idle cost) in a headless Chromium" },
   { id: "linux-aarch64-steam-container", platform: "Linux", arch: "aarch64", kind: "Steam client container", files: ["steam-container-aarch64"], gate: false, proves: "Valve's native ARM64 Steam client booting headless with its debug port, and — with a signed-in session — the daemon discovering it, injecting the runtime and the bundle, and the backend starting" },
 ];
@@ -100,11 +100,13 @@ function newestWithPlatform(ev) {
 function automatedCell(c, now) {
   const ev = evidenceFor(c.files);
   const fresh = freshness(ev, now);
-  const status = !ev.length ? "not-run" : fresh.stale ? "stale" : ev.every((e) => recordGreen(e.record)) ? "tested" : "partial";
+  // Every record the cell lists must be there: one that is not leaves it partial, named in `missing`.
+  const missing = c.files.filter((p) => !ev.some((e) => e.file.startsWith(`evidence/${p}`)));
+  const status = !ev.length ? "not-run" : fresh.stale ? "stale" : !missing.length && ev.every((e) => recordGreen(e.record)) ? "tested" : "partial";
   const from = c.fromEvidence ? newestWithPlatform(ev) : null;
   return {
     id: c.id, platform: from ? from.os : c.platform, arch: from ? from.arch : c.arch, kind: c.kind, proves: c.proves,
-    gate: c.gate !== false, status, ...fresh, evidence: ev.map(summarize),
+    gate: c.gate !== false, status, ...fresh, ...(missing.length ? { missing } : {}), evidence: ev.map(summarize),
   };
 }
 
@@ -124,7 +126,7 @@ function overallOf(cells) {
   // An on-demand lab or a manual cell (gate: false) shows its status without deciding the matrix.
   const gating = cells.filter((c) => c.gate);
   if (gating.every((c) => c.status === "not-run")) return "NOT-RUN";
-  return gating.some((c) => c.status === "partial" || c.status === "stale") ? "PARTIAL" : "PASS";
+  return gating.some((c) => c.status !== "tested") ? "PARTIAL" : "PASS";
 }
 
 function main() {
@@ -137,7 +139,8 @@ function main() {
   for (const c of cells) {
     const ev = c.evidence.length ? ` (${c.evidence.map((e) => e.file.replace(/^evidence\//, "")).join(", ")})` : "";
     const age = c.stale ? ` — STALE: ${c.ageDays} days old` : "";
-    console.log(`  ${c.status.padEnd(8)} ${c.platform} ${c.arch} · ${c.kind}${ev}${age}`);
+    const miss = c.missing ? ` — MISSING: ${c.missing.join(", ")}` : "";
+    console.log(`  ${c.status.padEnd(8)} ${c.platform} ${c.arch} · ${c.kind}${ev}${age}${miss}`);
   }
   return matrix.overall === "PARTIAL" ? 1 : 0;
 }

@@ -29,7 +29,7 @@ use crate::constants::defaults::{REAL_BINARY_MIN_BYTES, REAL_BUNDLE_MIN_BYTES};
 use crate::constants::timers::{CURL_CONNECT_TIMEOUT, CURL_DOWNLOAD_TIMEOUT, CURL_TEXT_TIMEOUT};
 use crate::constants::urls::{
     HUB_RELEASES_ALL_URL, HUB_RELEASES_LATEST_URL, RELEASES_ALL_URL, RELEASES_LATEST_URL,
-    TRUSTED_BUNDLE_PREFIX,
+    TRUSTED_BUNDLE_PREFIX, TRUSTED_HUB_PREFIX,
 };
 use crate::constants::MINISIGN_PUBLIC_KEY;
 
@@ -47,6 +47,42 @@ fn is_trusted_bundle_url(u: &str) -> bool {
         && !u.contains('?')
         && !u.contains('#')
         && !u.contains("..")
+}
+
+/// The same gate for a backend archive (`.tar.gz` / `.tgz`): it is extracted and
+/// then run as the hosted backend, so it may only come from the pinned repository.
+fn is_trusted_backend_url(u: &str) -> bool {
+    let lower = u.to_ascii_lowercase();
+    u.starts_with(TRUSTED_BUNDLE_PREFIX)
+        && (lower.ends_with(".tar.gz") || lower.ends_with(".tgz"))
+        && !u.contains('?')
+        && !u.contains('#')
+        && !u.contains("..")
+}
+
+/// A self-update asset: exactly `<TRUSTED_HUB_PREFIX><tag>/<name>`, the named file of
+/// one ShelvesHub release and nothing else.
+fn is_trusted_hub_url(u: &str, name: &str) -> bool {
+    u.strip_prefix(TRUSTED_HUB_PREFIX)
+        .and_then(|rest| rest.split_once('/'))
+        .is_some_and(|(tag, file)| is_release_tag(tag) && file == name)
+}
+
+/// The release tag of a download from the pinned Deck Shelves repository
+/// (`<TRUSTED_BUNDLE_PREFIX><tag>/<file>`); `None` for any other URL.
+pub(crate) fn pinned_release_tag(url: &str) -> Option<&str> {
+    let tag = url.strip_prefix(TRUSTED_BUNDLE_PREFIX)?.split('/').next()?;
+    is_release_tag(tag).then_some(tag)
+}
+
+/// A tag as releases carry them (`v3.4.0`, `v3.4.0-beta.1`): it goes into an API
+/// path, so nothing that could reshape that URL (no `/`, `?`, `#`, `%`, leading dot).
+fn is_release_tag(tag: &str) -> bool {
+    !tag.is_empty()
+        && !tag.starts_with('.')
+        && tag
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
 }
 
 /// Ensure `dest` holds a real Deck Shelves bundle, obtaining it if needed.
@@ -137,17 +173,19 @@ pub enum BackendRefresh {
     Replaced(String),
 }
 
-/// Bring the backend at `dir` to the release the bundle at `bundle_url` came from:
-/// its archive is obtained like the first boot's (download, hash check, vetted
-/// extract) into a sibling directory that then replaces `dir` in two renames.
-pub fn refresh_backend(dir: &Path, bundle_url: &str) -> Result<BackendRefresh, String> {
-    let (repo, tag) =
-        release_url_parts(bundle_url).ok_or_else(|| format!("no release tag in {bundle_url}"))?;
+/// Bring the backend at `dir` to the Deck Shelves release `tag`, read from the pinned
+/// repository only: its archive is obtained like the first boot's (download, hash
+/// check, vetted extract) into a sibling directory that then replaces `dir`.
+pub fn refresh_backend(dir: &Path, tag: &str) -> Result<BackendRefresh, String> {
+    if !is_release_tag(tag) {
+        return Err(format!("not a Deck Shelves release tag: {tag:?}"));
+    }
     if !backend_refresh_due(dir, tag) {
         return Ok(BackendRefresh::Unchanged);
     }
-    let url = find_backend_asset_url(&curl_text(&tags_api_url(repo, tag))?)
-        .ok_or_else(|| format!("release {tag} has no backend archive"))?;
+    let url = find_backend_asset_url(&curl_text(&format!("{RELEASES_ALL_URL}/tags/{tag}"))?)
+        .filter(|u| is_trusted_backend_url(u))
+        .ok_or_else(|| format!("release {tag} has no trusted backend archive"))?;
     let fresh = sibling_dir(dir, "new");
     let _ = fs::remove_dir_all(&fresh);
     let obtained = extract_tgz_url(&url, &fresh).and_then(|()| {
@@ -173,14 +211,14 @@ pub fn refresh_backend(dir: &Path, bundle_url: &str) -> Result<BackendRefresh, S
     Ok(BackendRefresh::Replaced(tag.to_string()))
 }
 
-/// After a bundle swap: bring the hub-managed backend to the same release and
-/// restart it, so the running backend matches the bundle it serves. Best-effort —
-/// the bundle swap stands either way; a configured external backend is never touched.
-fn refresh_backend_for_bundle(bundle_url: &str) {
+/// After a bundle swap or rollback: bring the hub-managed backend to the bundle's
+/// release `tag` and restart it. Best-effort — the bundle change stands either way;
+/// a configured external backend is never touched.
+pub fn refresh_backend_for_tag(tag: &str) {
     let Some(dir) = crate::backend::managed_dir() else {
         return;
     };
-    match refresh_backend(&dir, bundle_url) {
+    match refresh_backend(&dir, tag) {
         Ok(BackendRefresh::Unchanged) => {}
         Ok(BackendRefresh::Replaced(tag)) => {
             let running = crate::backend::restart();
@@ -359,14 +397,19 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), String> {
 fn download_latest_backend(dest: &Path, prerelease: bool) -> Result<String, String> {
     let url = if prerelease {
         let api = curl_text(RELEASES_ALL_URL)?;
-        find_newest_backend_in_releases(&api).ok_or_else(|| {
-            "no backend archive asset in any release (publish it there)".to_string()
-        })?
+        find_newest_backend_in_releases(&api)
+            .filter(|u| is_trusted_backend_url(u))
+            .ok_or_else(|| {
+                "no trusted backend archive asset in any release (publish it there)".to_string()
+            })?
     } else {
         let api = curl_text(RELEASES_LATEST_URL)?;
-        find_backend_asset_url(&api).ok_or_else(|| {
-            "no backend archive asset in the latest release (publish it there)".to_string()
-        })?
+        find_backend_asset_url(&api)
+            .filter(|u| is_trusted_backend_url(u))
+            .ok_or_else(|| {
+                "no trusted backend archive asset in the latest release (publish it there)"
+                    .to_string()
+            })?
     };
     extract_tgz_url(&url, dest)?;
     if !dest.join("main.py").is_file() {
@@ -524,20 +567,28 @@ pub fn rollback_bundle(dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The IIFE a release answer offers, only when it sits under the project's own release downloads.
+fn trusted_iife_url(api: &str, prerelease: bool) -> Result<String, String> {
+    let (found, scope) = if prerelease {
+        (find_newest_iife_in_releases(api), "any release")
+    } else {
+        (find_iife_asset_url(api), "the latest release")
+    };
+    found
+        .filter(|u| is_trusted_bundle_url(u))
+        .ok_or_else(|| format!("no trusted `*.iife.js` asset in {scope} (publish it there)"))
+}
+
 /// Resolve the newest release's `*.iife.js` asset and download it to `dest`. When
 /// `prerelease` is set, pre-release releases are considered (newest overall);
 /// otherwise only the latest stable release.
 fn download_latest_iife(dest: &Path, prerelease: bool) -> Result<String, String> {
-    let url = if prerelease {
-        let api = curl_text(RELEASES_ALL_URL)?;
-        find_newest_iife_in_releases(&api)
-            .ok_or_else(|| "no `*.iife.js` asset in any release (publish it there)".to_string())?
+    let api = curl_text(if prerelease {
+        RELEASES_ALL_URL
     } else {
-        let api = curl_text(RELEASES_LATEST_URL)?;
-        find_iife_asset_url(&api).ok_or_else(|| {
-            "no `*.iife.js` asset in the latest release (publish it there)".to_string()
-        })?
-    };
+        RELEASES_LATEST_URL
+    })?;
+    let url = trusted_iife_url(&api, prerelease)?;
     if let Some(dir) = dest.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
     }
@@ -703,8 +754,9 @@ fn is_steamos() -> bool {
         .unwrap_or(false)
 }
 
-/// The `browser_download_url` of the first asset in a release whose name matches
-/// one of `names` (pure — tested without the network).
+/// The `browser_download_url` of the first asset in a ShelvesHub release whose name
+/// matches one of `names`, only when it is that file in the hub's own release
+/// downloads (`is_trusted_hub_url`). Pure — tested without the network.
 fn find_asset_url_by_names(release: &serde_json::Value, names: &[&str]) -> Option<String> {
     let assets = release.get("assets")?.as_array()?;
     for want in names {
@@ -713,6 +765,7 @@ fn find_asset_url_by_names(release: &serde_json::Value, names: &[&str]) -> Optio
                 if let Some(url) = asset
                     .get("browser_download_url")
                     .and_then(serde_json::Value::as_str)
+                    .filter(|u| is_trusted_hub_url(u, want))
                 {
                     return Some(url.to_string());
                 }
@@ -1105,7 +1158,9 @@ fn rollback_hub_at(exe: &Path, running_version: &str) -> Result<String, String> 
 /// automatically after a clean exit (macOS launchd `KeepAlive`, systemd
 /// `Restart=always`) — so the caller can restart into the staged binary by
 /// exiting. A manually-launched daemon (dev runs) returns `false`: it stays up
-/// and the "restart to apply" notice tells the user to restart.
+/// and the "restart to apply" notice tells the user to restart. Windows is
+/// always `false`: its logon task restarts a failed run only, so a restart goes
+/// through `relaunch_self`, which runs the task again.
 pub fn under_relaunching_service() -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -1123,28 +1178,40 @@ pub fn under_relaunching_service() -> bool {
     }
 }
 
+/// The logon task the Windows installers register, run again by `relaunch_self`.
+const WINDOWS_TASK_NAME: &str = "ShelvesHub";
+
+/// The shell line that brings the daemon back once this process has exited: a
+/// ~2 s wait frees the RPC port first. Windows runs the logon task again, so the
+/// new daemon stays under it; a daemon started by hand has no task registered
+/// and the line falls back to the executable. Unix starts the executable — the
+/// self-update has already swapped the new binary in at that path.
+pub(crate) fn relaunch_line(exe: &str, windows: bool) -> String {
+    if windows {
+        format!("timeout /t 2 >nul & schtasks /Run /TN {WINDOWS_TASK_NAME} >nul 2>&1 || \"{exe}\"")
+    } else {
+        format!("sleep 2; exec \"{exe}\"")
+    }
+}
+
 /// Relaunch the daemon when NO service manager will bring it back (so a restart
-/// request isn't a silent no-op). Spawns a detached relauncher that waits ~2 s for
-/// this process to exit and free the RPC port, then starts the executable fresh —
-/// on Unix the self-update has already swapped the new binary in at the exe path.
+/// request isn't a silent no-op): spawns a detached shell on `relaunch_line`.
 /// Best-effort: a spawn failure just means no restart, which the caller logs.
 pub fn relaunch_self() {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    let exe = exe.to_string_lossy().into_owned();
+    let line = relaunch_line(&exe.to_string_lossy(), cfg!(windows));
     #[cfg(windows)]
     {
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", &format!("timeout /t 2 >nul & \"{exe}\"")])
-            .spawn();
+        // `cmd` takes its line verbatim: the escaping `arg` applies to a quoted
+        // path (`\"`) is not cmd syntax.
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("cmd").raw_arg(format!("/C {line}")).spawn();
     }
     #[cfg(not(windows))]
     {
-        let _ = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(format!("sleep 2; exec \"{exe}\""))
-            .spawn();
+        let _ = Command::new("sh").arg("-c").arg(line).spawn();
     }
 }
 
@@ -1238,13 +1305,13 @@ fn verify_release_archive(
     let Some(sums_url) = find_asset_url_by_names(release, &["SHA256SUMS"]) else {
         if signatures_required() {
             return Err(
-                "release has no SHA256SUMS but update signatures are required — refusing update"
+                "release has no trusted SHA256SUMS but update signatures are required — refusing update"
                     .to_string(),
             );
         }
         log_warning(
             "populate",
-            "release has no SHA256SUMS — skipping hash/signature check (archive magic/arch still verified).",
+            "release has no trusted SHA256SUMS — skipping hash/signature check (archive magic/arch still verified).",
         );
         return Ok(());
     };
@@ -1263,7 +1330,7 @@ fn verify_release_archive(
         }
         _ if signatures_required() => {
             return Err(
-                "release has no SHA256SUMS.minisig but update signatures are required — refusing update"
+                "release has no trusted SHA256SUMS.minisig but update signatures are required — refusing update"
                     .to_string(),
             );
         }
@@ -1326,7 +1393,7 @@ pub fn apply_hub_update(prerelease: bool) -> Result<String, String> {
 
     let url = find_asset_url_by_names(&release, hub_package_candidates()).ok_or_else(|| {
         format!(
-            "release {tag} has no package for this platform ({})",
+            "release {tag} has no trusted package for this platform ({})",
             hub_package_candidates().first().copied().unwrap_or("?")
         )
     })?;
@@ -1457,7 +1524,7 @@ fn find_newest_iife_in_releases(releases_json: &str) -> Option<String> {
 
 /// `curl -sL <url>` → stdout as text, bounded by the connect and whole-call
 /// timeouts so an unreachable or stalled endpoint never hangs the caller (the
-/// first-boot obtain runs before the RPC server is up). Used for the GitHub API call.
+/// first-boot obtain holds the injection loop until it ends). Used for the GitHub API call.
 fn curl_text(url: &str) -> Result<String, String> {
     let out = Command::new("curl")
         .args([
@@ -1502,7 +1569,7 @@ fn curl_download(url: &str, dest: &Path) -> Result<(), String> {
 pub fn update_from_release(dest: &Path, prerelease: bool) -> Result<String, String> {
     match download_latest_iife(dest, prerelease) {
         Ok(url) => {
-            refresh_backend_for_bundle(&url);
+            refresh_backend_for_tag(pinned_release_tag(&url).unwrap_or_default());
             Ok(url)
         }
         Err(e) => {
@@ -1564,7 +1631,7 @@ pub fn apply_update(
     verify_plugin_asset_against_sums(url, &tmp)?;
     swap_bundle_in(&tmp, dest)?;
     log_info("populate", &format!("Applied plugin update from {url}"));
-    refresh_backend_for_bundle(url);
+    refresh_backend_for_tag(pinned_release_tag(url).unwrap_or_default());
     Ok(url.to_string())
 }
 

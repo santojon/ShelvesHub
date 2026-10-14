@@ -45,6 +45,7 @@
         action_download: "Download the latest Deck Shelves",
         action_update_hub: "Update ShelvesHub",
         action_logs: "View logs",
+        action_status: "View status",
         action_auto_update: "Automatic updates",
       },
     };

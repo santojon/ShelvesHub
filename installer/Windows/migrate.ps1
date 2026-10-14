@@ -27,6 +27,19 @@ if ((Test-Path $sysSettings) -and -not (Test-Path $userSettings)) {
   if (Test-Path $userSettings) { Write-Output "[i] Rescued your Deck Shelves settings from the old system install." }
 }
 
+# The old install's task has this same name and ran with administrator rights;
+# left in place it stands in the way of the per-user task registered after this
+# script. Removing it needs those rights: try, and say what to do without them.
+if (Get-ScheduledTask -TaskName "ShelvesHub" -ErrorAction SilentlyContinue) {
+  try {
+    Stop-ScheduledTask -TaskName "ShelvesHub" -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName "ShelvesHub" -Confirm:$false -ErrorAction Stop
+    Write-Output "[i] Removed the old install's scheduled task."
+  } catch {
+    Write-Warning "[!] Could not remove the old install's scheduled task ($($_.Exception.Message)). Run this installer once as an administrator, or delete the task 'ShelvesHub' in Task Scheduler, then install again."
+  }
+}
+
 Remove-Item -Recurse -Force $oldInstall
 Remove-Item "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ShelvesHub" -Recurse -Force
 if (Test-Path $oldInstall) {

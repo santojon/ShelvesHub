@@ -157,8 +157,9 @@ fn manual_update_paths_answer_busy_while_a_check_runs() {
         r#"{"method":"populateBundle"}"#,
         r#"{"method":"selfUpdate"}"#,
     ] {
+        // The `busy: ` prefix is the contract's retry-later signal for applyUpdate.
         let out = call(body);
-        assert!(out.contains("busy"), "{body}: {out}");
+        assert!(out.contains(r#""error":"busy: "#), "{body}: {out}");
     }
     state::end_update_check();
     // Released: the handler runs again (and refuses for its own reason).
@@ -198,19 +199,16 @@ fn self_update_is_skipped_when_current_or_already_staged() {
 }
 
 #[test]
-fn bundle_tag_comes_from_the_download_url() {
+fn self_update_keeps_notes_only_with_the_release_they_describe() {
+    let looked_up = || Some(("v0.6.0".to_string(), "What changed".to_string()));
     assert_eq!(
-        bundle_tag_from_url(
-            "https://github.com/santojon/Deck-Shelves/releases/download/v3.4.0/index.iife.js"
-        )
-        .as_deref(),
-        Some("v3.4.0")
+        staged_release_notes(looked_up(), "v0.6.0").as_deref(),
+        Some("What changed")
     );
-    assert_eq!(
-        bundle_tag_from_url("https://example.com/releases/download/v3.4.0/index.iife.js"),
-        None
-    );
-    assert_eq!(bundle_tag_from_url(TRUSTED_BUNDLE_PREFIX), None);
+    // A newer release published between the lookup and the download, or a missed
+    // lookup: nothing is known about the staged release, so no notes.
+    assert_eq!(staged_release_notes(looked_up(), "v0.6.1"), None);
+    assert_eq!(staged_release_notes(None, "v0.6.0"), None);
 }
 
 #[test]
@@ -281,6 +279,19 @@ fn update_pref_and_config_sync_need_a_known_key_and_a_store() {
         out.contains("hub config path not configured") || out.contains("config_sync"),
         "{out}"
     );
+}
+
+#[test]
+fn bind_refuses_a_port_another_listener_holds() {
+    // Never bind successfully here: that would publish this process's token over
+    // the real token file. The refusal comes before the token is written.
+    let held = TcpListener::bind("127.0.0.1:0").expect("loopback listener");
+    let addr = held.local_addr().expect("bound address").to_string();
+    let token_file = || crate::config::rpc_token_path().and_then(|p| std::fs::read(p).ok());
+    let before = token_file();
+    let refused = bind(&addr).expect_err("a held port is refused");
+    assert_eq!(refused.kind(), std::io::ErrorKind::AddrInUse, "{refused}");
+    assert!(token_file() == before, "the token file was rewritten");
 }
 
 /// Feed one raw request over a loopback socket pair and parse it as the server does.

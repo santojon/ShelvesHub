@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Build the ShelvesHub simulation image and run the in-container harness (the
-# runtime scenarios + the daemon-injection smoke) against a headless Chromium on
-# Linux — cross-platform validation without a Steam Deck.
+# runtime scenarios, the install/uninstall lifecycle, the daemon-injection smoke,
+# the daemon scenarios and the plugin backend probes) against a headless Chromium
+# on Linux — cross-platform validation without a Steam Deck.
 #
 # Usage:
 #   scripts/harness-docker.sh                 # host architecture
@@ -27,9 +28,8 @@ docker build ${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} \
   --build-arg "BASE_IMAGE=$BASE_IMAGE" \
   -f "$ROOT/docker/Dockerfile" -t "$IMAGE" "$ROOT"
 
-# Mount the repo read-only at a work copy and keep target/ + cargo caches on named
-# volumes so rebuilds across runs are fast. The repo is mounted at /work; cargo
-# output and the git-fetched React vendor land on the cache volumes.
+# Mount the repo at /work (the harness's React files come with it) and keep target/
+# + the cargo registry on named volumes so rebuilds across runs are fast.
 # Optionally mount a Deck Shelves checkout so the harness can exercise the plugin's
 # cross-OS backend probes UNDER the host on this container's OS/arch. Looked up via
 # DECK_SHELVES_ROOT, else a sibling ../Deck-Shelves; absent → that step skips.

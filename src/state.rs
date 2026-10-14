@@ -11,9 +11,6 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static INJECTED: AtomicBool = AtomicBool::new(false);
-/// Wall-clock millis (since epoch) of the most recent bundle injection, stamped
-/// by the loop after each bundle eval. 0 = not injected yet this session.
-static INJECTED_AT_MS: AtomicU64 = AtomicU64::new(0);
 static POPULATE: OnceLock<(PathBuf, bool)> = OnceLock::new();
 static HUB_CONFIG: OnceLock<PathBuf> = OnceLock::new();
 /// Per-boot RPC bearer token: generated once, stamped into the runtime over CDP
@@ -44,10 +41,12 @@ pub fn pending_hub_update() -> Option<String> {
     PENDING_HUB_UPDATE.lock().ok().and_then(|s| s.clone())
 }
 
-/// Set once a hub self-update has been downloaded and staged over the running
-/// binary but not yet applied (the daemon isn't under a relaunching service, so
-/// it can't restart itself). Surfaced via `getConfig` so the notice becomes
-/// "update downloaded — restart to finish" instead of "restart to update".
+/// Set once a hub self-update (or rollback) has been staged over the running
+/// binary and waits for a restart: the loop's automatic check stages under any
+/// service manager without exiting, and only the manual `selfUpdate` /
+/// `rollbackHub` exit on their own, under a relaunching manager. Surfaced via
+/// `getConfig` so the notice becomes "update downloaded — restart to finish"
+/// instead of "restart to update".
 static HUB_UPDATE_STAGED: AtomicBool = AtomicBool::new(false);
 
 pub fn set_hub_update_staged(value: bool) {
@@ -252,11 +251,6 @@ pub fn boot_movie_source() -> Option<&'static PathBuf> {
 /// Record whether the Deck Shelves bundle is currently active in the renderer.
 pub fn set_injected(value: bool) {
     INJECTED.store(value, Ordering::Relaxed);
-}
-
-/// Stamp "the bundle was just injected" with the current wall-clock time.
-pub fn mark_injected_now() {
-    INJECTED_AT_MS.store(now_ms(), Ordering::Relaxed);
 }
 
 /// Whether the bundle was active as of the last loop tick.

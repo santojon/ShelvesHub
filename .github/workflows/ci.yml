@@ -201,10 +201,55 @@ jobs:
           fi
           test "$DERIVED" = "$CONTRACT_VERSION" || { echo "::error::derived $DERIVED differs from the contract's $CONTRACT_VERSION"; exit 1; }
 
-  # Cross-platform simulation harness: build + run the daemon, the runtime
-  # scenarios, and the install/uninstall lifecycle against a headless Chromium in
-  # a clean Linux container (x86_64 here; arm64 is available locally via
-  # `PLATFORM=linux/arm64 scripts/harness-docker.sh` with QEMU/buildx). The
+  # The runtime harness (its node unit checks + the browser scenarios) and the
+  # daemon scenarios on the runner itself: cargo, node and a CI-provided Chrome.
+  # Runs on every push and pull request; either one failing fails this job.
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Runtime harness (node unit checks + browser scenarios)
+        env:
+          BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+          HARNESS_NO_SANDBOX: '1'
+        run: bash scripts/harness.sh
+
+      - name: Daemon scenarios
+        if: ${{ !cancelled() }}
+        env:
+          BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+          HARNESS_NO_SANDBOX: '1'
+        run: bash scripts/harness-daemon.sh
+
+  # Cross-platform simulation harness: build + run the daemon, the runtime and
+  # daemon scenarios, and the install/uninstall lifecycle against a headless
+  # Chromium in a clean Linux container (x86_64 here; arm64 is available locally
+  # via `PLATFORM=linux/arm64 scripts/harness-docker.sh` with QEMU/buildx). The
   # Windows/macOS builds ride the matrices above — Windows containers can't run
   # on a Linux runner.
   docker-harness:
@@ -258,7 +303,7 @@ jobs:
             python:3-slim python3 /probes.py
 
   # Prove every change compiles for Linux ARM64 (ARM devices / ARM boxes). Cheap:
-  # a native cross-compile with the ARM64 linker — no emulation — so it gates every
+  # a native cross-compile with the ARM64 linker — no emulation — so it runs on every
   # PR. The full emulated ARM64 runtime harness is docker-harness-arm64 below.
   linux-arm64-check:
     runs-on: ubuntu-latest
@@ -310,7 +355,7 @@ jobs:
   # The full simulation harness on REAL emulated ARM64 (QEMU) — the daemon,
   # runtime scenarios and injection smoke actually running, not just compiling.
   # A cargo release build under emulation is slow, so this is manual-dispatch only
-  # (linux-arm64-check gates every PR); run it before promoting "Linux ARM64
+  # (linux-arm64-check runs on every PR); run it before promoting "Linux ARM64
   # supported" or ahead of a release.
   docker-harness-arm64:
     runs-on: ubuntu-latest

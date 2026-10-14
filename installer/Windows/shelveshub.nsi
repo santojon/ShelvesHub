@@ -160,7 +160,8 @@ Section "Install"
   SetOutPath "$INSTDIR"
 
   ; Migrate an old Program Files/admin install to per-user FIRST, so a carried-over
-  ; config is in place before the config check below (shared with install.ps1).
+  ; config is in place before the config check below and an admin-era task of the
+  ; same name is gone before register-task.ps1 registers the per-user one.
   File "payload\migrate.ps1"
   nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -NoProfile -File "$INSTDIR\migrate.ps1" -InstallPath "$INSTDIR"'
   Pop $0
@@ -267,12 +268,14 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\assets"
   ; Files the daemon and the installers write beside the payload: the config backup
   ; + the dot-prefixed write temps, the RPC token, a staged self-update, the rollback
-  ; snapshot and the install log. Without these the directory is left behind.
+  ; snapshot, the daemon's log and the install log. Without these the directory is
+  ; left behind.
   Delete "$INSTDIR\shelveshub.config.json.bak"
   Delete "$INSTDIR\.*.tmp"
   Delete "$INSTDIR\.rpc-token"
   Delete "$INSTDIR\shelveshub.exe.new"
   Delete "$INSTDIR\install.log"
+  RMDir /r "$INSTDIR\logs"
   RMDir /r "$INSTDIR\previous"
   RMDir /r "$INSTDIR\previous.tmp"
   Delete "$INSTDIR\uninstall.exe"

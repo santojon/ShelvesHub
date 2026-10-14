@@ -10,6 +10,22 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **Status gets its own tab in the side panel.** The ShelvesHub tab keeps three areas — Updates,
+  Settings, Troubleshooting — and the side panel now has Notifications, Status and Logs: "View
+  status" in Troubleshooting (or Ctrl+Shift+S) opens the readout that used to sit squeezed under
+  the other rows.
+- **Big Picture behind another window no longer pauses ShelvesHub.** On a Mac (or any desktop),
+  covering or minimizing Big Picture used to read as "back to the desktop client": the hub stood
+  down and skipped updates until the window was in front again. It now asks Steam which interface
+  is active.
+- **Windows: a log file, no console window, restarts under the task.** The service writes
+  `%LOCALAPPDATA%\ShelvesHub\logs\out.log`, starts hidden from the logon task (closing a window
+  can no longer end it), comes back under that task after "Restart service" or a self-update, and
+  the binaries no longer need the Visual C++ redistributable.
+- **The hub view stays where you left it.** Switching to another Quick Access tab and back brings
+  back the ShelvesHub view you opened from the Deck Shelves editor (the side panel closes on the
+  way out), so its gestures and shortcuts keep working. A second copy of ShelvesHub started while
+  one already runs now exits with a clear log line instead of running without its control port.
 - **Plugin auto-update in cooperative mode.** With the new `coop_bundle` option on (next to
   `force_owner`), ShelvesHub runs and updates its own copy of Deck Shelves even when a plugin loader
   is present: the loader's copy (Deck Shelves 3.4.0 or newer) stands down at the next Steam start
@@ -35,8 +51,8 @@ is pushed — the notes below are picked up and published with the release.
   small box under the buttons. The panel has two tabs, Logs and Notifications, with icons beside
   the ShelvesHub title to open either; it also opens like the plugin's own side panel — press
   right twice on the gamepad at the right edge of the hub view (left out of it closes) — or from
-  a keyboard with a double right arrow, Ctrl+Shift+L or Ctrl+Shift+N. LB / RB switch tabs inside
-  it, B closes it, and each notification shows its sender's mark like the Steam toast did.
+  a keyboard with Ctrl+Shift+L or Ctrl+Shift+N. LB / RB switch tabs inside it, B closes it, and
+  each notification shows its sender's mark like the Steam toast did.
 - **Notifications now look and behave like Steam's.** The notifications this host shows — Deck
   Shelves' too — go through Steam's own notification system: Steam's sound, position and in-game
   overlay, an entry in the Notifications tab, Steam's own look, each sender with its own mark.

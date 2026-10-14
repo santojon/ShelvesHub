@@ -9,15 +9,15 @@
 
 [![CI](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/ci.yml)
 [![Release](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml/badge.svg)](https://github.com/santojon/ShelvesHub/actions/workflows/release.yml)
-[![Tests](https://img.shields.io/badge/cargo%20test-80%20passed-brightgreen?logo=rust&logoColor=white)](src/)
-[![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](Cargo.toml)
+[![Tests](https://img.shields.io/badge/cargo%20test-150%20passed-brightgreen?logo=rust&logoColor=white)](../../src/)
+[![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen?logo=rust&logoColor=white)](../../Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-SteamOS%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-purple?logo=steamdeck&logoColor=white)](https://github.com/ValveSoftware/SteamOS)
 [![Downloads](https://img.shields.io/github/downloads/santojon/ShelvesHub/total.svg?label=downloads&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
 [![GitHub release](https://img.shields.io/github/v/release/santojon/ShelvesHub?label=latest&color=blue)](https://github.com/santojon/ShelvesHub/releases/latest)
 [![Deck Shelves](https://img.shields.io/github/v/release/santojon/Deck-Shelves?label=Deck%20Shelves&color=8957e5&logo=github)](https://github.com/santojon/Deck-Shelves)
 [![Forks](https://img.shields.io/github/forks/santojon/ShelvesHub?style=flat&color=blue)](https://github.com/santojon/ShelvesHub/network/members)
 [![Clones](https://img.shields.io/endpoint?url=https%3A%2F%2Fsantojon.github.io%2FDeck-Shelves%2Fstats%2Fclones-shelveshub.json)](https://github.com/santojon/ShelvesHub/graphs/traffic)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 
 </div>
 
@@ -49,7 +49,7 @@ ShelvesHub é o serviço hospedeiro independente para o [Deck Shelves](https://g
 
 ## Como funciona
 
-O loader roda como um serviço em segundo plano, observa o renderizador do Steam, injeta o pacote do Deck Shelves (`bundle/index.js`) via Chrome DevTools Protocol, e expõe um servidor HTTP JSON-RPC local (`127.0.0.1:60123`) que o pacote usa para se comunicar com o host. Se não houver um pacote presente, o serviço obtém um primeiro — reaproveitando uma cópia local, copiando-a de um carregador de plugins instalado, ou baixando a versão mais recente (`SHELVES_PRERELEASE=1` habilita versões pré-lançamento). Ele também pode hospedar o próprio backend de dados do Deck Shelves, de modo que uma instalação independente tenha todos os recursos on-line (lista de desejos, preços, launchers) e não apenas as prateleiras locais. Veja [docs/debugging.md](docs/debugging.md) para a ferramenta CDP `shelves-devtools` e o fluxo de depuração local/no Deck.
+O loader roda como um serviço em segundo plano, observa o renderizador do Steam, injeta o pacote do Deck Shelves (`bundle/index.js`) via Chrome DevTools Protocol, e expõe um servidor HTTP JSON-RPC local (`127.0.0.1:60123`) que o pacote usa para se comunicar com o host. Se não houver um pacote presente, o serviço obtém um primeiro — reaproveitando uma cópia local, copiando-a de um carregador de plugins instalado, ou baixando a versão mais recente (`SHELVES_PRERELEASE=1` habilita versões pré-lançamento). Ele também pode hospedar o próprio backend de dados do Deck Shelves, de modo que uma instalação independente tenha todos os recursos on-line (lista de desejos, preços, launchers) e não apenas as prateleiras locais. Veja [docs/debugging.md](debugging.md) para a ferramenta CDP `shelves-devtools` e o fluxo de depuração local/no Deck.
 
 O contrato compartilhado `HostApi` (`@deck-shelves/host`, incluído como submódulo `host/`) define o que o host oferece ao pacote, de modo que uma mesma build do Deck Shelves roda sob este host ou sob um carregador de plugins sem alterações. O processo em Rust (`src/`) implementa o lado do serviço e o runtime injetado (`runtime/shelves-host.js`) implementa o lado que roda dentro do renderizador.
 
@@ -80,14 +80,14 @@ O serviço também **se mantém atualizado, junto com o pacote**: com as atualiz
 - **Configurações seguras entre versões diferentes** — o próprio armazenamento de configurações do host preserva chaves que não reconhece, então rodar versões diferentes em máquinas diferentes nunca descarta uma configuração silenciosamente.
 - **Ciente da Gamepad UI** — por padrão só hospeda enquanto a interface de controle / Big Picture está em tela; um interruptor experimental (macOS / Windows) também injeta no cliente desktop normal.
 - **Reiniciar para aplicar, em um clique** — mudar uma configuração que exige reinício mostra um botão que reinicia o host e o Steam juntos para que a mudança tenha efeito.
-- **Configuração segura editável** — um subconjunto selecionado da configuração operacional é editável na aba, com uma leitura somente-leitura dos valores efetivos.
-- **Painel lateral com abas Logs e Notificações** — logs do host + runtime em um único fluxo navegável por controle, colorido por categoria, mais recentes primeiro, e a central de notificações com contador de não lidas; abre ao lado da aba (o menu alarga, como a lista de amigos do Steam) pelos ícones ao lado do título, com dois D-pad direita na borda direita da visão do hub (como o painel lateral do próprio plugin) ou Ctrl+Shift+L / Ctrl+Shift+N no teclado, e B leva de volta.
+- **Configuração segura editável** — um subconjunto selecionado da configuração operacional é editável na aba, com uma leitura somente-leitura dos valores efetivos na aba Estado do painel lateral.
+- **Painel lateral com abas Notificações, Estado e Logs** — logs do host + runtime em um único fluxo navegável por controle, colorido por categoria, mais recentes primeiro, e a central de notificações com contador de não lidas; abre ao lado da aba (o menu alarga, como a lista de amigos do Steam) pelos ícones ao lado do título, com dois D-pad direita na borda direita da visão do hub (como o painel lateral do próprio plugin) ou Ctrl+Shift+L / Ctrl+Shift+N no teclado, e B leva de volta. Trocar para outra aba do Acesso Rápido o fecha; de volta à aba do hub, a visão do hub que você abriu continua lá.
 - **Notificações pelo sistema do próprio Steam** — as notificações do host (as do Deck Shelves e as do próprio ShelvesHub, cada uma com sua marca) são toasts do Steam com entrada na aba Notificações; o ShelvesHub avisa quando atualizou, reverteu, pausou o modo cooperativo ou reiniciou uma interface do Steam colapsada. O painel lateral guarda as últimas na sua aba Notificações.
 - **Configurações que seguem sua conta Steam** — as escolhas do próprio hub (os interruptores de atualização, atualizações silenciosas, notificações do Steam, a animação de inicialização) sincronizam entre os dispositivos em que você entra; para cada configuração vence a mudança mais recente, a operação local do dispositivo (portas, caminhos, posse, intervalos, o comando de recuperação) nunca sai dele, e um interruptor em Configuração desliga tudo.
 - **Desativar até reiniciar** — um interruptor de solução de problemas desativa o host até o próximo reinício do serviço, sem desinstalar nada.
 - **Um contrato compartilhado** — a API `@deck-shelves/host` define o que o host fornece, então uma build do Deck Shelves roda sob este host ou sob um carregador de plugins sem alteração.
 - **Localizado** — a aba do host está traduzida em 19 idiomas.
-- **Verificação sem dispositivo** — um harness de simulação Docker roda o runtime, um smoke test de injeção daemon → Chromium headless, o ciclo de vida de instalação/desinstalação, e os probes de backend multiplataforma do Deck Shelves sob o host num container (em Linux x86_64 e ARM64 por emulação).
+- **Verificação sem dispositivo** — um harness de simulação Docker roda o runtime, um smoke test de injeção daemon → Chromium headless, os cenários de colapso e recuperação do daemon, o ciclo de vida de instalação/desinstalação, e os probes de backend multiplataforma do Deck Shelves sob o host num container (em Linux x86_64 e ARM64 por emulação).
 
 ---
 
@@ -112,15 +112,15 @@ O ShelvesHub adiciona seu próprio painel de gerenciamento ao menu de Acesso Rá
 
 ## Documentação
 
-- [Arquitetura](docs/architecture.md) — como o daemon, o runtime injetado e o servidor RPC se encaixam.
-- [Contrato HostApi](docs/host-api.md) — a superfície `window.__SHELVES_HOST__` que o pacote consome.
-- [Contrato do backend](docs/backend-contract.md) — hospedando o backend de dados do Deck Shelves via stdio.
-- [Uso](docs/usage.md) — executando e configurando o serviço.
-- [Desenvolvimento](docs/development.md) — construindo e trabalhando no ShelvesHub.
-- [Depuração e DevTools](docs/debugging.md) — a ferramenta CDP `shelves-devtools` e o fluxo de depuração.
-- [Solução de problemas](docs/troubleshooting.md) — conflitos de porta, coexistência e recuperação.
+- [Arquitetura](architecture.md) — como o daemon, o runtime injetado e o servidor RPC se encaixam.
+- [Contrato HostApi](host-api.md) — a superfície `window.__SHELVES_HOST__` que o pacote consome.
+- [Contrato do backend](backend-contract.md) — hospedando o backend de dados do Deck Shelves via stdio.
+- [Uso](usage.md) — executando e configurando o serviço.
+- [Desenvolvimento](development.md) — construindo e trabalhando no ShelvesHub.
+- [Depuração e DevTools](debugging.md) — a ferramenta CDP `shelves-devtools` e o fluxo de depuração.
+- [Solução de problemas](troubleshooting.md) — conflitos de porta, coexistência e recuperação.
 - [Validação em dispositivo](device-validation.md) — o procedimento único para checar um dispositivo Steam de verdade, modo a modo, e como registrar.
-- [Vitrine e capturas de tela](docs/showcase.md) — o conjunto de capturas de tela e como ele é publicado.
+- [Vitrine e capturas de tela](showcase.md) — o conjunto de capturas de tela e como ele é publicado.
 
 ---
 
@@ -144,7 +144,7 @@ Instala em `~/.local/share/shelveshub` e registra um `shelveshub.service` de ní
 
 ### macOS
 
-Baixe o **`Install ShelvesHub.app`** (um aplicativo instalador clicável com o ícone do ShelvesHub) do último lançamento e dê um duplo clique nele. Na primeira execução, clique com o botão direito → Abrir para contornar o Gatekeeper. Um script simples `install-mac.command` também é publicado. A build para macOS é um **binário universal**, então roda nativamente tanto em Macs com Apple Silicon quanto com Intel.
+Baixe o **`Install-ShelvesHub.app.zip`** do último lançamento, descompacte-o e dê um duplo clique no **`Install ShelvesHub.app`** (um aplicativo instalador clicável com o ícone do ShelvesHub). Na primeira execução, clique com o botão direito → Abrir para contornar o Gatekeeper. Um script simples `install-mac.command` também é publicado. A build para macOS é um **binário universal**, então roda nativamente tanto em Macs com Apple Silicon quanto com Intel.
 
 ### Windows
 
@@ -231,7 +231,7 @@ docker/
 ```
 
 As configurações ficam em `shelveshub.config.json` ao lado do binário (variável de
-ambiente > arquivo > padrão). Veja [docs/troubleshooting.md](docs/troubleshooting.md) para conflitos de porta,
+ambiente > arquivo > padrão). Veja [docs/troubleshooting.md](troubleshooting.md) para conflitos de porta,
 coexistência com outro host, e recuperação de tela preta.
 
 ---
@@ -252,19 +252,19 @@ Cada lançamento publica os pacotes por plataforma, os scripts de um clique, e o
 | `shelveshub-linux.desktop` | Instalador de um clique para Linux — mesma detecção automática de arquitetura |
 | `install-mac.command` | Script de um clique para macOS |
 | `install-windows.bat` | Script de um clique para Windows |
-| `Install ShelvesHub.app` (zipado) | Instalador clicável para macOS (com ícone) |
+| `Install-ShelvesHub.app.zip` | Instalador clicável para macOS `Install ShelvesHub.app` (com ícone), zipado |
 | `shelveshub-setup.exe` | Instalador para Windows (com ícone) |
 
 ---
 
 ## Contribuindo
 
-Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o fluxo de desenvolvimento e [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) para as expectativas da comunidade.
+Veja [CONTRIBUTING.md](../../CONTRIBUTING.md) para o fluxo de desenvolvimento e [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) para as expectativas da comunidade.
 
 ## Segurança
 
-Relate vulnerabilidades pelo [SECURITY.md](SECURITY.md).
+Relate vulnerabilidades pelo [SECURITY.md](../../SECURITY.md).
 
 ## Licença
 
-Este projeto é distribuído sob os termos do arquivo [LICENSE](LICENSE).
+Este projeto é distribuído sob os termos do arquivo [LICENSE](../../LICENSE).

@@ -43,6 +43,11 @@ struct Cli {
     #[arg(long, env = "SHELVES_TARGET", global = true)]
     target: Option<String>,
 
+    /// Give up after this many seconds, exiting with 124 (0 = no limit). Bounds a
+    /// readiness poll against an endpoint that accepts but never answers.
+    #[arg(long, default_value_t = 0, global = true)]
+    timeout: u64,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -95,6 +100,14 @@ enum Command {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if cli.timeout > 0 {
+        let secs = cli.timeout;
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(secs));
+            eprintln!("error: no answer within {secs}s");
+            std::process::exit(124);
+        });
+    }
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

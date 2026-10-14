@@ -17,17 +17,29 @@ chave para voltar ao seu valor padrão.
 
 ### A porta RPC (60123) já está em uso
 
-Sintoma: o log mostra `Failed to bind the control endpoint 127.0.0.1:60123: … Another
-process (a second ShelvesHub, or something else) holds the port, so settings CANNOT be
-saved.` O daemon continua injetando sem o RPC, mas nada pode ser salvo até a porta
-ficar livre. Correção — pare o outro processo, ou escolha uma porta livre:
+Sintoma: o ShelvesHub sai logo depois de iniciar e o log mostra `Failed to bind the control
+endpoint 127.0.0.1:60123: … Another ShelvesHub is probably running (or another process holds
+the port), so this one exits.` Um hub que não consegue abrir seu endpoint de controle nunca
+injeta — nada poderia ser salvo por ele — e o que já ocupa a porta continua rodando com o próprio
+token. A causa comum é um segundo ShelvesHub, iniciado à mão ou de uma segunda instalação: a
+cópia que inicia por último é a que sai. Quando essa cópia é o serviço, o systemd (a cada 10 s) e
+o launchd continuam reiniciando-a e a linha se repete até a porta ficar livre. Pare o outro
+ShelvesHub; quando outra coisa ocupa a porta, encontre-a (`ss -ltnp | grep 60123` no Linux,
+`lsof -iTCP:60123 -sTCP:LISTEN` no macOS, `netstat -ano | findstr :60123` no Windows) e pare-a,
+ou escolha uma porta livre e reinicie o serviço:
 
 ```json
-{ "rpc_port": 60124 }
+{ "rpc_port": 60125 }
 ```
 
 O runtime injetado usa a mesma porta automaticamente (o daemon a grava nele), então
 você só precisa alterá-la em um único lugar.
+
+Qualquer outro erro nessa linha vem com uma dica para conferir `rpc_host` / `rpc_port` no
+`shelveshub.config.json` — um `rpc_host` que não é um endereço desta máquina, ou uma porta que
+este usuário não pode abrir (uma porta abaixo de 1024 no Linux, ou uma dentro de uma faixa que o
+Windows reserva para os próprios serviços); o hub sai do mesmo jeito até que eles sejam
+corrigidos e o serviço seja iniciado de novo.
 
 ### A porta de depuração do Steam (8080) está errada ou inacessível
 
@@ -47,11 +59,14 @@ Você também pode mudar o host com `cef_host` caso esteja depurando um endpoint
 
 O ShelvesHub coexiste com outro host (por exemplo, outro carregador de plugins): ele
 nunca carrega o plugin duas vezes e adiciona apenas sua própria aba. Quando o Deck
-Shelves do próprio carregador é anterior ao 3.3.1, ele nunca reivindica o renderizador,
-então nada avisa o hub de que está ali — o ShelvesHub ainda o vê na lista de plugins do
-carregador e fica só com sua aba (o log diz `Coexisting with "plugin loader (Deck
-Shelves <versão>, no ownership claim …)"`); atualize o Deck Shelves no carregador para
-ter o editor dentro da aba do hub e as configurações compartilhadas entre os dois. A loja de
+Shelves do próprio carregador é anterior ao 3.2.0 (a 2.0.0 da loja incluída), ele nunca
+reivindica o renderizador, então nada avisa o hub de que está ali — o ShelvesHub ainda o
+vê na lista de plugins do carregador e fica só com sua aba (o log diz `Coexisting with
+"plugin loader (Deck Shelves <versão>, no ownership claim …)"`); a 3.2.x e a 3.3.0
+reivindicam sem gravar a versão, então a aba mostra um aviso âmbar e `—` como versão.
+Atualize o Deck Shelves no carregador (3.3.1 ou mais novo) para ter o editor dentro da
+aba do hub e as configurações compartilhadas entre os dois; a página de resolução de
+problemas da comunidade traz uma matriz de todas as versões e ajustes. A loja de
 plugins do carregador pode ficar muito atrás das releases (ela listava a 2.0.0 quando a 3.3.4
 era a atual), então instale o zip da release na página de releases do Deck Shelves quando a
 loja não oferecer nada mais novo que a 3.3.0.
@@ -139,7 +154,7 @@ como alternativa, e em host único o painel do Deck Shelves não tem outro lugar
 aparecer — então mantenha-a ligada a menos que a própria aba se comporte mal. Pelo
 console de depuração do Steam, `__SHELVES_QAM__.mode()` (presente em todos os modos,
 inclusive ao lado de um carregador) responde `native`, `native-arming`, `tripped`, ou
-`overlay` quando a aba não está instalada.
+`panel` quando a aba não está instalada.
 
 ## Notificações
 
@@ -156,6 +171,25 @@ aba. Quando o caminho não consegue instalar, o motivo está
 no log (`native toasts: …`); pelo console de depuração do Steam,
 `__SHELVES_HOST__.notifications.mode()` responde `active`, `pending`, `failed` ou `off`. Se algum
 dia se comportar mal, desligue a opção e reinicie o serviço.
+
+## Atualizações
+
+- **"Atualização do ShelvesHub baixada — reinicie para concluir" continua depois de desligar as
+  atualizações** — uma atualização baixada já está preparada ao lado do binário e roda no próximo
+  reinício, seja o que for que os interruptores digam agora, então o aviso fica até lá. Reinicie o
+  serviço, ou toque duas vezes nesse aviso na aba (o primeiro toque mostra "Toque de novo para
+  reiniciar"), para concluí-la.
+- **Trocar o canal de pré-lançamento do Deck Shelves** — o interruptor do hub e o interruptor de
+  beta do próprio Deck Shelves são lidos a cada verificação de atualização, então uma mudança vale
+  na próxima verificação, sem reinício.
+- **O backend de dados depois de uma atualização do Deck Shelves** — quando o hub hospeda o backend
+  a partir da própria pasta de instalação, cada atualização do Deck Shelves o leva para a mesma
+  release e o reinicia (o log diz `Backend refreshed to <tag>`); se esse download falha, o backend
+  anterior continua rodando e o log diz `backend not refreshed with the bundle: …`. Um diretório de
+  backend definido com `SHELVES_BACKEND_DIR` nunca é substituído. Numa primeira inicialização, o
+  hub obtém o backend por conta própria (de um Deck Shelves gerenciado por um carregador, senão do
+  download da release); a linha **Backend de dados** da visão do hub aparece ligada assim que a
+  hospedagem começa, e `getBackendStatus` pelo RPC diz se ele está rodando.
 
 ## Sincronização de configurações
 
@@ -208,10 +242,18 @@ próprias proteções. Nesta ordem:
 ## Lendo o log
 
 ```
-journalctl --user -u shelveshub -f      # SteamOS / Linux user service
+journalctl --user -u shelveshub -f                  # SteamOS, Linux desktop, Linux ARM64 (serviço de usuário do systemd)
+tail -f ~/.local/share/shelveshub/logs/out.log      # macOS (erros em error.log ao lado)
+%LOCALAPPDATA%\ShelvesHub\logs\out.log              # Windows (o arquivo anterior é out.log.1)
 ```
 
 Todo caminho de erro grava uma linha de log, então o log é o primeiro lugar a verificar.
+
+O serviço é a mesma unidade de usuário do systemd em todo Linux — SteamOS, uma distribuição
+desktop ou uma placa ARM64 (os pacotes diferem só pela arquitetura) — então a linha do journal é
+a mesma ali. Um daemon rodado à mão (`shelveshub` num terminal, `pnpm run run`) imprime nesse
+terminal. Em toda plataforma o **Ver logs** da aba mostra o serviço e o runtime injetado juntos;
+os arquivos e o journal guardam só o lado do serviço.
 
 No SteamOS / Linux o log do serviço fica no journal do systemd, então sobrevive à remoção
 do diretório de instalação: `journalctl --user -u shelveshub -n 500 --no-pager >

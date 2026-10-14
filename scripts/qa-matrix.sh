@@ -4,7 +4,7 @@
 # arm64 under QEMU) and the native scenario harness on this machine, each writing
 # structured evidence under site/reports/qa/evidence/, then assemble
 # site/reports/qa/matrix.json — one cell per platform × kind with an honest
-# status (tested / partial / not-run / blocked / manual). See docs/qa-lab.md.
+# status (tested / partial / stale / not-run / blocked / manual). See docs/qa-lab.md.
 #
 # Usage:  scripts/qa-matrix.sh                    # amd64 + arm64 containers + host harness
 #         QA_ARCHES="arm64" scripts/qa-matrix.sh  # one architecture

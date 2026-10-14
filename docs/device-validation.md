@@ -12,8 +12,10 @@ settings sync. The outcome is one JSON record per device and day under
 `device-steamos-*` and `device-macos-*` records to those platforms' manual cells; no other
 platform's cell takes a record yet (the prefixes live in `MANUAL` in `scripts/ci/qa-matrix.mjs`).
 
-Everything here but a real collapse and its recovery (so far only seen in the field) was
-exercised on a Steam Deck and a Mac; the same steps apply to any device that runs Steam with a
+Everything here but a real collapse and its recovery was exercised on a Steam Deck and a Mac
+(the daemon's side of a collapse has a desk proof in the QA lab's
+[daemon scenarios](qa-lab.md#daemon-scenarios); a real Steam collapse is still only seen in the
+field); the same steps apply to any device that runs Steam with a
 Chromium debug port. Without a device, the QA lab's
 [Steam ARM64 container](qa-lab.md#steam-arm64-in-a-container) runs Valve's own ARM64 client and
 proves the injection path on it.
@@ -53,7 +55,8 @@ proves the injection path on it.
 ## Step 1 — identify the device
 
 Run and keep the output of (SteamOS / Linux; on macOS skip the `ldd` line, there is no glibc
-there; on Windows run `%LOCALAPPDATA%\ShelvesHub\shelveshub.exe status --report`; after
+there; on Windows run `%LOCALAPPDATA%\ShelvesHub\shelveshub.exe status --report` and read
+`%LOCALAPPDATA%\ShelvesHub\logs\out.log`; after
 `pnpm deck:deploy` with `DECK_DEPLOY_PATH` set, the binary is `$DECK_DEPLOY_PATH/shelveshub`):
 
 ```sh
@@ -222,6 +225,12 @@ happens, the platform's default recovery runs once the collapse is confirmed: St
 Steam to open Big Picture again (no restart). A Linux system without `steam-launcher.service`, or
 any host with `recover_cmd: "off"`, only pauses and logs the manual-recovery hint. When a recovery
 command was launched, the hub shows the recovered notice once its runtime is back in place.
+The daemon's side of that path — the two collapse ticks, the recovery command or (with
+`recover_cmd: "off"`) the pause and the hint, resuming once a window is back, the recovered
+notice — is proven without a device by the QA lab's
+[daemon scenarios](qa-lab.md#daemon-scenarios) (`pnpm run harness:daemon`), which close a
+stand-in window under the real daemon. Whether a real Steam collapses that way and comes back
+from the platform's command stays a field observation: record it when you see one.
 
 **Legacy copy.** With `force_owner` off, delete `window.__DECK_SHELVES_OWNER__` from the shared
 context: the next tick logs the pre-3.3.1 owner label and stays tab-only; put the value back

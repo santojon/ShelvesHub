@@ -76,7 +76,8 @@ $TOOL preload --script my-script.js        # register a document-start script on
 ```
 
 Flags/variáveis globais: `--host` (`SHELVES_CEF_HOST`), `--port` (`SHELVES_CEF_PORT`),
-`--target` (`SHELVES_TARGET`). O `inject` avalia o arquivo como está e grava o marcador
+`--target` (`SHELVES_TARGET`), `--timeout N` (desiste depois de N segundos com código de saída
+124; 0, o padrão, espera sem limite). O `inject` avalia o arquivo como está e grava o marcador
 do loader — não adiciona a gravação de configuração (logo, nenhum token de RPC) nem o
 runtime do host, então serve para empurrar um pacote num renderizador que o daemon já
 preparou. O `preload` usa o auto-attach em nível de navegador: o script é registrado
@@ -106,6 +107,12 @@ ambiente de testes (`examples/harness/`) simula `window.SteamClient` e um
 o ciclo de vida, o canal RPC, chamadas de rota/notificação, e renderiza prateleiras
 de exemplo.
 
+O loader roda isolado numa pasta temporária — uma cópia do pacote, configurações, store do hub
+(atualizações e sincronização de configurações desligadas), arquivo de token e uma pasta de backend
+vazia só seus, com a animação de inicialização e a recuperação automática desligadas — na porta RPC
+`60124` (`SHELVES_RPC_PORT` a substitui), então não baixa nada e não toca nem a porta e os arquivos
+de um serviço instalado nem o Steam desta máquina.
+
 Para conduzi-lo manualmente contra o ambiente de testes na porta 9222:
 
 ```bash
@@ -121,7 +128,10 @@ shelves-devtools --port 9222 --target harness eval "window.__SHELVES_DEMO__"
 navegador headless, uma vez por cenário, e verifica o resultado — a aba nativa, o
 espelhamento de coexistência, o caminho de host único e o painel de fallback são todos cobertos
 sem um dispositivo físico. É hermético (o endpoint RPC do host é simulado na simulação),
-então não precisa de nenhum daemon em execução.
+então não precisa de nenhum daemon em execução. O equivalente do lado do serviço,
+`pnpm run harness:daemon`, roda o daemon real contra um Chromium headless cujas páginas fazem
+o papel das janelas do Steam e verifica o caminho colapso → recuperação (veja o
+[laboratório de QA](qa-lab.md#cenários-do-daemon)).
 
 ```bash
 pnpm harness            # headless
@@ -130,13 +140,16 @@ HEADLESS=0 pnpm harness  # show the browser window
 
 ### Ambiente de simulação em Docker (Linux)
 
-`pnpm harness:docker` constrói uma pequena imagem Linux e roda quatro verificações contra um
+`pnpm harness:docker` constrói uma pequena imagem Linux e roda cinco verificações contra um
 Chromium headless em um container: o conjunto de testes de cenário acima, o **ciclo de
 instalação e desinstalação do SteamOS/Linux** (um stub de gravação do `systemctl` faz esse
 papel — ele valida a criação/remoção de arquivos dos scripts e a preservação de
-configurações, não o systemd em si), um **teste de fumaça de injeção daemon → Chromium
-headless** (o daemon real descobre o alvo via CDP e injeta), e as **sondas do backend do
-plugin** (as sondas acopladas ao SO do backend do Deck Shelves rodando sob o host).
+configurações, não o systemd em si — e um `curl` simulado que serve uma release falsa, então
+o ramo de download + SHA256SUMS do instalador Linux genérico, uma atualização por cima de um
+daemon em execução e o `--purge` são cobertos sem rede), um **teste de fumaça de injeção daemon → Chromium
+headless** (o daemon real, sem rede sobre uma cópia do pacote de exemplo, descobre o alvo via CDP
+e injeta), os **cenários do daemon** acima,
+e as **sondas do backend do plugin** (as sondas acopladas ao SO do backend do Deck Shelves rodando sob o host).
 Validação multiplataforma sem um dispositivo; integrado à CI. arm64 via
 `PLATFORM=linux/arm64 pnpm harness:docker`.
 
@@ -166,8 +179,8 @@ shelves-devtools --port 9222 --target harness \
   eval "window.__SHELVES_HOST__.qam.mode() + ' ' + Object.keys(window.__SHELVES_HOST__.qam._specs)"
 ```
 
-`mode()` responde `native` (aba confirmada), `native-arming`, `tripped`, ou o rótulo
-legado `overlay` quando a aba não está instalada. O conjunto de testes de cenário
+`mode()` responde `native` (aba confirmada), `native-arming`, `tripped`, ou `panel`
+quando a aba não está instalada. O conjunto de testes de cenário
 (`pnpm harness`) é o lugar para ver a aba renderizar contra a simulação do Steam.
 
 ---
@@ -203,6 +216,10 @@ Logs no Deck:
 ssh deck@deck.local 'journalctl --user -u shelveshub -f'
 ```
 
+No macOS o log do serviço é `~/.local/share/shelveshub/logs/out.log` (erros em `error.log` ao
+lado); no Windows `%LOCALAPPDATA%\ShelvesHub\logs\out.log`, movido para `out.log.1` ao passar
+de 1 MiB.
+
 ### Estrutura dos logs e o visualizador embutido
 
 Os logs têm **nível** (`INFO` / `WARN` / `ERROR`) e **escopo** por categoria
@@ -217,6 +234,13 @@ ativado (`window.__SHELVES_LOG_VERBOSE__ = true` no renderizador) — então o `
 **um único fluxo combinado** de linhas do runtime e do serviço. O runtime também mantém
 suas últimas entradas em `window.__SHELVES_LOG__` (objetos `{t, level, scope, msg}`) para
 inspeção direta via a conexão do DevTools.
+
+Mais três globais do renderizador ajudam quando a aba nativa se comporta mal:
+`window.__SHELVES_NATIVE_ERR__` guarda o último erro que o error boundary da aba capturou
+(`message`, `stack`, `componentStack`); `window.__SHELVES_REFRESH__()` renderiza de novo os
+painéis da aba no lugar; e `window.__SHELVES_FIBER_REPOINT__ = false`, definido antes de o
+runtime carregar, desliga o re-apontamento no lugar de um menu já montado (a aba então precisa
+que o menu seja fechado e aberto para aparecer).
 
 A ação **Logs** na própria aba do host renderiza esse fluxo combinado como uma lista
 rolável e marcada (mais recentes primeiro), com um controle de atualização.

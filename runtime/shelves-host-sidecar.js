@@ -13,6 +13,7 @@
     back: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
     refresh: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
     trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>',
+    info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
     // Tintable ShelvesHub mark: three books on a shelf over a hub node, single-
     // colour (currentColor). Three bigger books (vs the 4-book draft) + the hub
     // (the ShelvesHub identity), tuned to still read at 16px.
@@ -232,9 +233,9 @@
     return { Panel: Panel, css: CSS, compositor: compositor, takeFocus: takeFocus };
   })();
 
-  /* ── Sidecar tabs (Logs | Notifications), the title icons that open them, and the two ways
-     to open the panel without a pointer: the plugin's own D-pad gesture and the keyboard. ── */
-  const SIDE_TAB_LOGS = "logs", SIDE_TAB_NOTIF = "notif";
+  /* ── Sidecar tabs (Notifications | Status | Logs), the title icons that open them, and the two
+     ways to open the panel without a pointer: the plugin's own D-pad gesture and the keyboard. ── */
+  const SIDE_TAB_LOGS = "logs", SIDE_TAB_NOTIF = "notif", SIDE_TAB_STATUS = "status";
   const BADGE_STYLE = { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "16px", height: "16px", padding: "0 5px", borderRadius: "8px", background: "#1a9fff", color: "#fff", fontSize: "10px", fontWeight: "700" };
   // One tab header: the active one is bright with an accent underline; a count badge for unread.
   function sidecarTab(id, label, active, onPick, badge) {
@@ -259,7 +260,59 @@
     return React.createElement.apply(React, [focusableComp || "div", listProps].concat(rows));
   }
 
+  // A read-only row of the Status tab: label left, monospace value right. Focusable with a
+  // no-op activate so the gamepad can walk the rows (a Focusable without one is skipped).
+  function statusRow(key, label, val) {
+    const body = [
+      h("span", { key: "l", style: { flex: "0 0 auto", color: "rgba(255,255,255,0.72)" } }, label),
+      h("span", { key: "v", style: { flex: "1 1 auto", textAlign: "right", fontFamily: "monospace", wordBreak: "break-all", color: "rgba(255,255,255,0.92)" } }, String(val)),
+    ];
+    const st = { display: "flex", alignItems: "center", gap: "10px", minHeight: "36px", boxSizing: "border-box", padding: "6px 16px", fontSize: "12px" };
+    return focusableComp
+      ? h(focusableComp, { key: key, "data-fb": "ro-" + key, onActivate: function () {}, focusClassName: "shelves-rowfocus", style: st }, body)
+      : h("div", { key: key, "data-fb": "ro-" + key, style: st }, body);
+  }
+  // Amber warnings on the Status tab (a legacy loader bundle; cooperative auto-paused).
+  function statusWarnings(hd, cx) {
+    const amber = { padding: "2px 16px 6px", fontSize: "12px", color: "#ffcf6b" };
+    const w = [];
+    if (hd.legacy) w.push(h("div", { key: "legacy", style: amber }, I18N.t("legacy_bundle_warning")));
+    if (cx && cx.forceReceded) w.push(h("div", { key: "coopreceded", style: amber }, I18N.t("coop_receded_warning")));
+    return w;
+  }
+  /* The Status tab: the mode, who hosts, key config and the warnings, read-only, from what the
+     hub view knows — `s.rc` the runtime config (nothing until it is in), `s.mode` the ownership
+     label, `s.hd` the host detection, `s.coex` the live coexistence state, `s.syncAge` the sync
+     readout. */
+  function statusRows(s) {
+    const rc = s.rc;
+    if (!rc) return [];
+    const onOff = function (v) { return v ? "on" : "off"; };
+    const rows = [
+      statusRow("mode", I18N.t("cfg_mode"), s.mode),
+      statusRow("hostedby", I18N.t("cfg_hosted_by"), s.hd.label),
+      statusRow("dsver", I18N.t("cfg_ds_version"), s.hd.dsVersion || "—"),
+    ].concat(statusWarnings(s.hd, s.coex));
+    if (!rc.loader_possible) rows.push(statusRow("force", I18N.t("cfg_force_owner"), onOff(rc.force_owner)));
+    rows.push(
+      statusRow("sync", I18N.t("cfg_config_sync"), s.syncAge),
+      statusRow("cef", I18N.t("cfg_cef"), (rc.cef_host || "") + ":" + (rc.cef_port || "")),
+      statusRow("rpc", I18N.t("cfg_rpc"), rc.rpc_addr || ""),
+      statusRow("recover", I18N.t("cfg_recover_cmd"), rc.recover_cmd == null ? "—" : rc.recover_cmd),
+      statusRow("bundle", I18N.t("cfg_bundle"), rc.bundle_path || ""),
+      statusRow("backend", I18N.t("cfg_backend"), onOff(rc.backend)),
+      statusRow("boot", I18N.t("cfg_boot_movie"), onOff(rc.boot_movie)),
+      statusRow("version", I18N.t("cfg_version"), rc.version || "")
+    );
+    return rows;
+  }
+  function statusList(listProps, s) {
+    return React.createElement.apply(React, [focusableComp || "div", listProps].concat(statusRows(s)));
+  }
+
   const DPAD_LEFT = 22, DPAD_RIGHT = 23;
+  // Ctrl+Shift + one of these opens the panel on that tab.
+  const KEY_TABS = { KeyN: SIDE_TAB_NOTIF, KeyS: SIDE_TAB_STATUS, KeyL: SIDE_TAB_LOGS };
   const FOCUS_SELECTOR = ".shelves-gpfocus, .shelves-rowfocus, .gpfocus";
   const DOUBLE_KEY_MS = 400;
   // Steam's controller input stream: through the QAM document's opener, else this window.
@@ -288,10 +341,10 @@
     try { return doc.defaultView.opener.SteamUIStore.WindowStore.GamepadUIMainWindowInstance.m_BrowserWindow.document; } catch (e) { return null; }
   }
   /* Opens the panel without a pointer, like the plugin's sidecar: a second D-pad right on the
-     same rightmost focusable of the hub view (the first only lands on it); D-pad left out of
-     the panel closes it. Keyboard: a second ArrowRight within 400 ms, Ctrl+Shift+L (logs) or
-     Ctrl+Shift+N (notifications). `api.current` is refreshed by every render of the hub view;
-     the listeners live only while it is mounted. */
+     same rightmost focusable of the hub view (the first only lands on it); D-pad left out of the
+     panel closes it. Keyboard: Ctrl+Shift + N (notifications), S (status) or L (logs); a double
+     ArrowRight only where the page gets arrow keys (the desktop clients keep them for Steam's own
+     navigation). `api.current` is refreshed per render; listeners live while the view is mounted. */
   function useSidecarGestures(ref, api) {
     React.useEffect(function () {
       const el = ref.current;
@@ -328,9 +381,10 @@
       }
       function onKey(e) {
         const a = tracked();
-        if (e.ctrlKey && e.shiftKey && (e.code === "KeyL" || e.code === "KeyN")) {
+        const keyTab = e.ctrlKey && e.shiftKey && Object.prototype.hasOwnProperty.call(KEY_TABS, e.code) ? KEY_TABS[e.code] : null;
+        if (keyTab) {
           e.preventDefault(); e.stopPropagation();
-          a.open(e.code === "KeyL" ? SIDE_TAB_LOGS : SIDE_TAB_NOTIF);
+          a.open(keyTab);
           return;
         }
         if (e.key !== "ArrowRight" || a.isOpen() || !onScreen(root)) { lastArrow = 0; return; }

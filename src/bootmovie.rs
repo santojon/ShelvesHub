@@ -6,15 +6,13 @@
 //! Enabled by the `boot_movie` config flag. On every boot the daemon calls
 //! `apply()`: when on, place the configured source WebM into
 //! `<steam>/config/uioverrides/movies/` under each startup-movie name the
-//! platform might play (see `slot_names`) and record those names in the hub
-//! store; when off, remove only the recorded slots and any slot still holding
-//! the hub's own movie — another tool's files stay. Steam picks a different
-//! name per device (LCD Deck / OLED Deck / desktop Big Picture), so writing
-//! every applicable name is what makes the override actually take effect.
-//! Each slot is a symlink to the source (the same approach animation-manager
-//! plugins use), falling back to a copy where symlinks aren't available. The
-//! install/remove core is pure (`install_one`/`remove_ours`) so it unit-tests
-//! against a temp dir without a real Steam install.
+//! platform might play (see `slot_names`); when off, remove the ones still ours
+//! (`remove_ours`). Steam picks a different name per device (LCD Deck / OLED
+//! Deck / desktop Big Picture), so writing every applicable name is what makes
+//! the override take effect. Each slot is a symlink to the source (the same
+//! approach animation-manager plugins use), falling back to a copy where
+//! symlinks aren't available. The install/remove core is pure (`install_one`/
+//! `remove_ours`) so it unit-tests against a temp dir without a real Steam install.
 
 use std::env;
 use std::fs;
@@ -161,13 +159,24 @@ fn holds_source(slot: &Path, source: &Path) -> bool {
     same_len && matches!((fs::read(slot), fs::read(source)), (Ok(a), Ok(b)) if a == b)
 }
 
-/// Remove the slots this host placed: the `recorded` names, plus any slot still
-/// holding the hub's own movie (placed before the record existed). Other tools'
-/// files stay. Missing names succeed.
+/// A live link to another tool's file. The hub's movie under an older path (an
+/// install that moved, another display cut beside the source) is not elsewhere: it
+/// has the source's bytes or sits in the source's folder.
+fn links_elsewhere(slot: &Path, source: &Path) -> bool {
+    let Ok(target) = fs::read_link(slot).and_then(|_| fs::canonicalize(slot)) else {
+        return false;
+    };
+    let beside_source = fs::canonicalize(source).is_ok_and(|s| s.parent() == target.parent());
+    !beside_source && fs::read(&target).ok() != fs::read(source).ok()
+}
+
+/// Remove the slots still ours: any holding the hub's movie, and the `recorded`
+/// names unless another tool has linked its own file there since.
 pub fn remove_ours(movies_dir: &Path, recorded: &[String], source: &Path) -> Result<(), String> {
     for name in slot_names() {
-        let ours =
-            recorded.iter().any(|r| r == name) || holds_source(&movies_dir.join(name), source);
+        let slot = movies_dir.join(name);
+        let ours = holds_source(&slot, source)
+            || (recorded.iter().any(|r| r == name) && !links_elsewhere(&slot, source));
         if ours {
             remove_one(movies_dir, name)?;
         }

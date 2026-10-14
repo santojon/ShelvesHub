@@ -1,8 +1,8 @@
 //! Host RPC server.
 //!
-//! A minimal blocking HTTP/1.1 server on localhost. The TypeScript
-//! `ShelvesHostApi.rpc.call()` reaches it with a `fetch` POST of
-//! `{ "method": "...", "args": ... }` and reads back `{ ok, result | error }`.
+//! A minimal blocking HTTP/1.1 server on localhost. The runtime's
+//! `host.rpc.call()` (`runtime/shelves-host-api.js`) reaches it with a `fetch`
+//! POST of `{ "method": "...", "args": ... }` and reads back `{ ok, result | error }`.
 //!
 //! HTTP (not raw TCP) because the caller lives inside the CEF renderer, where
 //! `fetch` is the only available transport, and cross-origin requests need the
@@ -15,7 +15,6 @@ use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
 use crate::constants::defaults::MAX_BODY_BYTES;
 use crate::constants::timers::READ_TIMEOUT;
-use crate::constants::urls::TRUSTED_BUNDLE_PREFIX;
 
 use serde_json::Value;
 
@@ -134,48 +133,35 @@ impl Drop for ConnectionSlot {
     }
 }
 
-pub fn serve(addr: &str) {
-    let listener = match TcpListener::bind(addr) {
-        Ok(l) => {
-            log_info("rpc", &format!("Listening on {addr}"));
-            // The control endpoint is token-gated, but it is meant for loopback
-            // only. Surface a non-loopback bind loudly — someone set rpc_host to a
-            // routable address, exposing the endpoint to the local network.
-            let loopback = addr.starts_with("127.")
-                || addr.starts_with("localhost")
-                || addr.starts_with("[::1]");
-            if !loopback {
-                log_warning(
-                    "rpc",
-                    &format!(
-                        "Control endpoint bound to a NON-loopback address ({addr}) — it is reachable \
-                         from the local network. Keep rpc_host at 127.0.0.1 unless you intend this."
-                    ),
-                );
-            }
-            // The token file is written only once the port is ours: a second
-            // daemon that fails to bind must never replace the running one's token.
-            if let Some(p) = crate::config::rpc_token_path() {
-                state::persist_rpc_token(&p);
-            }
-            l
-        }
-        Err(e) => {
-            // A dead RPC means the runtime can't save settings — a silent
-            // data-loss risk. Make it loud and actionable rather than a lone line.
-            log_error(
-                "rpc",
-                &format!(
-                    "Failed to bind the control endpoint {addr}: {e}. Another process (a \
-                     second ShelvesHub, or something else) holds the port, so settings CANNOT \
-                     be saved. Stop the other process, or set `rpc_port` in shelveshub.config.json \
-                     to a free port, then restart the service."
-                ),
-            );
-            return;
-        }
-    };
+/// Bind the control endpoint and publish its per-boot token. The caller binds
+/// before anything else starts and exits on an error, so a second daemon never
+/// replaces the running one's token nor injects without an endpoint.
+pub fn bind(addr: &str) -> std::io::Result<TcpListener> {
+    let listener = TcpListener::bind(addr)?;
+    log_info("rpc", &format!("Listening on {addr}"));
+    // The control endpoint is token-gated, but it is meant for loopback
+    // only. Surface a non-loopback bind loudly — someone set rpc_host to a
+    // routable address, exposing the endpoint to the local network.
+    let loopback =
+        addr.starts_with("127.") || addr.starts_with("localhost") || addr.starts_with("[::1]");
+    if !loopback {
+        log_warning(
+            "rpc",
+            &format!(
+                "Control endpoint bound to a NON-loopback address ({addr}) — it is reachable \
+                 from the local network. Keep rpc_host at 127.0.0.1 unless you intend this."
+            ),
+        );
+    }
+    if let Some(p) = crate::config::rpc_token_path() {
+        state::persist_rpc_token(&p);
+    }
+    Ok(listener)
+}
 
+/// Accept connections on the bound endpoint, one thread each, for the life of
+/// the process.
+pub fn serve(listener: TcpListener) {
     for stream in listener.incoming() {
         match stream {
             // One thread per connection: a slow data call proxied to the
@@ -419,22 +405,13 @@ fn read_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
     })
 }
 
-/// The release tag a trusted bundle download URL names
-/// (`<TRUSTED_BUNDLE_PREFIX><tag>/<file>`), or `None` for any other URL.
-fn bundle_tag_from_url(url: &str) -> Option<String> {
-    url.strip_prefix(TRUSTED_BUNDLE_PREFIX)?
-        .split('/')
-        .next()
-        .filter(|tag| !tag.is_empty())
-        .map(str::to_string)
-}
-
 /// Record the installed release as `bundle_tag` after a download, so the
 /// "update available" check resolves (else every cycle re-downloads). The tag
 /// comes from the fetched URL; the channel's newest tag is the fallback.
 fn record_bundle_tag(prerelease: bool, url: &str) {
-    let Some(tag) =
-        bundle_tag_from_url(url).or_else(|| crate::populate::latest_release_tag(prerelease))
+    let Some(tag) = crate::populate::pinned_release_tag(url)
+        .map(str::to_string)
+        .or_else(|| crate::populate::latest_release_tag(prerelease))
     else {
         return;
     };
@@ -477,6 +454,15 @@ fn hold_rolled_back_bundle() -> String {
     }
 }
 
+/// The plugin channel as it stands now (`populate::plugin_prerelease`, like the
+/// loop's check); the boot value until the loop has published its config.
+fn live_plugin_prerelease(boot: bool) -> bool {
+    state::daemon_config().map_or(boot, |c| {
+        let hub = crate::store::load(&c.hub_config_path);
+        crate::populate::plugin_prerelease(c.prerelease, &c.settings_dir, &hub)
+    })
+}
+
 /// Run a manual download, swap or rollback under the loop's single-flight guard,
 /// so a user action never moves the same files as a periodic check mid-way.
 /// Answers "busy" instead of waiting.
@@ -495,9 +481,8 @@ fn under_update_guard(handler: impl FnOnce() -> String) -> String {
 }
 
 /// Why a `selfUpdate` for `latest` is skipped: `current` when it is not newer
-/// than the running version (a reinstall or a downgrade would snapshot the
-/// running set over `previous/`), `staged` when that same release already waits
-/// for the restart (the loop skips it the same way). `None` = go ahead.
+/// than the running version, `staged` when that same release already waits for
+/// the restart (the loop skips it the same way). `None` = go ahead.
 fn self_update_skip_reason(
     latest: &str,
     current: &str,
@@ -511,6 +496,14 @@ fn self_update_skip_reason(
     } else {
         None
     }
+}
+
+/// The notes `selfUpdate` shows under the tag it staged: those of the release it
+/// looked up first, only when that is the same release (one published in between
+/// has none yet), so older notes never stay under a new tag.
+fn staged_release_notes(info: Option<(String, String)>, tag: &str) -> Option<String> {
+    info.filter(|(latest, _)| latest == tag)
+        .map(|(_, notes)| notes)
 }
 
 /// Exit after the response flushes, so a relaunching service manager brings the
@@ -638,10 +631,11 @@ fn dispatch(parsed: Option<Value>) -> String {
         // Manual bundle re-download (the fallback panel's "download" action):
         // fetch the newest release into the bundle path; the loop re-injects it.
         Some("populateBundle") => under_update_guard(|| match state::populate_config() {
-            Some((path, prerelease)) => {
-                match crate::populate::update_from_release(path, *prerelease) {
+            Some((path, boot_prerelease)) => {
+                let prerelease = live_plugin_prerelease(*boot_prerelease);
+                match crate::populate::update_from_release(path, prerelease) {
                     Ok(url) => {
-                        record_bundle_tag(*prerelease, &url);
+                        record_bundle_tag(prerelease, &url);
                         log_info("rpc", &format!("Bundle re-downloaded: {url}"));
                         ok(serde_json::Value::String(url).to_string())
                     }
@@ -654,15 +648,16 @@ fn dispatch(parsed: Option<Value>) -> String {
         // given release asset (or the newest) and swap the injected bundle in place; the
         // loop's on-disk watch then hot-swaps the new copy into the renderer.
         Some("applyUpdate") => under_update_guard(|| match state::populate_config() {
-            Some((path, prerelease)) => {
+            Some((path, boot_prerelease)) => {
+                let prerelease = live_plugin_prerelease(*boot_prerelease);
                 let asset_url = parsed
                     .as_ref()
                     .and_then(|v| v.get("args"))
                     .and_then(|a| a.get("assetUrl"))
                     .and_then(Value::as_str);
-                match crate::populate::apply_update(path, asset_url, *prerelease) {
+                match crate::populate::apply_update(path, asset_url, prerelease) {
                     Ok(url) => {
-                        record_bundle_tag(*prerelease, &url);
+                        record_bundle_tag(prerelease, &url);
                         log_info("rpc", &format!("Applied plugin update: {url}"));
                         ok(r#"{"applied":true}"#.to_string())
                     }
@@ -717,6 +712,11 @@ fn dispatch(parsed: Option<Value>) -> String {
                 Ok(()) => {
                     let tag = hold_rolled_back_bundle();
                     log_info("rpc", &format!("Rolled Deck Shelves back to {tag:?}."));
+                    // The hub-managed backend follows the bundle back (an unknown tag
+                    // leaves it on the release it has).
+                    if !tag.is_empty() {
+                        crate::populate::refresh_backend_for_tag(&tag);
+                    }
                     state::push_host_notice(
                         "notice_plugin_rolled_back",
                         serde_json::json!({ "version": tag }),
@@ -1003,6 +1003,8 @@ fn dispatch(parsed: Option<Value>) -> String {
                     "boot_movie".to_string(),
                     Value::Bool(state::boot_movie_enabled()),
                 );
+                // Live too: a first-boot obtain may start hosting after the snapshot.
+                obj.insert("backend".to_string(), Value::Bool(backend::enabled()));
                 obj.insert(
                     "pending_hub_update".to_string(),
                     state::pending_hub_update().map_or(Value::Null, Value::String),
@@ -1134,11 +1136,12 @@ fn dispatch(parsed: Option<Value>) -> String {
                 // self_update_skip_reason). A lookup miss falls through to the
                 // download's own error.
                 let current = env!("CARGO_PKG_VERSION");
-                if let Some((latest, _)) = crate::populate::latest_hub_release_info(prerelease) {
+                let info = crate::populate::latest_hub_release_info(prerelease);
+                if let Some((latest, _)) = &info {
                     let pending = state::pending_hub_update();
                     let staged = state::hub_update_staged();
                     if let Some(reason) =
-                        self_update_skip_reason(&latest, current, staged, pending.as_deref())
+                        self_update_skip_reason(latest, current, staged, pending.as_deref())
                     {
                         let line =
                             format!("Hub self-update skipped ({reason}): {latest} vs {current}.");
@@ -1158,6 +1161,7 @@ fn dispatch(parsed: Option<Value>) -> String {
                         state::set_hub_update_staged(true);
                         state::set_hub_rollback_staged(false);
                         state::set_pending_hub_update(Some(tag.clone()));
+                        state::set_pending_hub_notes(staged_release_notes(info, &tag));
                         let restarting = crate::populate::under_relaunching_service();
                         log_info(
                             "rpc",
@@ -1206,8 +1210,8 @@ fn dispatch(parsed: Option<Value>) -> String {
         // owner_settle, force_owner, …) take effect — they are only read at startup.
         // Under a relaunching service manager the daemon exits (after the response
         // flushes) and the manager relaunches a fresh process that re-reads the
-        // config; otherwise the "restart to apply" notice stands. The renderer
-        // restart (for owner claiming on a fresh boot) is the caller's job.
+        // config; otherwise it relaunches itself (below). The renderer restart
+        // (for owner claiming on a fresh boot) is the caller's job.
         Some("restartService") => {
             let managed = crate::populate::under_relaunching_service();
             log_info(
@@ -1215,8 +1219,9 @@ fn dispatch(parsed: Option<Value>) -> String {
                 &format!("Service restart requested (relaunching manager={managed})."),
             );
             // Always restart: under a relaunching manager (launchd KeepAlive /
-            // systemd Restart=always / Windows task) just exit and let it bring us
-            // back; otherwise relaunch ourselves so the request is never a no-op.
+            // systemd Restart=always) just exit and let it bring us back; otherwise
+            // (a manual run, or Windows, whose task is not one) relaunch ourselves
+            // so the request is never a no-op.
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_millis(1500));
                 if !managed {

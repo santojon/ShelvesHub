@@ -85,6 +85,7 @@
     "site:screenshot": "node scripts/site/capture-screenshots.mjs",
     "site:shots:hub": "bash scripts/site/capture-hub-screenshots.sh",
     "harness": "bash scripts/harness.sh",
+    "harness:daemon": "bash scripts/harness-daemon.sh",
     "harness:docker": "bash scripts/harness-docker.sh",
     "lab:steam-arm64": "bash scripts/steam-arm64-lab.sh",
     "qa:matrix": "bash scripts/qa-matrix.sh",

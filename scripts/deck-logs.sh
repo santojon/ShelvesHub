@@ -9,7 +9,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-[[ -f .env ]] || { echo "error: .env not found (run 'pnpm setup' or copy .env.example)"; exit 1; }
+[[ -f .env ]] || { echo "error: .env not found (run 'pnpm run setup' or copy .env.example)"; exit 1; }
 set -o allexport; # shellcheck disable=SC1091
 source .env; set +o allexport
 

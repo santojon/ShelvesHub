@@ -13,8 +13,10 @@ matriz de QA anexa os registros `device-steamos-*` e `device-macos-*` às célul
 plataformas; nenhuma outra plataforma tem ainda uma célula que receba registro (os prefixos ficam
 em `MANUAL`, em `scripts/ci/qa-matrix.mjs`).
 
-Tudo aqui, menos um colapso de verdade e sua recuperação (até agora só vistos em campo), foi
-exercitado num Steam Deck e num Mac; os mesmos passos valem para qualquer dispositivo que rode o
+Tudo aqui, menos um colapso de verdade e sua recuperação, foi exercitado num Steam Deck e num
+Mac (o lado do daemon num colapso tem uma prova de bancada nos
+[cenários do daemon](qa-lab.md#cenários-do-daemon) do QA lab; um colapso de verdade do Steam
+ainda só foi visto em campo); os mesmos passos valem para qualquer dispositivo que rode o
 Steam com uma porta de depuração do Chromium. Sem dispositivo, o
 [contêiner Steam ARM64](qa-lab.md#steam-arm64-em-contêiner) do QA lab roda o próprio cliente ARM64
 da Valve e prova o caminho de injeção nele.
@@ -55,7 +57,8 @@ da Valve e prova o caminho de injeção nele.
 ## Passo 1 — identificar o dispositivo
 
 Rode e guarde a saída de (SteamOS / Linux; no macOS pule a linha do `ldd`, lá não há glibc; no
-Windows rode `%LOCALAPPDATA%\ShelvesHub\shelveshub.exe status --report`; depois de
+Windows rode `%LOCALAPPDATA%\ShelvesHub\shelveshub.exe status --report` e leia
+`%LOCALAPPDATA%\ShelvesHub\logs\out.log`; depois de
 `pnpm deck:deploy` com `DECK_DEPLOY_PATH` definido, o binário é `$DECK_DEPLOY_PATH/shelveshub`):
 
 ```sh
@@ -228,7 +231,12 @@ da plataforma roda assim que o colapso é confirmado: o SteamOS reinicia o
 Steam para abrir o Big Picture de novo (sem reiniciar). Um Linux sem `steam-launcher.service`, ou
 qualquer host com `recover_cmd: "off"`, só pausa e registra a dica de recuperação manual. Quando
 um comando de recuperação foi disparado, o hub mostra o aviso de recuperação assim que o runtime
-dele está de volta.
+dele está de volta. O lado do daemon nesse caminho — os dois ciclos de colapso, o comando de
+recuperação ou (com `recover_cmd: "off"`) a pausa e a dica, a retomada quando uma janela volta,
+o aviso de recuperação — é provado sem dispositivo pelos
+[cenários do daemon](qa-lab.md#cenários-do-daemon) do QA lab (`pnpm run harness:daemon`), que
+fecham uma janela substituta sob o daemon real. Se um Steam de verdade colapsa desse jeito e
+volta com o comando da plataforma continua sendo uma observação de campo: registre quando vir um.
 
 **Cópia legada.** Com `force_owner` desligado, apague `window.__DECK_SHELVES_OWNER__` do
 contexto compartilhado: o tick seguinte registra o rótulo de dono pré-3.3.1 e fica só com a aba;

@@ -4,8 +4,7 @@
 //! rolling backup, and a load heals from that backup when the primary file is
 //! missing or corrupt. So an interrupted write or a bad shutdown never loses or
 //! corrupts the host's config — the same data-loss protection the plugin gives
-//! its settings. Every load→modify→save goes through `update`, which serializes
-//! the writers (RPC threads, the loop, sync) so none reverts another's change.
+//! its settings.
 
 use std::fs;
 use std::io::{self, Write};

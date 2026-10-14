@@ -1,5 +1,7 @@
 # Usando o ShelvesHub
 
+*[Read in English](../usage.md)*
+
 O ShelvesHub roda como um serviço em segundo plano e injeta o pacote do Deck Shelves na interface Big Picture do Steam. Abaixo estão as notas de instalação e uso específicas de cada plataforma.
 
 ---
@@ -85,7 +87,7 @@ launchctl list | grep shelves
 
 1. Baixe `install-windows.bat` da última versão.
 2. Dê duplo clique nele e aceite o prompt do UAC (requer administrador).
-3. O instalador baixa o pacote, copia para `%LOCALAPPDATA%\ShelvesHub` (por usuário, sem precisar de admin) e registra uma entrada por usuário no Agendador de Tarefas que o inicia no login.
+3. O instalador baixa o pacote, copia para `%LOCALAPPDATA%\ShelvesHub` (por usuário, sem precisar de admin) e registra uma entrada por usuário no Agendador de Tarefas que o inicia no login. A tarefa inicia o serviço por um PowerShell oculto, então nenhuma janela de console aparece; o log do serviço fica em `%LOCALAPPDATA%\ShelvesHub\logs\out.log` (o arquivo anterior fica como `out.log.1`).
 
 ### A partir do pacote
 
@@ -116,7 +118,7 @@ curl -s http://127.0.0.1:60123/ -H "Content-Type: application/json" -H "Authoriz
 # → {"ok":true,"result":"pong"}
 
 curl -s http://127.0.0.1:60123/ -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"getVersion"}'
-# → {"ok":true,"result":"0.6.0"}
+# → {"ok":true,"result":"<versão instalada>"}
 ```
 
 A lista de métodos e o formato de comunicação estão em [host-api.md](host-api.md#formato-de-comunicação-do-rpc).

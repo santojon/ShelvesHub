@@ -17,7 +17,8 @@
 
 use std::fmt;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -162,9 +163,24 @@ pub fn gamepad_ui_active(targets: &[Target]) -> bool {
 /// Reads the body using the `Content-Length` header rather than waiting for the
 /// server to close the connection — CEF/Chromium's DevTools HTTP server keeps
 /// the connection alive, so an EOF-based read would just time out.
-fn http_get(host: &str, port: u16, path: &str) -> Result<String> {
-    let mut stream = TcpStream::connect((host, port))
+/// Connects to the first resolved address that answers within `limit`, trying each in turn
+/// (a name resolving to IPv6 first still reaches a CEF listening on 127.0.0.1).
+pub(crate) fn connect_bounded(host: &str, port: u16, limit: Duration) -> Result<TcpStream> {
+    let addrs = (host, port)
+        .to_socket_addrs()
         .map_err(|e| CdpError::new(format!("tcp connect {host}:{port}: {e}")))?;
+    let mut last = format!("tcp connect {host}:{port}: cannot resolve");
+    for addr in addrs {
+        match TcpStream::connect_timeout(&addr, limit) {
+            Ok(stream) => return Ok(stream),
+            Err(e) => last = format!("tcp connect {host}:{port}: {e}"),
+        }
+    }
+    Err(CdpError::new(last))
+}
+
+fn http_get(host: &str, port: u16, path: &str) -> Result<String> {
+    let mut stream = connect_bounded(host, port, HTTP_TIMEOUT)?;
     stream.set_read_timeout(Some(HTTP_TIMEOUT)).ok();
     stream.set_write_timeout(Some(HTTP_TIMEOUT)).ok();
 

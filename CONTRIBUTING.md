@@ -4,16 +4,25 @@ Thanks for your interest in contributing to ShelvesHub. Below are recommended st
 
 ## Getting started
 
-`pnpm` is the single entry point. One-time setup is cross-platform — `pnpm setup`
+`pnpm` is the single entry point. One-time setup is cross-platform — `pnpm run setup`
 auto-dispatches to the right per-OS installer:
 
 ```bash
-pnpm setup     # macOS → Homebrew · Linux/SteamOS → rustup.rs · Windows → winget/rustup
-pnpm build     # cargo build (loader + shelves-devtools)
-pnpm test      # cargo test
-pnpm lint      # cargo clippy -- -D warnings  (same as CI)
-pnpm run       # run the loader locally
+pnpm run setup   # macOS → Homebrew · Linux/SteamOS → rustup.rs · Windows → winget/rustup
+pnpm build       # cargo build (loader + shelves-devtools)
+pnpm test        # cargo test
+pnpm lint        # cargo clippy -- -D warnings  (same as CI)
+pnpm run run     # run the loader locally
 ```
+
+`setup`, `update` and `run` need the explicit `pnpm run`: plain `pnpm setup` and
+`pnpm update` are pnpm's own commands, and a bare `pnpm run` only lists the scripts.
+
+With the ShelvesHub service installed and running, stop it for the session before `pnpm run run`
+(`systemctl --user stop shelveshub`, `launchctl bootout gui/$(id -u)/com.shelveshub` or
+`schtasks /End /TN ShelvesHub`; it comes back at the next login): it holds port `60123`, so the
+dev copy would exit at once, and on another port (`SHELVES_RPC_PORT`) both would inject into the
+same Steam.
 
 See [docs/development.md](docs/development.md) for the full task list.
 

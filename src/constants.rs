@@ -66,6 +66,8 @@ pub mod defaults {
     pub const REAL_BINARY_MIN_BYTES: u64 = 512 * 1024;
     /// Cap on the in-memory log ring the fallback viewer reads.
     pub const LOG_RING_CAP: usize = 300;
+    /// Size at which the Windows log file is moved aside and started over (1 MiB).
+    pub const LOG_FILE_CAP_BYTES: u64 = 1024 * 1024;
     /// Largest RPC request body the daemon will read (2 MiB).
     pub const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
     /// Consecutive collapsed-UI observations before injection halts.
@@ -80,7 +82,7 @@ pub mod urls {
     /// Deck Shelves all releases, newest first, including pre-releases.
     pub const RELEASES_ALL_URL: &str =
         "https://api.github.com/repos/santojon/Deck-Shelves/releases";
-    /// The only host+path a self-installed bundle may come from.
+    /// The only host+path a self-installed bundle, or its backend archive, may come from.
     pub const TRUSTED_BUNDLE_PREFIX: &str =
         "https://github.com/santojon/Deck-Shelves/releases/download/";
     /// ShelvesHub's OWN latest release (the hub self-update check).
@@ -89,4 +91,7 @@ pub mod urls {
     /// ShelvesHub's OWN releases, newest first, including pre-releases.
     pub const HUB_RELEASES_ALL_URL: &str =
         "https://api.github.com/repos/santojon/ShelvesHub/releases";
+    /// The only host+path a self-update package, or its checksums, may come from.
+    pub const TRUSTED_HUB_PREFIX: &str =
+        "https://github.com/santojon/ShelvesHub/releases/download/";
 }

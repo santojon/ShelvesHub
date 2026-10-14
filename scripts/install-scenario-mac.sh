@@ -4,9 +4,11 @@
 # (no Steam, no GUI). Proves install_mac.sh / uninstall_mac.sh lay down and tear
 # down the right files, apply the SHELVES_* options on a FIRST install, keep the
 # user's settings on a plain uninstall and remove them on --purge, refuse to run
-# as root, and write install.log. `launchctl` is stubbed (a recording shim) — the
-# LaunchAgent itself is not loaded here; this tests the SCRIPTS, like the Linux
-# docker/install-scenario.sh does with a systemctl stub.
+# as root, write install.log, and take the download branch (SHA256SUMS checked, a
+# mismatch and a failed download refused) against an offline curl stub.
+# `launchctl` is stubbed (a recording shim) — the LaunchAgent itself is not loaded
+# here; this tests the SCRIPTS, like the Linux docker/install-scenario.sh does
+# with a systemctl stub.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -38,6 +40,12 @@ echo "$*" >> "$LCLOG_TARGET"
 exit 0
 STUBEOF
 chmod +x "$STUB/launchctl"
+# The uninstaller's real pkill would stop a daemon this machine runs from its own install.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB/pkill"; chmod +x "$STUB/pkill"
+# The same for sudo (install_mac.sh migrates an old root install with it) and for the
+# caller's SHELVES_* overrides (a SHELVES_SETTINGS_DIR would be deleted by step [4]).
+printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB/sudo"; chmod +x "$STUB/sudo"
+for v in $(compgen -e); do [[ "$v" == SHELVES_* ]] && unset "$v"; done
 
 INSTALL_DIR="$FAKEHOME/.local/share/shelveshub"
 PLIST="$FAKEHOME/Library/LaunchAgents/com.shelveshub.plist"
@@ -106,7 +114,81 @@ run_installer "$INSTALL_DIR/uninstall_mac.sh" --purge >/tmp/purge.out 2>&1 \
 check "install dir removed (purge)"     test ! -e "$INSTALL_DIR"
 check "shared settings REMOVED (purge)" test ! -e "$SETTINGS_DIR"
 
-rm -rf "$PKG" "$FAKEHOME" "$STUB"
+# ── [5]-[7] Download branch: an offline curl (the stub docker/install-scenario.sh
+# uses) serves a fake release, so the package + SHA256SUMS download, a checksum
+# mismatch and a failed download run without the network. ─────────────────────
+FAKE="$(mktemp -d)"
+EMPTY="$(mktemp -d)"   # no ./shelveshub here, so the installer takes the download branch
+( cd "$PKG" && COPYFILE_DISABLE=1 tar -czf "$FAKE/shelveshub-macos.tar.gz" . )
+( cd "$FAKE" && shasum -a 256 shelveshub-macos.tar.gz > SHA256SUMS )
+cat > "$FAKE/api.json" <<'EOF'
+{
+  "assets": [
+    {
+      "name": "shelveshub-macos.tar.gz",
+      "browser_download_url": "https://example.invalid/dl/shelveshub-macos.tar.gz"
+    },
+    {
+      "name": "SHA256SUMS",
+      "browser_download_url": "https://example.invalid/dl/SHA256SUMS"
+    }
+  ]
+}
+EOF
+echo "Not Found" > "$FAKE/404.html"
+# The release API answers api.json; any other URL is served as the file of that
+# basename from the fake release. A missing one is a 404: curl's exit 22 under -f,
+# else the error page saved as the download, as the real curl does.
+cat > "$STUB/curl" <<'STUBEOF'
+#!/usr/bin/env bash
+out=""; url=""; fail=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    -H|--connect-timeout|--max-time) shift 2 ;;
+    --fail) fail=1; shift ;;
+    --*) shift ;;
+    -*) [[ "$1" == *f* ]] && fail=1; shift ;;
+    *) url="$1"; shift ;;
+  esac
+done
+[[ "$url" == *api.github.com* ]] && { cat "$FAKE_RELEASE/api.json"; exit 0; }
+f="$FAKE_RELEASE/$(basename "$url")"
+if [[ ! -f "$f" ]]; then [[ "$fail" == 1 ]] && exit 22; f="$FAKE_RELEASE/404.html"; fi
+if [[ -n "$out" ]]; then cp "$f" "$out"; else cat "$f"; fi
+STUBEOF
+chmod +x "$STUB/curl"
+absent() { ! grep -q "$1" "$2"; }
+download_install() { # download_install <output file>
+  ( cd "$EMPTY" && env HOME="$FAKEHOME" PATH="$STUB:$PATH" LCLOG_TARGET="$LCLOG" FAKE_RELEASE="$FAKE" \
+      bash "$PKG/installer/install_mac.sh" ) </dev/null >"$1" 2>&1
+}
+
+echo "[5] install_mac.sh (download mode: stubbed curl, SHA256SUMS verified)"
+rm -rf "$INSTALL_DIR" "$PLIST"
+download_install /tmp/download.out || { echo "  download install exited non-zero"; cat /tmp/download.out; FAILS=$((FAILS + 1)); }
+check "took the download branch"        grep -q "Fetching latest release" /tmp/download.out
+check "checksum verified"               grep -q "Checksum verified" /tmp/download.out
+check "binary installed from download"  test -x "$INSTALL_DIR/shelveshub"
+check "LaunchAgent plist placed"        test -f "$PLIST"
+
+echo "[6] install_mac.sh aborts on a SHA256SUMS mismatch"
+rm -rf "$INSTALL_DIR" "$PLIST"
+printf '%064d  shelveshub-macos.tar.gz\n' 0 > "$FAKE/SHA256SUMS"
+rc=0; download_install /tmp/mismatch.out || rc=$?
+check "install aborted (exit 1)"        test "$rc" -eq 1
+check "mismatch reported"               grep -q "Checksum mismatch" /tmp/mismatch.out
+check "nothing installed on mismatch"   test ! -e "$INSTALL_DIR/shelveshub"
+
+echo "[7] install_mac.sh fails cleanly when the package download fails"
+rm -rf "$INSTALL_DIR" "$PLIST"
+rm -f "$FAKE/shelveshub-macos.tar.gz"
+rc=0; download_install /tmp/404.out || rc=$?
+check "download failure surfaces as curl's exit 22" test "$rc" -eq 22
+check "no checksum mismatch reported"   absent "Checksum mismatch" /tmp/404.out
+check "nothing installed"               test ! -e "$INSTALL_DIR/shelveshub"
+
+rm -rf "$PKG" "$FAKEHOME" "$STUB" "$FAKE" "$EMPTY"
 echo ""
 if [[ "$FAILS" -eq 0 ]]; then echo "[OK] macOS install/uninstall lifecycle passed"; else echo "[X] $FAILS check(s) failed"; fi
 exit "$FAILS"

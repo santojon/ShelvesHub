@@ -128,11 +128,10 @@ Quick Access tab (key `900` in Steam's tab enum, inserted after Performance)
 that Steam's strip treats like its own. It is present from boot, before any
 panel is registered; the registered panel (the Deck Shelves editor) fills it
 when `registerPanel` fires, and without one it shows the hub's own view
-(status, updates, configuration, logs). There is no separate overlay: with
+(status, updates, configuration, logs). Nothing is drawn outside the tab: with
 `native_qam` off, or while the tab cannot be installed (the trip breaker, or no
 tab-list builder yet), the hub draws nothing and `qam.mode()` reports it
-(`native`, `native-arming`, `tripped`, or the legacy label `overlay` for "not
-installed").
+(`native`, `native-arming`, `tripped`, or `panel` for "not installed").
 
 #### Tab-ownership handshake — `window.__SHELVES_QAM_OWNER__`
 
@@ -157,8 +156,8 @@ registered. Not implemented by this host; the bundle feature-detects it.
 
 | Method | Signature | Notes |
 |---|---|---|
-| `canSelfInstall` | `() => boolean` | True when this host can install a plugin update in place (false beside a loader, which owns the plugin copy) |
-| `applyUpdate` | `({ version, assetUrl?, assetName? }) => Promise<void>` | Obtains the release through the `applyUpdate` RPC (URL-pinned to the Deck Shelves releases) and swaps the bundle in |
+| `canSelfInstall` | `() => boolean` | True while the copy of the bundle that runs is this host's own: as sole host, or under a loader once the cooperative-bundle hand-over happened (the loader's copy stood down or this host's copy booted); false in plain coexistence and plain cooperation, where the loader's copy runs |
+| `applyUpdate` | `({ version, assetUrl?, assetName? }) => Promise<void>` | Obtains the release through the `applyUpdate` RPC (URL-pinned to the Deck Shelves releases) and swaps the bundle in; rejects with `applyUpdate: busy: …` while the daemon's own update check runs (retry shortly) |
 
 ### `handshake?(): HostHandshake` *(added in 1.3.0)*
 
@@ -167,7 +166,14 @@ Identifies the host so a bundle can adapt without feature-detecting each member:
 `hostApiVersion`, `capabilities` (`teardown`, `selfUpdate`, `nativeQam`,
 `coexist`, `coopBundle`; `pointerInput` and `xr` are defined but not reported by
 this host) and, since 1.4.0, `device` (`{ kind, arch, model? }` from the daemon's
-own detection) and `bundleVersion` (the Deck Shelves release this host carries).
+own detection) and `bundleVersion` (the Deck Shelves release this host last
+installed, else — with the cooperative bundle on — the version its bundle file
+embeds; absent until either is known). `nativeQam` is true only while this
+host's own Quick Access tab is in the menu strip (inserted, breaker not tripped)
+and `selfUpdate` equals `updates.canSelfInstall()`; both are computed on every
+call. `hostVersion`, `device`, `bundleVersion` and `coopBundle` are read from the
+daemon's current `window.__SHELVES_CONFIG__` stamp on every call too, so a bundle
+swapped in place reports its own version.
 
 ---
 
@@ -246,7 +252,7 @@ curl -s http://127.0.0.1:60123/ \
 | Group | Methods |
 |---|---|
 | Health and handshake | `ping`, `getVersion`, `getHostApiVersion`, `isInjected`, `getDiagnostics` |
-| Hosted backend | `getBackendStatus`, `restartBackend`, and the plugin backend's public API names (the `BACKEND_METHODS` allowlist, 34 names), proxied only while backend hosting is configured |
+| Hosted backend | `getBackendStatus`, `restartBackend`, and the plugin backend's public API names (the `BACKEND_METHODS` allowlist, 35 names), proxied only while backend hosting is configured |
 | Plugin bundle | `populateBundle`, `applyUpdate` (URL-pinned to the Deck Shelves releases), `rollbackBundle` |
 | Hub binary | `checkUpdates`, `selfUpdate`, `rollbackHub`, `restartService` |
 | Hub settings store | `getConfig`, `setAutoUpdate`, `setUpdatePref`, `setConfigSync` |
@@ -259,8 +265,13 @@ Answers worth knowing: `populateBundle`, `applyUpdate`, `rollbackBundle`,
 `rollbackHub` and `selfUpdate` answer `busy: an update check is in flight, try
 again shortly` while the daemon's own check runs (retry a moment later);
 `selfUpdate` answers `{"updated":false,"reason":"current"}` when nothing newer
-is published; `rollbackHub` is refused while a ShelvesHub update or rollback is
-already staged (restart first). At the HTTP layer a request line or header
+is published and `"staged"` while that same release already waits for a
+restart; `rollbackHub` is refused while a ShelvesHub update or rollback is
+already staged (restart first). After `populateBundle` or `applyUpdate` swaps a
+release in, or `rollbackBundle` puts the previous one back, the hub also brings
+the Python backend in its install folder to that same release and restarts it (a
+backend directory configured elsewhere with `SHELVES_BACKEND_DIR` is never
+touched). At the HTTP layer a request line or header
 longer than 8 KiB, or more than 64 headers, answers **400**, and the server
 holds at most 64 connections at once — beyond that it answers **503**. The
 daemon log records only the method name of a request, never its body, and the

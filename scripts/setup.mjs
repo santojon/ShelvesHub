@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Cross-platform toolchain setup dispatcher so `pnpm setup` / `pnpm update` work everywhere:
+// Cross-platform toolchain setup dispatcher so `pnpm run setup` / `pnpm run update` work everywhere:
 // macOS → mac-setup.sh (Homebrew), Linux → linux-setup.sh (rustup + corepack), Windows →
 // win-setup.ps1 (winget/rustup + corepack). Pass --update to also upgrade what it manages.
 import { spawnSync } from "node:child_process";

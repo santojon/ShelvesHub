@@ -1,9 +1,9 @@
 {
-  "ts": "2026-10-13_12-53-20",
+  "ts": "2026-10-14T13:27:59Z",
   "kind": "container",
   "os": "linux",
   "arch": "x86_64",
   "mode": "all",
   "overall": "PASS",
-  "steps": { "scenarios": "pass", "install": "pass", "smoke": "pass", "plugin": "pass" }
+  "steps": { "scenarios": "pass", "install": "pass", "smoke": "pass", "daemon": "pass", "plugin": "pass" }
 }

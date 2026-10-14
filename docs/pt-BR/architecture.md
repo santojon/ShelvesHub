@@ -144,7 +144,10 @@ e pela CLI `shelves-devtools`. Veja [debugging.md](./debugging.md).
 
 ### Servidor RPC (`src/rpc.rs`)
 
-Servidor HTTP/1.1 bloqueante e minimalista em `127.0.0.1:60123` (configurável). O pacote
+Servidor HTTP/1.1 bloqueante e minimalista em `127.0.0.1:60123` (configurável). O daemon
+o abre antes de qualquer outra coisa e sai quando não consegue (em geral porque outro
+ShelvesHub, ou outro processo, ocupa a porta), então um segundo daemon nunca injeta nem substitui o token do que já
+está rodando. O pacote
 o alcança com um `fetch` POST de `{ method, args }` de dentro do renderizador, então
 ele emite cabeçalhos CORS e trata preflight. Toda requisição precisa levar
 `Content-Type: application/json` (qualquer outra coisa responde 415) e
@@ -157,7 +160,7 @@ antes de qualquer despacho. Métodos, por grupo:
 | Grupo | Métodos |
 |---|---|
 | Saúde e handshake | `ping`, `getVersion`, `getHostApiVersion`, `isInjected`, `getDiagnostics` |
-| Backend hospedado | `getBackendStatus`, `restartBackend`, e os nomes da API pública do backend do plugin (a lista permitida `BACKEND_METHODS`, 34 nomes) |
+| Backend hospedado | `getBackendStatus`, `restartBackend`, e os nomes da API pública do backend do plugin (a lista permitida `BACKEND_METHODS`, 35 nomes) |
 | Pacote do plugin | `populateBundle`, `applyUpdate` (URL fixada nas releases do Deck Shelves), `rollbackBundle` |
 | Binário do hub | `checkUpdates`, `selfUpdate`, `rollbackHub`, `restartService` |
 | Store de configurações do hub | `getConfig`, `setAutoUpdate`, `setUpdatePref`, `setConfigSync` |
@@ -169,8 +172,8 @@ e só enquanto a hospedagem do backend está configurada; qualquer outra coisa r
 erro de `unknown method`. As ações manuais de pacote e de hub (`populateBundle`,
 `applyUpdate`, `rollbackBundle`, `rollbackHub`, `selfUpdate`) compartilham a trava de
 verificação única do loop e respondem `busy` enquanto uma verificação roda; `selfUpdate`
-informa `current` quando nada mais novo foi publicado, e `rollbackHub` é recusado enquanto
-um binário do hub está preparado. Cada conexão é servida em sua própria thread (no máximo
+informa `current` quando nada mais novo foi publicado ou `staged` quando essa release já
+espera um reinício, e `rollbackHub` é recusado enquanto um binário do hub está preparado. Cada conexão é servida em sua própria thread (no máximo
 64 ao mesmo tempo, 503 além disso; linha de requisição e cabeçalhos limitados a 8 KiB e 64
 cabeçalhos, 400 além disso), então uma chamada de dados lenta nunca atrasa as
 verificações, e o log guarda só o nome do método de uma requisição, nunca o corpo. Veja
@@ -179,8 +182,13 @@ comunicação e uma receita de `curl`.
 
 ### Host do backend (`src/backend.rs` + `runtime/backend/`)
 
-Opcionalmente hospeda o backend de dados em Python do Deck Shelves como um processo filho
-supervisionado (`SHELVES_BACKEND_DIR`; se não definido, desabilitado). O daemon inicia
+Hospeda o backend de dados em Python do Deck Shelves como um processo filho supervisionado:
+o de `SHELVES_BACKEND_DIR`, senão a cópia na sua pasta de instalação (`backend/`), que o
+daemon obtém numa primeira inicialização (de um Deck Shelves gerenciado por um carregador,
+senão do download da release) e, depois de cada atualização do Deck Shelves, leva para essa
+mesma release e reinicia — um diretório definido com `SHELVES_BACKEND_DIR` nunca é
+substituído. Sem nenhum dos dois, os métodos de dados ficam desligados e as prateleiras locais
+continuam funcionando. O daemon inicia
 `runtime/backend/shelveshub_backend.py` (apenas biblioteca padrão), que carrega
 a classe `Plugin` do backend e serve seus métodos públicos via
 JSON delimitado por linha no stdio — um argumento em formato de objeto é aplicado como
@@ -257,15 +265,16 @@ como o usuário atual, para que compartilhem a sessão do Steam.
 
 ## Trabalho pendente (modo ShelvesHub)
 
-Toda a superfície original da API do host está implementada em
-`runtime/shelves-host.js`; esta lista de verificação está completa.
+Toda a superfície original da API do host está implementada como
+`window.__SHELVES_HOST__` (o objeto `host` construído em
+`runtime/shelves-host-api.js`, montado com as outras partes do runtime no único
+script que o daemon injeta); esta lista de verificação está completa.
 
 - [x] Substituir o placeholder de `is_injected()` por uma verificação CEF real
 - [x] Substituir a injeção via chamada de shell pelo mecanismo de injeção
       via WebSocket/CDP no renderizador do Steam
-- [x] Implementar `ShelvesHostApi.lifecycle.*` (`register` / `onMount` / `onUnmount`)
-- [x] Implementar `ShelvesHostApi.routes.*` (registro de rotas do lado do Steam via o
+- [x] Implementar `__SHELVES_HOST__.lifecycle.*` (`register` / `onMount` / `onUnmount`)
+- [x] Implementar `__SHELVES_HOST__.routes.*` (registro de rotas do lado do Steam via o
       `routerHook` concreto — `addRoute` / `removeRoute` / `addPatch`)
-- [x] Implementar `ShelvesHostApi.notifications.*` (`toast` / `send` via
-      `SteamClient.Notifications`)
-- [x] Implementar `ShelvesHostApi.platform.navigateToApp` (`SteamClient.Apps.RunGame`)
+- [x] Implementar `__SHELVES_HOST__.notifications.*` (`toast` / `send`)
+- [x] Implementar `__SHELVES_HOST__.platform.navigateToApp` (`SteamClient.Apps.RunGame`)

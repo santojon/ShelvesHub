@@ -87,7 +87,7 @@ launchctl list | grep shelves
 
 1. Download `install-windows.bat` from the latest release.
 2. Double-click it and accept the UAC prompt (admin required).
-3. The installer downloads the package, copies to `%LOCALAPPDATA%\ShelvesHub` (per-user, no admin needed), and registers a per-user Task Scheduler entry that starts it at logon.
+3. The installer downloads the package, copies to `%LOCALAPPDATA%\ShelvesHub` (per-user, no admin needed), and registers a per-user Task Scheduler entry that starts it at logon. The task starts the service through a hidden PowerShell, so no console window appears; the service log is `%LOCALAPPDATA%\ShelvesHub\logs\out.log` (the previous file is kept as `out.log.1`).
 
 ### From package
 
@@ -118,7 +118,7 @@ curl -s http://127.0.0.1:60123/ -H "Content-Type: application/json" -H "Authoriz
 # → {"ok":true,"result":"pong"}
 
 curl -s http://127.0.0.1:60123/ -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"method":"getVersion"}'
-# → {"ok":true,"result":"0.6.0"}
+# → {"ok":true,"result":"<installed version>"}
 ```
 
 The method list and the wire format are in [host-api.md](host-api.md#rpc-wire-format).

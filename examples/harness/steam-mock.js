@@ -34,12 +34,18 @@
       getLogs: [],
     };
     // Every call is recorded for the assertions; `__HARNESS_REFUSE_CONFIG__` makes a config edit
-    // answer the daemon's refusal envelope (what it sends outside its accepted ranges).
+    // answer the daemon's refusal envelope (what it sends outside its accepted ranges), and
+    // `__HARNESS_RPC_DELAY__` (ms) holds the answers back so a press can land while one is in flight.
     const calls = (window.__HARNESS_RPC_CALLS__ = []);
     function answer(method, args) {
       calls.push({ method: method, args: args });
       if (method === "setRuntimeConfig" && window.__HARNESS_REFUSE_CONFIG__) return { ok: false, error: "refused by the harness" };
       return { ok: true, result: Object.prototype.hasOwnProperty.call(results, method) ? results[method] : true };
+    }
+    function reply(body) {
+      const res = { ok: true, json: function () { return Promise.resolve(body); } };
+      const delay = window.__HARNESS_RPC_DELAY__ || 0;
+      return delay ? new Promise(function (r) { setTimeout(function () { r(res); }, delay); }) : Promise.resolve(res);
     }
     const realFetch = window.fetch ? window.fetch.bind(window) : null;
     window.fetch = function (url, opts) {
@@ -47,8 +53,7 @@
         if (typeof url === "string" && url.indexOf(RPC_HOST) >= 0) {
           let call = {};
           try { call = JSON.parse((opts && opts.body) || "{}"); } catch (e) {}
-          const body = answer(call.method || "", call.args);
-          return Promise.resolve({ ok: true, json: function () { return Promise.resolve(body); } });
+          return reply(answer(call.method || "", call.args));
         }
       } catch (e) {}
       return realFetch ? realFetch(url, opts) : Promise.reject(new Error("no fetch"));
@@ -74,16 +79,15 @@
   };
 
   // ── The tab-list renderer + the QAM consumer ──────────────────────────────
-  // The consumer returns an element carrying `props.tabs`; the runtime finds it
-  // and pushes our tab. Named so `toString()` contains the discovery substring.
-  // Steam mounts only the ACTIVE tab's panel, so leaving a tab unmounts it: `tabSwitch`
-  // scenarios get that (the menu opens on our tab 900, __HARNESS_SELECT_TAB__ switches),
-  // the others render every panel at once.
+  // Steam mounts only the ACTIVE tab's panel, so leaving a tab unmounts it. `tabSwitch` scenarios
+  // get that (opened on our tab 900, __HARNESS_SELECT_TAB__ switches); others mount every panel.
   let activeTab = 900;
   function panelOf(t, id) {
     if (S.tabSwitch && id !== activeTab) return null;
     return typeof t.panel === "function" ? h(t.panel) : t.panel || null;
   }
+  // The consumer returns an element carrying `props.tabs`; the runtime finds it
+  // and pushes our tab. Named so `toString()` contains the discovery substring.
   function TabList(props) {
     return h(
       "div",

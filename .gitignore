@@ -60,9 +60,6 @@ SHA256SUMS.minisig
 *.rpm
 *.bak
 *.tmp
-# The daemon's safe-download temps land beside the bundle it serves, including
-# examples/bundle/ on a local run.
-*.download.tmp
 *.temp
 *.backup
 
@@ -74,11 +71,12 @@ SHA256SUMS.minisig
 # ── Hidden directories (except .github) ───────────────────────────────────────
 .*/
 !.github/
-# cargo-audit's ignore list ships with the repo (CI reads it); nothing else under
-# .cargo/ (local config, credentials) ever does.
+# cargo-audit's ignore list and the per-target build flags ship with the repo (CI
+# reads both); nothing else under .cargo/ (local overrides, credentials) ever does.
 !.cargo/
 .cargo/*
 !.cargo/audit.toml
+!.cargo/config.toml
 
 # ── Workflow-generated files ──────────────────────────────────────────────────
 CHANGELOG*.md

@@ -9,6 +9,12 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **Uma matriz de compatibilidade na página de resolução de problemas da comunidade.** O hub
+  0.6.0 sem carregador, com um carregador sem Deck Shelves, e com o Deck Shelves 2.0.0 (a cópia
+  da loja), 3.2.x, 3.3.0, 3.3.1–3.3.4 e 3.4.0, nos padrões, com `force_owner` e com
+  `force_owner` + `coop_bundle`: o que você vê, o que pode dar errado, a correção e a
+  alternativa, com as linhas de log e os rótulos da aba a procurar
+  (`community-docs/pt-BR/troubleshooting.md`, também em inglês).
 - **Um lab que roda o cliente Steam nativo ARM64 da Valve num contêiner.** `pnpm lab:steam-arm64`
   busca o cliente a partir do manifesto de cliente da própria Valve (com checagem SHA-256) num
   volume Docker nomeado, o inicia sem tela num display virtual com a porta de depuração ligada,
@@ -193,6 +199,36 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   vai dentro do host nem do plugin.
 
 ### Alterado
+- **A leitura de Estado da visão do hub foi para o painel lateral.** A aba do Acesso Rápido fica
+  com três áreas — Atualizações, Configurações, Solução de problemas — e o painel lateral tem três
+  abas: Notificações, Estado e Logs, nessa ordem (LB / RB percorrem as abas). "Ver estado" em
+  Solução de problemas, ou Ctrl+Shift+S, o abre em Estado; a leitura embutida ficava espremida
+  entre as outras linhas (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`;
+  cenário do harness `sole-host-status`).
+- **Duas novas provas de bancada.** `pnpm run harness:daemon` roda o daemon de verdade contra um
+  navegador sem tela e prova, sem o Steam, que uma interface colapsada é detectada, que o comando
+  de recuperação roda exatamente uma vez e que o aviso de recuperação chega ao hub — além da
+  recuperação desligada e da tolerância de partida; ele não consegue tocar num Steam de verdade
+  (config, portas e pastas próprias, e substitutos que registram as ferramentas do Steam da
+  plataforma). O harness do runtime ganha um cenário de troca de aba no Acesso Rápido, conta as
+  checagens em node como mais um resultado e falha a execução quando elas falham. A CI roda os dois
+  no Linux, no runner e no contêiner.
+- **O modo de diagnóstico do Acesso Rápido mostra `panel`** (antes `overlay`) quando a aba nativa
+  não está no menu.
+- **Desenvolvimento local:** `pnpm local:run` e `pnpm debug:local` dão ao daemon deles uma porta RPC
+  própria (60124, `SHELVES_RPC_PORT` substitui) e um arquivo de token próprio; o `local:run` se
+  recusa a iniciar enquanto um serviço instalado responde na 60123 e mostra como pará-lo durante a
+  sessão, e o `debug:local` roda isolado numa pasta temporária. O `shelves-devtools` tem a opção
+  `--timeout`, e as conexões CDP desistem depois de uma espera limitada, não no tempo de conexão do
+  sistema.
+- **Checagens de qualidade.** Uma release para em segundos quando falta a chave de assinatura, antes
+  de qualquer build; a matriz de QA marca uma célula como partial quando falta um dos arquivos de
+  evidência dela (e uma perna que decide o veredito sem evidência não conta mais como aprovada); o
+  `pnpm validate` registra as contagens dos cenários do daemon e recusa argumentos desconhecidos; a
+  checagem de texto publicado sinaliza rótulos de fase, a menos que nomeiem um chip da Apple ou uma
+  tecla de função.
+- **Os comandos de preparo são `pnpm run setup`, `pnpm run update` e `pnpm run run`** nas docs e nas
+  dicas dos scripts: `pnpm setup` / `pnpm update` puros são comandos do próprio pnpm.
 - **Atualizações automáticas ligadas por padrão** nas preferências do próprio hub, como nos
   instaladores.
 - **Depois de uma atualização do Deck Shelves o hub renova o backend Python da mesma release** e
@@ -243,6 +279,76 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ### Corrigido
 
+- **O Big Picture atrás de outra janela não derruba mais o hub.** No macOS (e em qualquer
+  desktop) uma janela do Big Picture coberta ou minimizada se declara oculta, e o portão de
+  desktop tomava isso pelo cliente desktop: o hub se afastava (`Desktop client on screen …`),
+  pulava as trocas a quente do bundle e consultava rápido até a janela voltar à frente. O portão
+  agora pergunta ao Steam o modo de interface (o Big Picture responde 4, o cliente desktop outro
+  valor) e só recorre à visibilidade da janela num cliente sem essa chamada
+  (`src/loader/mod.rs`).
+- **Windows: o log do serviço fica em disco.** `%LOCALAPPDATA%\ShelvesHub\logs\out.log`,
+  movido para `out.log.1` ao passar de 1 MiB, então um reinício não leva mais o log junto
+  (`src/logger.rs`).
+- **Windows: a tarefa de logon inicia o daemon por um PowerShell oculto**, então nenhuma janela
+  de console aparece no logon e fechar uma janela não encerra mais o serviço; o companheiro da
+  bandeja roda sem console (`installer/Windows/install.ps1`, `register-task.ps1`,
+  `src/bin/tray.rs`).
+- **Windows: "Reiniciar serviço" e o reinício após uma autoatualização iniciam o daemon de novo
+  pela tarefa de logon** (diretamente quando foi iniciado à mão), então a tarefa continua
+  supervisionando-o. A linha `cmd` anterior citava o executável de um jeito que o `cmd` não lê,
+  então provavelmente nunca iniciava o binário (`src/populate.rs`).
+- **Windows: os instaladores removem uma tarefa antiga da era administrador com o mesmo nome
+  durante a migração para a instalação por usuário** (ou pedem para rodar uma vez elevado), e o
+  desinstalador do setup remove o diretório de logs do daemon (`installer/Windows/migrate.ps1`,
+  `shelveshub.nsi`).
+- **Windows: os binários são compilados com o runtime C estático**, então iniciam numa máquina
+  sem o redistribuível do Visual C++ (`.cargo/config.toml`).
+- **A visão do hub mantém uma chave virada enquanto uma edição de configuração recusada estava
+  em voo:** uma recusa devolve só a linha recusada e limpa a nota de reinício só quando nada
+  mais a marcou (`runtime/shelves-host-qam.js`).
+- **`handshake()` informa o carimbo atual do daemon a cada chamada** (`hostVersion`, `device`,
+  `bundleVersion`, `coopBundle`), então um bundle trocado no lugar informa a própria versão
+  (`runtime/shelves-host-api.js`).
+- **O app instalador do macOS é publicado como `Install-ShelvesHub.app.zip`** (sem espaço),
+  então sua linha no `SHA256SUMS` bate com o nome do asset publicado
+  (`scripts/build-mac-app.sh`, `.github/workflows/release.yml`).
+- **Host único: um componente renderizado de mentira fora de uma renderização do React** (a
+  descoberta do menu do card) recebe um despachante de hooks temporário no React 19 em vez de
+  falhar no primeiro hook (`runtime/shelves-host-api.js`).
+- **O fluxo de relatórios de qualidade instala o rustfmt** com a toolchain para o portão
+  `cargo fmt --check` (`.github/workflows/reports.yml`).
+- **Docs e comentários.** A página de arquitetura nomeia a superfície do host
+  `window.__SHELVES_HOST__` (`runtime/shelves-host-api.js`); a doc do handshake registra o
+  carimbo por chamada; as páginas de resolução de problemas dizem quais versões do Deck Shelves
+  reivindicam o renderizador (3.2.0 e mais novas; a 2.0.0 da loja não) e onde fica o log do
+  Windows; desvios de comentários corrigidos no servidor RPC, na flag de atualização preparada,
+  na configuração do vídeo de boot e no fluxo de release.
+- **A visão do hub continua aberta ao trocar de aba no Acesso Rápido.** Aberta a partir do editor
+  do Deck Shelves, ela voltava para a página inicial da aba quando você trocava de aba e voltava,
+  e os atalhos do painel lateral (D-pad direita duas vezes na borda direita, Ctrl+Shift+L,
+  Ctrl+Shift+N) paravam de funcionar até reabri-la.
+- **Um segundo ShelvesHub sai em vez de rodar sem a porta de controle.** Ele registra a causa real —
+  uma porta que outro programa ocupa, um endereço que não é desta máquina, ou uma porta que este
+  usuário não pode abrir — e não mexe na cópia que já roda nem no token dela.
+- **Downloads vêm só das releases do próprio projeto.** O bundle e o backend do plugin vêm só das
+  releases do Deck Shelves (primeira partida, download manual, toda atualização), e o pacote e os
+  arquivos de checksum do próprio hub só das releases do ShelvesHub; voltar o plugin de versão
+  também volta o backend para a release correspondente.
+- **Atualizações.** Uma release mais nova do ShelvesHub não cancela mais uma atualização já baixada
+  esperando reinício; depois de uma atualização manual do hub as notas mostradas são as da versão
+  baixada; downloads manuais do plugin seguem o canal beta atual sem reiniciar; tags de release
+  cujos metadados de build têm hífen são ordenadas corretamente.
+- **Primeira partida sem backend:** o endpoint de controle responde na hora e a primeira injeção
+  espera o download do backend, então as chamadas de dados do plugin funcionam desde o primeiro
+  carregamento.
+- **Desligar o filme de inicialização** remove o filme do hub onde quer que uma instalação antiga o
+  tenha colocado, e ainda deixa o filme que outra ferramenta ligou no lugar.
+- **As linhas de configuração da vista do hub** ignoram um toque enquanto a mudança anterior ainda
+  está sendo salva, e o interruptor de atualizações automáticas mostra o padrão real (ligado)
+  enquanto a vista carrega.
+- **Instaladores.** O desinstalador do Windows remove arquivos temporários interrompidos e as pastas
+  de troca do backend; as checagens de instalação do macOS, do Windows e do Linux falham num erro
+  do instalador e nunca alcançam a instalação da própria máquina.
 - **Escritas de preferências não se sobrescrevem mais.** Edições feitas pela aba, pela
   sincronização de configurações e pela checagem automática de atualização são serializadas,
   cada escrita usa um arquivo temporário próprio, e o arquivo de configuração mantém a ordem das

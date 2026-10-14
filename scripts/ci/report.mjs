@@ -84,9 +84,18 @@ export function parseAudit(out) {
   }
 }
 
+// One verdict line per result (`  PASS  name`); a failure's detail line is not counted again.
 export function parseHarness(out) {
-  const passed = (out.match(/PASS/g) || []).length;
-  const failed = (out.match(/FAIL/g) || []).length;
+  const plain = out.replace(/\x1b\[[0-9;]*m/g, "");
+  const passed = (plain.match(/^\s+PASS {2}\S/gm) || []).length;
+  const failed = (plain.match(/^\s+FAIL {2}\S/gm) || []).length;
+  return passed + failed ? { passed, failed, total: passed + failed } : null;
+}
+
+// The daemon scenarios print one `PASS <name>` or `FAIL <name> …` line each.
+export function parseScenarioLines(out) {
+  const passed = (out.match(/^PASS /gm) || []).length;
+  const failed = (out.match(/^FAIL /gm) || []).length;
   return passed + failed ? { passed, failed, total: passed + failed } : null;
 }
 
@@ -147,7 +156,7 @@ export function describe(kind, v) {
   if (kind === "eslint") return `${v.errors} errors, ${v.warnings} warnings` + (v.problems ? ` — ${Object.entries(v.byRule).map(([r, n]) => `${r}: ${n}`).join(", ")}` : "");
   if (kind === "complexity") return v.count ? `debt ${v.level} across ${v.count} function(s), worst ${v.max}: ${v.top.map((t) => `${t.fn} (${t.score}) ${t.file}:${t.line}`).join("; ")}` : "every runtime function is within the limit";
   if (kind === "tests") return `${v.passed}/${v.total} passed`;
-  if (kind === "harness") return `${v.passed}/${v.total} scenarios`;
+  if (kind === "harness") return `${v.passed}/${v.total} results`;
   if (kind === "audit") return `${v.vulnerabilities} advisories`;
   return v.clean ? "clean" : "not clean";
 }
@@ -352,6 +361,7 @@ function signalRows(r) {
     ["rustfmt", describe("fmt", r.fmt)],
     ["ESLint", describe("eslint", r.eslint)],
     ["Runtime harness", describe("harness", r.harness)],
+    ["Daemon scenarios", describe("harness", r.daemonScenarios)],
     ["cargo audit", describe("audit", r.audit)],
     ["Complexity debt (runtime)", describe("complexity", r.complexity)],
     ["Lint suppressions", r.suppressions ? String(r.suppressions.total) : "not measured"],

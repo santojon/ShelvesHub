@@ -8,6 +8,8 @@ same DevTools protocol as Steam's CEF renderer).
 |---|---|
 | `bundle/shelves-example.js` | A framework-free stand-in for the real Deck Shelves bundle. Reads `window.__SHELVES_HOST__`, registers lifecycle, calls `ping` / `getVersion` / `isInjected` over RPC, renders sample shelves, and sets `window.__SHELVES_DEMO__`. |
 | `harness/index.html` | A page that mimics the Steam renderer DOM. Has a `#shelves-root` mount point. |
+| `daemon-harness/shared-context.html` | The page titled `SharedJSContext` that `scripts/harness-daemon.sh` serves as the renderer the daemon injects into. |
+| `daemon-harness/big-picture.html` | The page standing in for a Big Picture window; the daemon scenarios close it and open it again. |
 | `harness/steam-stubs.js` | Provides `window.SteamClient` and a local `window.__SHELVES_HOST__` (whose `rpc.call` talks to the real host RPC server, mirroring `src/runtime/host/shelves.ts`). |
 
 ## Quick start

@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-13T20:19:24Z",
+  "ts": "2026-10-14T13:29:19Z",
   "version": "0.5.0",
   "staleDays": 30,
   "overall": "PASS",
@@ -9,29 +9,36 @@
       "platform": "Linux",
       "arch": "x86_64",
       "kind": "container",
-      "proves": "host build, install/uninstall lifecycle, RPC, daemon injection into a headless Chromium, runtime scenarios, plugin backend probes",
+      "proves": "host build, install/uninstall lifecycle, RPC, daemon injection into a headless Chromium, runtime scenarios, daemon scenarios, plugin backend probes",
       "gate": true,
       "status": "tested",
-      "ts": "2026-10-13T12:53:20Z",
+      "ts": "2026-10-14T13:27:59Z",
       "ageDays": 0,
       "stale": false,
       "evidence": [
         {
           "file": "evidence/container-x86_64.json",
-          "ts": "2026-10-13T12:53:20Z",
+          "ts": "2026-10-14T13:27:59Z",
           "kind": "container",
           "steps": {
             "scenarios": "pass",
             "install": "pass",
             "smoke": "pass",
+            "daemon": "pass",
             "plugin": "pass"
           }
         },
         {
+          "file": "evidence/daemon-scenarios-x86_64.json",
+          "ts": "2026-10-14T13:27:59Z",
+          "kind": "daemon-scenarios",
+          "scenarios": "3/3"
+        },
+        {
           "file": "evidence/scenarios-x86_64.json",
-          "ts": "2026-10-13T12:53:12Z",
+          "ts": "2026-10-14T13:27:17Z",
           "kind": "runtime-scenarios",
-          "scenarios": "14/14"
+          "scenarios": "20/20"
         }
       ]
     },
@@ -40,29 +47,36 @@
       "platform": "Linux",
       "arch": "aarch64",
       "kind": "container (QEMU)",
-      "proves": "host build, install/uninstall lifecycle, RPC, daemon injection into a headless Chromium, runtime scenarios, plugin backend probes",
+      "proves": "host build, install/uninstall lifecycle, RPC, daemon injection into a headless Chromium, runtime scenarios, daemon scenarios, plugin backend probes",
       "gate": true,
       "status": "tested",
-      "ts": "2026-10-13T12:53:42Z",
+      "ts": "2026-10-14T13:28:44Z",
       "ageDays": 0,
       "stale": false,
       "evidence": [
         {
           "file": "evidence/container-aarch64.json",
-          "ts": "2026-10-13T12:53:42Z",
+          "ts": "2026-10-14T13:28:44Z",
           "kind": "container",
           "steps": {
             "scenarios": "pass",
             "install": "pass",
             "smoke": "pass",
+            "daemon": "pass",
             "plugin": "pass"
           }
         },
         {
+          "file": "evidence/daemon-scenarios-aarch64.json",
+          "ts": "2026-10-14T13:28:44Z",
+          "kind": "daemon-scenarios",
+          "scenarios": "3/3"
+        },
+        {
           "file": "evidence/scenarios-aarch64.json",
-          "ts": "2026-10-13T12:53:40Z",
+          "ts": "2026-10-14T13:28:19Z",
           "kind": "runtime-scenarios",
-          "scenarios": "14/14"
+          "scenarios": "20/20"
         }
       ]
     },
@@ -74,15 +88,15 @@
       "proves": "runtime scenarios (native tab, coexistence, sole host, cooperative, fallback panel, idle cost) in a headless Chromium",
       "gate": true,
       "status": "tested",
-      "ts": "2026-10-13T09:54:14Z",
+      "ts": "2026-10-14T13:29:19Z",
       "ageDays": 0,
       "stale": false,
       "evidence": [
         {
           "file": "evidence/scenarios-host-darwin-arm64.json",
-          "ts": "2026-10-13T09:54:14Z",
+          "ts": "2026-10-14T13:29:19Z",
           "kind": "runtime-scenarios",
-          "scenarios": "14/14"
+          "scenarios": "20/20"
         }
       ]
     },
@@ -121,7 +135,7 @@
       "note": "Real Steam CEF integration (inject, render, gamepad, coexistence, cooperative) — run on a Steam Deck; `shelveshub status --report` plus the deploy and soak scripts are the evidence.",
       "gate": false,
       "ts": "2026-10-12T12:00:00Z",
-      "ageDays": 1,
+      "ageDays": 2,
       "stale": false,
       "evidence": [
         {
@@ -154,7 +168,7 @@
       "note": "Sole host on this machine's Steam Big Picture (`pnpm local:run`).",
       "gate": false,
       "ts": "2026-10-12T11:45:00Z",
-      "ageDays": 1,
+      "ageDays": 2,
       "stale": false,
       "evidence": [
         {

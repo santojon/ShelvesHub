@@ -12,12 +12,18 @@
 #   HEADLESS=0 scripts/local-debug.sh # show the browser window
 #
 # Env overrides: SHELVES_CEF_PORT (default 9222), BROWSER (path to a browser),
-#                SHELVES_BUNDLE_PATH (default examples/bundle/shelves-example.js)
+#                SHELVES_BUNDLE_PATH (default examples/bundle/shelves-example.js),
+#                SHELVES_RPC_PORT (default 60124; an installed service keeps 60123)
+#
+# The daemon runs on a copy of the bundle with its own settings, hub store (updates
+# and settings sync off), token file and an empty backend directory, all in a temp
+# directory, with the boot movie and auto-recovery off: it downloads nothing and
+# touches neither an installed service's files nor this machine's Steam.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${SHELVES_CEF_PORT:-9222}"
-RPC_ADDR="${SHELVES_RPC_ADDR:-127.0.0.1:60123}"
+RPC_PORT="${SHELVES_RPC_PORT:-60124}"
 HARNESS="$ROOT/examples/harness/index.html"
 BUNDLE="${SHELVES_BUNDLE_PATH:-$ROOT/examples/bundle/shelves-example.js}"
 HEADLESS="${HEADLESS:-1}"
@@ -50,6 +56,7 @@ BROWSER_BIN="$(find_browser)" || {
 }
 echo "[i] Browser : $BROWSER_BIN"
 echo "[i] Port    : $PORT"
+echo "[i] RPC port: $RPC_PORT"
 echo "[i] Bundle  : $BUNDLE"
 
 # ── Build the binaries ──────────────────────────────────────────────────────
@@ -59,14 +66,18 @@ DEVTOOLS="$ROOT/target/debug/shelves-devtools"
 LOADER="$ROOT/target/debug/shelveshub"
 
 PROFILE="$(mktemp -d)"
+WORK="$(mktemp -d)"
 BROWSER_PID=""
 LOADER_PID=""
 cleanup() {
   [[ -n "$LOADER_PID" ]] && kill "$LOADER_PID" 2>/dev/null || true
   [[ -n "$BROWSER_PID" ]] && kill "$BROWSER_PID" 2>/dev/null || true
-  rm -rf "$PROFILE" 2>/dev/null || true
+  rm -rf "$PROFILE" "$WORK" 2>/dev/null || true
 }
 trap cleanup EXIT
+cp "$BUNDLE" "$WORK/bundle.js"
+mkdir -p "$WORK/settings" "$WORK/backend"
+echo '{ "auto_update": false, "config_sync": false }' >"$WORK/hub.json"
 
 # ── Launch the browser ──────────────────────────────────────────────────────
 BROWSER_ARGS=(
@@ -95,8 +106,11 @@ curl -sf "http://127.0.0.1:$PORT/json/version" >/dev/null 2>&1 || { echo "error:
 # ── Run the loader against it (serves RPC + injects on its loop) ────────────
 echo "[i] Starting loader (CEF=127.0.0.1:$PORT)..."
 SHELVES_CEF_PORT="$PORT" \
-SHELVES_RPC_ADDR="$RPC_ADDR" \
-SHELVES_BUNDLE_PATH="$BUNDLE" \
+SHELVES_RPC_HOST=127.0.0.1 SHELVES_RPC_PORT="$RPC_PORT" SHELVES_RPC_TOKEN_FILE="$WORK/rpc-token" \
+SHELVES_BUNDLE_PATH="$WORK/bundle.js" SHELVES_HUB_CONFIG="$WORK/hub.json" \
+SHELVES_SETTINGS_DIR="$WORK/settings" SHELVES_BACKEND_DIR="$WORK/backend" \
+SHELVES_CONFIG_FILE="$WORK/shelveshub.config.json" \
+SHELVES_BOOT_MOVIE=0 SHELVES_BOOT_MOVIE_FILE="$WORK/no-movie.webm" SHELVES_RECOVER_CMD=off \
 SHELVES_TARGET="$TARGET_FILTER" \
 SHELVES_INTERVAL_SECS=5 \
 SHELVES_DESKTOP_UI=1 \
@@ -106,6 +120,14 @@ LOADER_PID=$!
 echo -n "[i] Waiting for injection"
 for _ in $(seq 1 20); do
   if [[ "$("$DEVTOOLS" --port "$PORT" --target "$TARGET_FILTER" probe 2>/dev/null)" == "injected: true" ]]; then break; fi
+  echo -n "."; sleep 0.5
+done
+echo
+# Without Steam's UI the runtime's scan never signals ready, so the bundle boots when
+# its gate gives up (about 12 s).
+echo -n "[i] Waiting for the bundle to boot"
+for _ in $(seq 1 40); do
+  if [[ "$("$DEVTOOLS" --port "$PORT" --target "$TARGET_FILTER" eval '!!window.__SHELVES_DEMO__' 2>/dev/null)" == "true" ]]; then break; fi
   echo -n "."; sleep 0.5
 done
 echo

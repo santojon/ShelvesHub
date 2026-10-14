@@ -2,10 +2,12 @@
 # runner (no Steam). Proves install.ps1 / uninstall.ps1 lay down and tear down the
 # right files under a redirected per-user profile, apply the SHELVES_* options on a
 # FIRST install, keep settings on a plain uninstall and remove them on -Purge,
-# migrate an old Program Files install, and write install.log. The ScheduledTask
-# cmdlets are STUBBED (a recording shim, like the Linux systemctl / macOS launchctl
-# stubs) so no real task is registered and no daemon starts; LOCALAPPDATA / APPDATA
-# / ProgramFiles are redirected to temp sandboxes.
+# migrate an old Program Files install (its admin-era task removed before the
+# per-user one is registered), start the daemon's task hidden with its exit code
+# passed on, and write install.log. The ScheduledTask cmdlets are STUBBED (a
+# recording shim, like the Linux systemctl / macOS launchctl stubs) so no real task
+# is registered and no daemon starts; LOCALAPPDATA / APPDATA / ProgramFiles are
+# redirected to temp sandboxes.
 $ErrorActionPreference = "Stop"
 $ROOT = (Resolve-Path "$PSScriptRoot\..").Path
 Set-Location $ROOT
@@ -20,8 +22,12 @@ function Check($label, [bool]$ok) {
 # then cd's into the package dir (so install.ps1's `Test-Path shelveshub.exe`
 # finds the local binary and skips the download) and runs the script. New-
 # ScheduledTaskSettingsSet answers a settings-shaped object like the real cmdlet
-# (the installer sets ExecutionTimeLimit on it); Register-ScheduledTask records
-# the limit it was handed to $env:SHTASK_LOG so we can assert on both.
+# (the installer sets ExecutionTimeLimit on it) and New-ScheduledTaskAction an
+# action-shaped one; Register-ScheduledTask records the limit and the action it was
+# handed to $env:SHTASK_LOG, Unregister-ScheduledTask its arguments, so we can
+# assert on all of them. Get-ScheduledTask reports an old install's task only while
+# SHTASK_OLD_TASK is set (the migration step). Stop-Process is stubbed too: the
+# installers' real one would stop a ShelvesHub this machine runs.
 function Run-Pkg($scriptName, $argLine, $outFile) {
   # The child shell may write to stderr (benign). Under the script's Stop
   # preference PowerShell escalates native-command stderr to a terminating error,
@@ -36,19 +42,22 @@ function Run-Pkg($scriptName, $argLine, $outFile) {
 `$env:APPDATA = '$($env:APPDATA)'
 `$env:ProgramFiles = '$($env:ProgramFiles)'
 `$env:SHTASK_LOG = '$($env:SHTASK_LOG)'
+`$env:SHTASK_OLD_TASK = '$($env:SHTASK_OLD_TASK)'
 `$env:SHELVES_FORCE_OWNER = '$($env:SHELVES_FORCE_OWNER)'
 `$env:SHELVES_NATIVE_QAM = '$($env:SHELVES_NATIVE_QAM)'
 `$env:SHELVES_DESKTOP_UI = '$($env:SHELVES_DESKTOP_UI)'
 `$env:SHELVES_AUTO_UPDATE = '$($env:SHELVES_AUTO_UPDATE)'
 `$env:SHELVES_PLUGIN_PRERELEASE = '$($env:SHELVES_PLUGIN_PRERELEASE)'
-function New-ScheduledTaskAction {}
+function New-ScheduledTaskAction { param(`$Execute, `$Argument) [pscustomobject]@{ Execute = `$Execute; Argument = `$Argument } }
 function New-ScheduledTaskTrigger {}
 function New-ScheduledTaskSettingsSet { [pscustomobject]@{ ExecutionTimeLimit = 'PT72H' } }
 function New-ScheduledTaskPrincipal {}
-function Register-ScheduledTask { `$i = [array]::IndexOf(`$args, '-Settings'); `$limit = if (`$i -ge 0) { `$args[`$i + 1].ExecutionTimeLimit } else { 'none' }; "Register-ScheduledTask limit=`$limit" | Out-File -Append -LiteralPath `$env:SHTASK_LOG }
+function Register-ScheduledTask { `$s = `$args | Where-Object { `$_ -and `$_.PSObject.Properties['ExecutionTimeLimit'] } | Select-Object -First 1; `$a = `$args | Where-Object { `$_ -and `$_.PSObject.Properties['Execute'] } | Select-Object -First 1; `$limit = if (`$s) { `$s.ExecutionTimeLimit } else { 'none' }; "Register-ScheduledTask `$(`$args[1]) limit=`$limit action=`$(`$a.Execute) `$(`$a.Argument)" | Out-File -Append -LiteralPath `$env:SHTASK_LOG }
+function Get-ScheduledTask { if (`$env:SHTASK_OLD_TASK -eq '1') { [pscustomobject]@{ TaskName = 'ShelvesHub' } } }
 function Start-ScheduledTask {}
 function Stop-ScheduledTask {}
-function Unregister-ScheduledTask {}
+function Unregister-ScheduledTask { "Unregister-ScheduledTask `$(`$args -join ' ')" | Out-File -Append -LiteralPath `$env:SHTASK_LOG }
+function Stop-Process {}
 Set-Location -LiteralPath '$PKG'
 & '$PKG\installer\$scriptName' $argLine
 exit `$LASTEXITCODE
@@ -108,6 +117,9 @@ Check "runtime copied"              (Test-Path "$installPath\runtime\shelves-hos
 Check "install.log written"         (Test-Path "$installPath\install.log")
 Check "task registration attempted" ((Test-Path $env:SHTASK_LOG) -and [bool](Select-String -Path $env:SHTASK_LOG -Pattern "Register-ScheduledTask" -Quiet))
 Check "task registered with no run-time limit (PT0S)" ((Test-Path $env:SHTASK_LOG) -and [bool](Select-String -Path $env:SHTASK_LOG -Pattern "limit=PT0S" -Quiet) -and -not [bool](Select-String -Path $env:SHTASK_LOG -Pattern "limit=(PT72H|none)" -Quiet))
+# The daemon's action: a hidden PowerShell that runs the installed binary and
+# exits with its code (the task's run result), so no console window shows.
+Check "daemon task starts hidden through PowerShell" ((Test-Path $env:SHTASK_LOG) -and [bool](Select-String -Path $env:SHTASK_LOG -Pattern '^Register-ScheduledTask ShelvesHub .*action=.*\\powershell\.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command "& ''.*\\ShelvesHub\\shelveshub\.exe''; exit \$LASTEXITCODE"$' -Quiet))
 $cfg = if (Test-Path $cfgPath) { Get-Content $cfgPath -Raw } else { "" }
 Check "force_owner flipped on"      ($cfg -match '"force_owner":\s*true')
 Check "native_qam flipped off"      ($cfg -match '"native_qam":\s*false')
@@ -142,9 +154,22 @@ $oldInstall = Join-Path $env:ProgramFiles "ShelvesHub"
 New-Item -ItemType Directory -Force -Path $oldInstall | Out-Null
 '{"migrated":true}' | Out-File -FilePath (Join-Path $oldInstall "shelveshub.config.json") -Encoding ascii
 Remove-Item -Recurse -Force $installPath -ErrorAction SilentlyContinue
+# The stubbed Get-ScheduledTask reports the old install's task while this is set;
+# a fresh task log makes the order of the calls below readable.
+$env:SHTASK_OLD_TASK = "1"
+Remove-Item $env:SHTASK_LOG -Force -ErrorAction SilentlyContinue
 Run-Pkg "install.ps1" "" "$env:TEMP\win-migrate.out"
+$env:SHTASK_OLD_TASK = ""
 Check "old Program Files install removed" (-not (Test-Path $oldInstall))
 Check "old config carried over"           ((Test-Path $cfgPath) -and ((Get-Content $cfgPath -Raw) -match '"migrated":\s*true'))
+$taskLog = if (Test-Path $env:SHTASK_LOG) { @(Get-Content $env:SHTASK_LOG) } else { @() }
+$unregAt = -1; $regAt = -1
+for ($i = 0; $i -lt $taskLog.Count; $i++) {
+  if ($unregAt -lt 0 -and $taskLog[$i] -match '^Unregister-ScheduledTask .*ShelvesHub') { $unregAt = $i }
+  if ($regAt -lt 0 -and $taskLog[$i] -match '^Register-ScheduledTask ShelvesHub ') { $regAt = $i }
+}
+Check "old admin-era task removed before the per-user one is registered" (($unregAt -ge 0) -and ($regAt -gt $unregAt))
+Check "migration reports the removed task" ([bool](Select-String -Path "$env:TEMP\win-migrate.out" -Pattern "Removed the old install's scheduled task" -SimpleMatch -Quiet))
 
 Remove-Item -Recurse -Force $PKG,$SAND -ErrorAction SilentlyContinue
 Write-Output ""

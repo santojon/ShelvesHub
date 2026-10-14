@@ -10,6 +10,23 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 
 ## [Unreleased]
 
+- **O Estado ganha a própria aba no painel lateral.** A aba do ShelvesHub fica com três áreas —
+  Atualizações, Configurações, Solução de problemas — e o painel lateral agora tem Notificações,
+  Estado e Logs: "Ver estado" em Solução de problemas (ou Ctrl+Shift+S) abre a leitura que antes
+  ficava espremida embaixo das outras linhas.
+- **O Big Picture atrás de outra janela não pausa mais o ShelvesHub.** Num Mac (ou em qualquer
+  desktop), cobrir ou minimizar o Big Picture era lido como "voltou ao cliente desktop": o hub se
+  afastava e pulava atualizações até a janela voltar à frente. Agora ele pergunta ao Steam qual
+  interface está ativa.
+- **Windows: um arquivo de log, sem janela de console, reinícios pela tarefa.** O serviço grava
+  `%LOCALAPPDATA%\ShelvesHub\logs\out.log`, inicia oculto pela tarefa de logon (fechar uma janela
+  não o encerra mais), volta por essa tarefa depois de "Reiniciar serviço" ou de uma
+  autoatualização, e os binários não precisam mais do redistribuível do Visual C++.
+- **A visão do hub fica onde você a deixou.** Trocar para outra aba do Acesso Rápido e voltar
+  traz de volta a visão do ShelvesHub aberta a partir do editor do Deck Shelves (o painel lateral
+  fecha na saída), então os gestos e atalhos dela continuam funcionando. Uma segunda cópia do
+  ShelvesHub iniciada com outra já rodando agora sai com uma linha clara no log, em vez de rodar
+  sem a porta de controle.
 - **Atualização automática do plugin no modo cooperativo.** Com a nova opção `coop_bundle` ligada
   (junto com `force_owner`), o ShelvesHub roda e atualiza a própria cópia do Deck Shelves mesmo com
   um loader de plugins presente: a cópia do loader (Deck Shelves 3.4.0 ou mais novo) se retira na
@@ -39,9 +56,9 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   em vez de uma caixinha abaixo dos botões. O painel tem duas abas, Logs e Notificações, com
   ícones ao lado do título ShelvesHub para abrir qualquer uma; ele também abre como o painel
   lateral do próprio plugin — aperte direita duas vezes no controle na borda direita da visão do
-  hub (esquerda para fora dele fecha) — ou pelo teclado com seta direita duas vezes,
-  Ctrl+Shift+L ou Ctrl+Shift+N. LB / RB alternam as abas dentro dele, B fecha, e cada
-  notificação mostra a marca do remetente como no toast do Steam.
+  hub (esquerda para fora dele fecha) — ou pelo teclado com Ctrl+Shift+L ou Ctrl+Shift+N. LB / RB
+  alternam as abas dentro dele, B fecha, e cada notificação mostra a marca do remetente como no
+  toast do Steam.
 - **As notificações agora têm a cara e o comportamento das do Steam.** As notificações que este
   host mostra — as do Deck Shelves também — passam pelo sistema de notificações do próprio Steam:
   o som e a posição do Steam, overlay em jogo, uma entrada na aba Notificações, o visual do próprio

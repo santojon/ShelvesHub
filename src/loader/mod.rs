@@ -843,16 +843,21 @@ fn check_hub_update(hold: &str, prerelease: bool, deferred: bool) {
     let Some((latest, notes)) = populate::latest_hub_release_info(prerelease) else {
         return; // network/parse miss — leave any existing notice as-is
     };
+    handle_hub_release(&latest, notes, hold, prerelease, deferred);
+}
+
+/// The check's decision on the newest release it found (`latest`, with its notes).
+/// A binary already staged keeps its notice until a newer one is staged over it.
+fn handle_hub_release(latest: &str, notes: String, hold: &str, prerelease: bool, deferred: bool) {
     let current = env!("CARGO_PKG_VERSION");
-    if !version_is_newer(&latest, current) || same_version(&latest, hold) {
+    if !version_is_newer(latest, current) || same_version(latest, hold) {
         clear_pending_hub_update_unless_staged();
         return;
     }
-    state::set_pending_hub_notes(Some(notes));
     // Already downloaded this version over the running binary — nothing to do
     // until the user restarts (which launches the staged binary).
-    if state::hub_update_staged() && state::pending_hub_update().as_deref() == Some(latest.as_str())
-    {
+    if state::hub_update_staged() && state::pending_hub_update().as_deref() == Some(latest) {
+        state::set_pending_hub_notes(Some(notes));
         return;
     }
     if deferred {
@@ -860,8 +865,7 @@ fn check_hub_update(hold: &str, prerelease: bool, deferred: bool) {
             "update",
             &format!("ShelvesHub {latest} available — waiting until no game is running."),
         );
-        state::set_pending_hub_update(Some(latest));
-        state::set_hub_update_staged(false);
+        note_pending_hub_update(latest, notes);
         return;
     }
     match populate::apply_hub_update(prerelease) {
@@ -872,19 +876,28 @@ fn check_hub_update(hold: &str, prerelease: bool, deferred: bool) {
             );
             state::push_host_notice("notice_hub_staged", serde_json::json!({ "version": tag }));
             state::set_pending_hub_update(Some(tag));
+            state::set_pending_hub_notes(Some(notes));
             state::set_hub_update_staged(true);
         }
         Err(e) => {
             // Keep the notice so the update is still visible; retry next check.
-            if state::pending_hub_update().as_deref() != Some(latest.as_str()) {
+            if state::pending_hub_update().as_deref() != Some(latest) {
                 log_warning(
                     "update",
                     &format!("ShelvesHub {latest} available but download/stage failed: {e}"),
                 );
             }
-            state::set_pending_hub_update(Some(latest));
-            state::set_hub_update_staged(false);
+            note_pending_hub_update(latest, notes);
         }
+    }
+}
+
+/// A newer release seen but not staged: the pending notice and its notes — unless a
+/// binary is already staged, which runs at the next restart whatever comes later.
+fn note_pending_hub_update(tag: &str, notes: String) {
+    if !state::hub_update_staged() {
+        state::set_pending_hub_update(Some(tag.to_string()));
+        state::set_pending_hub_notes(Some(notes));
     }
 }
 
@@ -908,25 +921,12 @@ fn is_version_literal(s: &str) -> bool {
         && parts.next().is_none()
 }
 
-/// The debug ports to probe, in order: the configured one first, then Steam's
-/// known alternates (8080/8081), de-duplicated so the configured port is never
-/// probed twice.
-pub(crate) fn port_candidates(configured: u16) -> Vec<u16> {
-    let mut candidates = vec![configured];
-    for p in [crate::config::DEFAULT_CEF_PORT, 8081] {
-        if !candidates.contains(&p) {
-            candidates.push(p);
-        }
-    }
-    candidates
-}
-
 /// Probe the CEF debug port: try the configured port first, then Steam's known
 /// alternates, returning the first that answers target discovery. `None` when
 /// nothing responds (Steam not up yet) — the caller keeps whatever port it had
 /// and the loop keeps retrying.
 fn resolve_cef_port(host: &str, configured: u16) -> Option<u16> {
-    port_candidates(configured)
+    crate::config::cef_port_candidates(configured)
         .into_iter()
         .find(|&p| cdp::discover_targets(host, p).is_ok())
 }
@@ -1241,13 +1241,9 @@ fn tick(
         "loader",
         &format!(
             "Inject timing: bundle read {read_ms}ms, runtime eval {runtime_ms}ms, bundle eval {bundle_ms}ms. \
-             (Bundle boot is then gated on the runtime's UI scan — see the runtime's \"UI scan complete\" line \
-             and the bundleReady delta.)"
+             (Bundle boot is then gated on the runtime's UI scan — see the runtime's \"UI scan complete\" line.)"
         ),
     );
-    // Record when the bundle landed so the bundleReady RPC can report the
-    // downstream boot→initialised time (the part after the daemon's own work).
-    state::mark_injected_now();
 
     // Confirm the marker is now present rather than trusting a silent eval.
     Ok(if probe_injected(&mut client)? {
@@ -1483,7 +1479,6 @@ fn inject_coop_bundle(
     let _ = client.evaluate(&format!("delete {HOST_BUNDLE_BOOTED_GLOBAL}; true"));
     let gated = format!("{BUNDLE_GATE_PREFIX}{source}{BUNDLE_GATE_SUFFIX}");
     inject_bundle(client, &gated, env!("CARGO_PKG_VERSION"))?;
-    state::mark_injected_now();
     log_info(
         "loader",
         if beside_loader {
@@ -1540,25 +1535,54 @@ fn note_newer_loader_copy(config: &Config, loader_plugin: Option<&str>) {
     state::request_update_check();
 }
 
-/// True when a gamepad / Big Picture window is actually on screen — not just
-/// present as a lingering hidden target. On desktop platforms the Big Picture
-/// window stays a CDP target after the user returns to the desktop client
-/// (hidden, still titled "Big Picture"), so the target list reports it active.
-/// Reading `document.hidden` across the Steam UI windows is the reliable signal.
-/// Returns true on any connect/eval error so a probe failure never blocks
-/// injection (matching the target-list heuristic's fail-open default).
+/// Steam's `EUIMode` for the gamepad / Big Picture UI (the desktop client
+/// answers another value).
+const UI_MODE_GAMEPAD: i64 = 4;
+
+/// Steam's own UI mode, plus whether any Steam UI window is visible as the
+/// fallback for a client without `GetUIMode`. Both read null when unknown.
+const UI_MODE_PROBE: &str = "(function(){\
+    function shown(){try{var w=window.SteamUIStore&&window.SteamUIStore.WindowStore;\
+        var a=w&&w.SteamUIWindows;if(!Array.isArray(a))return null;\
+        for(var i=0;i<a.length;i++){try{if(a[i].BrowserWindow.document.hidden===false)return true;}catch(e){}}\
+        return false;}catch(e){return null;}}\
+    function answer(m){return {mode:(typeof m==='number')?m:null,shown:shown()};}\
+    try{var ui=window.SteamClient&&window.SteamClient.UI;\
+        if(ui&&typeof ui.GetUIMode==='function'){\
+            return Promise.resolve(ui.GetUIMode()).then(answer,function(){return answer(null);});}}catch(e){}\
+    return answer(null);})()";
+
+/// True when the gamepad / Big Picture UI is the client's active UI — not just
+/// a lingering hidden target. On desktop platforms the Big Picture window stays
+/// a CDP target after the user returns to the desktop client (hidden, still
+/// titled "Big Picture"), so the target list reports it active. Steam's own UI
+/// mode is the reliable signal: an occluded or minimized Big Picture window
+/// still counts (macOS marks it `document.hidden`, which used to read as the
+/// desktop client and stood the hub down behind any other window). Returns
+/// true on any connect/eval error so a probe failure never blocks injection
+/// (matching the target-list heuristic's fail-open default).
 fn gamepad_ui_visible(host: &str, port: u16, filter: Option<&str>) -> bool {
     let Ok(mut client) = CdpClient::connect_renderer(host, port, filter) else {
         return true;
     };
-    let expr = "(function(){try{var w=window.SteamUIStore&&window.SteamUIStore.WindowStore;\
-        var a=w&&w.SteamUIWindows;if(!Array.isArray(a))return true;\
-        for(var i=0;i<a.length;i++){try{if(a[i].BrowserWindow.document.hidden===false)return true;}catch(e){}}\
-        return false;}catch(e){return true;}})()";
-    match client.evaluate(expr) {
-        Ok(v) => v.as_bool().unwrap_or(true),
+    match client.evaluate(UI_MODE_PROBE) {
+        Ok(v) => gamepad_ui_on_screen(&v),
         Err(_) => true,
     }
+}
+
+/// Decides from the probe's answer: Steam's UI mode when it answered one, else
+/// whether a Steam UI window is visible; no answer at all reads as on screen.
+fn gamepad_ui_on_screen(probe: &serde_json::Value) -> bool {
+    if let Some(mode) = probe.get("mode").and_then(serde_json::Value::as_i64) {
+        if mode >= 0 {
+            return mode == UI_MODE_GAMEPAD;
+        }
+    }
+    probe
+        .get("shown")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true)
 }
 
 /// True when our coexistence runtime has already added its tab. In coexistence the

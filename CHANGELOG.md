@@ -9,6 +9,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- **A compatibility matrix on the community troubleshooting page.** Hub 0.6.0 beside no loader,
+  a loader without Deck Shelves, and Deck Shelves 2.0.0 (the store's copy), 3.2.x, 3.3.0,
+  3.3.1–3.3.4 and 3.4.0, under the defaults, `force_owner` and `force_owner` + `coop_bundle`:
+  what you see, what can go wrong, the fix and its alternative, with the log lines and tab
+  labels to look for (`community-docs/troubleshooting.md`, pt-BR too).
 - **A lab that runs Valve's native ARM64 Steam client in a container.** `pnpm lab:steam-arm64`
   fetches the client from Valve's own client manifest (SHA-256 checked) into a named Docker
   volume, starts it headless on a virtual display with the debug port on, runs the hub's arm64
@@ -181,6 +186,33 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   code strips both. Nothing of this ships inside the host or the plugin.
 
 ### Changed
+- **The hub view's Status readout moved into the side panel.** The Quick Access tab keeps three
+  areas — Updates, Settings, Troubleshooting — and the side panel has three tabs: Notifications,
+  Status and Logs, in that order (LB / RB walk them). "View status" in Troubleshooting, or
+  Ctrl+Shift+S, opens it on Status; the inline readout was squeezed between the other rows
+  (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`; harness scenario
+  `sole-host-status`).
+- **Two new desk proofs.** `pnpm run harness:daemon` runs the real daemon against a headless
+  browser and proves, without Steam, that a collapsed interface is detected, the recovery command
+  runs exactly once and the recovered notice reaches the hub — plus recovery switched off and the
+  start-up grace; it cannot touch a real Steam (its own config, ports and folders, and recording
+  stand-ins for the platform's Steam tools). The runtime harness adds a Quick Access tab-switch
+  scenario, counts its node unit checks as one more result and fails the run when they fail. CI
+  runs both on Linux, on the runner and in the container.
+- **The Quick Access diagnostic mode reads `panel`** (was `overlay`) when the native tab is not in
+  the menu.
+- **Local development:** `pnpm local:run` and `pnpm debug:local` give their daemon its own RPC port
+  (60124, `SHELVES_RPC_PORT` overrides) and token file; `local:run` refuses to start while an
+  installed service answers on 60123 and prints how to stop it for the session, and
+  `debug:local` runs sealed in a temporary folder. `shelves-devtools` has a `--timeout` option, and
+  the CDP connections give up after a bounded wait instead of the system's connect timeout.
+- **Quality checks.** A release stops within seconds when the signing key is missing, before any
+  build runs; the QA matrix marks a cell partial when one of its evidence files is missing (and a
+  gating leg without evidence no longer reads as a pass); `pnpm validate` records the daemon
+  scenario counts and refuses unknown arguments; the shipped-text check flags phase-style labels
+  unless they name an Apple chip or a function key.
+- **Setup commands are `pnpm run setup`, `pnpm run update` and `pnpm run run`** in the docs and
+  script hints: plain `pnpm setup` / `pnpm update` are pnpm's own commands.
 - **Automatic updates are on by default** in the hub's own settings, matching the installers.
 - **After a Deck Shelves update the hub refreshes its Python backend from the same release** and
   restarts it, so the backend always matches the bundle; on a first start the backend is
@@ -225,6 +257,71 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Fixed
 
+- **Big Picture behind another window no longer stands the hub down.** On macOS (and any
+  desktop) an occluded or minimized Big Picture window reports itself hidden, which the desktop
+  gate took for the desktop client: the hub stood down (`Desktop client on screen …`), skipped
+  bundle hot-swaps and polled fast until the window was in front again. The gate now asks Steam
+  for its UI mode (Big Picture answers 4, the desktop client another value) and falls back to
+  window visibility only on a client without that call (`src/loader/mod.rs`).
+- **Windows: the service log is on disk.** `%LOCALAPPDATA%\ShelvesHub\logs\out.log`, moved to
+  `out.log.1` once it passes 1 MiB, so a restart no longer takes the log with it
+  (`src/logger.rs`).
+- **Windows: the logon task starts the daemon through a hidden PowerShell**, so no console
+  window appears at logon and closing a window can no longer end the service; the tray
+  companion runs without a console (`installer/Windows/install.ps1`, `register-task.ps1`,
+  `src/bin/tray.rs`).
+- **Windows: "Restart service" and the restart after a self-update start the daemon through
+  its logon task again** (directly when it was started by hand), so the task keeps supervising
+  it. The previous `cmd` line quoted the executable in a way `cmd` does not read, so it most
+  likely never started the binary (`src/populate.rs`).
+- **Windows: the installers remove an old administrator-era task of the same name during the
+  migration to a per-user install** (or say to run once elevated), and the setup's uninstaller
+  removes the daemon's log directory (`installer/Windows/migrate.ps1`, `shelveshub.nsi`).
+- **Windows: the binaries are built with a static C runtime**, so they start on a machine
+  without the Visual C++ redistributable (`.cargo/config.toml`).
+- **The hub view keeps a switch flipped while a refused config edit was in flight:** a refusal
+  puts back only the refused row and clears the restart note only when nothing else marked it
+  (`runtime/shelves-host-qam.js`).
+- **`handshake()` reports the daemon's current stamp on every call** (`hostVersion`, `device`,
+  `bundleVersion`, `coopBundle`), so a bundle swapped in place reports its own version
+  (`runtime/shelves-host-api.js`).
+- **The macOS installer app ships as `Install-ShelvesHub.app.zip`** (no space), so its
+  `SHA256SUMS` line matches the published asset name (`scripts/build-mac-app.sh`,
+  `.github/workflows/release.yml`).
+- **Sole host: a component fake-rendered outside a React render** (the card-menu discovery)
+  gets a temporary hook dispatcher on React 19 instead of failing at its first hook
+  (`runtime/shelves-host-api.js`).
+- **The quality-reports workflow installs rustfmt** with its toolchain for the
+  `cargo fmt --check` gate (`.github/workflows/reports.yml`).
+- **Docs and comments.** The architecture page names the host surface `window.__SHELVES_HOST__`
+  (`runtime/shelves-host-api.js`); the handshake doc notes the per-call stamp; the
+  troubleshooting pages say which Deck Shelves releases claim the renderer (3.2.0 and newer;
+  the store's 2.0.0 does not) and where the Windows log is; comment drift fixed in the RPC
+  server, the staged-update flag, the boot-movie config and the release workflow.
+- **The hub view stays open across Quick Access tab switches.** Opened from the Deck Shelves
+  editor, it used to fall back to the tab's front page when you switched to another tab and back,
+  and its side-panel shortcuts (D-pad right twice at the right edge, Ctrl+Shift+L, Ctrl+Shift+N)
+  stopped working until you reopened it.
+- **A second ShelvesHub exits instead of running without its control port.** It logs the real
+  cause — a port another program holds, an address that is not this machine's, or a port this
+  user may not open — and leaves the running copy and its token untouched.
+- **Downloads come only from the project's own releases.** The plugin bundle and backend are taken
+  only from the Deck Shelves releases (first start, manual download, every update), and the hub's
+  own package and checksum files only from the ShelvesHub releases; rolling the plugin back also
+  takes its backend back to the matching release.
+- **Updates.** A newer ShelvesHub release no longer cancels an update already downloaded and
+  waiting for a restart; after a manual hub update the release notes shown belong to the version
+  downloaded; manual plugin downloads follow the current beta channel without a restart; release
+  tags whose build metadata contains a hyphen are ordered correctly.
+- **First start without a backend:** the control endpoint answers at once and the first injection
+  waits for the backend download, so the plugin's data calls work from its first load.
+- **Turning the startup movie off** removes the hub's movie wherever an older install placed it,
+  and still leaves a movie another tool linked in its place.
+- **The hub view's configuration rows** ignore a press while the previous change is still being
+  saved, and the automatic-updates switch shows its real default (on) while the view loads.
+- **Installers.** The Windows uninstaller removes interrupted temporary files and the backend swap
+  folders; the macOS, Windows and Linux install checks fail on an installer's error and never
+  reach the machine's own install.
 - **Settings writes no longer overwrite one another.** Edits made from the tab, by settings
   sync and by the automatic update check are serialized, each write uses a unique temporary
   file, and the configuration file keeps its key order so its comment entries stay beside their

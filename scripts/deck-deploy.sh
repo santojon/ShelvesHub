@@ -11,7 +11,7 @@
 #   scripts/deck-deploy.sh --no-build   # deploy a previously-built binary
 #   BUNDLE=examples/bundle/shelves-example.js scripts/deck-deploy.sh
 #
-# Prereqs are installed by `pnpm setup` (rustup + Linux target, zig +
+# Prereqs are installed by `pnpm run setup` (rustup + Linux target, zig +
 # cargo-zigbuild for cross-compiling, rsync/ssh ship with macOS).
 set -euo pipefail
 

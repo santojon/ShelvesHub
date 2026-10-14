@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 #
 # Assemble "Install ShelvesHub.app" — a clickable macOS installer app carrying
-# the ShelvesHub icon. Output: <dist>/Install ShelvesHub.app (+ a .zip for the
-# GitHub release, since a .app is a directory). macOS only (needs iconutil for
-# the .icns, produced by scripts/gen-icons.sh).
+# the ShelvesHub icon. Output: <dist>/Install ShelvesHub.app, plus
+# Install-ShelvesHub.app.zip for the release (a .app is a directory; the asset
+# name carries no space, which the release host would turn into a dot so that
+# SHA256SUMS could never match it). macOS only (needs iconutil for the .icns,
+# produced by scripts/gen-icons.sh).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTDIR="${1:-$ROOT/dist}"
 APP_NAME="Install ShelvesHub"
 APP="$OUTDIR/$APP_NAME.app"
+ZIP_NAME="Install-ShelvesHub.app.zip"
 ICNS="$ROOT/assets/icons/icon.icns"
 
 [[ -f "$ICNS" ]] || bash "$ROOT/scripts/gen-icons.sh"
@@ -47,9 +50,9 @@ touch "$APP"
 
 # Zip for the release (ditto preserves the bundle bits).
 if command -v ditto >/dev/null 2>&1; then
-  ( cd "$OUTDIR" && ditto -c -k --sequesterRsrc --keepParent "$APP_NAME.app" "$APP_NAME.app.zip" )
+  ( cd "$OUTDIR" && ditto -c -k --sequesterRsrc --keepParent "$APP_NAME.app" "$ZIP_NAME" )
   echo "[OK] $APP"
-  echo "     $OUTDIR/$APP_NAME.app.zip"
+  echo "     $OUTDIR/$ZIP_NAME"
 else
   echo "[OK] $APP  (ditto unavailable — skipped .zip)"
 fi

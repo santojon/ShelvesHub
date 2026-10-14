@@ -37,6 +37,16 @@ need_plugin_dir(){ [[ -d "$PLUGIN_DIR" ]] || { echo "error: plugin repo not foun
 build_plugin(){ need_plugin_dir; say "building plugin sole-host bundle…" >&2; ( cd "$PLUGIN_DIR" && pnpm run build:release ) >&2 || { echo "error: plugin build failed — deploy aborted" >&2; exit 1; }; }
 build_iife(){ echo "$PLUGIN_DIR/dist/index.iife.js"; }
 
+# The plugin's Python backend (main.py + src/backend) the hub hosts from <install>/backend;
+# only a plugin release refreshes it otherwise, so a dev deploy ships the tree's copy.
+BACKEND_RSYNC=(rsync -az --delete --exclude __pycache__ --exclude '*.pyc')
+sync_backend(){ # sync_backend <dest> [rsh]
+  need_plugin_dir; say "plugin backend → $1" >&2
+  local e=(); [[ -n "${2:-}" ]] && e=(-e "$2")
+  "${BACKEND_RSYNC[@]}" "${e[@]+"${e[@]}"}" "$PLUGIN_DIR/main.py" "$1/" || exit 1
+  "${BACKEND_RSYNC[@]}" "${e[@]+"${e[@]}"}" "$PLUGIN_DIR/src/backend/" "$1/src/backend/" || exit 1
+}
+
 # Indirect env lookup that stays safe under `set -u` on bash 3.2.
 envof(){ eval "printf '%s' \"\${$1:-}\""; }
 
@@ -62,13 +72,13 @@ remote_deploy(){
   [[ -f "$bin" ]] || { echo "error: $bin missing after build"; exit 1; }
 
   say "deploying to $user@$host:$path …"
-  "${ssh[@]}" "mkdir -p '$path/bundle' '$path/runtime/backend' '$path/assets/boot' '/home/$user/.config/systemd/user'"
+  "${ssh[@]}" "mkdir -p '$path/bundle' '$path/runtime/backend' '$path/backend/src' '$path/assets/boot' '/home/$user/.config/systemd/user'"
   rsync -az -e "$rsh" "$bin" "$user@$host:$path/shelveshub"
   rsync -az -e "$rsh" runtime/shelves-host*.js "$user@$host:$path/runtime/"
   rsync -az -e "$rsh" runtime/i18n/ "$user@$host:$path/runtime/i18n/"
   rsync -az -e "$rsh" runtime/backend/ "$user@$host:$path/runtime/backend/"
   rsync -az --ignore-existing -e "$rsh" shelveshub.config.json "$user@$host:$path/shelveshub.config.json"
-  if [[ "$PLUGIN" == 1 ]]; then build_plugin; local iife; iife="$(build_iife)"; say "plugin bundle → $path/bundle/index.js"; rsync -az -e "$rsh" "$iife" "$user@$host:$path/bundle/index.js"; fi
+  if [[ "$PLUGIN" == 1 ]]; then build_plugin; local iife; iife="$(build_iife)"; say "plugin bundle → $path/bundle/index.js"; rsync -az -e "$rsh" "$iife" "$user@$host:$path/bundle/index.js"; sync_backend "$user@$host:$path/backend" "$rsh"; fi
 
   "${ssh[@]}" bash -s <<REMOTE
 set -e
@@ -104,11 +114,17 @@ case "$PLAT" in
     # too. `deck-deploy.sh` otherwise ships this repo's checked-in `bundle/index.js`,
     # which nothing rebuilds — so cooperative/sole mode (where the hub injects its
     # OWN copy, not the loader's) kept running a stale bundle. Mirrors the mac leg.
-    if [[ "$PLUGIN" == 1 ]]; then build_plugin; BUNDLE="$(build_iife)" bash "scripts/deck-deploy$HSFX.sh"
+    if [[ "$PLUGIN" == 1 ]]; then
+      dk="${DECK_SSH_KEY:-$HOME/.ssh/id_rsa}"; dk="${dk/#\~/$HOME}"; drsh="ssh -o StrictHostKeyChecking=accept-new"
+      [[ -f "$dk" ]] && drsh="$drsh -i $dk"
+      dpath="${DECK_DEPLOY_PATH:-/home/$DECK_USER/.local/share/shelveshub}"
+      $drsh "$DECK_USER@$DECK_HOST" "mkdir -p '$dpath/backend/src'" || exit 1
+      sync_backend "$DECK_USER@$DECK_HOST:$dpath/backend" "$drsh"
+      build_plugin; BUNDLE="$(build_iife)" bash "scripts/deck-deploy$HSFX.sh"
     else bash "scripts/deck-deploy$HSFX.sh"; fi
     ;;
   mac)
-    if [[ "$PLUGIN" == 1 ]]; then build_plugin; local_iife="$(build_iife)"; say "plugin bundle → hub install"; mkdir -p "$HOME/.local/share/shelveshub/bundle"; cp "$local_iife" "$HOME/.local/share/shelveshub/bundle/index.js"; fi
+    if [[ "$PLUGIN" == 1 ]]; then build_plugin; local_iife="$(build_iife)"; say "plugin bundle → hub install"; mkdir -p "$HOME/.local/share/shelveshub/bundle"; cp "$local_iife" "$HOME/.local/share/shelveshub/bundle/index.js"; mkdir -p "$HOME/.local/share/shelveshub/backend/src"; sync_backend "$HOME/.local/share/shelveshub/backend"; fi
     say "hub → Mac"; bash "scripts/mac-deploy$HSFX.sh"
     ;;
   linux) remote_deploy LINUX x86_64-unknown-linux-gnu "" ;;

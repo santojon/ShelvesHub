@@ -1,7 +1,12 @@
+// A console program on Windows too: `status` / `doctor` print to the console it
+// was started from, and the logon task hides the daemon's own one (register-task.ps1).
+
+use std::io::Write;
+use std::net::TcpListener;
 use std::path::PathBuf;
 
 use shelveshub::config::{backend_install_dir, Config};
-use shelveshub::logger::{log_info, log_warning};
+use shelveshub::logger::{log_error, log_info, log_warning};
 use shelveshub::{backend, bootmovie, loader, populate, rpc, state};
 
 fn main() {
@@ -27,12 +32,15 @@ fn main() {
     log_info("main", "ShelvesHub starting...");
     log_info("main", concat!("Version: ", env!("CARGO_PKG_VERSION")));
 
+    let config = Config::from_env();
+    // The control endpoint first: a daemon that cannot own it exits here, before it
+    // touches the install, the store, Steam's files or the renderer.
+    let listener = bind_control_endpoint(&config.rpc_addr);
+
     // A prior self-update stages the binary swap and takes effect on this start;
     // clear any leftover swap artifacts (an interrupted `.new`, the moved-aside
     // `.old` on Windows) now that the new binary is the one running.
     populate::cleanup_stale_update_artifacts();
-
-    let config = Config::from_env();
 
     // The plugin channel is read live at every update check (`plugin_prerelease`);
     // this boot value only serves the first obtains and the RPC handlers' snapshot.
@@ -53,7 +61,7 @@ fn main() {
 
     // The Deck Shelves Python backend for a SOLE host (no loader: macOS/Windows),
     // so the data RPCs work, not just local shelves. Obtained when nothing is
-    // configured, off the start path: a slow network delays only the data RPCs.
+    // configured, after the control endpoint is up and before the first inject.
     let backend_obtain = config
         .backend_dir
         .is_none()
@@ -61,6 +69,7 @@ fn main() {
         .flatten();
 
     log_info("main", &format!("Config: {}", config.summary()));
+    state::set_hub_config_path(config.hub_config_path.clone());
 
     // Optional: install (or remove) the startup animation in Steam's own
     // startup-movie slot. Best-effort — a failure here never blocks the daemon.
@@ -83,7 +92,6 @@ fn main() {
     // Expose the bundle path + pre-release flag to RPC handlers (the fallback
     // panel's manual re-download) before the server starts.
     state::set_populate_config(config.bundle_path.clone(), prerelease);
-    state::set_hub_config_path(config.hub_config_path.clone());
     // Effective operational config, for the hub's "advanced configuration" mirror
     // (read-only display + an editable safe subset that writes the config file and
     // applies on the next restart). Built before `config` is moved into the loop.
@@ -103,9 +111,9 @@ fn main() {
             "force_owner": config.force_owner,
             "recover_cmd": config.recover_cmd,
             "bundle_path": config.bundle_path.display().to_string(),
-            // Backend hosting is on: configured, or being obtained for this sole
-            // host (it starts when it lands; `getBackendStatus` is the live state).
-            "backend": config.backend_dir.is_some() || backend_obtain.is_some(),
+            // Boot value only: `getRuntimeConfig` answers `backend::enabled()`, which
+            // turns true once a first-boot obtain starts hosting.
+            "backend": config.backend_dir.is_some(),
             "version": env!("CARGO_PKG_VERSION"),
             // Whether another plugin loader can coexist here — only on
             // Linux/SteamOS. On macOS/Windows this is a pure sole host, so the
@@ -115,23 +123,52 @@ fn main() {
         }),
     );
 
-    // Spawn the RPC server on a background thread so the loader loop can run
-    // concurrently without blocking on incoming connections. It publishes the
-    // per-boot token file once its port is bound (see `rpc::serve`).
-    let rpc_addr = config.rpc_addr.clone();
-    std::thread::spawn(move || rpc::serve(&rpc_addr));
+    // Serve the bound endpoint on a background thread so the loader loop runs
+    // beside it; a client that connected since the bind waits in the backlog.
+    std::thread::spawn(move || rpc::serve(listener));
 
     if let Some(dir) = backend_obtain {
-        let hosted = config.clone();
-        std::thread::spawn(move || obtain_backend(hosted, dir, prerelease));
+        obtain_backend(config.clone(), dir, prerelease);
     }
 
     loader::run(config);
 }
 
+/// Bind the control endpoint or exit: without it nothing can be saved. A port in
+/// use usually means a ShelvesHub already running (whose token file stays as it
+/// is); any other error is named as itself.
+fn bind_control_endpoint(addr: &str) -> TcpListener {
+    match rpc::bind(addr) {
+        Ok(listener) => listener,
+        Err(e) => {
+            let hint = match e.kind() {
+                std::io::ErrorKind::AddrInUse => {
+                    "Another ShelvesHub is probably running (or another process holds the port), \
+                     so this one exits. Stop the other process, or set `rpc_port` in \
+                     shelveshub.config.json to a free port, then start the service again."
+                }
+                std::io::ErrorKind::AddrNotAvailable => {
+                    "Check `rpc_host` / `rpc_port` in shelveshub.config.json (the address must \
+                     belong to this machine), then start the service again."
+                }
+                _ => {
+                    "Check `rpc_host` / `rpc_port` in shelveshub.config.json (an address of this \
+                     machine and a port this user may open), then start the service again."
+                }
+            };
+            log_error(
+                "main",
+                &format!("Failed to bind the control endpoint {addr}: {e}. {hint}"),
+            );
+            let _ = std::io::stdout().flush();
+            std::process::exit(1);
+        }
+    }
+}
+
 /// First-boot obtain of the hub-managed backend (local, loader copy or download),
-/// then hosting starts on it. Runs beside the RPC server and the injection loop;
-/// best-effort — on a miss the daemon runs core-only, no crash.
+/// then hosting starts on it. Runs after the RPC server is up, before the injection
+/// loop; best-effort — on a miss the daemon runs core-only, no crash.
 fn obtain_backend(mut config: Config, dir: PathBuf, prerelease: bool) {
     match populate::ensure_backend(&dir, prerelease) {
         Ok(src) => {
