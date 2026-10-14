@@ -205,6 +205,9 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
   Solução de problemas, ou Ctrl+Shift+S, o abre em Estado; a leitura embutida ficava espremida
   entre as outras linhas (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`;
   cenário do harness `sole-host-status`).
+- **Código morto removido.** Uma cópia não compilada de um contrato antigo do host
+  (`src/runtime/host/`) e a descoberta de UI de uma vez só, sem uso, do runtime se foram; a
+  descoberta em partes é a única que resta.
 - **Duas novas provas de bancada.** `pnpm run harness:daemon` roda o daemon de verdade contra um
   navegador sem tela e prova, sem o Steam, que uma interface colapsada é detectada, que o comando
   de recuperação roda exatamente uma vez e que o aviso de recuperação chega ao hub — além da

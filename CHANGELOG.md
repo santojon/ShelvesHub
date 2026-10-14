@@ -192,6 +192,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   Ctrl+Shift+S, opens it on Status; the inline readout was squeezed between the other rows
   (`runtime/shelves-host-qam.js`, `runtime/shelves-host-sidecar.js`; harness scenario
   `sole-host-status`).
+- **Dead code removed.** An unbuilt copy of an old host contract (`src/runtime/host/`) and the
+  runtime's unused all-at-once UI discovery are gone; the chunked discovery is the only one left.
 - **Two new desk proofs.** `pnpm run harness:daemon` runs the real daemon against a headless
   browser and proves, without Steam, that a collapsed interface is detected, the recovery command
   runs exactly once and the recovered notice reaches the hub — plus recovery switched off and the

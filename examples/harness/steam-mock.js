@@ -143,7 +143,7 @@
   };
 
   /* ── Native, gamepad-focusable UI components (scenario flag `nativeUi`) ─────
-     Shaped so the runtime's ensureUi() discovery finds them: ButtonItem and
+     Shaped so the runtime's chunked discovery (ensureUiChunked) finds them: ButtonItem and
      ToggleField are forwardRef-shaped (renderSrc reads `.render`) and carry the
      discovery marker in a comment; PanelSection/Row are plain functions (srcOf
      reads toString). Each renders detectable DOM (`data-native=…`) for assertions. */

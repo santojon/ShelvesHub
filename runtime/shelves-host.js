@@ -439,7 +439,7 @@
 
   // Steam's native, gamepad-focusable UI components. The sole host discovers them with the CHUNKED
   // scan (ensureUiChunked, one step per tick); under a loader (COEXIST) nothing is scanned — its
-  // already-resolved components are borrowed. `ensureUi` (all steps at once) has no boot-path caller.
+  // already-resolved components are borrowed.
   const UI = {};
   let uiReady = false;
   let _commonValues = [];
@@ -632,12 +632,6 @@
     },
   ];
   function runUiStep(i) { try { uiSteps[i](); } catch (e) { log("ui step " + i + ":", e && e.message); } }
-  function ensureUi() {
-    if (uiReady || !React) return UI;
-    uiReady = true;
-    for (let i = 0; i < uiSteps.length; i++) runUiStep(i);
-    return UI;
-  }
   function ensureUiChunked(onDone) {
     if (uiReady || !React) { if (onDone) onDone(); return; }
     uiReady = true;
