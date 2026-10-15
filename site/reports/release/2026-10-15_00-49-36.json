@@ -1,0 +1,178 @@
+{
+  "ts": "2026-10-15_00-49-36",
+  "scope": "release",
+  "version": "0.5.0",
+  "overall": "FAIL",
+  "fmt": {
+    "clean": true
+  },
+  "clippy": {
+    "warnings": 0,
+    "errors": 0,
+    "clean": true
+  },
+  "tests": {
+    "passed": 158,
+    "failed": 0,
+    "skipped": 0,
+    "total": 158
+  },
+  "audit": null,
+  "eslint": {
+    "errors": 0,
+    "warnings": 0,
+    "problems": 0,
+    "byRule": {}
+  },
+  "complexity": {
+    "level": 0,
+    "count": 0,
+    "max": 0,
+    "top": []
+  },
+  "harness": {
+    "passed": 20,
+    "failed": 0,
+    "total": 20
+  },
+  "daemonScenarios": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3
+  },
+  "suppressions": {
+    "total": 0,
+    "byRule": {}
+  },
+  "runtimeCodeLines": 3176,
+  "rustCodeLines": {
+    "total": 9773,
+    "files": 35
+  },
+  "qa": {
+    "cells": 10,
+    "byStatus": {
+      "tested": 3,
+      "partial": 1,
+      "manual": 2,
+      "blocked": 4
+    },
+    "assembled": "2026-10-14T13:29:19Z"
+  },
+  "docs": {
+    "locales": 19,
+    "keys": 84,
+    "keyParity": true,
+    "parityProblems": [],
+    "docPairs": 12,
+    "docsUnpaired": 0
+  },
+  "durations": {
+    "fmt": 687,
+    "clippy": 10095,
+    "tests": 10225,
+    "audit": 19,
+    "eslint": 1463,
+    "complexity": 885,
+    "syntax": 525,
+    "data": 4,
+    "launchers": 12,
+    "shipped-text": 71,
+    "harness": 29123,
+    "harness-daemon": 23705,
+    "total": 76814
+  },
+  "steps": [
+    {
+      "key": "fmt",
+      "label": "rustfmt (cargo fmt --check)",
+      "status": "pass",
+      "durationMs": 687,
+      "log": ""
+    },
+    {
+      "key": "clippy",
+      "label": "clippy (-D warnings)",
+      "status": "pass",
+      "durationMs": 10095,
+      "log": "\u001b[1m\u001b[92m    Updating\u001b[0m crates.io index\n\u001b[1m\u001b[92m     Locking\u001b[0m 322 packages to highest compatible versions\n\u001b[1m\u001b[92m      Adding\u001b[0m generic-array v0.14.7 \u001b[1m\u001b[33m(available: v0.14.9)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m getrandom v0.2.17 \u001b[1m\u001b[33m(available: v0.4.3)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m minisign-verify v0.2.5 \u001b[1m\u001b[33m(available: v0.3.0)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m png v0.17.16 \u001b[1m\u001b[33m(available: v0.18.1)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m sha2 v0.10.9 \u001b[1m\u001b[33m(available: v0.11.1)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m tao v0.34.8 \u001b[1m\u001b[33m(available: v0.37.1)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m toml v0.8.2 \u001b[1m\u001b[33m(available: v0.8.23)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m toml_datetime v0.6.3 \u001b[1m\u001b[33m(available: v0.6.11)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m toml_edit v0.20.2 \u001b[1m\u001b[33m(available: v0.20.7)\u001b[0m\n\u001b[1m\u001b[92m      Adding\u001b[0m tray-icon v0.21.3 \u001b[1m\u001b[33m(available: v0.26.1)\u001b[0m\n\u001b[1m\u001b[92m Downloading\u001b[0m crates ...\n\u001b[1m\u001b[92m  Downloaded\u001b[0m cfg-if v1.0.5\n\u001b[1m\u001b[92m  Downloaded\u001b[0m block-buffer v0.12.1\n\u001b[1m\u001b[92m  Downloaded\u001b[0m clap v4.6.7\n\u001b[1m\u001b[92m  Downloaded\u001b[0m chacha20 v0.10.2\n\u001b[1m\u001b[92m  Downloaded\u001b[0m clap_lex v1.1.1\n\u001b[1m\u001b[92m  Downloaded\u001b[0m cpufeatures v0.3.1\n\u001b[1m\u001b[92m  Downloaded\u001b[0m crypto-common v0.2.2\n\u001b[1m\u001b[92m  Downloaded\u001b[0m equivalent v1.0.3\n\u001b[1m\u001b[92m  Downloaded\u001b[0m sha1 v0.11.0\n\u001b[1m\u001b[92m  Downloaded\u001b[0m clap_builder v4.6.7\n\u001b[1m\u001b[92m  Downloaded\u001b[0m sha2 v0.10.9\n\u001b[1m\u001b[92m  Downloaded\u001b[0m thiserror v2.0.21\n\u001b[1m\u001b[92m  Downloaded\u001b[0m foldhash v0.2.0\n\u001b[1m\u001b[92m  Downloaded\u001b[0m minisign-verify v0.2.5\n\u001b[1m\u001b[92m  Downloaded\u001b[0m digest v0.11.3\n\u001b[1m\u001b[92m  Downloaded\u001b[0m clap_derive v4.6.7\n\u001b[1m\u001b[92m  Downloaded\u001b[0m hybrid-array v0.4.15\n\u001b[1m\u001b[92m  Downloaded\u001b[0m thiserror-impl v2.0.21\n\u001b[1m\u001b[92m  Downloaded\u001b[0m rand_core v0.10.1\n\u001b[1m\u001b[92m  Downloaded\u001b[0m tungstenite v0.30.0\n\u001b[1m\u001b[92m  Downloaded\u001b[0m unicode-ident v1.0.27\n\u001b[1m\u001b[92m  Downloaded\u001b[0m const-oid v0.10.2\n\u001b[1m\u001b[92m  Downloaded\u001b[0m getrandom v0.4.3\n\u001b[1m\u001b[92m  Downloaded\u001b[0m indexmap v2.14.2\n\u001b[1m\u001b[92m  Downloaded\u001b[0m rand v0.10.3\n\u001b[1m\u001b[92m  Downloaded\u001b[0m hashbrown v0.17.1\n\u001b[1m\u001b[92m  Downloaded\u001b[0m serde_json v1.0.154\n\u001b[1m\u001b[92m  Downloaded\u001b[0m syn v3.0.9\n\u001b[1m\u001b[92m  Downloaded\u001b[0m libc v0.2.190\n\u001b[1m\u001b[92m    Checking\u001b[0m typenum v1.20.1\n\u001b[1m\u001b[92m   Compiling\u001b[0m proc-macro2 v1.0.107\n\u001b[1m\u001b[92m   Compiling\u001b[0m quote v1.0.47\n\u001b[1m\u001b[92m   Compiling\u001b[0m unicode-ident v1.0.27\n\u001b[1m\u001b[92m   Compiling\u001b[0m version_check v0.9.5\n\u001b[1m\u001b[92m    Checking\u001b[0m cfg-if v1.0.5\n\u001b[1m\u001b[92m   Compiling\u001b[0m generic-array v0.14.7\n\u001b[1m\u001b[92m   Compiling\u001b[0m libc v0.2.190\n\u001b[1m\u001b[92m   Compiling\u001b[0m serde_core v1.0.229\n\u001b[1m\u001b[92m    Checking\u001b[0m hybrid-array v0.4.15\n\u001b[1m\u001b[92m    Checking\u001b[0m rand_core v0.10.1\n\u001b[1m\u001b[92m    Checking\u001b[0m cpufeatures v0.3.1\n\u001b[1m\u001b[92m    Checking\u001b[0m utf8parse v0.2.2\n\u001b[1m\u001b[92m   Compiling\u001b[0m getrandom v0.4.3\n\u001b[1m\u001b[92m   Compiling\u001b[0m autocfg v1.5.1\n\u001b[1m\u001b[92m   Compiling\u001b[0m syn v3.0.9\n\u001b[1m\u001b[92m    Checking\u001b[0m anstyle-parse v1.0.0\n\u001b[1m\u001b[92m    Checking\u001b[0m crypto-common v0.2.2\n\u001b[1m\u001b[92m   Compiling\u001b[0m num-traits v0.2.19\n\u001b[1m\u001b[92m    Checking\u001b[0m block-buffer v0.12.1\n\u001b[1m\u001b[92m    Checking\u001b[0m is_terminal_polyfill v1.70.2\n\u001b[1m\u001b[92m    Checking\u001b[0m colorchoice v1.0.5\n\u001b[1m\u001b[92m    Checking\u001b[0m anstyle-query v1.1.5\n\u001b[1m\u001b[92m    Checking\u001b[0m anstyle v1.0.14\n\u001b[1m\u001b[92m    Checking\u001b[0m const-oid v0.10.2\n\u001b[1m\u001b[92m   Compiling\u001b[0m thiserror v2.0.21\n\u001b[1m\u001b[92m   Compiling\u001b[0m httparse v1.10.1\n\u001b[1m\u001b[92m    Checking\u001b[0m itoa v1.0.18\n\u001b[1m\u001b[92m   Compiling\u001b[0m zmij v1.0.23\n\u001b[1m\u001b[92m    Checking\u001b[0m digest v0.11.3\n\u001b[1m\u001b[92m    Checking\u001b[0m anstream v1.0.0\n\u001b[1m\u001b[92m    Checking\u001b[0m chacha20 v0.10.2\n\u001b[1m\u001b[92m    Checking\u001b[0m block-buffer v0.10.4\n\u001b[1m\u001b[92m    Checking\u001b[0m crypto-common v0.1.7\n\u001b[1m\u001b[92m    Checking\u001b[0m equivalent v1.0.3\n\u001b[1m\u001b[92m   Compiling\u001b[0m serde v1.0.229\n\u001b[1m\u001b[92m    Checking\u001b[0m bytes v1.12.1\n\u001b[1m\u001b[92m    Checking\u001b[0m strsim v0.11.1\n\u001b[1m\u001b[92m    Checking\u001b[0m clap_lex v1.1.1\n\u001b[1m\u001b[92m   Compiling\u001b[0m serde_json v1.0.154\n\u001b[1m\u001b[92m   Compiling\u001b[0m heck v0.5.0\n\u001b[1m\u001b[92m    Checking\u001b[0m hashbrown v0.17.1\n\u001b[1m\u001b[92m    Checking\u001b[0m http v1.5.0\n\u001b[1m\u001b[92m    Checking\u001b[0m indexmap v2.14.2\n\u001b[1m\u001b[92m    Checking\u001b[0m clap_builder v4.6.7\n\u001b[1m\u001b[92m    Checking\u001b[0m rand v0.10.3\n\u001b[1m\u001b[92m    Checking\u001b[0m digest v0.10.7\n\u001b[1m\u001b[92m    Checking\u001b[0m sha1 v0.11.0\n\u001b[1m\u001b[92m    Checking\u001b[0m memchr v2.8.3\n\u001b[1m\u001b[92m   Compiling\u001b[0m thiserror-impl v2.0.21\n\u001b[1m\u001b[92m   Compiling\u001b[0m serde_derive v1.0.229\n\u001b[1m\u001b[92m   Compiling\u001b[0m clap_derive v4.6.7\n\u001b[1m\u001b[92m    Checking\u001b[0m cpufeatures v0.2.17\n\u001b[1m\u001b[92m    Checking\u001b[0m data-encoding v2.11.1\n\u001b[1m\u001b[92m    Checking\u001b[0m log v0.4.34\n\u001b[1m\u001b[92m   Compiling\u001b[0m shelveshub v0.5.0 (/home/runner/work/ShelvesHub/ShelvesHub)\n\u001b[1m\u001b[92m    Checking\u001b[0m foldhash v0.2.0\n\u001b[1m\u001b[92m    Checking\u001b[0m iana-time-zone v0.1.65\n\u001b[1m\u001b[92m    Checking\u001b[0m chrono v0.4.45\n\u001b[1m\u001b[92m    Checking\u001b[0m clap v4.6.7\n\u001b[1m\u001b[92m    Checking\u001b[0m tungstenite v0.30.0\n\u001b[1m\u001b[92m    Checking\u001b[0m sha2 v0.10.9\n\u001b[1m\u001b[92m    Checking\u001b[0m getrandom v0.2.17\n\u001b[1m\u001b[92m    Checking\u001b[0m minisign-verify v0.2.5\n\u001b[1m\u001b[92m    Finished\u001b[0m `dev` profile [unoptimized + debuginfo] target(s) in 9.97s"
+    },
+    {
+      "key": "tests",
+      "label": "Rust unit tests (cargo test)",
+      "status": "pass",
+      "durationMs": 10225,
+      "log": "test populate::tests::bundle_swap_keeps_previous_copy_and_rollback_restores_it ... ok\ntest populate::tests::copy_into_replaces_the_target_through_a_sibling_temp ... ok\ntest populate::tests::elf_architecture_is_verified ... ok\ntest populate::tests::embedded_minisign_key_parses ... ok\ntest populate::tests::executable_magic_recognized_for_this_os ... ok\ntest populate::tests::finds_backend_archive_asset ... ok\ntest populate::tests::finds_iife_asset_url ... ok\ntest populate::tests::finds_newest_backend_archive_across_releases ... ok\ntest populate::tests::binary_floor_is_separate_from_the_bundle_floor ... ok\ntest populate::tests::hub_rollback_is_refused_while_an_update_is_staged ... ok\ntest populate::tests::hub_rollback_clears_an_interrupted_staging_and_snapshots_the_running_set ... ok\ntest populate::tests::hub_update_finds_platform_package_in_priority_order ... ok\ntest populate::tests::hub_update_takes_assets_only_from_its_own_release_downloads ... ok\ntest populate::tests::maps_release_download_url_to_tags_api ... ok\ntest populate::tests::newest_non_draft_iife_wins_including_prerelease ... ok\ntest populate::tests::newest_release_tag_matches_the_newest_iife_release ... ok\ntest populate::tests::no_iife_asset_returns_none ... ok\ntest populate::tests::package_selection_is_architecture_aware ... ok\ntest populate::tests::pe_architecture_is_verified ... ok\ntest populate::tests::pinned_release_tag_reads_only_the_projects_release_downloads ... ok\ntest populate::tests::hub_rollback_restores_the_snapshot_and_keeps_the_undone_set ... ok\ntest populate::tests::placeholder_is_not_a_real_bundle ... ok\ntest populate::tests::plugin_channel_combines_the_flag_the_plugin_switch_and_the_hub_switches ... ok\ntest populate::tests::plugin_update_prefs_read_the_wrapped_settings_file ... ok\ntest populate::tests::relaunch_line_runs_the_windows_task_and_falls_back_to_the_binary ... ok\ntest populate::tests::release_notes_are_trimmed_normalized_and_capped ... ok\ntest populate::tests::release_url_parts_name_the_repository_and_the_tag ... ok\ntest populate::tests::release_tag_reads_tag_name_and_rejects_empty ... ok\ntest config::tests::recover_cmd_resolution ... ok\ntest populate::tests::release_without_sums_is_refused_when_signatures_required ... ok\ntest populate::tests::sha256_matches_known_vector ... ok\ntest populate::tests::sha256_for_name_parses_both_shapes_and_skips_noise ... ok\ntest populate::tests::signatures_required_when_key_is_baked ... ok\ntest populate::tests::replace_dir_swaps_the_tree_in_place_and_keeps_the_old_one_on_failure ... ok\ntest populate::tests::trusted_backend_url_gate ... ok\ntest populate::tests::trusted_bundle_url_gate ... ok\ntest populate::tests::trusted_bundle_url_gate_refuses_a_release_pointing_elsewhere ... ok\ntest report::tests::arch_matches_normalises_families ... ok\ntest populate::tests::stage_binary_swap_replaces_the_target_in_place ... ok\ntest report::tests::doctor_classifiers_map_states ... ok\ntest report::tests::rpc_probe_rejects_a_malformed_address_without_connecting ... ok\ntest report::tests::worst_is_the_most_severe_check ... ok\ntest rpc::tests::backend_proxy_allowlist_bounds_the_surface ... ok\ntest rpc::tests::bind_refuses_a_port_another_listener_holds ... ok\ntest rpc::tests::config_editor_refuses_keys_outside_the_safe_subset ... ok\ntest rpc::tests::config_editor_refuses_out_of_range_seconds ... ok\ntest rpc::tests::config_editor_refuses_wrong_value_types ... ok\ntest rpc::tests::connection_slots_are_bounded_and_released ... ok\ntest rpc::tests::constant_time_eq_matches_only_equal ... ok\ntest rpc::tests::diagnostics_report_hosting_without_a_bundle_ready_latch ... ok\ntest rpc::tests::dispatches_host_api_version ... ok\ntest rpc::tests::dispatches_is_injected ... ok\ntest rpc::tests::dispatches_ping ... ok\ntest rpc::tests::error_envelope_is_valid_json_for_any_message ... ok\ntest rpc::tests::manual_update_paths_answer_busy_while_a_check_runs ... ok\ntest rpc::tests::quiet_methods_are_the_read_only_polls ... ok\ntest rpc::tests::recover_cmd_is_not_rpc_editable ... ok\ntest rpc::tests::rejects_garbage ... ok\ntest rpc::tests::rejects_unknown_method ... ok\ntest rpc::tests::request_parser_keeps_the_fields_it_needs_and_caps_the_headers ... ok\ntest rpc::tests::rollback_hub_is_refused_while_staged_or_without_a_snapshot ... ok\ntest rpc::tests::self_update_is_skipped_when_current_or_already_staged ... ok\ntest rpc::tests::self_update_keeps_notes_only_with_the_release_they_describe ... ok\ntest rpc::tests::update_pref_and_config_sync_need_a_known_key_and_a_store ... ok\ntest semver::tests::parse_accepts_tags_and_plain_versions ... ok\ntest semver::tests::prerelease_identifiers_compare_numerically_then_lexically ... ok\ntest semver::tests::version_is_newer_orders_by_semver_precedence ... ok\ntest state::tests::config_edits_are_remembered_by_key_with_the_latest_value ... ok\ntest state::tests::host_notices_queue_drains_in_order_and_requeues_at_the_front ... ok\ntest state::tests::rpc_token_is_nonempty_and_stable ... ok\ntest report::tests::device_block_reads_sysfs_fixtures ... ok\ntest state::tests::token_file_is_private_from_creation ... ok\ntest state::tests::update_check_single_flight_guard ... ok\ntest state::tests::update_check_stamp_reports_recent_elapsed ... ok\ntest store::tests::auto_update_defaults_on_and_boot_movie_slots_roundtrip ... ok\ntest store::tests::atomic_write_leaves_no_temp ... ok\ntest store::tests::missing_file_is_defaults ... ok\ntest store::tests::preserves_unknown_keys_from_a_newer_daemon ... ok\ntest store::tests::corrupt_primary_heals_from_backup ... ok\ntest store::tests::quiet_updates_default_on_and_rollback_fields_roundtrip ... ok\ntest store::tests::save_load_roundtrip ... ok\ntest store::tests::settings_sync_defaults_on_and_bookkeeping_roundtrips ... ok\ntest store::tests::wrong_type_known_key_keeps_the_other_settings ... ok\ntest sync::tests::a_malformed_entry_is_replaced_and_the_rest_of_the_document_is_kept ... ok\ntest sync::tests::a_newer_local_value_replaces_the_entry_and_its_extras ... ok\ntest sync::tests::apply_writes_only_booleans_for_known_keys ... ok\ntest sync::tests::doc_parse_rejects_junk_and_keeps_extra_fields ... ok\ntest sync::tests::doc_parse_skips_only_the_malformed_entries ... ok\ntest sync::tests::entry_extras_survive_a_merge_round_trip ... ok\ntest sync::tests::local_values_cover_the_store_keys_and_config_file_values ... ok\ntest sync::tests::merge_converges_after_one_exchange ... ok\ntest sync::tests::merge_newest_stamp_wins_each_way ... ok\ntest sync::tests::merge_pushes_missing_local_keys_and_keeps_unknown_cloud_keys ... ok\ntest sync::tests::merge_tie_keeps_equal_values_and_takes_the_shared_copy_when_they_differ ... ok\ntest sync::tests::set_store_value_covers_exactly_the_synced_switches ... ok\ntest sync::tests::stamp_marks_changes_since_the_last_round ... ok\ntest sync::tests::stamp_on_a_first_round_marks_only_non_defaults ... ok\ntest report::tests::status_report_has_the_expected_shape ... ok\ntest store::tests::update_serializes_concurrent_writers_and_skips_an_unchanged_save ... ok\ntest loader::tests::the_bundle_gate_keeps_one_poll_interval_per_renderer ... ok\n\ntest result: ok. 158 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s\n\n\u001b[1m\u001b[92m     Running\u001b[0m unittests src/bin/devtools.rs (target/debug/deps/shelves_devtools-06a3646f61af3308)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\u001b[1m\u001b[92m     Running\u001b[0m unittests src/main.rs (target/debug/deps/shelveshub-82bc795e27e4af3b)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\u001b[1m\u001b[92m   Doc-tests\u001b[0m shelveshub\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "key": "audit",
+      "label": "cargo audit",
+      "status": "fail",
+      "durationMs": 19,
+      "log": ""
+    },
+    {
+      "key": "eslint",
+      "label": "ESLint",
+      "status": "pass",
+      "durationMs": 1463,
+      "log": "0 errors, 0 warnings"
+    },
+    {
+      "key": "complexity",
+      "label": "Complexity debt of the runtime",
+      "status": "pass",
+      "durationMs": 885,
+      "log": "every runtime function is within the limit"
+    },
+    {
+      "key": "syntax",
+      "label": "JavaScript syntax (node --check)",
+      "status": "pass",
+      "durationMs": 525,
+      "log": "23 files parse"
+    },
+    {
+      "key": "data",
+      "label": "Data files + localization parity",
+      "status": "pass",
+      "durationMs": 4,
+      "log": "21 JSON files valid · 19 locales × 84 keys in parity · 12 doc pairs"
+    },
+    {
+      "key": "launchers",
+      "label": "One-click launchers (.desktop Exec)",
+      "status": "pass",
+      "durationMs": 12,
+      "log": "4 launchers parse"
+    },
+    {
+      "key": "shipped-text",
+      "label": "Shipped-text rule",
+      "status": "pass",
+      "durationMs": 71,
+      "log": "230 tracked files clean"
+    },
+    {
+      "key": "harness",
+      "label": "Runtime harness (headless Chromium)",
+      "status": "pass",
+      "durationMs": 29123,
+      "log": "[i] Browser  : /opt/hostedtoolcache/setup-chrome/chromium/1719138/x64/chrome\n[i] Building shelves-devtools…\n[i] Runtime unit checks (node vm)…\n[unit] ok   sole: host published\n[unit] ok   sole: nav prune armed at boot\n[unit] ok   sole: every teardown stops the prune and re-arms exactly one\n[unit] ok   sole: selfUpdate and canSelfInstall, no tab inserted yet\n[unit] ok   prune: paused while the Home window is hidden, runs when shown\n[unit] ok   prune: falls back to this document's visibility\n[unit] ok   routes: host.routes follows whatever host.routerHook holds\n[unit] ok   qam: mode() reads panel while no native tab is in the menu\n[unit] ok   locale: Steam's language beats navigator.language\n[unit] ok   locale: a Steam name maps to its locale code\n[unit] ok   locale: no LANGUAGE parameter: navigator.language\n[unit] ok   locale: an unknown Steam name: navigator.language\n[unit] ok   locale: a prototype key is not a language\n[unit] ok   locale: a prototype setter is not a language\n[unit] ok   coexist: host not published beside a loader\n[unit] ok   coop: host published, loader's copy runs: no self-install\n[unit] ok   coop: routes reach the loader's router hook\n[unit] ok   coop: no nav prune beside a loader\n[unit] ok   coop bundle: self-install once the loader's copy stood down or our copy booted\n[unit] ok   coop bundle: a stale defer signal without the config stays false\n[unit] ok   stamp: the handshake follows a rewritten config stamp\n[unit] ok   stamp: the capture at boot answers without the global\n[unit] ok   fake render 18: a hooked component renders outside a render, the slot put back\n[unit] ok   fake render 18: an installed dispatcher is stubbed in place and restored\n[unit] ok   fake render 19: a hooked component renders outside a render, the slot put back\n[unit] ok   fake render 19: an installed dispatcher is stubbed in place and restored\n[unit] ok   gate: constants readable from src/loader/mod.rs\n[unit] ok   gate: a ready renderer boots at once, no poll\n[unit] ok   gate: an overlapping evaluation replaces the poll handle\n[unit] ok   gate: one boot per renderer, handle cleared, no orphan poll\n[unit] 30 checks, 0 problem(s)\n  \u001b[32mPASS\u001b[0m  runtime-unit\n[i] Running scenarios…\n  \u001b[32mPASS\u001b[0m  coexist-mirror\nrm: cannot remove '/tmp/tmp.y0K6G3d93D/Default': Directory not empty\n  \u001b[32mPASS\u001b[0m  coexist-fallback\n  \u001b[32mPASS\u001b[0m  sole-host\n  \u001b[32mPASS\u001b[0m  sole-host-mirror\nrm: cannot remove '/tmp/tmp.1bfzmhVnrm/Default': Directory not empty\n  \u001b[32mPASS\u001b[0m  sole-host-fallback\n  \u001b[32mPASS\u001b[0m  coexist-late\n  \u001b[32mPASS\u001b[0m  coexist-native\n  \u001b[32mPASS\u001b[0m  coexist-fallback-native\n  \u001b[32mPASS\u001b[0m  coexist-idle\n  \u001b[32mPASS\u001b[0m  coop-mirror\n  \u001b[32mPASS\u001b[0m  coop-fallback\n  \u001b[32mPASS\u001b[0m  coop-bundle\n  \u001b[32mPASS\u001b[0m  sole-host-sidecar\nrm: cannot remove '/tmp/tmp.KZSnpbaNJs/Default': Directory not empty\n  \u001b[32mPASS\u001b[0m  sole-host-status\n  \u001b[32mPASS\u001b[0m  sole-host-notify\n  \u001b[32mPASS\u001b[0m  sole-host-gesture\n  \u001b[32mPASS\u001b[0m  sole-host-locale\n  \u001b[32mPASS\u001b[0m  sole-host-config\nrm: cannot remove '/tmp/tmp.wxkAk8slP1/Default': Directory not empty\n  \u001b[32mPASS\u001b[0m  sole-host-tabswitch\n\n[OK] all results passed (19 scenarios; runtime-unit passed)"
+    },
+    {
+      "key": "harness-daemon",
+      "label": "Daemon scenarios (headless Chromium)",
+      "status": "pass",
+      "durationMs": 23705,
+      "log": "[i] Browser  : /opt/hostedtoolcache/setup-chrome/chromium/1719138/x64/chrome\n[i] Ports    : CDP 9555, RPC 60177, HTTP 8577\n[i] Building shelveshub + shelves-devtools...\n[i] Running daemon scenarios...\nPASS recovered\nPASS recovery-off\nPASS booting\n\n[OK] all daemon scenarios passed"
+    }
+  ],
+  "stepsSummary": {
+    "passed": 11,
+    "failed": 1,
+    "skipped": 0,
+    "total": 12
+  },
+  "page": "release/2026-10-15_00-49-36.html"
+}
