@@ -9,6 +9,11 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **Um interruptor em Configurações para `coop_bundle`** ("Hub executa o Deck Shelves"), visível só
+  onde um carregador de plugins é possível e só com `force_owner` ligado; grava o arquivo de
+  configuração como os outros interruptores e vale no próximo reinício. `coop_bundle` entra nas
+  chaves editáveis do RPC e no retrato da configuração de runtime (`src/rpc.rs`, `src/main.rs`,
+  `runtime/shelves-host-qam.js`, 19 idiomas, cenário de harness `sole-host-config`).
 - **Uma aba Sobre no painel lateral** (Notificações, Estado, Logs, Sobre): a versão do ShelvesHub,
   três dicas (como abrir o painel, o que o Estado mostra, qual botão conclui uma mudança ou uma
   atualização), o QR code do Ko-fi com botões para o Ko-fi e o GitHub. O rodapé com a versão na aba

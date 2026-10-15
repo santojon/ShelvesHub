@@ -9,6 +9,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- **A Configuration switch for `coop_bundle`** ("Hub runs Deck Shelves"), shown only where a plugin
+  loader is possible and only while `force_owner` is on; it writes the config file like the other
+  switches and applies at the next restart. `coop_bundle` joins the RPC's editable keys and the
+  runtime-config snapshot (`src/rpc.rs`, `src/main.rs`, `runtime/shelves-host-qam.js`, 19 locales,
+  harness scenario `sole-host-config`).
 - **An About tab in the side panel** (Notifications, Status, Logs, About): the ShelvesHub version,
   three tips (how to open the panel, what Status shows, which button finishes a change or an
   update), the Ko-fi QR code with Ko-fi and GitHub buttons. The version footer of the ShelvesHub

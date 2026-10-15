@@ -29,12 +29,13 @@ use crate::state;
 /// NOT here: it runs through a shell on a UI-collapse event, so letting the RPC
 /// (reachable by any local caller) set it would be arbitrary code execution — it
 /// is file/env only.
-const EDITABLE_CONFIG_KEYS: [&str; 7] = [
+const EDITABLE_CONFIG_KEYS: [&str; 8] = [
     "native_qam",
     "prerelease",
     "owner_settle_secs",
     "interval_secs",
     "force_owner",
+    "coop_bundle",
     "desktop_ui",
     "native_notifications",
 ];
@@ -1039,6 +1040,7 @@ fn dispatch(parsed: Option<Value>) -> String {
                 "native_qam"
                 | "prerelease"
                 | "force_owner"
+                | "coop_bundle"
                 | "desktop_ui"
                 | "native_notifications" => value.as_bool().map(Value::Bool),
                 "owner_settle_secs" | "interval_secs" => value.as_u64().map(Value::from),

@@ -49,6 +49,8 @@
   "sec_updates": "Updates",
   "updates_managed_elsewhere": "Updates worden hier beheerd door de plugin-loader.",
   "cfg_force_owner_sub": "Neem eigenaarschap, ook als een andere loader aanwezig is",
+  "cfg_coop_bundle": "Hub voert Deck Shelves uit",
+  "cfg_coop_bundle_sub": "De hub host en werkt zijn eigen kopie bij; de kopie van de loader treedt terug bij de volgende Steam-start",
   "cfg_owner_settle_sub": "Seconden wachten op een andere host vóór hosten",
   "cfg_interval_sub": "Seconden tussen injectiecontroles",
   "adv_disable_hub_sub": "Injectie stoppen tot opnieuw ingeschakeld (probleemoplossing)",

@@ -63,8 +63,9 @@ versions ShelvesHub 0.6.0 was built with. Find your Deck Shelves version in
 the ShelvesHub tab (**View status** in Troubleshooting → *Deck Shelves version*) or in the loader's
 plugin list, pick your row below, then read the column for your
 `force_owner` / `coop_bundle` setting — both are off unless you turned them
-on (`force_owner` can be flipped in the tab's Configuration section where a
-loader is possible; `coop_bundle` lives in `shelveshub.config.json` only).
+on (both can be flipped in the tab's Configuration section where a loader is
+possible: `force_owner` as **Force ownership**, `coop_bundle` as **Hub runs
+Deck Shelves**, shown only while `force_owner` is on).
 
 ### How the hub decides
 
@@ -350,10 +351,11 @@ below.
    newer (the installer's cooperative-hosting question is what turns it on).
    On its own it never makes the hub host next to a loader, and it can make a
    3.2.x copy stand down or trip the safe mode.
-3. **`coop_bundle` on or off** — in `shelveshub.config.json`. On (with
-   `force_owner`) to let the hub run and update Deck Shelves beside the
-   loader — 3.4.0 or newer only. Off to hand the shelves back to the loader's
-   copy at the next Steam start.
+3. **`coop_bundle` on or off** — the **Hub runs Deck Shelves** switch in the
+   tab's Configuration section (shown while `force_owner` is on), or
+   `shelveshub.config.json`. On (with `force_owner`) to let the hub run and
+   update Deck Shelves beside the loader — 3.4.0 or newer only. Off to hand
+   the shelves back to the loader's copy at the next Steam start.
 4. **Remove the loader's copy to let the hub host.** The hub then hosts its
    own, current copy beside the loader. Export your settings first on copies
    older than 3.3.0.

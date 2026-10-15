@@ -49,6 +49,8 @@
   "sec_updates": "アップデート",
   "updates_managed_elsewhere": "ここでは更新はプラグインローダーが管理します。",
   "cfg_force_owner_sub": "他のローダーがあっても所有権を取得します",
+  "cfg_coop_bundle": "ハブで Deck Shelves を実行",
+  "cfg_coop_bundle_sub": "ハブが自身のコピーをホストして更新します。ローダー側のコピーは次回の Steam 起動時に停止します",
   "cfg_owner_settle_sub": "ホストする前に他のホストを待つ秒数",
   "cfg_interval_sub": "インジェクション確認の間隔（秒）",
   "adv_disable_hub_sub": "再有効化までインジェクションを停止（トラブル対応）",

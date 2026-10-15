@@ -42,7 +42,8 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
   aparecem quando a primeira injeção do hub chega (cerca de 25 s depois de um reinício num Steam
   Deck). Se o hub nunca aparece, a cópia do loader inicia sozinha depois de um minuto e o hub,
   enquanto continua rodando, para de pedir por um dia (um hub que foi parado, reiniciado ou
-  atualizado pede de novo na hora). Desligada por padrão.
+  atualizado pede de novo na hora). Desligada por padrão; ligue com **Hub executa o Deck Shelves**
+  na seção Configurações da aba, que aparece com **Forçar posse** ligada.
 - **A posse forçada não cai mais em "sole" depois de um reinício.** O hub agora espera o loader de
   plugins aparecer antes de hospedar, então um Deck com um loader de plugins e posse forçada cai no
   modo cooperativo como esperado.

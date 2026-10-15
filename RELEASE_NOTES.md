@@ -40,7 +40,9 @@ is pushed — the notes below are picked up and published with the release.
   and its entry points at the ShelvesHub tab, and the shelves appear when the hub's first injection
   lands (about 25 s after a restart on a Steam Deck). If the hub never shows up, the loader's copy
   boots itself after a minute and the hub, while it keeps running, stops asking for a day (a hub
-  that was stopped, restarted or updated asks again at once). Off by default.
+  that was stopped, restarted or updated asks again at once). Off by default; turn it on with
+  **Hub runs Deck Shelves** in the tab's Configuration section, shown while **Force ownership** is
+  on.
 - **Forced ownership no longer flips to "sole" after a restart.** The hub now waits for the plugin
   loader to show up before hosting, so a Deck with a plugin loader and forced ownership lands in
   cooperative mode as intended.

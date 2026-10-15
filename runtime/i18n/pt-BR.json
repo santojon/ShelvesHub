@@ -59,6 +59,8 @@
   "sec_updates": "Atualizações",
   "updates_managed_elsewhere": "As atualizações são gerenciadas pelo carregador de plugins aqui.",
   "cfg_force_owner_sub": "Assumir o controle mesmo se houver outro carregador",
+  "cfg_coop_bundle": "Hub executa o Deck Shelves",
+  "cfg_coop_bundle_sub": "O hub hospeda e atualiza a própria cópia; a cópia do carregador cede o lugar no próximo início do Steam",
   "cfg_owner_settle_sub": "Segundos de espera por outro host antes de hospedar",
   "cfg_interval_sub": "Segundos entre verificações de injeção",
   "adv_disable_hub_sub": "Parar a injeção até reativar (para diagnóstico)",

@@ -109,6 +109,7 @@ fn main() {
             "boot_movie": config.boot_movie,
             "prerelease": prerelease,
             "force_owner": config.force_owner,
+            "coop_bundle": config.coop_bundle,
             "recover_cmd": config.recover_cmd,
             "bundle_path": config.bundle_path.display().to_string(),
             // Boot value only: `getRuntimeConfig` answers `backend::enabled()`, which
@@ -117,8 +118,8 @@ fn main() {
             "version": env!("CARGO_PKG_VERSION"),
             // Whether another plugin loader can coexist here — only on
             // Linux/SteamOS. On macOS/Windows this is a pure sole host, so the
-            // coexist-only settings (force_owner, owner_settle_secs) are inert and
-            // the UI hides them.
+            // coexist-only settings (force_owner, coop_bundle, owner_settle_secs)
+            // are inert and the UI hides them.
             "loader_possible": cfg!(target_os = "linux"),
         }),
     );

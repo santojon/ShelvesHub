@@ -32,6 +32,11 @@ fn recover_cmd_is_not_rpc_editable() {
 }
 
 #[test]
+fn coop_bundle_is_rpc_editable() {
+    assert!(EDITABLE_CONFIG_KEYS.contains(&"coop_bundle"));
+}
+
+#[test]
 fn backend_proxy_allowlist_bounds_the_surface() {
     // Real API methods pass; arbitrary Python attributes do not.
     assert!(BACKEND_METHODS.contains(&"get_settings"));

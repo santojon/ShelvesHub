@@ -67,9 +67,10 @@ foi construído. Veja a versão do seu Deck Shelves na aba do ShelvesHub
 (**Ver estado** em Solução de problemas → *Versão do Deck Shelves*) ou na lista de plugins do carregador,
 escolha sua linha abaixo e leia a coluna da sua configuração de
 `force_owner` / `coop_bundle` — as duas ficam desligadas a menos que você as
-tenha ligado (`force_owner` pode ser trocado na seção Configurações da aba
-onde um carregador é possível; `coop_bundle` só existe em
-`shelveshub.config.json`).
+tenha ligado (as duas podem ser trocadas na seção Configurações da aba onde
+um carregador é possível: `force_owner` como **Forçar posse**, `coop_bundle`
+como **Hub executa o Deck Shelves**, que só aparece com `force_owner`
+ligado).
 
 ### Como o hub decide
 
@@ -371,10 +372,12 @@ Deck. Mantenha `interval_secs` em 45 ou menos.
    que o liga). Sozinho ele nunca faz o hub hospedar ao lado de um
    carregador, e pode fazer uma cópia 3.2.x se retirar ou disparar o modo
    seguro.
-3. **`coop_bundle` ligado ou desligado** — em `shelveshub.config.json`.
-   Ligado (com `force_owner`) para o hub rodar e atualizar o Deck Shelves ao
-   lado do carregador — só com a 3.4.0 ou mais nova. Desligado para devolver
-   as prateleiras à cópia do carregador na próxima partida do Steam.
+3. **`coop_bundle` ligado ou desligado** — o interruptor **Hub executa o
+   Deck Shelves** na seção Configurações da aba (aparece com `force_owner`
+   ligado), ou `shelveshub.config.json`. Ligado (com `force_owner`) para o
+   hub rodar e atualizar o Deck Shelves ao lado do carregador — só com a
+   3.4.0 ou mais nova. Desligado para devolver as prateleiras à cópia do
+   carregador na próxima partida do Steam.
 4. **Remova a cópia do carregador para o hub hospedar.** O hub então hospeda
    a própria cópia, atual, ao lado do carregador. Exporte suas configurações
    antes em cópias anteriores à 3.3.0.

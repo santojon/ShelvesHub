@@ -702,6 +702,7 @@
         const conf = [advToggleRow("cfg-config_sync", I18N.t("cfg_config_sync"), I18N.t("cfg_config_sync_sub"), uc.config_sync !== false, function (v) { applyPref("config_sync", v); })];
         if (rc.loader_possible) {
           conf.push(advToggleRow("cfg-force_owner", I18N.t("cfg_force_owner"), I18N.t("cfg_force_owner_sub"), rc.force_owner === true, function (v) { applyCfg("force_owner", v); }));
+          if (rc.force_owner === true) conf.push(advToggleRow("cfg-coop_bundle", I18N.t("cfg_coop_bundle"), I18N.t("cfg_coop_bundle_sub"), rc.coop_bundle === true, function (v) { applyCfg("coop_bundle", v); }));
           conf.push(advStepRow("owner_settle_secs", I18N.t("cfg_owner_settle"), I18N.t("cfg_owner_settle_sub"), rc.owner_settle_secs));
         }
         conf.push(advToggleRow("cfg-boot_movie", I18N.t("cfg_boot_movie"), I18N.t("cfg_boot_movie_sub"), rc.boot_movie === true, applyBootMovie));

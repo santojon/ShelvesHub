@@ -49,6 +49,8 @@
   "sec_updates": "更新",
   "updates_managed_elsewhere": "此处更新由插件加载器管理。",
   "cfg_force_owner_sub": "即使存在其他加载器也接管所有权",
+  "cfg_coop_bundle": "由中枢运行 Deck Shelves",
+  "cfg_coop_bundle_sub": "中枢托管并更新自己的副本；加载器中的副本会在下次启动 Steam 时退出",
   "cfg_owner_settle_sub": "在托管前等待其他主机的秒数",
   "cfg_interval_sub": "注入检查之间的秒数",
   "adv_disable_hub_sub": "在重新启用前停止注入（用于排查）",

@@ -49,6 +49,8 @@
   "sec_updates": "Aktualizacje",
   "updates_managed_elsewhere": "Aktualizacjami zarządza tutaj program ładujący wtyczki.",
   "cfg_force_owner_sub": "Przejmij kontrolę, nawet gdy obecny jest inny loader",
+  "cfg_coop_bundle": "Hub uruchamia Deck Shelves",
+  "cfg_coop_bundle_sub": "Hub hostuje i aktualizuje własną kopię; kopia loadera ustępuje przy następnym uruchomieniu Steam",
   "cfg_owner_settle_sub": "Sekundy oczekiwania na innego hosta przed hostowaniem",
   "cfg_interval_sub": "Sekundy między sprawdzeniami wstrzykiwania",
   "adv_disable_hub_sub": "Zatrzymaj wstrzykiwanie do ponownego włączenia (diagnostyka)",
