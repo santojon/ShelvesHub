@@ -256,6 +256,7 @@
       const coex = cxS[0], setCoex = cxS[1];
       const arS = React.useState(null);
       const armedRestart = arS[0], setArmedRestart = arS[1];
+      const rlS = React.useState(false), restartLater = rlS[0], setRestartLater = rlS[1];
       // Notification center mirror: re-render on arrival/clear (the unread badge); entries
       // count as seen when the Notifications tab is left.
       const nt = React.useState(0);
@@ -304,14 +305,14 @@
           try { const u = window.SteamClient && window.SteamClient.User; if (u && typeof u.StartRestart === "function") u.StartRestart(false); } catch (e) {}
         }, 600);
       }
-      /* Hub self-update: restart ONLY the daemon. The new process stamps its RPC
-         token into __SHELVES_CONFIG__ on its next tick and the runtime reads it per
-         call, so no Steam restart is needed — never StartRestart (black-screen
-         discipline) and never close a running game. */
+      /* Hub update or rollback: the daemon restarts onto the new binary, then Steam, so the new
+         runtime loads (this view is code injected into Steam; it only refreshes with Steam). During
+         a game only the daemon restarts — never close a game — and a note says Steam finishes it. */
+      function doUpdateRestart() { if (gameRunning()) doRestartDaemonOnly(); else doApplyRestart(); }
       function doRestartDaemonOnly() {
         if (busy) return;
         setBusy("restart");
-        hostRpc("restartService", {}).then(function () {}, function () {});
+        hostRpc("restartService", {}).then(function () { setBusy(null); setRestartLater(true); }, function () { setBusy(null); });
       }
       /* Confirm-before-restart: the first tap arms the button (label → "tap again
          to restart") and the second runs it, so a restart (which may bounce Steam)
@@ -511,7 +512,7 @@
         return React.createElement.apply(React, [focusableComp || "div", props].concat(kids));
       }
       // "Restart to update" notice: the daemon saw a newer ShelvesHub release (getConfig
-      // reports `pending_hub_update`); its button restarts only the daemon (doRestartDaemonOnly).
+      // reports `pending_hub_update`); its button restarts the daemon and Steam (doUpdateRestart).
       function hubUpdateNotice() {
         const ver = uc.pending_hub_update;
         if (typeof ver !== "string" || !ver) return null;
@@ -524,7 +525,7 @@
         if (!staged && uc.update_deferred === true) return null;
         const label = uc.hub_rollback_staged === true ? "hub_restart_rollback" : "hub_restart_update";
         return h("div", { key: "hubupd", style: { padding: "10px 14px 8px" } },
-          bannerButton("hub-update", restartLabel("hub", I18N.t(label)), function () { armRestart("hub", doRestartDaemonOnly); }));
+          bannerButton("hub-update", restartLabel("hub", I18N.t(label)), function () { armRestart("hub", doUpdateRestart); }));
       }
       // Release notes of a pending update, as a collapsed "What's new" section so the
       // user can read what changes before it applies. Headings/bullets flattened to lines.
@@ -894,6 +895,7 @@
       function buildBody() {
         const body = [buildTitleRow()];
         if (rcDirty) body.push(restartBanner());
+        if (restartLater) body.push(h("div", { key: "rl", style: { padding: "0 16px 8px", fontSize: "12px", color: "#ffcf6b" } }, I18N.t("hub_restart_later")));
         Array.prototype.push.apply(body, updateNotices());
         if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
         const out = body.concat(buildSections(useNative, TF));

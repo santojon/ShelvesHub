@@ -319,6 +319,20 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 
 ### Corrigido
 
+- **"Reiniciar para atualizar" agora conclui a atualização.** O botão reiniciava só o serviço — já
+  na versão nova, em segundos — mas a tela do ShelvesHub dentro do Steam é carregada com o Steam,
+  então a tela antiga ficava (banner incluído) até um reinício manual do Steam. O botão agora
+  reinicia o serviço e depois o Steam; com um jogo em execução ele reinicia só o serviço e avisa que
+  um reinício do Steam conclui a atualização (`runtime/shelves-host-qam.js`). Vale a partir da
+  primeira atualização feita depois que esta estiver instalada.
+- **O bundle cooperativo não volta mais para a cópia antiga do carregador depois de um reinício.**
+  Quando a cópia do carregador precisa iniciar sozinha porque a cópia do hub não chegou, o hub
+  espera um dia antes de oferecer de novo — mas ele também contava um fallback de quando o serviço
+  estava parado, e o respeitava em todo reinício, então cada partida do Steam rodava a cópia antiga
+  do carregador por um dia. Agora só conta um fallback que acontece com o processo atual do hub
+  rodando; um hub que foi parado, reiniciado ou atualizado oferece de novo na hora
+  (`src/loader/mod.rs`).
+
 - **O Big Picture atrás de outra janela não derruba mais o hub.** No macOS (e em qualquer
   desktop) uma janela do Big Picture coberta ou minimizada se declara oculta, e o portão de
   desktop tomava isso pelo cliente desktop: o hub se afastava (`Desktop client on screen …`),

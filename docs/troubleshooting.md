@@ -109,7 +109,9 @@ it unless `force_owner` is set on purpose. Two knobs:
   the loader's panel then just points at the ShelvesHub tab — and the hub hosts its own copy
   when its first injection lands (about 25 s after a restart on a Steam Deck; keep
   `interval_secs` at 45 or below). If the hub's copy never arrives within a minute, the
-  loader's copy boots itself and the hub withholds the offer for a day (the log says so);
+  loader's copy boots itself and the hub withholds the offer for a day (the log says so) — only
+  when that happened while the current hub process was running: a hub that was stopped,
+  restarted or updated offers again at once;
   turning the option off withdraws the offer on the next tick. A loader copy newer than the
   hub's makes the hub check for an update at once, so the next start's offer carries the newer
   version. An older Deck Shelves ignores the offer and keeps today's coexistence.

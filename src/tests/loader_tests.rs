@@ -52,11 +52,12 @@ fn the_token_restamp_only_touches_an_existing_config() {
 
 #[test]
 fn coop_offer_scripts_carry_the_key_and_the_bundle_we_offer() {
-    let offer = coop_offer_script("v3.4.0", "0.6.0");
+    let offer = coop_offer_script("v3.4.0", "0.6.0", 1_700_000_000_000);
     assert!(offer.contains(COOP_OFFER_KEY));
     assert!(offer.contains("\"v3.4.0\""));
     assert!(offer.contains("\"0.6.0\""));
-    assert!(offer.contains("fallbackAt"));
+    // Only a fallback stamped since this daemon started holds the offer back.
+    assert!(offer.contains("c.fallbackAt>=1700000000000&&"));
     let withdraw = coop_offer_withdraw_script();
     assert!(withdraw.contains(COOP_OFFER_KEY));
     assert!(withdraw.contains("removeItem"));

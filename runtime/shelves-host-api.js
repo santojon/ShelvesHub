@@ -31,6 +31,10 @@
   // The logo for a sender: the host's own notifications carry `source: "hub"`; everything
   // else is the hosted plugin's.
   function logoSvg(source) { return source === "hub" ? HUB_LOGO_SVG : PLUGIN_LOGO_SVG; }
+  // Steam reports a running game: the signal the daemon's quiet updates read too.
+  function gameRunning() {
+    try { const a = window.SteamUIStore && window.SteamUIStore.RunningApps; return !!(a && a.length); } catch (e) { return false; }
+  }
 
   /* Notification center: the last few notifications this host showed (title, body,
      time, read flag), re-readable in the hub view. Newest first, bounded; listeners

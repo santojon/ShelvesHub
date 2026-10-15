@@ -98,7 +98,8 @@ prateleiras:
   retira: a entrada dela no painel do carregador vira uma nota curta (*O Deck
   Shelves roda pela aba ShelvesHub neste dispositivo.*) e o hub roda — e
   atualiza — a própria cópia. Se a cópia do hub não aparece em um minuto, a
-  cópia do carregador inicia sozinha e o hub para de pedir por um dia.
+  cópia do carregador inicia sozinha e o hub em execução para de pedir por um
+  dia (um hub que foi parado, reiniciado ou atualizado pede de novo na hora).
 
 Sem carregador na máquina, nada disso importa: o hub é o único host e
 simplesmente hospeda.
@@ -335,11 +336,13 @@ Deck. Mantenha `interval_secs` em 45 ou menos.
 
 - *As prateleiras vieram do carregador de novo e o log diz* `Cooperative
   bundle: the loader's copy booted itself last time (ours did not land
-  within its window) — not offering again for a day.`: o hub atrasou ou
-  parou (um reinício do serviço, um `interval_secs` longo), a cópia do
-  carregador desistiu depois de um minuto, e o hub agora segura a oferta por
-  24 horas. Correção: garanta que o serviço está rodando e que
-  `interval_secs` é 45 ou menos, e deixe o dia passar. Alternativa: defina
+  within its window) — not offering again for a day.`: o hub em execução
+  atrasou (um `interval_secs` longo, um início lento), a cópia do carregador
+  desistiu depois de um minuto, e este processo do hub agora segura a oferta
+  por 24 horas. Um fallback de quando o serviço estava parado não conta
+  mais: reiniciar o serviço oferece de novo, e a próxima partida do Steam
+  traz a cópia do hub de volta. Correção: mantenha `interval_secs` em 45 ou
+  menos e reinicie o serviço. Alternativa: defina
   `coop_bundle` como `false`, reinicie o serviço (isso retira a oferta
   segurada), volte para `true`, reinicie o serviço e reinicie o Steam.
 - *A cópia do carregador é mais nova que a do hub:* ela ignora a oferta. Com

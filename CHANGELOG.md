@@ -295,6 +295,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Fixed
 
+- **"Restart to update" now finishes the update.** It restarted only the service — onto the new
+  version, within seconds — but the ShelvesHub screen inside Steam is loaded with Steam, so the old
+  screen stayed (banner included) until a manual Steam restart. The button now restarts the
+  service and then Steam; while a game is running it restarts only the service and says that a
+  Steam restart finishes the update (`runtime/shelves-host-qam.js`). Takes effect from the first
+  update made after this one is installed.
+- **The cooperative bundle no longer falls back to the loader's older copy after a restart.** When
+  the loader's copy has to start itself because the hub's copy did not arrive, the hub waits a day
+  before offering again — but it also counted a fallback that happened while the service was
+  stopped, and kept honouring it across every restart, so each Steam start ran the loader's older
+  copy for a day. Only a fallback that happens while the current hub process runs counts now; a
+  hub that was stopped, restarted or updated offers again at once (`src/loader/mod.rs`).
+
 - **Big Picture behind another window no longer stands the hub down.** On macOS (and any
   desktop) an occluded or minimized Big Picture window reports itself hidden, which the desktop
   gate took for the desktop client: the hub stood down (`Desktop client on screen …`), skipped

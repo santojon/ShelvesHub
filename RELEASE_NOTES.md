@@ -10,6 +10,9 @@ is pushed — the notes below are picked up and published with the release.
 
 ## [Unreleased]
 
+- **"Restart to update" finishes the update.** It now restarts the service and then Steam, so the
+  new ShelvesHub screen loads right away; during a game it restarts only the service and tells you
+  a Steam restart finishes it.
 - **Status gets its own tab in the side panel.** The ShelvesHub tab keeps three areas — Updates,
   Settings, Troubleshooting — and the side panel now has Notifications, Status and Logs: "View
   status" in Troubleshooting (or Ctrl+Shift+T) opens the readout that used to sit squeezed under
@@ -33,7 +36,8 @@ is pushed — the notes below are picked up and published with the release.
   is present: the loader's copy (Deck Shelves 3.4.0 or newer) stands down at the next Steam start
   and its entry points at the ShelvesHub tab, and the shelves appear when the hub's first injection
   lands (about 25 s after a restart on a Steam Deck). If the hub never shows up, the loader's copy
-  boots itself after a minute and the hub stops asking for a day. Off by default.
+  boots itself after a minute and the hub, while it keeps running, stops asking for a day (a hub
+  that was stopped, restarted or updated asks again at once). Off by default.
 - **Forced ownership no longer flips to "sole" after a restart.** The hub now waits for the plugin
   loader to show up before hosting, so a Deck with a plugin loader and forced ownership lands in
   cooperative mode as intended.

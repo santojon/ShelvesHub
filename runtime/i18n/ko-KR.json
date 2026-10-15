@@ -2,6 +2,7 @@
   "hub_title": "ShelvesHub",
   "hub_restart_update": "다시 시작하여 업데이트",
   "hub_restart_rollback": "다시 시작하여 되돌리기",
+  "hub_restart_later": "업데이트했습니다. 게임이 끝난 후 Steam을 다시 시작하면 완료됩니다.",
   "upd_uptodate": "최신 상태",
   "upd_available": "업데이트 있음",
   "upd_last_checked": "마지막 확인",

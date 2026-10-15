@@ -2,6 +2,7 @@
   "hub_title": "ShelvesHub",
   "hub_restart_update": "Перезапустити для оновлення",
   "hub_restart_rollback": "Перезапустити для повернення",
+  "hub_restart_later": "Оновлено. Перезапустіть Steam після гри, щоб завершити.",
   "upd_uptodate": "Актуально",
   "upd_available": "Доступне оновлення",
   "upd_last_checked": "Остання перевірка",

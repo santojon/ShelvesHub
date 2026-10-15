@@ -2,6 +2,7 @@
   "hub_title": "ShelvesHub",
   "hub_restart_update": "Güncellemek için yeniden başlat",
   "hub_restart_rollback": "Geri dönmek için yeniden başlat",
+  "hub_restart_later": "Güncellendi. Tamamlamak için oyundan sonra Steam'i yeniden başlatın.",
   "upd_uptodate": "Güncel",
   "upd_available": "Güncelleme var",
   "upd_last_checked": "Son kontrol",

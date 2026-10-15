@@ -113,7 +113,8 @@ vezes e colapsaria a interface do Steam, então o hub nunca faz isso a não ser 
   hospeda a própria cópia quando a primeira injeção dele chega (cerca de 25 s depois de um
   reinício num Steam Deck; mantenha `interval_secs` em 45 ou menos). Se a cópia do hub nunca
   chega em um minuto, a cópia do carregador inicia sozinha e o hub segura a oferta por um dia (o
-  log avisa); desligar a opção retira a oferta no tick seguinte. Uma cópia do carregador mais
+  log avisa) — só quando isso aconteceu com o processo atual do hub rodando: um hub que foi parado,
+  reiniciado ou atualizado oferece de novo na hora; desligar a opção retira a oferta no tick seguinte. Uma cópia do carregador mais
   nova que a do hub faz o hub checar atualização na hora, para a oferta da próxima partida levar
   a versão mais nova. Um Deck Shelves mais antigo ignora a oferta e mantém a coexistência de hoje.
 

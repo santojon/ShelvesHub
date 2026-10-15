@@ -91,7 +91,8 @@ Three small signals inside Steam's interface settle who hosts the shelves:
   loader's panel becomes a short note (*Deck Shelves runs from the ShelvesHub
   tab on this device.*) and the hub runs — and updates — its own copy. If the
   hub's copy does not show up within a minute, the loader's copy starts
-  itself and the hub stops asking for a day.
+  itself and the running hub stops asking for a day (a hub that was
+  stopped, restarted or updated asks again at once).
 
 With no loader on the machine none of this matters: the hub is the only host
 and simply hosts.
@@ -317,11 +318,12 @@ below.
 
 - *The shelves came from the loader again and the log says* `Cooperative
   bundle: the loader's copy booted itself last time (ours did not land
-  within its window) — not offering again for a day.`: the hub was late or
-  stopped (a service restart, a long `interval_secs`), the loader's copy gave
-  up after a minute, and the hub now holds the offer for 24 hours. Fix: make
-  sure the service runs and `interval_secs` is 45 or less, then let the day
-  pass. Alternative: set `coop_bundle` to `false`, restart the service (that
+  within its window) — not offering again for a day.`: the running hub was
+  late (a long `interval_secs`, a slow start), the loader's copy gave up
+  after a minute, and this hub process now holds the offer for 24 hours. A
+  fallback from while the service was stopped no longer counts: restarting
+  the service offers again, and the next Steam start brings the hub's copy
+  back. Fix: keep `interval_secs` at 45 or less and restart the service. Alternative: set `coop_bundle` to `false`, restart the service (that
   withdraws the held offer), set it back to `true`, restart the service, and
   restart Steam.
 - *The loader's copy is newer than the hub's:* it ignores the offer. With

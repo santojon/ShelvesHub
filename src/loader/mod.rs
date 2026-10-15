@@ -10,6 +10,7 @@
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -54,6 +55,9 @@ pub const HOST_BUNDLE_BOOTED_GLOBAL: &str = "window.__DECK_SHELVES_HOST_BUNDLE_B
 /// on a live handshake. A fallback boot stamps it; the daemon then withholds the offer.
 pub const COOP_OFFER_KEY: &str = "shelveshub-coop-bundle";
 const COOP_OFFER_HOLD_MS: u64 = 24 * 60 * 60 * 1000;
+/// When this daemon process started (ms since the epoch): only a fallback boot that
+/// happened while it was running holds its offer back.
+static DAEMON_STARTED_MS: OnceLock<u64> = OnceLock::new();
 static COOP_OFFER_WITHDRAWN: AtomicBool = AtomicBool::new(false);
 static COOP_OFFER_HELD_LOGGED: AtomicBool = AtomicBool::new(false);
 /// A renderer whose UI windows were never seen is still booting (Steam creates
@@ -117,6 +121,7 @@ use crate::constants::timers::{
 };
 
 pub fn run(mut config: Config) {
+    DAEMON_STARTED_MS.get_or_init(state::now_ms);
     // Obtain the bundle before anything else: the sole-host case (no loader, no
     // local bundle) still brings Deck Shelves up on its own — local → copy from
     // an installed plugin loader → download the newest release. Best-effort; on a
@@ -1314,14 +1319,15 @@ fn restamp_token_script(token: &str) -> String {
     )
 }
 
-/// Writes this host's offer unless the loader's copy answered the previous one with a
-/// fallback boot less than `COOP_OFFER_HOLD_MS` ago. Yields "offered", "same", "held"
-/// or "error".
-fn coop_offer_script(bundle_tag: &str, host_version: &str) -> String {
+/// Writes this host's offer unless the loader's copy answered it with a fallback boot
+/// while this daemon was running (`since_ms`, its start) and less than
+/// `COOP_OFFER_HOLD_MS` ago. A fallback from before it started — the hub stopped,
+/// restarted or updated — does not count. Yields "offered", "same", "held" or "error".
+fn coop_offer_script(bundle_tag: &str, host_version: &str, since_ms: u64) -> String {
     format!(
         "(function(){{try{{var k={COOP_OFFER_KEY:?},s=window.localStorage,c=null;\
          try{{c=JSON.parse(s.getItem(k)||\"null\");}}catch(e){{}}\
-         if(c&&c.fallbackAt&&Date.now()-c.fallbackAt<{COOP_OFFER_HOLD_MS})return \"held\";\
+         if(c&&c.fallbackAt&&c.fallbackAt>={since_ms}&&Date.now()-c.fallbackAt<{COOP_OFFER_HOLD_MS})return \"held\";\
          if(c&&!c.fallbackAt&&c.bundleVersion==={bundle_tag:?})return \"same\";\
          s.setItem(k,JSON.stringify({{bundleVersion:{bundle_tag:?},hostVersion:{host_version:?},at:Date.now()}}));\
          return \"offered\";}}catch(e){{return \"error\";}}}})()"
@@ -1352,7 +1358,11 @@ fn sync_coop_offer(client: &mut CdpClient, config: &Config) {
         return;
     };
     let status = client
-        .evaluate(&coop_offer_script(&tag, env!("CARGO_PKG_VERSION")))
+        .evaluate(&coop_offer_script(
+            &tag,
+            env!("CARGO_PKG_VERSION"),
+            DAEMON_STARTED_MS.get().copied().unwrap_or(0),
+        ))
         .ok()
         .and_then(|v| v.as_str().map(str::to_string));
     match status.as_deref() {
