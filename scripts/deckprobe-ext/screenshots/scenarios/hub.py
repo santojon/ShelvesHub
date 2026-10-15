@@ -306,6 +306,14 @@ def hub_status(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
                  extra=lambda h, p: _open_side(h, p, "status", "status-view"))
 
 
+@register("hub_about")
+def hub_about(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
+    """The side panel's About tab — tips, the Ko-fi QR and links — opened from the version
+    footer."""
+    return _shot(sjc, host, port, out_dir, {}, "hub-about.png",
+                 extra=lambda h, p: _open_side(h, p, "version", "about-view"))
+
+
 @register("hub_notifications")
 def hub_notifications(sjc, host: str, port: int, out_dir: Path) -> Dict[str, Path]:
     """The side panel's Notifications tab, opened from the bell by the title.

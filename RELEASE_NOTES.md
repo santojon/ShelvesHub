@@ -13,6 +13,9 @@ is pushed — the notes below are picked up and published with the release.
 - **"Restart to update" finishes the update.** It now restarts the service and then Steam, so the
   new ShelvesHub screen loads right away; during a game it restarts only the service and tells you
   a Steam restart finishes it.
+- **An About tab.** The last tab of the side panel — tap the version at the bottom of the
+  ShelvesHub tab — has a few tips, a Ko-fi QR code to scan from your phone, and links to Ko-fi and
+  GitHub.
 - **Status gets its own tab in the side panel.** The ShelvesHub tab keeps three areas — Updates,
   Settings, Troubleshooting — and the side panel now has Notifications, Status and Logs: "View
   status" in Troubleshooting (or Ctrl+Shift+T) opens the readout that used to sit squeezed under

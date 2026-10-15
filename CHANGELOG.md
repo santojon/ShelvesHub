@@ -9,6 +9,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- **An About tab in the side panel** (Notifications, Status, Logs, About): the ShelvesHub version,
+  three tips (how to open the panel, what Status shows, which button finishes a change or an
+  update), the Ko-fi QR code with Ko-fi and GitHub buttons. The version footer of the ShelvesHub
+  tab opens it; LB / RB reach it from the other tabs (`runtime/shelves-host-sidecar.js`, harness
+  scenario `sole-host-status`, screenshot scenario `hub_about`).
 - **A transparency statement on how the project is made** (`AI_USAGE.md`), the same kind of
   file the plugin and the probe toolkit carry; `NOTICE.md` gains a
   paragraph on the project site (self-contained; the optional visit counter is a hosted service,

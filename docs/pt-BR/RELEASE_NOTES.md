@@ -13,6 +13,9 @@ Os lançamentos são criados automaticamente pela CI quando uma tag de versão (
 - **"Reiniciar para atualizar" conclui a atualização.** Agora reinicia o serviço e depois o Steam,
   para a tela nova do ShelvesHub carregar na hora; durante um jogo reinicia só o serviço e avisa que
   um reinício do Steam conclui a atualização.
+- **Uma aba Sobre.** A última aba do painel lateral — toque na versão no fim da aba do
+  ShelvesHub — traz algumas dicas, um QR code do Ko-fi para ler pelo celular e links para o Ko-fi e
+  o GitHub.
 - **O Estado ganha a própria aba no painel lateral.** A aba do ShelvesHub fica com três áreas —
   Atualizações, Configurações, Solução de problemas — e o painel lateral agora tem Notificações,
   Estado e Logs: "Ver estado" em Solução de problemas (ou Ctrl+Shift+T) abre a leitura que antes

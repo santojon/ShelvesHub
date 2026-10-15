@@ -185,9 +185,10 @@
       return h("div", { className: "ds-hub-collapsible", style: { marginTop: "6px" } }, kids);
     }
     // Version footer, pinned at the end of the panel (like the plugin's).
-    function hubVersionFooter(version) {
-      return h("div", { key: "verfoot", "data-fb": "version", style: { textAlign: "center", padding: "10px 12px 6px", fontSize: "11px", lineHeight: "15px", color: "rgba(255,255,255,0.4)" } },
-        "ShelvesHub" + (version ? " · v" + version : ""));
+    // The footer opens the side panel's About tab.
+    function hubVersionFooter(version, onOpen) {
+      return clickable(onOpen, { key: "verfoot", "data-fb": "version", title: I18N.t("about_title"), style: { display: "block", width: "100%", border: "none", background: "transparent", cursor: "pointer", textAlign: "center", padding: "10px 12px 6px", fontSize: "11px", lineHeight: "15px", color: "rgba(255,255,255,0.4)" } },
+        ["ShelvesHub" + (version ? " · v" + version : "")]);
     }
     function ownerLabel(owner) {
       if (!owner) return "—";
@@ -460,7 +461,7 @@
       /* Buttons while focus is inside the sidecar: B (2) closes it, the bumpers (LB 5 / RB 6)
          move between its tabs. Absorbed like B elsewhere, so the QAM router and Steam's own
          bumper handling never see them. */
-      const SIDE_TABS = [SIDE_TAB_NOTIF, SIDE_TAB_STATUS, SIDE_TAB_LOGS];
+      const SIDE_TABS = [SIDE_TAB_NOTIF, SIDE_TAB_STATUS, SIDE_TAB_LOGS, SIDE_TAB_ABOUT];
       function absorbGamepadEvent(evt, d) {
         try { evt.preventDefault(); evt.stopImmediatePropagation(); } catch (e) {}
         try { const inner = d.event; if (inner) { inner.preventDefault(); inner.stopImmediatePropagation(); } } catch (e) {}
@@ -786,7 +787,7 @@
          newest first, like the plugin's Advanced → Logs; or the notification center.
          Beside the hub view, which stays visible; the gamepad walks it in the normal flow. */
       function buildSidecarView() {
-        const isLogs = sideTab === SIDE_TAB_LOGS, isStatus = sideTab === SIDE_TAB_STATUS;
+        const isLogs = sideTab === SIDE_TAB_LOGS, isStatus = sideTab === SIDE_TAB_STATUS, isAbout = sideTab === SIDE_TAB_ABOUT;
         const parseLine = function (line) {
           const m = /^\[(\w+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+([\s\S]*)$/.exec(String(line));
           return m ? { level: m[1].toUpperCase(), ts: m[2], scope: m[3], msg: m[4] }
@@ -837,10 +838,11 @@
           sidecarTab(SIDE_TAB_NOTIF, I18N.t("sec_notifications"), sideTab === SIDE_TAB_NOTIF, function () { openSide(SIDE_TAB_NOTIF); }, host.notifications.unread()),
           sidecarTab(SIDE_TAB_STATUS, I18N.t("adv_sec_status"), isStatus, function () { openSide(SIDE_TAB_STATUS); }, 0),
           sidecarTab(SIDE_TAB_LOGS, I18N.t("logs_title"), isLogs, function () { openSide(SIDE_TAB_LOGS); }, 0),
+          sidecarTab(SIDE_TAB_ABOUT, I18N.t("about_title"), isAbout, function () { openSide(SIDE_TAB_ABOUT); }, 0),
           h("div", { key: "sp", style: { flex: "1 1 auto" } }),
         ];
         if (isLogs) ctrls.push(ctrlBtn("refresh", function () { viewLogs(); }, [fbIcon("refresh")], iconBtnStyle, I18N.t("logs_refresh")));
-        if (!isStatus) ctrls.push(ctrlBtn("clear", isLogs ? clearLogs : function () { host.notifications.clear(); }, [fbIcon("trash")], iconBtnStyle, I18N.t("logs_clear")));
+        if (!isStatus && !isAbout) ctrls.push(ctrlBtn("clear", isLogs ? clearLogs : function () { host.notifications.clear(); }, [fbIcon("trash")], iconBtnStyle, I18N.t("logs_clear")));
         const header = React.createElement.apply(React, [
           focusableComp || "div",
           focusableComp
@@ -858,6 +860,7 @@
         // The Status tab is built in shelves-host-sidecar.js from what this view knows.
         const sidecarList = function () {
           if (isLogs) return React.createElement.apply(React, [focusableComp || "div", listProps].concat(logRows()));
+          if (isAbout) return aboutList(listProps, uc.version);
           if (isStatus) return statusList(listProps, { rc: rc, mode: COOP ? "cooperative" : (coexist ? "coexist" : "sole"), hd: hostDetection(), coex: coex, syncAge: syncAge() });
           return notificationsList(listProps);
         };
@@ -899,7 +902,7 @@
         Array.prototype.push.apply(body, updateNotices());
         if (!onBack) body.push(h("div", { key: "sub", style: { fontSize: "13px", opacity: 0.7, padding: "0 16px 6px" } }, I18N.t("unavailable_body")));
         const out = body.concat(buildSections(useNative, TF));
-        out.push(hubVersionFooter(uc.version));
+        out.push(hubVersionFooter(uc.version, function () { openSide(SIDE_TAB_ABOUT); }));
         return out;
       }
       // The sidecar opens beside the hub view (the menu widens) on the Notifications,

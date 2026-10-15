@@ -236,7 +236,7 @@
 
   /* ── Sidecar tabs (Notifications | Status | Logs), the title icons that open them, and the two
      ways to open the panel without a pointer: the plugin's own D-pad gesture and the keyboard. ── */
-  const SIDE_TAB_LOGS = "logs", SIDE_TAB_NOTIF = "notif", SIDE_TAB_STATUS = "status";
+  const SIDE_TAB_LOGS = "logs", SIDE_TAB_NOTIF = "notif", SIDE_TAB_STATUS = "status", SIDE_TAB_ABOUT = "about";
   const BADGE_STYLE = { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "16px", height: "16px", padding: "0 5px", borderRadius: "8px", background: "#1a9fff", color: "#fff", fontSize: "10px", fontWeight: "700" };
   // One tab header: the active one is bright with an accent underline; a count badge for unread.
   function sidecarTab(id, label, active, onPick, badge) {
@@ -309,6 +309,37 @@
   }
   function statusList(listProps, s) {
     return React.createElement.apply(React, [focusableComp || "div", listProps].concat(statusRows(s)));
+  }
+
+  // The About tab: a few tips and the support links, short on purpose.
+  const KOFI_URL = "https://ko-fi.com/F2F61WE76V";
+  const PROJECT_URL = "https://github.com/santojon/ShelvesHub";
+  const KOFI_QR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAuQAAALkCAIAAADIxrcyAAANRElEQVR42u3ZQY7kNhBFQaah+1/5e+HNADYGZeV0UVRG7AsSU5T6gV1JFgDAU/1lBACAWAEAECsAgFgBABArAABiBQAQKwAAYgUAECsAAGIFAECsAABiBQBArAAAYgUAQKwAAIgVAECsAACIFQBArAAAiBUAALECAIgVAACxAgCIFQAAsQIAIFYAALECACBWAADECgAgVgAAxAoAIFYAAMQKAIBYAQDECgCAWAEAxAoAgFgBABArAIBYAQAQKwCAWAEAECsAAGIFABArAABiBQAQKwAAYgUAQKwAAGIFAECsAACIFQBArAAAiBUAQKwAAIgVAACxAgCIFQAAsQIAiBUAALECACBWAACxAgAgVgAAsQIAIFYAAMQKACBWAADECgAgVgAAxAoAgFgBAMQKAIBYAQAQKwCAWAEAECsAgFgBABArAAD/dk1bcFV56g+X5Li9seuep70L0+Z84ruAd2E5WQEAln8DAQCIFQAAsQIAiBUAALECAIgVAACxAgAgVgAAsQIAIFYAAMQKACBWAADECgAgVgAAxAoAgFgBAMQKAIBYAQAGuIzgc0kM4UNVZb325KPm3JnVruv6TtrPLCcrAIBYAQAQKwCAWAEAECsAAGIFABArAABiBQAQKwAAYgUAQKwAAGIFAECsAABiBQBArAAAiBUAQKwAAIgVAECsAAA802UE31FVx91zEnP+wqw69zxtvbv25K71en99J1lOVgAAsQIAIFYAALECACBWAADECgAgVgAAxAoAIFYAAMQKAIBYAQDECgCAWAEAxAoAgFgBABArAIBYAQAQKwCAWAEAeKbLCOAfSY67blUdd137ypxhOVkBAMQKAIBYAQAQKwCAWAEAECsAgFgBABArAABiBQAQKwAAYgUAECsAAGIFAECsAABiBQBArAAAYgUAQKwAAIgVAOB0lxEA/1eS27+tqi2/7dxzx4n3DMvJCgCAWAEAxAoAgFgBAMQKAIBYAQAQKwCAWAEAECsAAGIFABArAABiBQAQKwAAYgUAQKwAAGIFAECsAABiBQBArAAA/N5lBN+RxBAerqo83xe/C7uer71hViwnKwCAWAEAECsAAGIFABArAABiBQAQKwAAYgUAQKwAAGIFAECsAABiBQBArAAAiBUAQKwAAIgVAECsAACIFQAAsQIAvM9lBJ+rKkN4sSRb9kbnuie+CyfOedp1fSdZTlYAAMQKACBWAADECgAgVgAAxAoAgFgBAMQKAIBYAQAQKwCAWAEAECsAgFgBABArAABiBQAQKwAAYgUAECsAAGIFAOD3rmkLTuKp85+qyn7mj8/ZvoLlZAUAECsAAGIFAECsAABiBQBArAAAYgUAQKwAAIgVAECsAACIFQBArAAAiBUAALECAIgVAACxAgCIFQAAsQIAIFYAgPepJLMWXHX7t51Zda47jT1pVmZ17px9r1hOVgAAsQIAIFYAAMQKACBWAADECgAgVgAAxAoAgFgBAMQKAIBYAQAQKwCAWAEAECsAgFgBABArAABiBQAQKwAAYgUAmKCSzFpw1ZbrduZ84j1P2xsnzmrXvjpxT+7aGyc+o2l7wzdnOVkBABArAIBYAQAQKwCAWAEAECsAAGIFABArAABiBQAQKwAAYgUAQKwAAGIFAECsAABiBQBArAAAiBUAQKwAAIgVAGCmywieL8nt31bVlnvedd0TdWbV2Rtm9fw5n/juT9uTZrWcrAAAiBUAQKwAAIgVAECsAACIFQAAsQIAiBUAALECAIgVAACxAgAgVgAAsQIAIFYAALECACBWAADECgAgVgAAxAoAMFMlmbXgqlHr9Xzf/Yx2rXfXPZ+4n63XO+j7vJysAABiBQBArAAAiBUAQKwAAIgVAECsAACIFQAAsQIAiBUAALECAIgVAACxAgAgVgAAsQIAIFYAALECACBWAADECgDwPpVk1oKrbv+2M6vOdXm+E/eGe3bPP3HPJ37bp81qOVkBABArAIBYAQAQKwAAYgUAECsAAGIFABArAABiBQBArAAAYgUAQKwAAGLFCAAAsQIAIFYAALECACBWAADECgAgVgAA+irJrAVXjVqv5/v8WZ14zye+g9Oer2+d79VysgIAIFYAAMQKACBWAADECgAgVgAAxAoAgFgBAMQKAIBYAQDECgCAWAEAECsAgFgBABArAIBYAQAQKwAAYgUAECsAAD+nksxacNWW6544512zOlHn+XbmPO393bWffSexN5aTFQAAsQIAiBUAALECAIgVAACxAgAgVgAAsQIAIFYAALECACBWAADECgAgVgAAxAoAgFgBAMQKAIBYAQDECgCAWAEA+FUlMYVPh1W15brTntG0OXfWO+2ep81qmhO/dSfuyeVkBQBArAAAYgUAQKwAAIgVAECsAACIFQBArAAAiBUAALECAIgVAACxAgCIFSMAAMQKAIBYAQDECgCAWAEAECsAgFgBAOirJKbw6bCqbv/2xDl31tvRmdWJ98zzn6+9YW94vsvJCgCAWAEAxAoAgFgBAMQKAIBYAQAQKwCAWAEAECsAgFgBABArAABiBQAQKwAAYgUAQKwAAGIFAECsAABiBQBArAAA/KqSzFpw1aj1nvh8O8+os94T94b1+l7Zk667nKwAAIgVAACxAgCIFQAAsQIAiBUAALECACBWAACxAgAgVgAAsQIAIFYAAMQKACBWAADECgCAWAEAxAoAgFgBAMQKAMD3XUbwuSS3f1tVW+5513V3zXna851m15x37clp3zpzZjlZAQDECgCAWAEAxAoAgFgBABArAIBYAQAQKwCAWAEAECsAAGIFABArAABiBQBArAAAYgUAQKwAAGIFAECsAACIFQDgFJcRfEeS27+tquPuuaOz3l1z3jWrafv5xD3pm2NWvhvLyQoAIFYAAMQKAIBYAQDECgCAWAEAxAoAgFgBABArAIBYAQAQKwCAWAEAECsAAGIFABArAABiBQAQKwAAYgUAQKwAAO9TSWYtuOr2bzuz2nXdXbPaxayev59PfL7T9saJTtzP096F5WQFABArAABiBQBArAAAYgUAQKwAAGIFAECsAACIFQBArAAAiBUAQKwAAIgVAACxAgCIFQAAsQIAiBUAALECACBWAIA3qSSmwHs2dNXt33behc51O058f83q+ft52t440bS/3U5WAACxAgAgVgAAsQIAIFYAAMQKACBWAADECgAgVgAAxAoAgFgBAMQKAIBYAQDECgCAWAEAECsAgFgBABArAIBYAQB4nGvagqvKU3+4JFt+y/Of7653v3PPJ35zds3KfmY5WQEAxAoAgFgBAMQKAIBYAQAQKwCAWAEAECsAgFgBABArAABiBQAQKwAAYgUAQKwAAGIFAECsAABiBQBArAAAiBUA4BSXEXwuiSF8qKpGXXfavurMubNe17Unn3bPu/bGcrICACBWAADECgAgVgAAxAoAIFYAAMQKAIBYAQDECgCAWAEAECsAgFgBABArAIBYAQAQKwAAYgUAECsAAGIFABArAAB7XUbwHVV13D0nGfWMdq13197orHfa3vDNMaufeBd2XXc5WQEAECsAgFgBABArAABiBQAQKwAAYgUAECsAAGIFAECsAABiBQBArAAAYsUIAACxAgAgVgAAsQIAIFYAAMQKACBWAAD6LiOAf1TV7d8m2fLbzj3vmlXHtFl11uv9fT7PdzlZAQDECgCAWAEAxAoAgFgBABArAIBYAQAQKwAAYgUAECsAAGIFABArAABiBQBArAAAYgUAQKwAAGIFAECsAACIFQDgXJcRQF9V3f5tklH33Llu57cd09bLu9/95WQFAECsAABiBQBArAAAiBUAQKwAAIgVAECsAACIFQAAsQIAiBUAALECAIgVIwAAxAoAgFgBAMQKAIBYAQAQKwCAWAEA6LuM4DuSGMLD51xVo67r+dobP3Fd7y/LyQoAIFYAAMQKAIBYAQDECgCAWAEAxAoAgFgBABArAIBYAQAQKwAAYgUAECsAAGIFABArAABiBQBArAAAYgUAQKwAABNcRvC5qjIEz+iPXzeJe/4Cc373nDvXnfaMlpMVAACxAgCIFQAAsQIAIFYAALECACBWAACxAgAgVgAAxAoAIFYAAMQKACBWjAAAECsAAGIFABArAABiBQBArAAAYgUAoK+SmAIAsJysAACIFQBArAAAiBUAALECAIgVAACxAgCIFQAAsQIAIFYAALECACBWAACxAgAgVgAAxAoAIFYAAMQKACBWAADECgCAWAEAxAoAgFgBAMQKAIBYAQAQKwCAWAEAECsAAGIFABArAABiBQAQKwAAYgUAQKwAAGIFAECsAABiBQBArAAAiBUAQKwAAIgVAECsAACIFQAAsQIAiBUAALECAIgVAACxAgAgVgAAsQIAIFYAAMQKACBWAADECgAgVgAAxAoAgFgBAMQKAIBYAQDECgCAWAEAECsAgFgBABArAIBYAQAQKwAAYgUAECsAAGIFABArAABiBQBArAAAYgUAQKwAAIgVAECsAACIFQBArAAAiBUAALECABzkb8NBQq2BVSslAAAAAElFTkSuQmCC";
+  const HEART_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+  function openInBrowser(url) {
+    try { const s = window.SteamClient && window.SteamClient.System; if (s && typeof s.OpenInSystemBrowser === "function") s.OpenInSystemBrowser(url); } catch (e) {}
+  }
+  function linkButton(key, label, url, svg) {
+    const st = { display: "inline-flex", alignItems: "center", gap: "6px", height: "32px", padding: "0 14px", borderRadius: "4px", border: "none", background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: "13px", cursor: "pointer" };
+    const kids = svg ? [h("span", { key: "i", style: { display: "inline-flex" }, dangerouslySetInnerHTML: { __html: svg } })] : [];
+    return clickable(function () { openInBrowser(url); }, { key: key, "data-fb": key, style: st }, kids.concat([h("span", { key: "t" }, label)]));
+  }
+  function kofiCard() {
+    const btnRow = { display: "flex", gap: "8px" };
+    const buttons = [linkButton("about-kofi", "Ko-fi", KOFI_URL, HEART_SVG), linkButton("about-github", "GitHub", PROJECT_URL)];
+    return h("div", { key: "kofi", style: { display: "flex", gap: "14px", alignItems: "center", margin: "10px 16px", padding: "12px", borderRadius: "10px", background: "rgba(255,94,91,0.08)", border: "1px solid rgba(255,94,91,0.25)" } },
+      h("img", { key: "qr", src: KOFI_QR, alt: "Ko-fi QR code", width: 112, height: 112, style: { flex: "0 0 auto", width: "112px", height: "112px", padding: "6px", background: "#fff", borderRadius: "6px" } }),
+      h("div", { key: "side", style: { display: "flex", flexDirection: "column", gap: "10px", minWidth: "0" } },
+        h("div", { key: "hint", style: { fontSize: "13px", lineHeight: "18px", color: "#dcdedf" } }, I18N.t("about_kofi_hint")),
+        focusableComp ? h(focusableComp, { key: "btns", "flow-children": "horizontal", style: btnRow }, buttons) : h("div", { key: "btns", style: btnRow }, buttons)));
+  }
+  function aboutList(listProps, version) {
+    const tip = { padding: "5px 16px", fontSize: "12px", lineHeight: "17px", color: "rgba(255,255,255,0.75)" };
+    const rows = [
+      h("div", { key: "ver", style: { padding: "4px 16px 10px", fontSize: "16px", fontWeight: "700" } }, "ShelvesHub" + (version ? " v" + version : "")),
+      h("div", { key: "tt", style: { padding: "2px 16px 4px", fontSize: "11px", fontWeight: "700", letterSpacing: "0.04em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" } }, I18N.t("about_tips")),
+    ].concat(["about_tip_open", "about_tip_status", "about_tip_apply"].map(function (k) { return h("div", { key: k, style: tip }, "· " + I18N.t(k)); }), [kofiCard()]);
+    return React.createElement.apply(React, [focusableComp || "div", listProps].concat(rows));
   }
 
   const DPAD_LEFT = 22, DPAD_RIGHT = 23;

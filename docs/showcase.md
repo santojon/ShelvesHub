@@ -49,6 +49,7 @@ lists inside the pages from the README and the release notes (EN and pt-BR).
 | `hub-status.png` | `hub_status` | The side panel on its Status tab |
 | `hub-logs.png` | `hub_logs` | The side panel on its Logs tab |
 | `hub-notifications.png` | `hub_notifications` | The side panel on its Notifications tab (the center is cleared and two generic entries posted first, so the shot is in the capture language; nothing is persisted) |
+| `hub-about.png` | `hub_about` | The side panel on its About tab (tips, the Ko-fi QR, Ko-fi and GitHub), opened from the version footer |
 | `home.png` → `home.webp` | `home` | The Deck Shelves Home, full window; the site serves the WebP (about a tenth of the PNG's size, written beside it when Pillow is installed) |
 
 The hub views are clipped from the menu document's left edge to the panel (`[data-fb-panel]`), or

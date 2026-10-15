@@ -9,6 +9,11 @@ O formato é baseado no Keep a Changelog, e este projeto segue o Versionamento S
 ## [Unreleased]
 
 ### Adicionado
+- **Uma aba Sobre no painel lateral** (Notificações, Estado, Logs, Sobre): a versão do ShelvesHub,
+  três dicas (como abrir o painel, o que o Estado mostra, qual botão conclui uma mudança ou uma
+  atualização), o QR code do Ko-fi com botões para o Ko-fi e o GitHub. O rodapé com a versão na aba
+  do ShelvesHub a abre; LB / RB chegam a ela pelas outras abas (`runtime/shelves-host-sidecar.js`,
+  cenário do harness `sole-host-status`, cenário de captura `hub_about`).
 - **Uma declaração de transparência sobre como o projeto é feito** (`AI_USAGE.md`), o mesmo
   tipo de arquivo que o plugin e o kit de sondas trazem; o `NOTICE.md`
   ganha um parágrafo sobre o site do projeto (autocontido; o contador de visitas opcional é um

@@ -49,6 +49,7 @@ funcionalidades e de versões a partir do README e das notas de versão (EN e pt
 | `hub-status.png` | `hub_status` | O painel lateral na aba Estado |
 | `hub-logs.png` | `hub_logs` | O painel lateral na aba Logs |
 | `hub-notifications.png` | `hub_notifications` | O painel lateral na aba Notificações (a central é limpa e duas entradas genéricas enviadas antes, para a captura ficar no idioma da captura; nada é persistido) |
+| `hub-about.png` | `hub_about` | O painel lateral na aba Sobre (dicas, o QR do Ko-fi, Ko-fi e GitHub), aberta pelo rodapé com a versão |
 | `home.png` → `home.webp` | `home` | A Home do Deck Shelves, janela inteira; o site serve o WebP (cerca de um décimo do PNG, gravado ao lado quando o Pillow está instalado) |
 
 As visões do hub são recortadas da borda esquerda do documento do menu até o painel
