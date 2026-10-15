@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShelvesHub — release 2026-10-15_00-43-39</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+  <link rel="stylesheet" href="../../style.css">
+  <style>
+  .rep-wrap { max-width: var(--maxw); margin: 0 auto; padding: 32px 20px 64px; }
+  .rep-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .rep-head h1 { margin: 0; font-size: 22px; }
+  .muted { color: var(--fg-dim); font-size: 13px; }
+  a.back { color: var(--accent); text-decoration: none; font-size: 13px; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-dim); }
+  .pill.pass { color: #15a34a; border-color: rgba(21,163,74,.4); } .pill.fail { color: #dc2626; border-color: rgba(220,38,38,.4); } .pill.skip { color: #d97706; border-color: rgba(217,119,6,.4); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 18px 0; }
+  .card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--card-shadow); padding: 14px 16px; }
+  .card .k { color: var(--fg-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; } .card .v { font-size: 26px; font-weight: 700; margin-top: 4px; }
+  .v.pass { color: #15a34a; } .v.fail { color: #dc2626; } .v.skip { color: #d97706; }
+  h2 { font-size: 15px; margin: 26px 0 10px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; } .row:last-child { border-bottom: 0; } .row .lbl { flex: 1; min-width: 0; } .row .sub { color: var(--fg-dim); font-size: 12px; }
+  details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); margin: 8px 0; }
+  details summary { cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 14px; list-style: none; } details summary::-webkit-details-marker { display: none; }
+  details summary .lbl { flex: 1; } details summary .dur { color: var(--fg-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  pre.log { margin: 0; padding: 12px 14px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.45; overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 480px; overflow-y: auto; }
+  table.mini { width: 100%; border-collapse: collapse; font-size: 13px; } table.mini th, table.mini td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); } table.mini th { color: var(--fg-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; } table.mini td.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+  <div class="rep-wrap">
+    <div class="rep-head">
+      <a class="back" href="index.html">← release runs</a>
+      <h1>ShelvesHub · release run</h1>
+      <span class="pill fail">FAIL</span>
+      <span class="muted">2026-10-15 00-43-39 · v0.5.0</span>
+      <span class="muted"><a class="back" href="../dashboard.html">Dashboard →</a></span>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="k">Passed</div><div class="v pass">11</div></div>
+      <div class="card"><div class="k">Failed</div><div class="v fail">1</div></div>
+      <div class="card"><div class="k">Skipped</div><div class="v skip">0</div></div>
+      <div class="card"><div class="k">Steps</div><div class="v">12</div></div>
+      <div class="card"><div class="k">Duration</div><div class="v">1.3 min</div></div>
+    </div>
+    <h2>Signals</h2>
+    <div class="card">
+<div class="row"><span class="lbl">Rust unit tests</span><span class="sub">158/158 passed</span></div>
+<div class="row"><span class="lbl">clippy</span><span class="sub">clean</span></div>
+<div class="row"><span class="lbl">rustfmt</span><span class="sub">clean</span></div>
+<div class="row"><span class="lbl">ESLint</span><span class="sub">0 errors, 0 warnings</span></div>
+<div class="row"><span class="lbl">Runtime harness</span><span class="sub">20/20 results</span></div>
+<div class="row"><span class="lbl">Daemon scenarios</span><span class="sub">3/3 results</span></div>
+<div class="row"><span class="lbl">cargo audit</span><span class="sub">not measured</span></div>
+<div class="row"><span class="lbl">Complexity debt (runtime)</span><span class="sub">every runtime function is within the limit</span></div>
+<div class="row"><span class="lbl">Lint suppressions</span><span class="sub">0</span></div>
+<div class="row"><span class="lbl">Code lines</span><span class="sub">runtime 3176 · Rust 9773</span></div>
+<div class="row"><span class="lbl">QA matrix</span><span class="sub">tested 3 · partial 1 · manual 2 · blocked 4</span></div>
+<div class="row"><span class="lbl">Localization / docs</span><span class="sub">19 locales · 84 keys · 12 doc pairs</span></div>
+    </div>
+    <h2>Steps</h2>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">rustfmt (cargo fmt --check)</span><span class="dur">531 ms</span></summary>
+  <pre class="log">(no output)</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">clippy (-D warnings)</span><span class="dur">9.8 s</span></summary>
+  <pre class="log">[1m[92m    Updating[0m crates.io index
+[1m[92m     Locking[0m 322 packages to highest compatible versions
+[1m[92m      Adding[0m generic-array v0.14.7 [1m[33m(available: v0.14.9)[0m
+[1m[92m      Adding[0m getrandom v0.2.17 [1m[33m(available: v0.4.3)[0m
+[1m[92m      Adding[0m minisign-verify v0.2.5 [1m[33m(available: v0.3.0)[0m
+[1m[92m      Adding[0m png v0.17.16 [1m[33m(available: v0.18.1)[0m
+[1m[92m      Adding[0m sha2 v0.10.9 [1m[33m(available: v0.11.1)[0m
+[1m[92m      Adding[0m tao v0.34.8 [1m[33m(available: v0.37.1)[0m
+[1m[92m      Adding[0m toml v0.8.2 [1m[33m(available: v0.8.23)[0m
+[1m[92m      Adding[0m toml_datetime v0.6.3 [1m[33m(available: v0.6.11)[0m
+[1m[92m      Adding[0m toml_edit v0.20.2 [1m[33m(available: v0.20.7)[0m
+[1m[92m      Adding[0m tray-icon v0.21.3 [1m[33m(available: v0.26.1)[0m
+[1m[92m Downloading[0m crates ...
+[1m[92m  Downloaded[0m cfg-if v1.0.5
+[1m[92m  Downloaded[0m clap v4.6.7
+[1m[92m  Downloaded[0m block-buffer v0.12.1
+[1m[92m  Downloaded[0m digest v0.11.3
+[1m[92m  Downloaded[0m chacha20 v0.10.2
+[1m[92m  Downloaded[0m equivalent v1.0.3
+[1m[92m  Downloaded[0m clap_lex v1.1.1
+[1m[92m  Downloaded[0m crypto-common v0.2.2
+[1m[92m  Downloaded[0m minisign-verify v0.2.5
+[1m[92m  Downloaded[0m sha1 v0.11.0
+[1m[92m  Downloaded[0m cpufeatures v0.3.1
+[1m[92m  Downloaded[0m rand_core v0.10.1
+[1m[92m  Downloaded[0m thiserror-impl v2.0.21
+[1m[92m  Downloaded[0m thiserror v2.0.21
+[1m[92m  Downloaded[0m hybrid-array v0.4.15
+[1m[92m  Downloaded[0m foldhash v0.2.0
+[1m[92m  Downloaded[0m sha2 v0.10.9
+[1m[92m  Downloaded[0m unicode-ident v1.0.27
+[1m[92m  Downloaded[0m clap_derive v4.6.7
+[1m[92m  Downloaded[0m const-oid v0.10.2
+[1m[92m  Downloaded[0m getrandom v0.4.3
+[1m[92m  Downloaded[0m tungstenite v0.30.0
+[1m[92m  Downloaded[0m clap_builder v4.6.7
+[1m[92m  Downloaded[0m indexmap v2.14.2
+[1m[92m  Downloaded[0m rand v0.10.3
+[1m[92m  Downloaded[0m serde_json v1.0.154
+[1m[92m  Downloaded[0m hashbrown v0.17.1
+[1m[92m  Downloaded[0m syn v3.0.9
+[1m[92m  Downloaded[0m libc v0.2.190
+[1m[92m   Compiling[0m proc-macro2 v1.0.107
+[1m[92m    Checking[0m typenum v1.20.1
+[1m[92m   Compiling[0m unicode-ident v1.0.27
+[1m[92m   Compiling[0m quote v1.0.47
+[1m[92m    Checking[0m cfg-if v1.0.5
+[1m[92m   Compiling[0m version_check v0.9.5
+[1m[92m   Compiling[0m libc v0.2.190
+[1m[92m   Compiling[0m generic-array v0.14.7
+[1m[92m    Checking[0m utf8parse v0.2.2
+[1m[92m    Checking[0m rand_core v0.10.1
+[1m[92m    Checking[0m cpufeatures v0.3.1
+[1m[92m    Checking[0m hybrid-array v0.4.15
+[1m[92m   Compiling[0m serde_core v1.0.229
+[1m[92m   Compiling[0m autocfg v1.5.1
+[1m[92m   Compiling[0m syn v3.0.9
+[1m[92m   Compiling[0m getrandom v0.4.3
+[1m[92m    Checking[0m block-buffer v0.12.1
+[1m[92m   Compiling[0m num-traits v0.2.19
+[1m[92m    Checking[0m crypto-common v0.2.2
+[1m[92m    Checking[0m anstyle-parse v1.0.0
+[1m[92m    Checking[0m const-oid v0.10.2
+[1m[92m    Checking[0m colorchoice v1.0.5
+[1m[92m    Checking[0m anstyle-query v1.1.5
+[1m[92m    Checking[0m anstyle v1.0.14
+[1m[92m   Compiling[0m thiserror v2.0.21
+[1m[92m    Checking[0m is_terminal_polyfill v1.70.2
+[1m[92m    Checking[0m itoa v1.0.18
+[1m[92m   Compiling[0m httparse v1.10.1
+[1m[92m   Compiling[0m zmij v1.0.23
+[1m[92m    Checking[0m digest v0.11.3
+[1m[92m    Checking[0m anstream v1.0.0
+[1m[92m    Checking[0m block-buffer v0.10.4
+[1m[92m    Checking[0m crypto-common v0.1.7
+[1m[92m    Checking[0m chacha20 v0.10.2
+[1m[92m   Compiling[0m serde_json v1.0.154
+[1m[92m    Checking[0m strsim v0.11.1
+[1m[92m   Compiling[0m heck v0.5.0
+[1m[92m    Checking[0m clap_lex v1.1.1
+[1m[92m   Compiling[0m serde v1.0.229
+[1m[92m    Checking[0m bytes v1.12.1
+[1m[92m    Checking[0m hashbrown v0.17.1
+[1m[92m    Checking[0m equivalent v1.0.3
+[1m[92m    Checking[0m http v1.5.0
+[1m[92m    Checking[0m indexmap v2.14.2
+[1m[92m    Checking[0m clap_builder v4.6.7
+[1m[92m    Checking[0m rand v0.10.3
+[1m[92m    Checking[0m digest v0.10.7
+[1m[92m    Checking[0m sha1 v0.11.0
+[1m[92m   Compiling[0m shelveshub v0.5.0 (/home/runner/work/ShelvesHub/ShelvesHub)
+[1m[92m    Checking[0m log v0.4.34
+[1m[92m    Checking[0m cpufeatures v0.2.17
+[1m[92m    Checking[0m data-encoding v2.11.1
+[1m[92m    Checking[0m foldhash v0.2.0
+[1m[92m   Compiling[0m thiserror-impl v2.0.21
+[1m[92m   Compiling[0m serde_derive v1.0.229
+[1m[92m   Compiling[0m clap_derive v4.6.7
+[1m[92m    Checking[0m iana-time-zone v0.1.65
+[1m[92m    Checking[0m memchr v2.8.3
+[1m[92m    Checking[0m tungstenite v0.30.0
+[1m[92m    Checking[0m chrono v0.4.45
+[1m[92m    Checking[0m sha2 v0.10.9
+[1m[92m    Checking[0m getrandom v0.2.17
+[1m[92m    Checking[0m clap v4.6.7
+[1m[92m    Checking[0m minisign-verify v0.2.5
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 9.64s</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">Rust unit tests (cargo test)</span><span class="dur">9.7 s</span></summary>
+  <pre class="log">test populate::tests::bundle_swap_keeps_previous_copy_and_rollback_restores_it ... ok
+test populate::tests::copy_into_replaces_the_target_through_a_sibling_temp ... ok
+test populate::tests::elf_architecture_is_verified ... ok
+test populate::tests::embedded_minisign_key_parses ... ok
+test populate::tests::executable_magic_recognized_for_this_os ... ok
+test populate::tests::finds_backend_archive_asset ... ok
+test populate::tests::finds_iife_asset_url ... ok
+test populate::tests::finds_newest_backend_archive_across_releases ... ok
+test populate::tests::binary_floor_is_separate_from_the_bundle_floor ... ok
+test populate::tests::hub_rollback_is_refused_while_an_update_is_staged ... ok
+test config::tests::recover_cmd_resolution ... ok
+test populate::tests::hub_update_finds_platform_package_in_priority_order ... ok
+test populate::tests::hub_rollback_clears_an_interrupted_staging_and_snapshots_the_running_set ... ok
+test populate::tests::hub_update_takes_assets_only_from_its_own_release_downloads ... ok
+test populate::tests::maps_release_download_url_to_tags_api ... ok
+test populate::tests::newest_non_draft_iife_wins_including_prerelease ... ok
+test populate::tests::no_iife_asset_returns_none ... ok
+test populate::tests::newest_release_tag_matches_the_newest_iife_release ... ok
+test populate::tests::package_selection_is_architecture_aware ... ok
+test populate::tests::pe_architecture_is_verified ... ok
+test populate::tests::pinned_release_tag_reads_only_the_projects_release_downloads ... ok
+test populate::tests::placeholder_is_not_a_real_bundle ... ok
+test populate::tests::plugin_channel_combines_the_flag_the_plugin_switch_and_the_hub_switches ... ok
+test populate::tests::relaunch_line_runs_the_windows_task_and_falls_back_to_the_binary ... ok
+test populate::tests::plugin_update_prefs_read_the_wrapped_settings_file ... ok
+test populate::tests::release_tag_reads_tag_name_and_rejects_empty ... ok
+test populate::tests::release_notes_are_trimmed_normalized_and_capped ... ok
+test populate::tests::release_url_parts_name_the_repository_and_the_tag ... ok
+test populate::tests::release_without_sums_is_refused_when_signatures_required ... ok
+test populate::tests::sha256_for_name_parses_both_shapes_and_skips_noise ... ok
+test populate::tests::hub_rollback_restores_the_snapshot_and_keeps_the_undone_set ... ok
+test populate::tests::sha256_matches_known_vector ... ok
+test populate::tests::replace_dir_swaps_the_tree_in_place_and_keeps_the_old_one_on_failure ... ok
+test populate::tests::signatures_required_when_key_is_baked ... ok
+test populate::tests::trusted_backend_url_gate ... ok
+test populate::tests::trusted_bundle_url_gate ... ok
+test report::tests::arch_matches_normalises_families ... ok
+test populate::tests::trusted_bundle_url_gate_refuses_a_release_pointing_elsewhere ... ok
+test populate::tests::stage_binary_swap_replaces_the_target_in_place ... ok
+test report::tests::doctor_classifiers_map_states ... ok
+test report::tests::rpc_probe_rejects_a_malformed_address_without_connecting ... ok
+test report::tests::worst_is_the_most_severe_check ... ok
+test rpc::tests::backend_proxy_allowlist_bounds_the_surface ... ok
+test rpc::tests::bind_refuses_a_port_another_listener_holds ... ok
+test rpc::tests::config_editor_refuses_keys_outside_the_safe_subset ... ok
+test rpc::tests::config_editor_refuses_out_of_range_seconds ... ok
+test rpc::tests::config_editor_refuses_wrong_value_types ... ok
+test rpc::tests::connection_slots_are_bounded_and_released ... ok
+test rpc::tests::constant_time_eq_matches_only_equal ... ok
+test rpc::tests::diagnostics_report_hosting_without_a_bundle_ready_latch ... ok
+test rpc::tests::dispatches_host_api_version ... ok
+test rpc::tests::dispatches_is_injected ... ok
+test rpc::tests::dispatches_ping ... ok
+test rpc::tests::error_envelope_is_valid_json_for_any_message ... ok
+test rpc::tests::manual_update_paths_answer_busy_while_a_check_runs ... ok
+test rpc::tests::quiet_methods_are_the_read_only_polls ... ok
+test rpc::tests::recover_cmd_is_not_rpc_editable ... ok
+test report::tests::device_block_reads_sysfs_fixtures ... ok
+test rpc::tests::rejects_garbage ... ok
+test rpc::tests::rejects_unknown_method ... ok
+test rpc::tests::rollback_hub_is_refused_while_staged_or_without_a_snapshot ... ok
+test rpc::tests::self_update_is_skipped_when_current_or_already_staged ... ok
+test rpc::tests::self_update_keeps_notes_only_with_the_release_they_describe ... ok
+test rpc::tests::update_pref_and_config_sync_need_a_known_key_and_a_store ... ok
+test semver::tests::parse_accepts_tags_and_plain_versions ... ok
+test semver::tests::prerelease_identifiers_compare_numerically_then_lexically ... ok
+test semver::tests::version_is_newer_orders_by_semver_precedence ... ok
+test state::tests::config_edits_are_remembered_by_key_with_the_latest_value ... ok
+test rpc::tests::request_parser_keeps_the_fields_it_needs_and_caps_the_headers ... ok
+test state::tests::host_notices_queue_drains_in_order_and_requeues_at_the_front ... ok
+test state::tests::rpc_token_is_nonempty_and_stable ... ok
+test state::tests::update_check_single_flight_guard ... ok
+test state::tests::update_check_stamp_reports_recent_elapsed ... ok
+test state::tests::token_file_is_private_from_creation ... ok
+test store::tests::auto_update_defaults_on_and_boot_movie_slots_roundtrip ... ok
+test store::tests::atomic_write_leaves_no_temp ... ok
+test store::tests::missing_file_is_defaults ... ok
+test store::tests::preserves_unknown_keys_from_a_newer_daemon ... ok
+test store::tests::corrupt_primary_heals_from_backup ... ok
+test store::tests::quiet_updates_default_on_and_rollback_fields_roundtrip ... ok
+test store::tests::save_load_roundtrip ... ok
+test store::tests::settings_sync_defaults_on_and_bookkeeping_roundtrips ... ok
+test store::tests::wrong_type_known_key_keeps_the_other_settings ... ok
+test sync::tests::a_malformed_entry_is_replaced_and_the_rest_of_the_document_is_kept ... ok
+test sync::tests::a_newer_local_value_replaces_the_entry_and_its_extras ... ok
+test sync::tests::apply_writes_only_booleans_for_known_keys ... ok
+test sync::tests::doc_parse_rejects_junk_and_keeps_extra_fields ... ok
+test sync::tests::doc_parse_skips_only_the_malformed_entries ... ok
+test sync::tests::entry_extras_survive_a_merge_round_trip ... ok
+test sync::tests::local_values_cover_the_store_keys_and_config_file_values ... ok
+test sync::tests::merge_converges_after_one_exchange ... ok
+test sync::tests::merge_newest_stamp_wins_each_way ... ok
+test sync::tests::merge_pushes_missing_local_keys_and_keeps_unknown_cloud_keys ... ok
+test sync::tests::merge_tie_keeps_equal_values_and_takes_the_shared_copy_when_they_differ ... ok
+test sync::tests::set_store_value_covers_exactly_the_synced_switches ... ok
+test sync::tests::stamp_marks_changes_since_the_last_round ... ok
+test sync::tests::stamp_on_a_first_round_marks_only_non_defaults ... ok
+test report::tests::status_report_has_the_expected_shape ... ok
+test store::tests::update_serializes_concurrent_writers_and_skips_an_unchanged_save ... ok
+test loader::tests::the_bundle_gate_keeps_one_poll_interval_per_renderer ... ok
+
+test result: ok. 158 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+[1m[92m     Running[0m unittests src/bin/devtools.rs (target/debug/deps/shelves_devtools-06a3646f61af3308)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/main.rs (target/debug/deps/shelveshub-82bc795e27e4af3b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m   Doc-tests[0m shelveshub
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s</pre>
+</details>
+<details open>
+  <summary><span class="pill fail">FAIL</span><span class="lbl">cargo audit</span><span class="dur">20 ms</span></summary>
+  <pre class="log">(no output)</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">ESLint</span><span class="dur">1.4 s</span></summary>
+  <pre class="log">0 errors, 0 warnings</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">Complexity debt of the runtime</span><span class="dur">887 ms</span></summary>
+  <pre class="log">every runtime function is within the limit</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">JavaScript syntax (node --check)</span><span class="dur">529 ms</span></summary>
+  <pre class="log">23 files parse</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">Data files + localization parity</span><span class="dur">5 ms</span></summary>
+  <pre class="log">21 JSON files valid · 19 locales × 84 keys in parity · 12 doc pairs</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">One-click launchers (.desktop Exec)</span><span class="dur">12 ms</span></summary>
+  <pre class="log">4 launchers parse</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">Shipped-text rule</span><span class="dur">75 ms</span></summary>
+  <pre class="log">230 tracked files clean</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">Runtime harness (headless Chromium)</span><span class="dur">28.4 s</span></summary>
+  <pre class="log">[i] Browser  : /opt/hostedtoolcache/setup-chrome/chromium/1719121/x64/chrome
+[i] Building shelves-devtools…
+[i] Runtime unit checks (node vm)…
+[unit] ok   sole: host published
+[unit] ok   sole: nav prune armed at boot
+[unit] ok   sole: every teardown stops the prune and re-arms exactly one
+[unit] ok   sole: selfUpdate and canSelfInstall, no tab inserted yet
+[unit] ok   prune: paused while the Home window is hidden, runs when shown
+[unit] ok   prune: falls back to this document's visibility
+[unit] ok   routes: host.routes follows whatever host.routerHook holds
+[unit] ok   qam: mode() reads panel while no native tab is in the menu
+[unit] ok   locale: Steam's language beats navigator.language
+[unit] ok   locale: a Steam name maps to its locale code
+[unit] ok   locale: no LANGUAGE parameter: navigator.language
+[unit] ok   locale: an unknown Steam name: navigator.language
+[unit] ok   locale: a prototype key is not a language
+[unit] ok   locale: a prototype setter is not a language
+[unit] ok   coexist: host not published beside a loader
+[unit] ok   coop: host published, loader's copy runs: no self-install
+[unit] ok   coop: routes reach the loader's router hook
+[unit] ok   coop: no nav prune beside a loader
+[unit] ok   coop bundle: self-install once the loader's copy stood down or our copy booted
+[unit] ok   coop bundle: a stale defer signal without the config stays false
+[unit] ok   stamp: the handshake follows a rewritten config stamp
+[unit] ok   stamp: the capture at boot answers without the global
+[unit] ok   fake render 18: a hooked component renders outside a render, the slot put back
+[unit] ok   fake render 18: an installed dispatcher is stubbed in place and restored
+[unit] ok   fake render 19: a hooked component renders outside a render, the slot put back
+[unit] ok   fake render 19: an installed dispatcher is stubbed in place and restored
+[unit] ok   gate: constants readable from src/loader/mod.rs
+[unit] ok   gate: a ready renderer boots at once, no poll
+[unit] ok   gate: an overlapping evaluation replaces the poll handle
+[unit] ok   gate: one boot per renderer, handle cleared, no orphan poll
+[unit] 30 checks, 0 problem(s)
+  [32mPASS[0m  runtime-unit
+[i] Running scenarios…
+  [32mPASS[0m  coexist-mirror
+rm: cannot remove '/tmp/tmp.QpZ9HL3aq6/Default': Directory not empty
+  [32mPASS[0m  coexist-fallback
+  [32mPASS[0m  sole-host
+rm: cannot remove '/tmp/tmp.gDN6CtNAGX/Default': Directory not empty
+  [32mPASS[0m  sole-host-mirror
+  [32mPASS[0m  sole-host-fallback
+  [32mPASS[0m  coexist-late
+  [32mPASS[0m  coexist-native
+rm: cannot remove '/tmp/tmp.v8p1P7vNZA/Default': Directory not empty
+  [32mPASS[0m  coexist-fallback-native
+  [32mPASS[0m  coexist-idle
+rm: cannot remove '/tmp/tmp.MD3PJfg2X0/Default': Directory not empty
+  [32mPASS[0m  coop-mirror
+  [32mPASS[0m  coop-fallback
+  [32mPASS[0m  coop-bundle
+  [32mPASS[0m  sole-host-sidecar
+rm: cannot remove '/tmp/tmp.mhVKHXZ0qB/Default': Directory not empty
+  [32mPASS[0m  sole-host-status
+rm: cannot remove '/tmp/tmp.7CpK5cxNaN/Default': Directory not empty
+  [32mPASS[0m  sole-host-notify
+rm: cannot remove '/tmp/tmp.HMdVyUjvNY/Default': Directory not empty
+  [32mPASS[0m  sole-host-gesture
+  [32mPASS[0m  sole-host-locale
+rm: cannot remove '/tmp/tmp.etDVfEIT5P/Default': Directory not empty
+  [32mPASS[0m  sole-host-config
+  [32mPASS[0m  sole-host-tabswitch
+
+[OK] all results passed (19 scenarios; runtime-unit passed)</pre>
+</details>
+<details>
+  <summary><span class="pill pass">PASS</span><span class="lbl">Daemon scenarios (headless Chromium)</span><span class="dur">24.0 s</span></summary>
+  <pre class="log">[i] Browser  : /opt/hostedtoolcache/setup-chrome/chromium/1719121/x64/chrome
+[i] Ports    : CDP 9555, RPC 60177, HTTP 8577
+[i] Building shelveshub + shelves-devtools...
+[i] Running daemon scenarios...
+PASS recovered
+PASS recovery-off
+PASS booting
+
+[OK] all daemon scenarios passed</pre>
+</details>
+  </div>
+</body>
+</html>
